@@ -4,6 +4,8 @@
 
 #include "db.h"
 
+int countFields (FILE *f);
+
 int countLines (FILE *f);
 
 /**
@@ -15,6 +17,8 @@ void printLine (FILE *f, long position);
 
 void makeDB (struct DB *db, FILE *f) {
     db->file = f;
+
+    db->field_count = countFields(f);
 
     int line_count = countLines(f);
 
@@ -67,6 +71,31 @@ int countLines (FILE *f) {
     fseek(f, -1, SEEK_END);
     fread(buffer, 1, 1, f);
     if (buffer[0] != '\n') count++;
+
+    return count;
+}
+
+int countFields (FILE *f) {
+    size_t buffer_size = 1024;
+    int count = 1; 
+    char buffer[buffer_size];
+    size_t read_size;
+
+    fseek(f, 0, SEEK_SET);
+
+    do {
+        read_size = fread(buffer, 1, buffer_size, f);
+
+        for (int i = 0; i < read_size; i++) {
+            if (buffer[i] == '\n'){
+                return count;
+            }
+
+            if (buffer[i] == ','){
+                count++;
+            }
+        }
+    } while (read_size > 0);
 
     return count;
 }
@@ -178,6 +207,10 @@ int getFieldIndex (struct DB *db, const char *field) {
 
 int getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
     if (record_index >= db->record_count) {
+        return -1;
+    }
+
+    if (field_index < 0 || field_index >= db->field_count) {
         return -1;
     }
 

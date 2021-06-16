@@ -76,7 +76,7 @@ int query (const char *query) {
 
         skipWhitespace(query, &index);
 
-        if (strncmp(query + index, "=", 1) != 0) {
+        if (query[index] != '=') {
             fprintf(stderr, "Bad query - expected =\n");
             return -1;
         }
@@ -101,6 +101,11 @@ int query (const char *query) {
     
     for (int i = 0; i < curr_index; i++) {
         field_indices[i] = getFieldIndex(&db, fields + (i * field_max_length));
+
+        if (field_indices[i] == -1 && fields[i * field_max_length] != '*') {
+            fprintf(stderr, "Field %s not found\n", &fields[i * field_max_length]);
+            exit(-1);
+        }
     }
 
     int predicate_field_index;
@@ -120,9 +125,23 @@ int query (const char *query) {
         }
 
         for (int j = 0; j < curr_index; j++) {
-            char value[value_max_length];
-            getRecordValue(&db, i, field_indices[j], value, value_max_length);
-            printf("%s", value);
+            // If we got to here and the field index is -1 then the field must have been '*'
+            if (field_indices[j] == -1) {
+                for (int k = 0; k < db.field_count; k++) {
+                    char value[value_max_length];
+                    getRecordValue(&db, i, k, value, value_max_length);
+                    printf("%s", value);
+
+                    if (k < db.field_count - 1) {
+                        printf("\t");
+                    }
+
+                }
+            } else {
+                char value[value_max_length];
+                getRecordValue(&db, i, field_indices[j], value, value_max_length);
+                printf("%s", value);
+            }
 
             if (j < curr_index - 1) {
                 printf("\t");
