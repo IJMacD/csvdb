@@ -1,0 +1,1 @@
+int query (const char *query);
