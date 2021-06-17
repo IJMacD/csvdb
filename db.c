@@ -58,7 +58,7 @@ int countLines (FILE *f) {
     do {
         read_size = fread(buffer, 1, buffer_size, f);
 
-        for (int i = 0; i < read_size; i++) {
+        for (size_t i = 0; i < read_size; i++) {
             if (buffer[i] == '\n'){
                 count++;
             }
@@ -69,7 +69,11 @@ int countLines (FILE *f) {
     // If the file ends in a new line, then fine
     // If it soesn't then we have one more line to count
     fseek(f, -1, SEEK_END);
-    fread(buffer, 1, 1, f);
+    
+    size_t result = fread(buffer, 1, 1, f);
+    if (result == 0) 
+        return -1;
+
     if (buffer[0] != '\n') count++;
 
     return count;
@@ -86,7 +90,7 @@ int countFields (FILE *f) {
     do {
         read_size = fread(buffer, 1, buffer_size, f);
 
-        for (int i = 0; i < read_size; i++) {
+        for (size_t i = 0; i < read_size; i++) {
             if (buffer[i] == '\n'){
                 return count;
             }
@@ -117,7 +121,7 @@ int indexLines (FILE *f, long *indices) {
     do {
         read_size = fread(buffer, 1, buffer_size, f);
 
-        for (int i = 0; i < read_size; i++) {
+        for (size_t i = 0; i < read_size; i++) {
             if (buffer[i] == '\n'){
                 indices[++count] = pos + i + 1;
             }
@@ -130,7 +134,11 @@ int indexLines (FILE *f, long *indices) {
     // If the file ends in a new line, then fine
     // If it soesn't then we have one more line to count
     fseek(f, -1, SEEK_END);
-    fread(buffer, 1, 1, f);
+
+    size_t result = fread(buffer, 1, 1, f);
+    if (result == 0) 
+        return -1;
+
     if (buffer[0] != '\n') count++;
 
     return count;
@@ -148,7 +156,7 @@ void printLine (FILE *f, long position) {
     do {
         read_size = fread(buffer, 1, buffer_size - 1, f);
 
-        for (int i = 0; i < read_size; i++) {
+        for (size_t i = 0; i < read_size; i++) {
             if (buffer[i] == '\n'){
                 buffer[i] = '\0';
                 printf("%s\n", buffer);
@@ -184,7 +192,7 @@ int getFieldIndex (struct DB *db, const char *field) {
 
     read_size = fread(buffer, 1, buffer_size, db->file);
 
-    for (int i = 0; i < read_size; i++) {
+    for (size_t i = 0; i < read_size; i++) {
         // Check end conditions first
         if (buffer[i] == '\n' || buffer[i] == ','){
             // If the character found was the last one, then we're done
@@ -236,11 +244,11 @@ int getRecordValue (struct DB *db, int record_index, int field_index, char *valu
     char buffer[buffer_size];
     size_t read_size;
     int current_field_index = 0;
-    int char_index = 0;
+    size_t char_index = 0;
 
     read_size = fread(buffer, 1, buffer_size, db->file);
 
-    for (int i = 0; i < read_size; i++) {
+    for (size_t i = 0; i < read_size; i++) {
         if (current_field_index == field_index) {
             if (buffer[i] == ',' || buffer[i] == '\n') {
                 value[char_index] = '\0';

@@ -4,11 +4,11 @@
 
 #include "db.h"
 
-void skipWhitespace (const char *string, int *index);
+void skipWhitespace (const char *string, size_t *index);
 
-void skipToken (const char *string, int *index);
+void skipToken (const char *string, size_t *index);
 
-int getToken (const char *string, int *index, char *token, int token_max_length);
+int getToken (const char *string, size_t *index, char *token, int token_max_length);
 
 int query (const char *query) {
     if (strncmp(query, "SELECT ", 7) != 0) {
@@ -20,7 +20,7 @@ int query (const char *query) {
 
     // printf("Query length: %ld\n", query_length);
 
-    int index = 7;
+    size_t index = 7;
 
     skipWhitespace(query, &index);
 
@@ -149,17 +149,19 @@ int query (const char *query) {
         }
         printf("\n");
     }
+
+    return -1;
 }
 
-void skipWhitespace (const char * string, int *index) {
+void skipWhitespace (const char * string, size_t *index) {
     while(string[(*index)] == ' ') { (*index)++; }
 }
 
-void skipToken (const char * string, int *index) {
+void skipToken (const char * string, size_t *index) {
     while(string[(*index)] != ' ' && string[(*index)] != ',' && string[(*index)] != '\0') { (*index)++; }
 }
 
-int getToken (const char *string, int *index, char *token, int token_max_length) {
+int getToken (const char *string, size_t *index, char *token, int token_max_length) {
     int start_index = *index;
 
     // printf("Field starts at %d\n", start_index);

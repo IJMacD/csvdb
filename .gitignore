@@ -1,3 +1,5 @@
-*.o
-test.csv
+debug/
+release/
 csvdb
+test.csv
+test2.csv
