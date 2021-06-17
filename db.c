@@ -176,9 +176,6 @@ void printLine (FILE *f, long position) {
     printf("Error\n");
 }
 
-/**
- * Max header length 1024 characters
- */
 int getFieldIndex (struct DB *db, const char *field) {
     fseek(db->file, 0, SEEK_SET);
     
@@ -190,37 +187,39 @@ int getFieldIndex (struct DB *db, const char *field) {
     int char_length = strlen(field);
     int candidate = 1;
 
-    read_size = fread(buffer, 1, buffer_size, db->file);
+    do {
+        read_size = fread(buffer, 1, buffer_size, db->file);
 
-    for (size_t i = 0; i < read_size; i++) {
-        // Check end conditions first
-        if (buffer[i] == '\n' || buffer[i] == ','){
-            // If the character found was the last one, then we're done
-            if (candidate == 1 && char_index == char_length) {
-                return field_index;
+        for (size_t i = 0; i < read_size; i++) {
+            // Check end conditions first
+            if (buffer[i] == '\n' || buffer[i] == ','){
+                // If the character found was the last one, then we're done
+                if (candidate == 1 && char_index == char_length) {
+                    return field_index;
+                }
+                
+                // If we get to a comma then we haven't found the field but there's still a chance
+                // so restart our search
+                if (buffer[i] == ',') {
+                    char_index = 0;
+                    field_index++;
+                    candidate = 1;
+                } else {
+                    // If we get to a new line then we haven't found the field
+                    return -1;
+                }
             }
-            
-            // If we get to a comma then we haven't found the field but there's still a chance
-            // so restart our search
-            if (buffer[i] == ',') {
-                char_index = 0;
-                field_index++;
-                candidate = 1;
-            } else {
-                // If we get to a new line then we haven't found the field
-                return -1;
+            // If we found a matching character then advance the index to look for the next one
+            else if (buffer[i] == field[char_index] && candidate == 1) {
+                char_index++;
+            }
+            // We found a character but it wasn't the right one
+            // This is no longer a candidate. Wait for a comma
+            else {
+                candidate = 0;
             }
         }
-        // If we found a matching character then advance the index to look for the next one
-        else if (buffer[i] == field[char_index] && candidate == 1) {
-            char_index++;
-        }
-        // We found a character but it wasn't the right one
-        // This is no longer a candidate. Wait for a comma
-        else {
-            candidate = 0;
-        }
-    }
+    } while (read_size > 0);
 
     return -1;
 }
@@ -246,36 +245,38 @@ int getRecordValue (struct DB *db, int record_index, int field_index, char *valu
     int current_field_index = 0;
     size_t char_index = 0;
 
-    read_size = fread(buffer, 1, buffer_size, db->file);
+    do {
+        read_size = fread(buffer, 1, buffer_size, db->file);
 
-    for (size_t i = 0; i < read_size; i++) {
-        if (current_field_index == field_index) {
-            if (buffer[i] == ',' || buffer[i] == '\n') {
-                value[char_index] = '\0';
-                return 0;
-            }
+        for (size_t i = 0; i < read_size; i++) {
+            if (current_field_index == field_index) {
+                if (buffer[i] == ',' || buffer[i] == '\n') {
+                    value[char_index] = '\0';
+                    return 0;
+                }
 
-            value[char_index++] = buffer[i];
+                value[char_index++] = buffer[i];
 
-            if (char_index > value_max_length) {
-                return -1;
-            }
-        } else {
-            if (buffer[i] == ',') {
-                current_field_index++;
-            }
+                if (char_index > value_max_length) {
+                    return -1;
+                }
+            } else {
+                if (buffer[i] == ',') {
+                    current_field_index++;
+                }
 
-            if (buffer[i] == '\n') {
-                return -1;
+                if (buffer[i] == '\n') {
+                    return -1;
+                }
             }
         }
-    }
 
-    // Getting the very last record from the file
-    if (current_field_index == field_index) {
-        value[char_index] = '\0';
-        return 0;
-    }
+        // Getting the very last record from the file
+        if (current_field_index == field_index) {
+            value[char_index] = '\0';
+            return 0;
+        }
+    } while (read_size > 0);
 
     return -1;
 }
