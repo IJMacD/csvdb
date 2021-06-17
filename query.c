@@ -8,6 +8,14 @@
 #define FIELD_STAR          -2
 #define FIELD_COUNT_STAR    -3
 
+#define OPERATOR_UN         0
+#define OPERATOR_EQ         1
+#define OPERATOR_NE         2
+#define OPERATOR_LT         3
+#define OPERATOR_LE         4
+#define OPERATOR_GT         5
+#define OPERATOR_GE         6
+
 #define VALUE_MAX_LENGTH    255
 #define FIELD_MAX_LENGTH    32
 #define TABLE_MAX_LENGTH    255
@@ -21,6 +29,10 @@ void skipToken (const char *string, size_t *index);
 int getToken (const char *string, size_t *index, char *token, int token_max_length);
 
 void printResultLine (struct DB *db, int *field_indices, int field_count, int record_index, int result_count);
+
+char parseOperator (const char *input);
+
+int evaluateExpression (char op, const char *left, const char *right);
 
 int query (const char *query) {
     if (strncmp(query, "SELECT ", 7) != 0) {
@@ -71,6 +83,7 @@ int query (const char *query) {
 
     char predicate_field[FIELD_MAX_LENGTH];
     char predicate_value[VALUE_MAX_LENGTH];
+    char predicate_op = OPERATOR_UN;
 
     int have_predicate = 0;
     int is_group = 0;
@@ -89,8 +102,13 @@ int query (const char *query) {
 
         skipWhitespace(query, &index);
 
-        if (query[index] != '=') {
-            fprintf(stderr, "Bad query - expected =\n");
+        char op[3];
+        getToken(query, &index, op, 3);
+
+        predicate_op = parseOperator(op);
+
+        if (predicate_op == OPERATOR_UN) {
+            fprintf(stderr, "Bad query - expected =|!=|<|<=|>|>=\n");
             return -1;
         }
 
@@ -141,6 +159,8 @@ int query (const char *query) {
     // If we have COUNT(*) and there's no predicate then just early exit
     // we already know how many records there are 
     if (is_group && !have_predicate) {
+        // We also need to provide a specimen row
+        // "0 was chosen by a fair dice roll"
         printResultLine(&db, field_indices, curr_index, 0, db.record_count);
         return 0;
     }
@@ -150,7 +170,7 @@ int query (const char *query) {
             char value[VALUE_MAX_LENGTH];
             getRecordValue(&db, i, predicate_field_index, value, VALUE_MAX_LENGTH);
             
-            if (strcmp(value, predicate_value) != 0) {
+            if (!evaluateExpression(predicate_op, value, predicate_value)) {
                 continue;
             }
         }
@@ -234,4 +254,30 @@ void printResultLine (struct DB *db, int *field_indices, int field_count, int re
         }
     }
     printf("\n");
+}
+
+char parseOperator (const char *input) {
+    if (strcmp(input, "=") == 0)  return OPERATOR_EQ;
+    if (strcmp(input, "!=") == 0) return OPERATOR_NE;
+    if (strcmp(input, "<") == 0)  return OPERATOR_LT;
+    if (strcmp(input, "<=") == 0) return OPERATOR_LE;
+    if (strcmp(input, ">") == 0)  return OPERATOR_GT;
+    if (strcmp(input, ">=") == 0) return OPERATOR_GE;
+    return OPERATOR_UN;
+}
+
+int evaluateExpression (char op, const char *left, const char *right) {
+    if (op == OPERATOR_EQ) return strcmp(left, right) == 0;
+    if (op == OPERATOR_NE) return strcmp(left, right) != 0;
+
+    char *end;
+    long left_num = strtol(left, &end, 10);
+    long right_num = strtol(right, &end, 10);
+
+    if (op == OPERATOR_LT) return left_num < right_num;
+    if (op == OPERATOR_LE) return left_num <= right_num;
+    if (op == OPERATOR_GT) return left_num > right_num;
+    if (op == OPERATOR_GE) return left_num >= right_num;
+
+    return 0;
 }
