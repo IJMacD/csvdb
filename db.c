@@ -180,25 +180,37 @@ int getFieldIndex (struct DB *db, const char *field) {
     int field_index = 0;
     int char_index = 0; 
     int char_length = strlen(field);
+    int candidate = 1;
 
     read_size = fread(buffer, 1, buffer_size, db->file);
 
     for (int i = 0; i < read_size; i++) {
-        if (buffer[i] == '\n'){
-            return -1;
-        }
-
-        if (buffer[i] == ','){
-            char_index = 0;
-            field_index++;
-        }
-
-        if (buffer[i] == field[char_index]) {
-            if (char_index == char_length - 1) {
+        // Check end conditions first
+        if (buffer[i] == '\n' || buffer[i] == ','){
+            // If the character found was the last one, then we're done
+            if (candidate == 1 && char_index == char_length) {
                 return field_index;
             }
-
+            
+            // If we get to a comma then we haven't found the field but there's still a chance
+            // so restart our search
+            if (buffer[i] == ',') {
+                char_index = 0;
+                field_index++;
+                candidate = 1;
+            } else {
+                // If we get to a new line then we haven't found the field
+                return -1;
+            }
+        }
+        // If we found a matching character then advance the index to look for the next one
+        else if (buffer[i] == field[char_index] && candidate == 1) {
             char_index++;
+        }
+        // We found a character but it wasn't the right one
+        // This is no longer a candidate. Wait for a comma
+        else {
+            candidate = 0;
         }
     }
 
