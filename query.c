@@ -259,6 +259,7 @@ void printResultLine (struct DB *db, int *field_indices, int field_count, int re
 char parseOperator (const char *input) {
     if (strcmp(input, "=") == 0)  return OPERATOR_EQ;
     if (strcmp(input, "!=") == 0) return OPERATOR_NE;
+    if (strcmp(input, "IS") == 0) return OPERATOR_EQ;
     if (strcmp(input, "<") == 0)  return OPERATOR_LT;
     if (strcmp(input, "<=") == 0) return OPERATOR_LE;
     if (strcmp(input, ">") == 0)  return OPERATOR_GT;
@@ -267,12 +268,29 @@ char parseOperator (const char *input) {
 }
 
 int evaluateExpression (char op, const char *left, const char *right) {
+    if (strcmp(right, "NULL") == 0) {
+        size_t len = strlen(left);
+
+        if (op == OPERATOR_EQ) return len == 0;
+        if (op == OPERATOR_NE) return len != 0;
+
+        return 0;
+    }
+
+    if (strcmp(left, "NULL") == 0) {
+        size_t len = strlen(right);
+
+        if (op == OPERATOR_EQ) return len == 0;
+        if (op == OPERATOR_NE) return len != 0;
+
+        return 0;
+    }
+
     if (op == OPERATOR_EQ) return strcmp(left, right) == 0;
     if (op == OPERATOR_NE) return strcmp(left, right) != 0;
 
-    char *end;
-    long left_num = strtol(left, &end, 10);
-    long right_num = strtol(right, &end, 10);
+    long left_num = strtol(left, NULL, 10);
+    long right_num = strtol(right, NULL, 10);
 
     if (op == OPERATOR_LT) return left_num < right_num;
     if (op == OPERATOR_LE) return left_num <= right_num;
