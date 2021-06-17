@@ -224,8 +224,11 @@ int getFieldIndex (struct DB *db, const char *field) {
     return -1;
 }
 
+/**
+ * Returns the number of bytes read, or -1 on error
+ */
 int getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
-    if (record_index >= db->record_count) {
+    if (record_index < 0 || record_index >= db->record_count) {
         return -1;
     }
 
@@ -252,7 +255,7 @@ int getRecordValue (struct DB *db, int record_index, int field_index, char *valu
             if (current_field_index == field_index) {
                 if (buffer[i] == ',' || buffer[i] == '\n') {
                     value[char_index] = '\0';
-                    return 0;
+                    return char_index;
                 }
 
                 value[char_index++] = buffer[i];
@@ -270,13 +273,14 @@ int getRecordValue (struct DB *db, int record_index, int field_index, char *valu
                 }
             }
         }
-
-        // Getting the very last record from the file
-        if (current_field_index == field_index) {
-            value[char_index] = '\0';
-            return 0;
-        }
     } while (read_size > 0);
 
+    // Getting the very last record from the file
+    if (current_field_index == field_index) {
+        value[char_index] = '\0';
+        return char_index;
+    }
+
+    // Ran out of file
     return -1;
 }
