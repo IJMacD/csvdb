@@ -152,6 +152,11 @@ int query (const char *query) {
             skipWhitespace(query, &index);
 
             offset_value = getNumericToken(query, &index);
+
+            if (offset_value < 0) {
+                fprintf(stderr, "OFFSET cannot be negative\n");
+                return -1;
+            }
         }
         else if (strcmp(keyword, "FETCH") == 0) {
             skipWhitespace(query, &index);
@@ -166,11 +171,21 @@ int query (const char *query) {
             skipWhitespace(query, &index);
 
             limit_value = getNumericToken(query, &index);
+
+            if (limit_value < 0) {
+                fprintf(stderr, "FETCH FIRST cannot be negative\n");
+                return -1;
+            }
         }
         else if (strcmp(keyword, "LIMIT") == 0) {
             skipWhitespace(query, &index);
 
             limit_value = getNumericToken(query, &index);
+
+            if (limit_value < 0) {
+                fprintf(stderr, "LIMIT cannot be negative\n");
+                return -1;
+            }
         }
         else {
             fprintf(stderr, "Bad query - expected WHERE|OFFSET|FETCH FIRST|LIMIT\n");
@@ -221,7 +236,12 @@ int query (const char *query) {
     if ((flags & FLAG_GROUP) && !(flags & FLAG_HAVE_PREDICATE)) {
         // We also need to provide a specimen row
         // "0 was chosen by a fair dice roll"
-        printResultLine(&db, field_indices, curr_index, 0, db.record_count);
+        // > But now we'll use offset value
+        long count = db.record_count;
+        if (limit_value >= 0L && limit_value < count) {
+            count = limit_value;
+        }
+        printResultLine(&db, field_indices, curr_index, offset_value, count);
         return 0;
     }
 
@@ -263,8 +283,6 @@ int query (const char *query) {
             continue;
         }
 
-        result_count++;
-
         // If we are grouping then don't output anything
         // but we do need to loop through the rows to check predicates
         // we'll also make note of a specimen record
@@ -275,8 +293,10 @@ int query (const char *query) {
             printResultLine(&db, field_indices, curr_index, i, 0);
         }
 
+        result_count++;
+
         // Implement FETCH FIRST/LIMIT
-        if (limit_value > 0 && result_count >= limit_value) {
+        if (limit_value >= 0 && result_count >= limit_value) {
             break;
         }
     }
