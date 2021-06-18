@@ -18,6 +18,7 @@
 
 #define FLAG_HAVE_PREDICATE     1
 #define FLAG_GROUP              2
+#define FLAG_PRIMARY_KEY_SEARCH 4
 
 #define VALUE_MAX_LENGTH    255
 #define FIELD_MAX_LENGTH    32
@@ -36,6 +37,8 @@ void printResultLine (struct DB *db, int *field_indices, int field_count, int re
 char parseOperator (const char *input);
 
 int evaluateExpression (char op, const char *left, const char *right);
+
+int pk_search(struct DB *db, int pk_index, char *value);
 
 int query (const char *query) {
     /*********************
@@ -108,6 +111,16 @@ int query (const char *query) {
 
         getToken(query, &index, predicate_field, FIELD_MAX_LENGTH);
 
+        if (strncmp(predicate_field, "PK(", 3) == 0) {
+            flags |= FLAG_PRIMARY_KEY_SEARCH;
+            size_t len = strlen(predicate_field);
+            // remove trailing ')'
+            for (size_t i = 0; i < len - 4; i++) {
+                predicate_field[i] = predicate_field[i+3];
+            }
+            predicate_field[len - 4] = '\0';
+        }
+
         // printf("Predicate field: %s\n", predicate_field);
 
         skipWhitespace(query, &index);
@@ -162,12 +175,9 @@ int query (const char *query) {
 
     }
 
-    int predicate_field_index = FIELD_UNKNOWN;
-
-    if (flags & FLAG_HAVE_PREDICATE) {
-        predicate_field_index = getFieldIndex(&db, predicate_field);
-        // printf("Predicate index: %d\n", predicate_field_index);
-    }
+    /*************************
+     * Special Cases
+     *************************/
 
     // If we have COUNT(*) and there's no predicate then just early exit
     // we already know how many records there are 
@@ -177,6 +187,24 @@ int query (const char *query) {
         printResultLine(&db, field_indices, curr_index, 0, db.record_count);
         return 0;
     }
+
+    int predicate_field_index = FIELD_UNKNOWN;
+
+    if (flags & FLAG_HAVE_PREDICATE) {
+        predicate_field_index = getFieldIndex(&db, predicate_field);
+        // printf("Predicate index: %d\n", predicate_field_index);
+    }
+
+    // If we have a primary key search then we can binary search
+    if ((flags & FLAG_PRIMARY_KEY_SEARCH) && predicate_op == OPERATOR_EQ) {
+        int record_index = pk_search(&db, predicate_field_index, predicate_value);
+        printResultLine(&db, field_indices, curr_index, record_index, record_index == -1 ? 0 : 1);
+        return 0;
+    }
+
+    /**********************
+     * Start iterating rows
+     **********************/
 
     for (int i = 0; i < db.record_count; i++) {
 
@@ -316,4 +344,47 @@ int evaluateExpression (char op, const char *left, const char *right) {
     if (op == OPERATOR_GE) return left_num >= right_num;
 
     return 0;
+}
+
+int pk_search(struct DB *db, int pk_index, char *value) {
+    int index_a = 0;
+    int index_b = db->record_count - 1;
+
+    long search_value = atol(value);
+
+    char val[VALUE_MAX_LENGTH];
+
+    // Boundary cases
+    getRecordValue(db, index_a, pk_index, val, VALUE_MAX_LENGTH);
+    if (atol(val) == search_value) {
+        return index_a;
+    }
+    getRecordValue(db, index_b, pk_index, val, VALUE_MAX_LENGTH);
+    if (atol(val) == search_value) {
+        return index_b;
+    }
+
+    while (index_a < index_b - 1) { 
+        int index_curr = (index_a + index_b) / 2;
+
+        getRecordValue(db, index_curr, pk_index, val, VALUE_MAX_LENGTH);
+
+        long curr_value = atol(val);
+
+        if (curr_value == search_value) {
+            // printf("pk_search [%d   <%d>   %d]: %s\n", index_a, index_curr, index_b, val);
+            return index_curr;
+        }
+
+        if (curr_value < search_value) {
+            // printf("pk_search [%d   (%d) x %d]: %s\n", index_a, index_curr, index_b, val);
+            index_a = index_curr;
+
+        } else {
+            // printf("pk_search [%d x (%d)   %d]: %s\n", index_a, index_curr, index_b, val);
+            index_b = index_curr;
+        }
+    }
+
+    return -1;
 }
