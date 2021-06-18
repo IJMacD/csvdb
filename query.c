@@ -32,6 +32,8 @@ void skipToken (const char *string, size_t *index);
 
 int getToken (const char *string, size_t *index, char *token, int token_max_length);
 
+int getNumericToken (const char *string, size_t *index);
+
 void printResultLine (struct DB *db, int *field_indices, int field_count, int record_index, int result_count);
 
 char parseOperator (const char *input);
@@ -89,8 +91,6 @@ int query (const char *query) {
     char table[TABLE_MAX_LENGTH];
     getToken(query, &index, table, TABLE_MAX_LENGTH);
 
-    skipWhitespace(query, &index);
-
     char predicate_field[FIELD_MAX_LENGTH];
     char predicate_value[VALUE_MAX_LENGTH];
     char predicate_op = OPERATOR_UN;
@@ -98,48 +98,85 @@ int query (const char *query) {
     int flags = 0;
     int result_count = 0;
     int group_specimen = -1;
+    long offset_value = 0;
+    long limit_value = -1;
 
-    if (index < query_length) {
-        if (strncmp(query + index, "WHERE ", 6) != 0) {
-            fprintf(stderr, "Bad query - expected WHERE\n");
-            return -1;
-        }
+    while (index < query_length) {
 
-        flags |= FLAG_HAVE_PREDICATE;
+        skipWhitespace(query, &index);
 
-        index += 6;
+        char keyword[FIELD_MAX_LENGTH];
 
-        getToken(query, &index, predicate_field, FIELD_MAX_LENGTH);
+        getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+        
+        // printf("Token: '%s'\n", keyword);
 
-        if (strncmp(predicate_field, "PK(", 3) == 0) {
-            flags |= FLAG_PRIMARY_KEY_SEARCH;
-            size_t len = strlen(predicate_field);
-            // remove trailing ')'
-            for (size_t i = 0; i < len - 4; i++) {
-                predicate_field[i] = predicate_field[i+3];
+        if (strcmp(keyword, "WHERE") == 0) {
+            flags |= FLAG_HAVE_PREDICATE;
+
+            skipWhitespace(query, &index);
+
+            getToken(query, &index, predicate_field, FIELD_MAX_LENGTH);
+
+            if (strncmp(predicate_field, "PK(", 3) == 0) {
+                flags |= FLAG_PRIMARY_KEY_SEARCH;
+                size_t len = strlen(predicate_field);
+                // remove trailing ')'
+                for (size_t i = 0; i < len - 4; i++) {
+                    predicate_field[i] = predicate_field[i+3];
+                }
+                predicate_field[len - 4] = '\0';
             }
-            predicate_field[len - 4] = '\0';
+
+            // printf("Predicate field: %s\n", predicate_field);
+
+            skipWhitespace(query, &index);
+
+            char op[3];
+            getToken(query, &index, op, 3);
+
+            predicate_op = parseOperator(op);
+
+            if (predicate_op == OPERATOR_UN) {
+                fprintf(stderr, "Bad query - expected =|!=|<|<=|>|>=\n");
+                return -1;
+            }
+
+            index++;
+
+            skipWhitespace(query, &index);
+
+            getToken(query, &index, predicate_value, VALUE_MAX_LENGTH);
         }
+        else if (strcmp(keyword, "OFFSET") == 0) {
+            skipWhitespace(query, &index);
 
-        // printf("Predicate field: %s\n", predicate_field);
+            offset_value = getNumericToken(query, &index);
+        }
+        else if (strcmp(keyword, "FETCH") == 0) {
+            skipWhitespace(query, &index);
 
-        skipWhitespace(query, &index);
+            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
 
-        char op[3];
-        getToken(query, &index, op, 3);
+            if (strcmp(keyword, "FIRST") != 0) {
+                fprintf(stderr, "Bad query - expected FETCH FIRST\n");
+                return -1;
+            }
 
-        predicate_op = parseOperator(op);
+            skipWhitespace(query, &index);
 
-        if (predicate_op == OPERATOR_UN) {
-            fprintf(stderr, "Bad query - expected =|!=|<|<=|>|>=\n");
+            limit_value = getNumericToken(query, &index);
+        }
+        else if (strcmp(keyword, "LIMIT") == 0) {
+            skipWhitespace(query, &index);
+
+            limit_value = getNumericToken(query, &index);
+        }
+        else {
+            fprintf(stderr, "Bad query - expected WHERE|OFFSET|FETCH FIRST|LIMIT\n");
+            fprintf(stderr, "Found: '%s'\n", keyword);
             return -1;
         }
-
-        index++;
-
-        skipWhitespace(query, &index);
-
-        getToken(query, &index, predicate_value, VALUE_MAX_LENGTH);
     }
 
     /*************************
@@ -208,7 +245,7 @@ int query (const char *query) {
     /**********************
      * Start iterating rows
      **********************/
-
+    int match_count = 0;
     for (int i = 0; i < db.record_count; i++) {
 
         // Perform filtering if necessary
@@ -221,6 +258,11 @@ int query (const char *query) {
             }
         }
 
+        // implement OFFSET
+        if (match_count++ < offset_value) {
+            continue;
+        }
+
         result_count++;
 
         // If we are grouping then don't output anything
@@ -231,6 +273,11 @@ int query (const char *query) {
             group_specimen = i;
         } else {
             printResultLine(&db, field_indices, curr_index, i, 0);
+        }
+
+        // Implement FETCH FIRST/LIMIT
+        if (limit_value > 0 && result_count >= limit_value) {
+            break;
         }
     }
 
@@ -254,7 +301,7 @@ void skipToken (const char * string, size_t *index) {
 int getToken (const char *string, size_t *index, char *token, int token_max_length) {
     int start_index = *index;
 
-    // printf("Field starts at %d\n", start_index);
+    // printf("Token starts at %d\n", start_index);
 
     skipToken(string, index);
 
@@ -271,6 +318,12 @@ int getToken (const char *string, size_t *index, char *token, int token_max_leng
     token[token_length] = '\0';
 
     return 0;
+}
+
+int getNumericToken (const char *string, size_t *index) {
+    char val[10];
+    getToken(string, index, val, 10);
+    return atol(val);
 }
 
 void printResultLine (struct DB *db, int *field_indices, int field_count, int record_index, int result_count) {
