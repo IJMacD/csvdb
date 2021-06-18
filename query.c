@@ -16,6 +16,9 @@
 #define OPERATOR_GT         5
 #define OPERATOR_GE         6
 
+#define FLAG_HAVE_PREDICATE     1
+#define FLAG_GROUP              2
+
 #define VALUE_MAX_LENGTH    255
 #define FIELD_MAX_LENGTH    32
 #define TABLE_MAX_LENGTH    255
@@ -35,6 +38,10 @@ char parseOperator (const char *input);
 int evaluateExpression (char op, const char *left, const char *right);
 
 int query (const char *query) {
+    /*********************
+     * Begin Query parsing
+     *********************/
+
     if (strncmp(query, "SELECT ", 7) != 0) {
         fprintf(stderr, "Bad query - expected SELECT\n");
         return -1;
@@ -85,8 +92,7 @@ int query (const char *query) {
     char predicate_value[VALUE_MAX_LENGTH];
     char predicate_op = OPERATOR_UN;
 
-    int have_predicate = 0;
-    int is_group = 0;
+    int flags = 0;
     int result_count = 0;
     int group_specimen = -1;
 
@@ -96,9 +102,13 @@ int query (const char *query) {
             return -1;
         }
 
+        flags |= FLAG_HAVE_PREDICATE;
+
         index += 6;
 
         getToken(query, &index, predicate_field, FIELD_MAX_LENGTH);
+
+        // printf("Predicate field: %s\n", predicate_field);
 
         skipWhitespace(query, &index);
 
@@ -117,9 +127,11 @@ int query (const char *query) {
         skipWhitespace(query, &index);
 
         getToken(query, &index, predicate_value, VALUE_MAX_LENGTH);
-
-        have_predicate = 1;
     }
+
+    /*************************
+     * Begin Query processing
+     *************************/
 
     struct DB db;
 
@@ -135,7 +147,7 @@ int query (const char *query) {
 
         if (strcmp(field_name, "COUNT(*)") == 0) {
             field_indices[i] = FIELD_COUNT_STAR;
-            is_group = 1;
+            flags |= FLAG_GROUP;
         } else if (strcmp(field_name, "*") == 0) {
             field_indices[i] = FIELD_STAR;
         }
@@ -152,13 +164,14 @@ int query (const char *query) {
 
     int predicate_field_index = FIELD_UNKNOWN;
 
-    if (have_predicate) {
+    if (flags & FLAG_HAVE_PREDICATE) {
         predicate_field_index = getFieldIndex(&db, predicate_field);
+        // printf("Predicate index: %d\n", predicate_field_index);
     }
 
     // If we have COUNT(*) and there's no predicate then just early exit
     // we already know how many records there are 
-    if (is_group && !have_predicate) {
+    if ((flags & FLAG_GROUP) && !(flags & FLAG_HAVE_PREDICATE)) {
         // We also need to provide a specimen row
         // "0 was chosen by a fair dice roll"
         printResultLine(&db, field_indices, curr_index, 0, db.record_count);
@@ -166,7 +179,9 @@ int query (const char *query) {
     }
 
     for (int i = 0; i < db.record_count; i++) {
-        if (have_predicate) {
+
+        // Perform filtering if necessary
+        if (flags & FLAG_HAVE_PREDICATE) {
             char value[VALUE_MAX_LENGTH];
             getRecordValue(&db, i, predicate_field_index, value, VALUE_MAX_LENGTH);
             
@@ -180,7 +195,7 @@ int query (const char *query) {
         // If we are grouping then don't output anything
         // but we do need to loop through the rows to check predicates
         // we'll also make note of a specimen record
-        if (is_group) {
+        if (flags & FLAG_GROUP) {
             // SQL says specimen can be any matching record we like
             group_specimen = i;
         } else {
@@ -189,7 +204,8 @@ int query (const char *query) {
     }
 
     // COUNT(*) will print just one row
-    if (is_group) {
+    if (flags & FLAG_GROUP) {
+        // printf("Aggregate result:\n");
         printResultLine(&db, field_indices, curr_index, group_specimen, result_count);
     }
 
@@ -268,6 +284,8 @@ char parseOperator (const char *input) {
 }
 
 int evaluateExpression (char op, const char *left, const char *right) {
+    // printf("Evaluating %s OP %s\n", left, right);
+
     if (strcmp(right, "NULL") == 0) {
         size_t len = strlen(left);
 
