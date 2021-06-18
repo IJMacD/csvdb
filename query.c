@@ -198,7 +198,10 @@ int query (const char *query) {
     // If we have a primary key search then we can binary search
     if ((flags & FLAG_PRIMARY_KEY_SEARCH) && predicate_op == OPERATOR_EQ) {
         int record_index = pk_search(&db, predicate_field_index, predicate_value);
-        printResultLine(&db, field_indices, curr_index, record_index, record_index == -1 ? 0 : 1);
+        // If we didn't find a record we shouldn't output anything unless we're grouping
+        if (record_index >= 0 || (flags & FLAG_GROUP)) {
+            printResultLine(&db, field_indices, curr_index, record_index, record_index == -1 ? 0 : 1);
+        }
         return 0;
     }
 
