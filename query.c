@@ -35,6 +35,8 @@ void skipWhitespace (const char *string, size_t *index);
 
 void skipToken (const char *string, size_t *index);
 
+void skipLine (const char * string, size_t *index);
+
 int getToken (const char *string, size_t *index, char *token, int token_max_length);
 
 int getNumericToken (const char *string, size_t *index);
@@ -52,49 +54,18 @@ int query (const char *query) {
      * Begin Query parsing
      *********************/
 
-    char keyword[FIELD_MAX_LENGTH];
-
     size_t index = 0;
-
-    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
-
-    if (strcmp(keyword, "SELECT") != 0) {
-        fprintf(stderr, "Bad query - expected SELECT\n");
-        return -1;
-    }
 
     size_t query_length = strlen(query);
 
     // printf("Query length: %ld\n", query_length);
 
     char fields[FIELD_MAX_COUNT * FIELD_MAX_LENGTH];
-
-    int curr_index = 0;
-    while (index < query_length) {
-        getToken(query, &index, fields + (FIELD_MAX_LENGTH * curr_index++), FIELD_MAX_LENGTH);
-
-        // printf("Field is %s\n", field);
-
-        skipWhitespace(query, &index);
-
-        if (query[index] != ',') {
-            break;
-        }
-
-        index++;
-    }
+    int field_count = 0;
 
     // printf("Asked for %d field(s)\n", curr_index);
 
-    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
-
-    if (strcmp(keyword, "FROM") != 0) {
-        fprintf(stderr, "Bad query - expected FROM\n");
-        return -1;
-    }
-
-    char table[TABLE_MAX_LENGTH];
-    getToken(query, &index, table, TABLE_MAX_LENGTH);
+    char table[TABLE_MAX_LENGTH] = {0};
 
     char predicate_field[FIELD_MAX_LENGTH];
     char predicate_value[VALUE_MAX_LENGTH];
@@ -109,17 +80,41 @@ int query (const char *query) {
     long offset_value = 0;
     long limit_value = -1;
 
+    char keyword[FIELD_MAX_LENGTH];
+
     while (index < query_length) {
 
         int token_length = getToken(query, &index, keyword, FIELD_MAX_LENGTH);
 
-        if (token_length == 0) {
+        if (token_length <= 0) {
             break;
         }
         
         // printf("Token: '%s'\n", keyword);
 
-        if (strcmp(keyword, "WHERE") == 0) {
+        if (strcmp(keyword, "SELECT") == 0) {
+            
+            int curr_index = 0;
+            while (index < query_length) {
+                getToken(query, &index, fields + (FIELD_MAX_LENGTH * curr_index++), FIELD_MAX_LENGTH);
+
+                // printf("Field is %s\n", field);
+
+                skipWhitespace(query, &index);
+
+                if (query[index] != ',') {
+                    break;
+                }
+
+                index++;
+            }
+
+            field_count = curr_index;
+        }
+        else if (strcmp(keyword, "FROM") == 0) {
+            getToken(query, &index, table, TABLE_MAX_LENGTH);
+        }
+        else if (strcmp(keyword, "WHERE") == 0) {
             flags |= FLAG_HAVE_PREDICATE;
 
             getToken(query, &index, predicate_field, FIELD_MAX_LENGTH);
@@ -173,6 +168,8 @@ int query (const char *query) {
                 fprintf(stderr, "Bad query - expected FIRST|NEXT\n");
                 return -1;
             }
+
+            skipWhitespace(query, &index);
 
             if (isdigit(query[index])) {
 
@@ -233,6 +230,11 @@ int query (const char *query) {
         }
     }
 
+    if (strlen(table) == 0) {
+        fprintf(stderr, "Table not specified\n");
+        return -1;
+    }
+
     /*************************
      * Begin Query processing
      *************************/
@@ -240,13 +242,13 @@ int query (const char *query) {
     struct DB db;
 
     if (openDB(&db, table) != 0) {
-        fprintf(stderr, "File not found: %s\n", table);
+        fprintf(stderr, "File not found: '%s'\n", table);
         return -1;
     }
 
     int field_indices[FIELD_MAX_COUNT];
     
-    for (int i = 0; i < curr_index; i++) {
+    for (int i = 0; i < field_count; i++) {
         char *field_name = fields + (i * FIELD_MAX_LENGTH);
 
         if (strcmp(field_name, "COUNT(*)") == 0) {
@@ -284,7 +286,7 @@ int query (const char *query) {
         if (limit_value >= 0L && limit_value < count) {
             count = limit_value;
         }
-        printResultLine(&db, field_indices, curr_index, offset_value, count);
+        printResultLine(&db, field_indices, field_count, offset_value, count);
         return 0;
     }
 
@@ -300,7 +302,7 @@ int query (const char *query) {
         int record_index = pk_search(&db, predicate_field_index, predicate_value);
         // If we didn't find a record we shouldn't output anything unless we're grouping
         if (record_index >= 0 || (flags & FLAG_GROUP)) {
-            printResultLine(&db, field_indices, curr_index, record_index, record_index == -1 ? 0 : 1);
+            printResultLine(&db, field_indices, field_count, record_index, record_index == -1 ? 0 : 1);
         }
         return 0;
     }
@@ -390,28 +392,47 @@ int query (const char *query) {
     // COUNT(*) will print just one row
     if (flags & FLAG_GROUP) {
         // printf("Aggregate result:\n");
-        printResultLine(&db, field_indices, curr_index, group_specimen, result_count);
+        printResultLine(&db, field_indices, field_count, group_specimen, result_count);
     } else for (int i = 0; i < result_count; i++) {
 
         // ROW_NUMBER is offset by OFFSET from result index and is 1-index based
-        printResultLine(&db, field_indices, curr_index, result_rowids[i], offset_value + i + 1);
+        printResultLine(&db, field_indices, field_count, result_rowids[i], offset_value + i + 1);
     }
 
     return 0;
 }
 
-void skipWhitespace (const char * string, size_t *index) {
-    while(isspace(string[*index])) { (*index)++; }
+void skipWhitespace (const char *string, size_t *index) {
+    while (string[*index] != '\0') {
+        while(isspace(string[*index])) { (*index)++; }
+
+        if (strncmp(string + *index, "--", 2) == 0) {
+            skipLine(string, index);
+        } else {
+            break;
+        }
+    }
 }
 
-void skipToken (const char * string, size_t *index) {
+void skipToken (const char *string, size_t *index) {
     while (!iscntrl(string[*index]) && string[*index] != ' ' && string[*index] != ',') {
         (*index)++;
     }
 }
 
+void skipLine (const char *string, size_t *index) {
+    while (string[*index] != '\n' && string[*index] != '\0') {
+        (*index)++;
+    }
+    if (string[*index] == '\n') (*index)++;
+}
+
 int getToken (const char *string, size_t *index, char *token, int token_max_length) {
     skipWhitespace(string, index);
+
+    if (string[*index] == '\0') {
+        return -1;
+    }
 
     int start_index = *index;
 
