@@ -4,6 +4,7 @@
 #include <ctype.h>
 
 #include "db.h"
+#include "tree.h"
 #include "limits.h"
 
 #define FIELD_UNKNOWN       -1
@@ -20,9 +21,10 @@
 #define OPERATOR_GT         5
 #define OPERATOR_GE         6
 
-#define FLAG_HAVE_PREDICATE     1
-#define FLAG_GROUP              2
-#define FLAG_PRIMARY_KEY_SEARCH 4
+#define FLAG_HAVE_PREDICATE         1
+#define FLAG_GROUP                  2
+#define FLAG_PRIMARY_KEY_SEARCH     4
+#define FLAG_ORDER                  8
 
 #define FIELD_MAX_COUNT     10
 
@@ -94,6 +96,8 @@ int query (const char *query) {
     char predicate_field[FIELD_MAX_LENGTH];
     char predicate_value[VALUE_MAX_LENGTH];
     char predicate_op = OPERATOR_UN;
+
+    char order_field[FIELD_MAX_LENGTH];
 
     int flags = 0;
     int result_count = 0;
@@ -201,6 +205,23 @@ int query (const char *query) {
                 return -1;
             }
         }
+        else if (strcmp(keyword, "ORDER") == 0) {
+            skipWhitespace(query, &index);
+
+            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+            if (strcmp(keyword, "BY") != 0) {
+                fprintf(stderr, "Bad query - expected BY\n");
+                return -1;
+            }
+
+            flags |= FLAG_ORDER;
+
+            skipWhitespace(query, &index);
+
+            getToken(query, &index, order_field, FIELD_MAX_LENGTH);
+
+        }
         else {
             fprintf(stderr, "Bad query - expected WHERE|OFFSET|FETCH FIRST|LIMIT\n");
             fprintf(stderr, "Found: '%s'\n", keyword);
@@ -283,7 +304,6 @@ int query (const char *query) {
     /**********************
      * Start iterating rows
      **********************/
-    int match_count = 0;
     int *result_rowids = malloc(sizeof (int) * db.record_count); 
     for (int i = 0; i < db.record_count; i++) {
 
@@ -295,11 +315,6 @@ int query (const char *query) {
             if (!evaluateExpression(predicate_op, value, predicate_value)) {
                 continue;
             }
-        }
-
-        // implement OFFSET
-        if (match_count++ < offset_value) {
-            continue;
         }
 
         // If we are grouping then don't output anything
@@ -315,10 +330,42 @@ int query (const char *query) {
 
         result_count++;
 
-        // Implement FETCH FIRST/LIMIT
-        if (limit_value >= 0 && result_count >= limit_value) {
+        // Implement early exit FETCH FIRST/LIMIT for cases with no ORDER clause
+        if (!(flags & FLAG_ORDER) && limit_value >= 0 && (result_count - offset_value) >= limit_value) {
             break;
         }
+    }
+
+    /*******************
+     * Ordering
+     *******************/
+    if (flags & FLAG_ORDER) {
+        int order_index = getFieldIndex(&db, order_field);
+        struct tree *pool = malloc(sizeof (struct tree) * result_count);
+        struct tree *root = pool;
+
+        for (int i = 0; i < result_count; i++) {
+            struct tree *node = pool++;
+            makeNode(&db, order_index, result_rowids[i], node);
+
+            if (i > 0) {
+                insertNumericNode(root, node);
+            }
+        }
+
+        // Walk tree overwriting result_rowids array
+        int *result_ptr = result_rowids;
+        walkTree(root, &result_ptr);
+    }
+
+    /********************
+     * OFFSET/FETCH FIRST
+     ********************/
+    result_rowids += offset_value;
+    result_count -= offset_value;
+
+    if (limit_value >= 0 && limit_value < result_count) {
+        result_count = limit_value;
     }
 
     /*******************
@@ -331,8 +378,8 @@ int query (const char *query) {
         printResultLine(&db, field_indices, curr_index, group_specimen, result_count);
     } else for (int i = 0; i < result_count; i++) {
 
-        // ROW_NUMBER uses is offset by OFFSET from result index
-        printResultLine(&db, field_indices, curr_index, result_rowids[i], offset_value + i);
+        // ROW_NUMBER is offset by OFFSET from result index and is 1-index based
+        printResultLine(&db, field_indices, curr_index, result_rowids[i], offset_value + i + 1);
     }
 
     return 0;

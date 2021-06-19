@@ -7,7 +7,7 @@ CFLAGS = -Wall -Werror -Wextra
 #
 # Project files
 #
-SRCS = main.c db.c query.c
+SRCS = main.c db.c query.c tree.c
 OBJS = $(SRCS:.c=.o)
 EXE  = csvdb
 

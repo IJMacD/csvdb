@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/debug/csvdb",
             "args": [
-                "SELECT reg FROM test"
+                "SELECT * FROM test"
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
