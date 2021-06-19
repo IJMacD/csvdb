@@ -111,7 +111,11 @@ int query (const char *query) {
 
     while (index < query_length) {
 
-        getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+        int token_length = getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+        if (token_length == 0) {
+            break;
+        }
         
         // printf("Token: '%s'\n", keyword);
 
@@ -397,11 +401,13 @@ int query (const char *query) {
 }
 
 void skipWhitespace (const char * string, size_t *index) {
-    while(string[(*index)] == ' ') { (*index)++; }
+    while(isspace(string[*index])) { (*index)++; }
 }
 
 void skipToken (const char * string, size_t *index) {
-    while(string[(*index)] != ' ' && string[(*index)] != ',' && string[(*index)] != '\0') { (*index)++; }
+    while (!iscntrl(string[*index]) && string[*index] != ' ' && string[*index] != ',') {
+        (*index)++;
+    }
 }
 
 int getToken (const char *string, size_t *index, char *token, int token_max_length) {
@@ -425,7 +431,7 @@ int getToken (const char *string, size_t *index, char *token, int token_max_leng
 
     token[token_length] = '\0';
 
-    return 0;
+    return token_length;
 }
 
 int getNumericToken (const char *string, size_t *index) {
