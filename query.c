@@ -132,14 +132,24 @@ int query (const char *query) {
 
             // printf("Predicate field: %s\n", predicate_field);
 
-            char op[3];
-            getToken(query, &index, op, 3);
+            char op[4];
+            getToken(query, &index, op, 4);
 
             predicate_op = parseOperator(op);
-
             if (predicate_op == OPERATOR_UN) {
                 fprintf(stderr, "Bad query - expected =|!=|<|<=|>|>=\n");
                 return -1;
+            }
+
+            // Check for IS NOT
+            if (strcmp(op, "IS") == 0) {
+                size_t original_index = index;
+                getToken(query, &index, op, 4);
+                if (strcmp(op, "NOT") == 0) {
+                    predicate_op = OPERATOR_NE;
+                } else {
+                    index = original_index;
+                }
             }
 
             getToken(query, &index, predicate_value, VALUE_MAX_LENGTH);
