@@ -25,6 +25,8 @@ void insertNode (struct DB *db, int field_index, struct tree *root, struct tree 
 }
 
 void insertNumericNode (struct tree *root, struct tree *node) {
+    if (root == NULL) return;
+
     if (node->value < root->value) {
         if (root->left == NULL) root->left = node;
         else {
@@ -40,6 +42,8 @@ void insertNumericNode (struct tree *root, struct tree *node) {
 }
 
 void insertTextNode (struct DB *db, int field_index, struct tree *root, struct tree *node) {
+    if (root == NULL) return;
+    
     char root_value[VALUE_MAX_LENGTH];
     char node_value[VALUE_MAX_LENGTH];
 
@@ -79,6 +83,19 @@ void walkTree (struct tree *node, int **rowids) {
     // else printf(" null ");
 
     // printf(" }");
+}
+
+void walkTreeBackwards (struct tree *node, int **rowids) {
+    if (node->right != NULL) {
+        walkTreeBackwards(node->right, rowids);
+    }
+
+    **rowids = node->rowid;
+    (*rowids)++;
+
+    if (node->left != NULL) {
+        walkTreeBackwards(node->left, rowids);
+    }
 }
 
 int is_numeric (const char *string) {

@@ -28,6 +28,9 @@
 
 #define FIELD_MAX_COUNT     10
 
+#define ORDER_ASC   0
+#define ORDER_DESC  1
+
 void skipWhitespace (const char *string, size_t *index);
 
 void skipToken (const char *string, size_t *index);
@@ -49,7 +52,13 @@ int query (const char *query) {
      * Begin Query parsing
      *********************/
 
-    if (strncmp(query, "SELECT ", 7) != 0) {
+    char keyword[FIELD_MAX_LENGTH];
+
+    size_t index = 0;
+
+    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+    if (strcmp(keyword, "SELECT") != 0) {
         fprintf(stderr, "Bad query - expected SELECT\n");
         return -1;
     }
@@ -57,10 +66,6 @@ int query (const char *query) {
     size_t query_length = strlen(query);
 
     // printf("Query length: %ld\n", query_length);
-
-    size_t index = 7;
-
-    skipWhitespace(query, &index);
 
     char fields[FIELD_MAX_COUNT * FIELD_MAX_LENGTH];
 
@@ -77,18 +82,16 @@ int query (const char *query) {
         }
 
         index++;
-
-        skipWhitespace(query, &index);
     }
 
     // printf("Asked for %d field(s)\n", curr_index);
 
-    if (strncmp(query + index, "FROM ", 5) != 0) {
+    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+    if (strcmp(keyword, "FROM") != 0) {
         fprintf(stderr, "Bad query - expected FROM\n");
         return -1;
     }
-
-    index += 5;
 
     char table[TABLE_MAX_LENGTH];
     getToken(query, &index, table, TABLE_MAX_LENGTH);
@@ -98,6 +101,7 @@ int query (const char *query) {
     char predicate_op = OPERATOR_UN;
 
     char order_field[FIELD_MAX_LENGTH];
+    int order_direction = ORDER_ASC;
 
     int flags = 0;
     int result_count = 0;
@@ -107,18 +111,12 @@ int query (const char *query) {
 
     while (index < query_length) {
 
-        skipWhitespace(query, &index);
-
-        char keyword[FIELD_MAX_LENGTH];
-
         getToken(query, &index, keyword, FIELD_MAX_LENGTH);
         
         // printf("Token: '%s'\n", keyword);
 
         if (strcmp(keyword, "WHERE") == 0) {
             flags |= FLAG_HAVE_PREDICATE;
-
-            skipWhitespace(query, &index);
 
             getToken(query, &index, predicate_field, FIELD_MAX_LENGTH);
 
@@ -134,8 +132,6 @@ int query (const char *query) {
 
             // printf("Predicate field: %s\n", predicate_field);
 
-            skipWhitespace(query, &index);
-
             char op[3];
             getToken(query, &index, op, 3);
 
@@ -146,15 +142,9 @@ int query (const char *query) {
                 return -1;
             }
 
-            index++;
-
-            skipWhitespace(query, &index);
-
             getToken(query, &index, predicate_value, VALUE_MAX_LENGTH);
         }
         else if (strcmp(keyword, "OFFSET") == 0) {
-            skipWhitespace(query, &index);
-
             offset_value = getNumericToken(query, &index);
 
             if (offset_value < 0) {
@@ -163,16 +153,12 @@ int query (const char *query) {
             }
         }
         else if (strcmp(keyword, "FETCH") == 0) {
-            skipWhitespace(query, &index);
-
             getToken(query, &index, keyword, FIELD_MAX_LENGTH);
 
             if (strcmp(keyword, "FIRST") != 0 && strcmp(keyword, "NEXT") != 0) {
                 fprintf(stderr, "Bad query - expected FIRST|NEXT\n");
                 return -1;
             }
-
-            skipWhitespace(query, &index);
 
             if (isdigit(query[index])) {
 
@@ -182,8 +168,6 @@ int query (const char *query) {
                     fprintf(stderr, "FETCH FIRST cannot be negative\n");
                     return -1;
                 }
-
-                skipWhitespace(query, &index);
             } else {
                 limit_value = 1;
             }
@@ -196,8 +180,6 @@ int query (const char *query) {
             }
         }
         else if (strcmp(keyword, "LIMIT") == 0) {
-            skipWhitespace(query, &index);
-
             limit_value = getNumericToken(query, &index);
 
             if (limit_value < 0) {
@@ -206,8 +188,6 @@ int query (const char *query) {
             }
         }
         else if (strcmp(keyword, "ORDER") == 0) {
-            skipWhitespace(query, &index);
-
             getToken(query, &index, keyword, FIELD_MAX_LENGTH);
 
             if (strcmp(keyword, "BY") != 0) {
@@ -217,9 +197,19 @@ int query (const char *query) {
 
             flags |= FLAG_ORDER;
 
-            skipWhitespace(query, &index);
-
             getToken(query, &index, order_field, FIELD_MAX_LENGTH);
+
+            size_t original_index = index;
+
+            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+            
+            if (strcmp(keyword, "ASC") == 0) {
+                order_direction = ORDER_ASC;
+            } else if (strcmp(keyword, "DESC") == 0) {
+                order_direction = ORDER_DESC;
+            } else {
+                index = original_index;
+            }
 
         }
         else {
@@ -348,14 +338,25 @@ int query (const char *query) {
             struct tree *node = pool++;
             node->rowid = result_rowids[i];
 
-            if (i > 0) {
+            if (i == 0) {
+                // For root node we do a dummy insert to make sure struct
+                // has been initialised properly
+                insertNode(&db, order_index, NULL, node);
+            } else {
                 insertNode(&db, order_index, root, node);
             }
         }
 
         // Walk tree overwriting result_rowids array
         int *result_ptr = result_rowids;
-        walkTree(root, &result_ptr);
+        if (order_direction == ORDER_ASC) {
+            walkTree(root, &result_ptr);
+        }
+        else {
+            walkTreeBackwards(root, &result_ptr);
+        }
+
+        free(root);
     }
 
     /********************
@@ -394,6 +395,8 @@ void skipToken (const char * string, size_t *index) {
 }
 
 int getToken (const char *string, size_t *index, char *token, int token_max_length) {
+    skipWhitespace(string, index);
+
     int start_index = *index;
 
     // printf("Token starts at %d\n", start_index);
