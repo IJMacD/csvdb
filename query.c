@@ -7,6 +7,8 @@
 #define FIELD_UNKNOWN       -1
 #define FIELD_STAR          -2
 #define FIELD_COUNT_STAR    -3
+#define FIELD_ROW_NUMBER    -4
+#define FIELD_ROW_INDEX     -5
 
 #define OPERATOR_UN         0
 #define OPERATOR_EQ         1
@@ -215,6 +217,10 @@ int query (const char *query) {
             flags |= FLAG_GROUP;
         } else if (strcmp(field_name, "*") == 0) {
             field_indices[i] = FIELD_STAR;
+        } else if (strcmp(field_name, "ROW_NUMBER()") == 0) {
+            field_indices[i] = FIELD_ROW_NUMBER;
+        } else if (strcmp(field_name, "rowid") == 0) {
+            field_indices[i] = FIELD_ROW_INDEX;
         }
         else {
             field_indices[i] = getFieldIndex(&db, field_name);
@@ -290,7 +296,8 @@ int query (const char *query) {
             // SQL says specimen can be any matching record we like
             group_specimen = i;
         } else {
-            printResultLine(&db, field_indices, curr_index, i, 0);
+            // ROW_NUMBER uses match count but is 1-index based
+            printResultLine(&db, field_indices, curr_index, i, match_count);
         }
 
         result_count++;
@@ -360,8 +367,14 @@ void printResultLine (struct DB *db, int *field_indices, int field_count, int re
                     printf("\t");
                 }
             }
-        } else if (field_indices[j] == FIELD_COUNT_STAR) {
+        } else if (field_indices[j] == FIELD_COUNT_STAR || field_indices[j] == FIELD_ROW_NUMBER) {
+            // Same logic is recycled when printing result
+            // FIELD_COUNT_STAR causes grouping and gets total at end
+            // FIELD_ROW_NUMBER uses current matched result count at each iteration
             printf("%d", result_count);
+        } else if (field_indices[j] == FIELD_ROW_INDEX) {
+            // FIELD_ROW_INDEX is the input line (0 indexed)
+            printf("%d", record_index);
         } else {
             char value[VALUE_MAX_LENGTH];
             if (getRecordValue(db, record_index, field_indices[j], value, VALUE_MAX_LENGTH)> 0) {
