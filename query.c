@@ -511,14 +511,22 @@ int pk_search(struct DB *db, int pk_index, char *value) {
 
     char val[VALUE_MAX_LENGTH];
 
+    long curr_value;
+
     // Boundary cases
     getRecordValue(db, index_a, pk_index, val, VALUE_MAX_LENGTH);
-    if (atol(val) == search_value) {
+    curr_value = atol(val);
+    if (curr_value == search_value) {
         return index_a;
+    } else if (search_value < curr_value) {
+        return -1;
     }
     getRecordValue(db, index_b, pk_index, val, VALUE_MAX_LENGTH);
-    if (atol(val) == search_value) {
+    curr_value = atol(val);
+    if (curr_value == search_value) {
         return index_b;
+    } else if (search_value > curr_value) {
+        return -1;
     }
 
     while (index_a < index_b - 1) { 
@@ -526,7 +534,7 @@ int pk_search(struct DB *db, int pk_index, char *value) {
 
         getRecordValue(db, index_curr, pk_index, val, VALUE_MAX_LENGTH);
 
-        long curr_value = atol(val);
+        curr_value = atol(val);
 
         if (curr_value == search_value) {
             // printf("pk_search [%d   <%d>   %d]: %s\n", index_a, index_curr, index_b, val);
