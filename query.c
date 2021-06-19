@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "db.h"
 
@@ -165,17 +166,31 @@ int query (const char *query) {
 
             getToken(query, &index, keyword, FIELD_MAX_LENGTH);
 
-            if (strcmp(keyword, "FIRST") != 0) {
-                fprintf(stderr, "Bad query - expected FETCH FIRST\n");
+            if (strcmp(keyword, "FIRST") != 0 && strcmp(keyword, "NEXT") != 0) {
+                fprintf(stderr, "Bad query - expected FIRST|NEXT\n");
                 return -1;
             }
 
             skipWhitespace(query, &index);
 
-            limit_value = getNumericToken(query, &index);
+            if (isdigit(query[index])) {
 
-            if (limit_value < 0) {
-                fprintf(stderr, "FETCH FIRST cannot be negative\n");
+                limit_value = getNumericToken(query, &index);
+
+                if (limit_value < 0) {
+                    fprintf(stderr, "FETCH FIRST cannot be negative\n");
+                    return -1;
+                }
+
+                skipWhitespace(query, &index);
+            } else {
+                limit_value = 1;
+            }
+
+            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+            if (strcmp(keyword, "ROW") != 0 && strcmp(keyword, "ROWS") != 0) {
+                fprintf(stderr, "Bad query - expected ROW|ROWS; Got '%s'\n", keyword);
                 return -1;
             }
         }
