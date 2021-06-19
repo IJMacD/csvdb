@@ -346,10 +346,10 @@ int query (const char *query) {
 
         for (int i = 0; i < result_count; i++) {
             struct tree *node = pool++;
-            makeNode(&db, order_index, result_rowids[i], node);
+            node->rowid = result_rowids[i];
 
             if (i > 0) {
-                insertNumericNode(root, node);
+                insertNode(&db, order_index, root, node);
             }
         }
 

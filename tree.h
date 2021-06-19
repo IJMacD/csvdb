@@ -5,8 +5,10 @@ struct tree {
     struct tree *right;
 };
 
-void makeNode (struct DB *db, int field_index, int rowid, struct tree *node);
+void insertNode (struct DB *db, int field_index, struct tree *root, struct tree *node);
 
 void insertNumericNode (struct tree *root, struct tree *node);
+
+void insertTextNode (struct DB *db, int field_index, struct tree *root, struct tree *node);
 
 void walkTree (struct tree *node, int **rowids);
