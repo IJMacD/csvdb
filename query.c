@@ -4,6 +4,7 @@
 #include <ctype.h>
 
 #include "db.h"
+#include "limits.h"
 
 #define FIELD_UNKNOWN       -1
 #define FIELD_STAR          -2
@@ -22,10 +23,6 @@
 #define FLAG_HAVE_PREDICATE     1
 #define FLAG_GROUP              2
 #define FLAG_PRIMARY_KEY_SEARCH 4
-
-#define VALUE_MAX_LENGTH    255
-#define FIELD_MAX_LENGTH    32
-#define TABLE_MAX_LENGTH    255
 
 #define FIELD_MAX_COUNT     10
 
@@ -287,6 +284,7 @@ int query (const char *query) {
      * Start iterating rows
      **********************/
     int match_count = 0;
+    int *result_rowids = malloc(sizeof (int) * db.record_count); 
     for (int i = 0; i < db.record_count; i++) {
 
         // Perform filtering if necessary
@@ -311,8 +309,8 @@ int query (const char *query) {
             // SQL says specimen can be any matching record we like
             group_specimen = i;
         } else {
-            // ROW_NUMBER uses match count but is 1-index based
-            printResultLine(&db, field_indices, curr_index, i, match_count);
+            // Add to result set
+            result_rowids[result_count] = i;
         }
 
         result_count++;
@@ -323,10 +321,18 @@ int query (const char *query) {
         }
     }
 
+    /*******************
+     * Output result set
+     *******************/
+
     // COUNT(*) will print just one row
     if (flags & FLAG_GROUP) {
         // printf("Aggregate result:\n");
         printResultLine(&db, field_indices, curr_index, group_specimen, result_count);
+    } else for (int i = 0; i < result_count; i++) {
+
+        // ROW_NUMBER uses is offset by OFFSET from result index
+        printResultLine(&db, field_indices, curr_index, result_rowids[i], offset_value + i);
     }
 
     return 0;
