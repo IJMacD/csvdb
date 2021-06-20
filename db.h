@@ -1,7 +1,8 @@
 struct DB {
     FILE *file;
-    long *line_indices;
+    char *fields;
     int field_count;
+    long *line_indices;
     int record_count;
 };
 

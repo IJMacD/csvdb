@@ -8,6 +8,10 @@ int countFields (FILE *f);
 
 int countLines (FILE *f);
 
+int measureLine (FILE *f, size_t byte_offset);
+
+void prepareHeaders (struct DB *db);
+
 /**
  * Indices must point to enough memory to contain all the indices
  */
@@ -18,7 +22,7 @@ void printLine (FILE *f, long position);
 void makeDB (struct DB *db, FILE *f) {
     db->file = f;
 
-    db->field_count = countFields(f);
+    prepareHeaders(db);
 
     int line_count = countLines(f);
 
@@ -105,6 +109,32 @@ int countFields (FILE *f) {
 }
 
 /**
+ * Including \n
+ */
+int measureLine (FILE *f, size_t byte_offset) {
+    size_t buffer_size = 1024;
+    int count = 0; 
+    char buffer[buffer_size];
+    size_t read_size;
+
+    fseek(f, byte_offset, SEEK_SET);
+
+    do {
+        read_size = fread(buffer, 1, buffer_size, f);
+
+        for (size_t i = 0; i < read_size; i++) {
+            if (buffer[i] == '\n'){
+                return count + i + 1;
+            }
+        }
+
+        count += read_size;
+    } while (read_size > 0);
+
+    return -1;
+}
+
+/**
  * Indices must point to enough memory to contain all the indices
  */
 int indexLines (FILE *f, long *indices) {
@@ -177,49 +207,15 @@ void printLine (FILE *f, long position) {
 }
 
 int getFieldIndex (struct DB *db, const char *field) {
-    fseek(db->file, 0, SEEK_SET);
-    
-    size_t buffer_size = 1024;
-    char buffer[buffer_size];
-    size_t read_size;
-    int field_index = 0;
-    int char_index = 0; 
-    int char_length = strlen(field);
-    int candidate = 1;
+    char *curr_field = db->fields;
 
-    do {
-        read_size = fread(buffer, 1, buffer_size, db->file);
-
-        for (size_t i = 0; i < read_size; i++) {
-            // Check end conditions first
-            if (buffer[i] == '\n' || buffer[i] == ','){
-                // If the character found was the last one, then we're done
-                if (candidate == 1 && char_index == char_length) {
-                    return field_index;
-                }
-                
-                // If we get to a comma then we haven't found the field but there's still a chance
-                // so restart our search
-                if (buffer[i] == ',') {
-                    char_index = 0;
-                    field_index++;
-                    candidate = 1;
-                } else {
-                    // If we get to a new line then we haven't found the field
-                    return -1;
-                }
-            }
-            // If we found a matching character then advance the index to look for the next one
-            else if (buffer[i] == field[char_index] && candidate == 1) {
-                char_index++;
-            }
-            // We found a character but it wasn't the right one
-            // This is no longer a candidate. Wait for a comma
-            else {
-                candidate = 0;
-            }
+    for (int i = 0; i < db->field_count; i++) {
+        if (strcmp(field, curr_field) == 0) {
+            return i;
         }
-    } while (read_size > 0);
+
+        curr_field += strlen(curr_field) + 1;
+    }
 
     return -1;
 }
@@ -283,4 +279,34 @@ int getRecordValue (struct DB *db, int record_index, int field_index, char *valu
 
     // Ran out of file
     return -1;
+}
+
+void prepareHeaders (struct DB *db) {
+
+    db->field_count = countFields(db->file);
+    
+    int header_length = measureLine(db->file, 0);
+
+    if (header_length < 0) {
+        fprintf(stderr, "Something went wrong measuring header");
+        exit(-1);
+    }
+
+    db->fields = malloc(header_length);
+
+
+    fseek(db->file, 0, SEEK_SET);
+
+    int count = fread(db->fields, 1, header_length, db->file);
+    if (count < header_length) {
+        fprintf(stderr, "Something went wrong reading header");
+        exit(-1);
+    }
+    
+    for (int i = 0; i < header_length; i++) {
+        if(db->fields[i] == ',' || db->fields[i] == '\n') {
+            db->fields[i] = '\0';
+        }
+    }
+
 }
