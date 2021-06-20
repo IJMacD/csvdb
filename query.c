@@ -61,7 +61,9 @@ int query (const char *query) {
     // printf("Query length: %ld\n", query_length);
 
     char fields[FIELD_MAX_COUNT * FIELD_MAX_LENGTH];
-    int field_count = 0;
+    // Allow SELECT to be optional and default to SELECT *
+    fields[0] = '*';
+    int field_count = 1;
 
     // printf("Asked for %d field(s)\n", curr_index);
 
