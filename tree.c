@@ -43,7 +43,7 @@ void insertNumericNode (struct tree *root, struct tree *node) {
 
 void insertTextNode (struct DB *db, int field_index, struct tree *root, struct tree *node) {
     if (root == NULL) return;
-    
+
     char root_value[VALUE_MAX_LENGTH];
     char node_value[VALUE_MAX_LENGTH];
 

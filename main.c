@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "query.h"
 
@@ -31,8 +32,6 @@ int main (int argc, char * argv[]) {
             return -1;
         }
 
-        printf("I got '%s'\n", argv[1]);
-
         printUsage(argv[0]);
         return -1;
     }
@@ -42,9 +41,9 @@ int main (int argc, char * argv[]) {
         return 0;
     }
 
-    if ((fseek(stdin, 0, SEEK_END), ftell(stdin)) > 0) {
-        rewind(stdin);
-
+    // If stdin is something more than a tty (i.e pipe or redirected file) then
+    // we should read from it.
+    if (!isatty(fileno(stdin))) {
         size_t count = fread(buffer, 1, 1024, stdin);
         if (count > 0) {
             buffer[count] = '\0';
