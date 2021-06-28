@@ -220,6 +220,20 @@ int getFieldIndex (struct DB *db, const char *field) {
     return -1;
 }
 
+char * getFieldName (struct DB *db, int field_index) {
+    char *curr_field = db->fields;
+
+    for (int i = 0; i < db->field_count; i++) {
+        if (i == field_index) {
+            return curr_field;
+        }
+
+        curr_field += strlen(curr_field) + 1;
+    }
+
+    return "\0";
+}
+
 /**
  * Returns the number of bytes read, or -1 on error
  */

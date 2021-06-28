@@ -3,6 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "query.h"
 #include "db.h"
 #include "tree.h"
 #include "limits.h"
@@ -41,6 +42,8 @@ int getToken (const char *string, size_t *index, char *token, int token_max_leng
 
 int getNumericToken (const char *string, size_t *index);
 
+void printHeaderLine (struct DB *db, int *field_indices, int field_count);
+
 void printResultLine (struct DB *db, int *field_indices, int field_count, int record_index, int result_count);
 
 char parseOperator (const char *input);
@@ -49,7 +52,7 @@ int evaluateExpression (char op, const char *left, const char *right);
 
 int pk_search(struct DB *db, int pk_index, char *value);
 
-int query (const char *query) {
+int query (const char *query, int output_flags) {
     /*********************
      * Begin Query parsing
      *********************/
@@ -250,6 +253,7 @@ int query (const char *query) {
 
     int field_indices[FIELD_MAX_COUNT];
 
+    // Get selected column indexes
     for (int i = 0; i < field_count; i++) {
         char *field_name = fields + (i * FIELD_MAX_LENGTH);
 
@@ -271,7 +275,13 @@ int query (const char *query) {
                 return -1;
             }
         }
+    }
 
+    /*************************
+     * Output headers
+     ************************/
+    if (output_flags & OUTPUT_FLAG_HEADERS) {
+        printHeaderLine(&db, field_indices, field_count);
     }
 
     /*************************
@@ -533,6 +543,35 @@ void printResultLine (struct DB *db, int *field_indices, int field_count, int re
             if (getRecordValue(db, record_index, field_indices[j], value, VALUE_MAX_LENGTH)> 0) {
                 printf("%s", value);
             }
+        }
+
+        if (j < field_count - 1) {
+            printf("\t");
+        }
+    }
+    printf("\n");
+}
+
+void printHeaderLine (struct DB *db, int *field_indices, int field_count) {
+    for (int j = 0; j < field_count; j++) {
+
+        if (field_indices[j] == FIELD_STAR) {
+            for (int k = 0; k < db->field_count; k++) {
+                printf("%s", getFieldName(db, k));
+
+                if (k < db->field_count - 1) {
+                    printf("\t");
+                }
+            }
+        } else if (field_indices[j] == FIELD_COUNT_STAR) {
+            printf("COUNT(*)");
+        } else if (field_indices[j] == FIELD_ROW_NUMBER) {
+            printf("ROW_NUMBER()");
+        } else if (field_indices[j] == FIELD_ROW_INDEX) {
+            // FIELD_ROW_INDEX is the input line (0 indexed)
+            printf("rowid");
+        } else {
+            printf("%s", getFieldName(db, field_indices[j]));
         }
 
         if (j < field_count - 1) {

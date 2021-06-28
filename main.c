@@ -6,15 +6,23 @@
 #include "query.h"
 
 void printUsage (const char* name) {
-    printf("Usage:\n\t%1$s \"SELECT <fields, ...> FROM <file> [WHERE <field> = <value>]\"\n\t%1$s -- file.sql\n", name);
+    printf("Usage:\n\t%1$s [-h|--headers] \"SELECT <fields, ...> FROM <file> [WHERE] [ORDER BY] [OFFSET FETCH FIRST]\"\n\t%1$s [-h|--headers] -- file.sql\n\t%1$s [-h|--headers] (expects input on stdin)\n", name);
 }
 
 int main (int argc, char * argv[]) {
     char buffer[1024];
+    int flags = 0;
 
-    if (argc > 2) {
-        if (strcmp(argv[1], "--") == 0) {
-            FILE *f = fopen(argv[2], "r");
+    int arg = 1;
+
+    if (argc > arg && (strcmp(argv[arg], "-h") == 0 || strcmp(argv[arg], "--headers") == 0)) {
+        flags |= OUTPUT_FLAG_HEADERS;
+        arg++;
+    }
+
+    if (argc > arg + 1) {
+        if (strcmp(argv[arg], "--") == 0) {
+            FILE *f = fopen(argv[arg + 1], "r");
 
             if (!f) {
                 fprintf(stderr, "Couldn't open file %s\n", argv[2]);
@@ -25,7 +33,7 @@ int main (int argc, char * argv[]) {
 
             if (count > 0) {
                 buffer[count] = '\0';
-                query(buffer);
+                query(buffer, flags);
                 return 0;
             }
 
@@ -37,8 +45,8 @@ int main (int argc, char * argv[]) {
         return -1;
     }
 
-    if (argc > 1) {
-        query(argv[1]);
+    if (argc > arg) {
+        query(argv[arg], flags);
         return 0;
     }
 
@@ -48,7 +56,7 @@ int main (int argc, char * argv[]) {
         size_t count = fread(buffer, 1, 1024, stdin);
         if (count > 0) {
             buffer[count] = '\0';
-            query(buffer);
+            query(buffer, flags);
             return 0;
         }
     }
