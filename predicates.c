@@ -1,7 +1,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include "predicates.h"
+#include "query.h"
 #include "limits.h"
+#include "util.h"
+
+int compare (int numeric_mode, const char * valueA, long valueA_numeric, const char *valueB);
 
 char parseOperator (const char *input) {
     if (strcmp(input, "=") == 0)  return OPERATOR_EQ;
@@ -49,53 +53,82 @@ int evaluateExpression (char op, const char *left, const char *right) {
     return 0;
 }
 
-int pk_search(struct DB *db, int pk_index, const char *value) {
+int pk_search(struct DB *db, int pk_index, const char *value, int result_index) {
     int index_a = 0;
     int index_b = db->record_count - 1;
+    int index_match = -1;
+    int numeric_mode = is_numeric(value);
 
-    long search_value = atol(value);
+    long search_value;
+
+    if (numeric_mode) {
+        search_value = atol(value);
+    }
 
     char val[VALUE_MAX_LENGTH];
 
-    long curr_value;
-
     // Boundary cases
     getRecordValue(db, index_a, pk_index, val, VALUE_MAX_LENGTH);
-    curr_value = atol(val);
-    if (curr_value == search_value) {
-        return index_a;
-    } else if (search_value < curr_value) {
-        return -1;
-    }
-    getRecordValue(db, index_b, pk_index, val, VALUE_MAX_LENGTH);
-    curr_value = atol(val);
-    if (curr_value == search_value) {
-        return index_b;
-    } else if (search_value > curr_value) {
+    int res = compare(numeric_mode, value, search_value, val);
+    if (res < 0) {
         return -1;
     }
 
-    while (index_a < index_b - 1) {
-        int index_curr = (index_a + index_b) / 2;
+    if (res == 0) {
+        index_match = index_a;
+    } else {
+        getRecordValue(db, index_b, pk_index, val, VALUE_MAX_LENGTH);
+        res = compare(numeric_mode, value, search_value, val);
 
-        getRecordValue(db, index_curr, pk_index, val, VALUE_MAX_LENGTH);
-
-        curr_value = atol(val);
-
-        if (curr_value == search_value) {
-            // printf("pk_search [%d   <%d>   %d]: %s\n", index_a, index_curr, index_b, val);
-            return index_curr;
+        if (res > 0) {
+            return -1;
         }
 
-        if (curr_value < search_value) {
-            // printf("pk_search [%d   (%d) x %d]: %s\n", index_a, index_curr, index_b, val);
-            index_a = index_curr;
+        if (res == 0) {
+            index_match = index_b;
+        } else while (index_a < index_b - 1) {
+            int index_curr = (index_a + index_b) / 2;
 
-        } else {
-            // printf("pk_search [%d x (%d)   %d]: %s\n", index_a, index_curr, index_b, val);
-            index_b = index_curr;
+            getRecordValue(db, index_curr, pk_index, val, VALUE_MAX_LENGTH);
+            res = compare(numeric_mode, value, search_value, val);
+
+            if (res == 0) {
+                // printf("pk_search [%d   <%d>   %d]: %s\n", index_a, index_curr, index_b, val);
+                index_match = index_curr;
+                break;
+            }
+
+            if (res > 0) {
+                // printf("pk_search [%d   (%d) x %d]: %s\n", index_a, index_curr, index_b, val);
+                index_a = index_curr;
+
+            } else {
+                // printf("pk_search [%d x (%d)   %d]: %s\n", index_a, index_curr, index_b, val);
+                index_b = index_curr;
+            }
         }
+    }
+
+    if (index_match < 0) {
+        return -1;
+    }
+
+    if (result_index == FIELD_ROW_INDEX) {
+        return index_match;
+    }
+
+    if (getRecordValue(db, index_match, result_index, val, VALUE_MAX_LENGTH) > 0) {
+        return atoi(val);
     }
 
     return -1;
+}
+
+int compare (int numeric_mode, const char * valueA, long valueA_numeric, const char *valueB) {
+    if (numeric_mode) {
+        long valueB_numeric = atol(valueB);
+        return valueA_numeric - valueB_numeric;
+    } else {
+        return strcmp(valueA, valueB);
+    }
 }

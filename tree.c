@@ -1,11 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 
 #include "db.h"
 #include "tree.h"
 #include "limits.h"
+#include "util.h"
 
 #define MODE_ALPHA      0
 #define MODE_NUMERIC    1
@@ -32,8 +32,8 @@ void insertNumericNode (struct tree *root, struct tree *node) {
         else {
             insertNumericNode(root->left, node);
         }
-    } 
-    else {  
+    }
+    else {
         if (root->right == NULL) root->right = node;
         else {
             insertNumericNode(root->right, node);
@@ -96,13 +96,4 @@ void walkTreeBackwards (struct tree *node, int **rowids) {
     if (node->left != NULL) {
         walkTreeBackwards(node->left, rowids);
     }
-}
-
-int is_numeric (const char *string) {
-    const char *ptr = string;
-    while (*ptr != '\0') {
-        if (!isdigit(*ptr)) return 0;
-        ptr++;
-    }
-    return 1;
 }
