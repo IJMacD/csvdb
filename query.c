@@ -37,6 +37,7 @@ int process_select_query (
 );
 
 int indexUniqueScan (const char *predicate_field, char predicate_op, const char *predicate_value, int flags);
+int indexRangeScan (int *result_rowids, const char *predicate_field, char predicate_op, const char *predicate_value, int limit_value, int offset_value, int flags);
 int fullTableScan (struct DB *db, int *result_rowids, const char *predicate_field, char predicate_op, const char *predicate_value, int limit_value, int offset_value, int flags);
 
 int query (const char *query, int output_flags) {
@@ -340,9 +341,9 @@ int process_select_query (
     if (matched_rowid != -2) {
         if (matched_rowid >= 0 || (flags & FLAG_GROUP)) {
             printResultLine(stdout, &db, field_indices, field_count, matched_rowid, matched_rowid == -1 ? 0 : 1, output_flags);
-            }
-            return 0;
         }
+        return 0;
+    }
     // If we're here it's because there was no unique index
 
     /**********************
@@ -352,9 +353,17 @@ int process_select_query (
     int *result_rowids = malloc(sizeof (int) * db.record_count);
 
     /******************
+     * INDEX RANGE SCAN
+     ******************/
+    result_count = indexRangeScan(result_rowids, predicate_field, predicate_op, predicate_value, limit_value, offset_value, flags);
+
+    /******************
      * FULL TABLE SCAN
      ******************/
-    result_count = fullTableScan(&db, result_rowids, predicate_field, predicate_op, predicate_value, limit_value, offset_value, flags);
+    // If INDEX RANGE SCAN failed then do FULL TABLE SCAN
+    if (result_count == -2) {
+        result_count = fullTableScan(&db, result_rowids, predicate_field, predicate_op, predicate_value, limit_value, offset_value, flags);
+    }
 
     // Early exit if there were no results
     if (result_count == 0) {
@@ -411,6 +420,67 @@ int indexUniqueScan (const char *predicate_field, char predicate_op, const char 
 
         if (openDB(&index_db, index_filename) == 0) {
             return pk_search(&index_db, 0, predicate_value, 1);
+        }
+    }
+
+    return -2;
+}
+
+/**
+ * @return number of matched rows; -2 if index does not exist
+ */
+int indexRangeScan (int *result_rowids, const char *predicate_field, char predicate_op, const char *predicate_value, int limit_value, int offset_value, int flags) {
+    int result_count = 0;
+
+    // If we have a (non-unique) index predicate then we can binary search and scan
+    if ((flags & FLAG_HAVE_PREDICATE) && predicate_op == OPERATOR_EQ) {
+        char index_filename[TABLE_MAX_LENGTH + 10];
+        sprintf(index_filename, "%s.index.csv", predicate_field);
+
+        struct DB index_db;
+
+        char value[VALUE_MAX_LENGTH];
+
+        if (openDB(&index_db, index_filename) == 0) {
+            int record_index = pk_search(&index_db, 0, predicate_value, FIELD_ROW_INDEX);
+
+            if (record_index < 0) {
+                return -1;
+            }
+
+            // Backtrack until we find the first value
+            while (record_index >= 0) {
+                getRecordValue(&index_db, --record_index, 0, value, VALUE_MAX_LENGTH);
+
+                if (strcmp(value, predicate_value) != 0) {
+                    break;
+                }
+            }
+
+            // We've found the first value; now iterate forwards again
+            record_index++;
+
+            while (record_index < index_db.record_count) {
+                getRecordValue(&index_db, record_index, 0, value, VALUE_MAX_LENGTH);
+
+                // We've reached the end of the values
+                if (strcmp(value, predicate_value) != 0) {
+                    break;
+                }
+
+                getRecordValue(&index_db, record_index, 1, value, VALUE_MAX_LENGTH);
+                result_rowids[result_count++] = atoi(value);
+
+                record_index++;
+
+                // Implement early exit FETCH FIRST/LIMIT for cases with no ORDER clause
+                if (!(flags & FLAG_ORDER) && limit_value >= 0 && (result_count - offset_value) >= limit_value) {
+                    break;
+                }
+
+            }
+
+            return result_count;
         }
     }
 
