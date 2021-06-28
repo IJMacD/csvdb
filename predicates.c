@@ -59,34 +59,41 @@ int pk_search(struct DB *db, int pk_index, const char *value, int result_index) 
     int index_match = -1;
     int numeric_mode = is_numeric(value);
 
-    long search_value;
-
-    if (numeric_mode) {
-        search_value = atol(value);
-    }
+    long search_value = atol(value);
 
     char val[VALUE_MAX_LENGTH];
 
-    // Boundary cases
+    // Check boundary cases before commencing search
+
+    // Check lower boundary
     getRecordValue(db, index_a, pk_index, val, VALUE_MAX_LENGTH);
     int res = compare(numeric_mode, value, search_value, val);
+
+    // Search value is below minimum
     if (res < 0) {
         return -1;
     }
 
-    if (res == 0) {
+    // Found a match at lower boundary
+    if (res == 0)
         index_match = index_a;
-    } else {
+
+    else {
+        // Check upper boundary
         getRecordValue(db, index_b, pk_index, val, VALUE_MAX_LENGTH);
         res = compare(numeric_mode, value, search_value, val);
 
+        // Search value is above maximum
         if (res > 0) {
             return -1;
         }
 
-        if (res == 0) {
+        // Found a match at upper boundary
+        if (res == 0)
             index_match = index_b;
-        } else while (index_a < index_b - 1) {
+
+        // Iterate as a binary search
+        else while (index_a < index_b - 1) {
             int index_curr = (index_a + index_b) / 2;
 
             getRecordValue(db, index_curr, pk_index, val, VALUE_MAX_LENGTH);
@@ -113,10 +120,13 @@ int pk_search(struct DB *db, int pk_index, const char *value, int result_index) 
         return -1;
     }
 
+    // If the requested result column was this special value
+    // we return the row index as the result
     if (result_index == FIELD_ROW_INDEX) {
         return index_match;
     }
 
+    // Otherwise fetch the value for the requested column and convert to an int
     if (getRecordValue(db, index_match, result_index, val, VALUE_MAX_LENGTH) > 0) {
         return atoi(val);
     }
