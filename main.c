@@ -6,7 +6,13 @@
 #include "query.h"
 
 void printUsage (const char* name) {
-    printf("Usage:\n\t%1$s [-h|--headers] \"SELECT <fields, ...> FROM <file> [WHERE] [ORDER BY] [OFFSET FETCH FIRST]\"\n\t%1$s [-h|--headers] -- file.sql\n\t%1$s [-h|--headers] (expects input on stdin)\n", name);
+    printf(
+        "Usage:\n"
+        "\t%1$s [-h|--headers] \"SELECT <fields, ...> FROM <file> [WHERE] [ORDER BY] [OFFSET FETCH FIRST]\"\n"
+        "\t%1$s [-h|--headers] \"CREATE [UNIQUE] INDEX <index_file> ON <file> (<field>)\"\n"
+        "\t%1$s [-h|--headers] -- file.sql\n"
+        "\t%1$s [-h|--headers] (expects input on stdin)\n"
+    , name);
 }
 
 int main (int argc, char * argv[]) {

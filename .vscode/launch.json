@@ -13,6 +13,9 @@
                 // "SELECT * FROM test"
                 "--",
                 "test.sql"
+                // "SELECT * FROM test3 WHERE PK(id) = 270"
+                // "CREATE INDEX name ON test3 (name)"
+                // "SELECT * FROM test3 WHERE name = 'Gus LUCAS'"
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

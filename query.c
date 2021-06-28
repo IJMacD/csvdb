@@ -10,6 +10,7 @@
 #include "sort.h"
 #include "output.h"
 #include "limits.h"
+#include "create.h"
 
 #define FLAG_HAVE_PREDICATE         1
 #define FLAG_GROUP                  2
@@ -17,6 +18,8 @@
 #define FLAG_ORDER                  8
 
 #define FIELD_MAX_COUNT     10
+
+int select_query (const char *query, int output_flags);
 
 int process_select_query (
     const char *table,
@@ -34,6 +37,14 @@ int process_select_query (
 );
 
 int query (const char *query, int output_flags) {
+    if (strncmp(query, "CREATE ", 7) == 0) {
+        return create_query(query);
+    }
+
+    return select_query(query, output_flags);
+}
+
+int select_query (const char *query, int output_flags) {
     /*********************
      * Begin Query parsing
      *********************/
@@ -311,11 +322,28 @@ int process_select_query (
     if ((flags & FLAG_PRIMARY_KEY_SEARCH) && predicate_op == OPERATOR_EQ) {
         int record_index = pk_search(&db, predicate_field_index, predicate_value, FIELD_ROW_INDEX);
         // If we didn't find a record we shouldn't output anything unless we're grouping
-        
+
         if (record_index >= 0 || (flags & FLAG_GROUP)) {
             printResultLine(stdout, &db, field_indices, field_count, record_index, record_index == -1 ? 0 : 1, 0);
         }
         return 0;
+    }
+
+    // If we have a unique index on a predicate then we can binary search
+    if ((flags & FLAG_HAVE_PREDICATE) && predicate_op == OPERATOR_EQ) {
+        char index_filename[TABLE_MAX_LENGTH + 10];
+        sprintf(index_filename, "%s.unique.csv", predicate_field);
+
+        struct DB index_db;
+
+        if (openDB(&index_db, index_filename) == 0) {
+            int record_index = pk_search(&index_db, 0, predicate_value, 1);
+
+            if (record_index >= 0 || (flags & FLAG_GROUP)) {
+                printResultLine(stdout, &db, field_indices, field_count, record_index, record_index == -1 ? 0 : 1, 0);
+            }
+            return 0;
+        }
     }
 
     /**********************
