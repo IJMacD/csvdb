@@ -36,6 +36,9 @@ int process_select_query (
     int output_flags
 );
 
+int indexUniqueScan (const char *predicate_field, char predicate_op, const char *predicate_value, int flags);
+int fullTableScan (struct DB *db, int *result_rowids, const char *predicate_field, char predicate_op, const char *predicate_value, int limit_value, int offset_value, int flags);
+
 int query (const char *query, int output_flags) {
     if (strncmp(query, "CREATE ", 7) == 0) {
         return create_query(query);
@@ -297,6 +300,9 @@ int process_select_query (
      * Special Cases
      *************************/
 
+    /****************************
+     * COUNT(*) with no predicate
+     ****************************/
     // If we have COUNT(*) and there's no predicate then just early exit
     // we already know how many records there are
     if ((flags & FLAG_GROUP) && !(flags & FLAG_HAVE_PREDICATE)) {
@@ -311,75 +317,44 @@ int process_select_query (
         return 0;
     }
 
-    int predicate_field_index = FIELD_UNKNOWN;
-
-    if (flags & FLAG_HAVE_PREDICATE) {
-        predicate_field_index = getFieldIndex(&db, predicate_field);
-        // printf("Predicate index: %d\n", predicate_field_index);
-    }
-
-    // If we have a primary key search then we can binary search
+    /******************
+     * PRIMARY KEY
+     *****************/
+    // If we have a primary key predicate then we can binary search
     if ((flags & FLAG_PRIMARY_KEY_SEARCH) && predicate_op == OPERATOR_EQ) {
+        int predicate_field_index = getFieldIndex(&db, predicate_field);
         int record_index = pk_search(&db, predicate_field_index, predicate_value, FIELD_ROW_INDEX);
         // If we didn't find a record we shouldn't output anything unless we're grouping
 
         if (record_index >= 0 || (flags & FLAG_GROUP)) {
-            printResultLine(stdout, &db, field_indices, field_count, record_index, record_index == -1 ? 0 : 1, 0);
+            printResultLine(stdout, &db, field_indices, field_count, record_index, record_index == -1 ? 0 : 1, output_flags);
         }
         return 0;
     }
 
-    // If we have a unique index on a predicate then we can binary search
-    if ((flags & FLAG_HAVE_PREDICATE) && predicate_op == OPERATOR_EQ) {
-        char index_filename[TABLE_MAX_LENGTH + 10];
-        sprintf(index_filename, "%s.unique.csv", predicate_field);
-
-        struct DB index_db;
-
-        if (openDB(&index_db, index_filename) == 0) {
-            int record_index = pk_search(&index_db, 0, predicate_value, 1);
-
-            if (record_index >= 0 || (flags & FLAG_GROUP)) {
-                printResultLine(stdout, &db, field_indices, field_count, record_index, record_index == -1 ? 0 : 1, 0);
+    /*******************
+     * UNIQUE INDEX SCAN
+     *******************/
+    int matched_rowid = indexUniqueScan(predicate_field, predicate_op, predicate_value, flags);
+    // Either no match was found or one match was found
+    if (matched_rowid != -2) {
+        if (matched_rowid >= 0 || (flags & FLAG_GROUP)) {
+            printResultLine(stdout, &db, field_indices, field_count, matched_rowid, matched_rowid == -1 ? 0 : 1, output_flags);
             }
             return 0;
         }
-    }
+    // If we're here it's because there was no unique index
 
     /**********************
      * Start iterating rows
      **********************/
+
     int *result_rowids = malloc(sizeof (int) * db.record_count);
-    for (int i = 0; i < db.record_count; i++) {
 
-        // Perform filtering if necessary
-        if (flags & FLAG_HAVE_PREDICATE) {
-            char value[VALUE_MAX_LENGTH];
-            getRecordValue(&db, i, predicate_field_index, value, VALUE_MAX_LENGTH);
-
-            if (!evaluateExpression(predicate_op, value, predicate_value)) {
-                continue;
-            }
-        }
-
-        // If we are grouping then don't output anything
-        // but we do need to loop through the rows to check predicates
-        // we'll also make note of a specimen record
-        if (flags & FLAG_GROUP) {
-            // SQL says specimen can be any matching record we like
-            group_specimen = i;
-        } else {
-            // Add to result set
-            result_rowids[result_count] = i;
-        }
-
-        result_count++;
-
-        // Implement early exit FETCH FIRST/LIMIT for cases with no ORDER clause
-        if (!(flags & FLAG_ORDER) && limit_value >= 0 && (result_count - offset_value) >= limit_value) {
-            break;
-        }
-    }
+    /******************
+     * FULL TABLE SCAN
+     ******************/
+    result_count = fullTableScan(&db, result_rowids, predicate_field, predicate_op, predicate_value, limit_value, offset_value, flags);
 
     // Early exit if there were no results
     if (result_count == 0) {
@@ -411,14 +386,64 @@ int process_select_query (
     // COUNT(*) will print just one row
     if (flags & FLAG_GROUP) {
         // printf("Aggregate result:\n");
-        printResultLine(stdout, &db, field_indices, field_count, group_specimen, result_count, 0);
+        printResultLine(stdout, &db, field_indices, field_count, group_specimen, result_count, output_flags);
     } else for (int i = 0; i < result_count; i++) {
 
         // ROW_NUMBER is offset by OFFSET from result index and is 1-index based
-        printResultLine(stdout, &db, field_indices, field_count, result_rowids[i], offset_value + i + 1, 0);
+        printResultLine(stdout, &db, field_indices, field_count, result_rowids[i], offset_value + i + 1, output_flags);
     }
 
     free(result_rowids - offset_value);
 
     return 0;
+}
+
+/**
+ * @return matched row index; -1 if row not found; -2 if index does not exist
+ */
+int indexUniqueScan (const char *predicate_field, char predicate_op, const char *predicate_value, int flags) {
+    // If we have a unique index predicate then we can binary search
+    if ((flags & FLAG_HAVE_PREDICATE) && predicate_op == OPERATOR_EQ) {
+        char index_filename[TABLE_MAX_LENGTH + 10];
+        sprintf(index_filename, "%s.unique.csv", predicate_field);
+
+        struct DB index_db;
+
+        if (openDB(&index_db, index_filename) == 0) {
+            return pk_search(&index_db, 0, predicate_value, 1);
+        }
+    }
+
+    return -2;
+}
+
+/**
+ * @return number of matched rows
+ */
+int fullTableScan (struct DB *db, int *result_rowids, const char *predicate_field, char predicate_op, const char *predicate_value, int limit_value, int offset_value, int flags) {
+    int result_count = 0;
+
+    int predicate_field_index = getFieldIndex(db, predicate_field);
+
+    for (int i = 0; i < db->record_count; i++) {
+        // Perform filtering if necessary
+        if (flags & FLAG_HAVE_PREDICATE) {
+            char value[VALUE_MAX_LENGTH];
+            getRecordValue(db, i, predicate_field_index, value, VALUE_MAX_LENGTH);
+
+            if (!evaluateExpression(predicate_op, value, predicate_value)) {
+                continue;
+            }
+        }
+
+        // Add to result set
+        result_rowids[result_count++] = i;
+
+        // Implement early exit FETCH FIRST/LIMIT for cases with no ORDER clause
+        if (!(flags & FLAG_ORDER) && limit_value >= 0 && (result_count - offset_value) >= limit_value) {
+            break;
+        }
+    }
+
+    return result_count;
 }
