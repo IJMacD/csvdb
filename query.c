@@ -91,11 +91,11 @@ int query (const char *query) {
         if (token_length <= 0) {
             break;
         }
-        
+
         // printf("Token: '%s'\n", keyword);
 
         if (strcmp(keyword, "SELECT") == 0) {
-            
+
             int curr_index = 0;
             while (index < query_length) {
                 getToken(query, &index, fields + (FIELD_MAX_LENGTH * curr_index++), FIELD_MAX_LENGTH);
@@ -215,7 +215,7 @@ int query (const char *query) {
             size_t original_index = index;
 
             getToken(query, &index, keyword, FIELD_MAX_LENGTH);
-            
+
             if (strcmp(keyword, "ASC") == 0) {
                 order_direction = ORDER_ASC;
             } else if (strcmp(keyword, "DESC") == 0) {
@@ -249,7 +249,7 @@ int query (const char *query) {
     }
 
     int field_indices[FIELD_MAX_COUNT];
-    
+
     for (int i = 0; i < field_count; i++) {
         char *field_name = fields + (i * FIELD_MAX_LENGTH);
 
@@ -279,7 +279,7 @@ int query (const char *query) {
      *************************/
 
     // If we have COUNT(*) and there's no predicate then just early exit
-    // we already know how many records there are 
+    // we already know how many records there are
     if ((flags & FLAG_GROUP) && !(flags & FLAG_HAVE_PREDICATE)) {
         // We also need to provide a specimen row
         // "0 was chosen by a fair dice roll"
@@ -312,14 +312,14 @@ int query (const char *query) {
     /**********************
      * Start iterating rows
      **********************/
-    int *result_rowids = malloc(sizeof (int) * db.record_count); 
+    int *result_rowids = malloc(sizeof (int) * db.record_count);
     for (int i = 0; i < db.record_count; i++) {
 
         // Perform filtering if necessary
         if (flags & FLAG_HAVE_PREDICATE) {
             char value[VALUE_MAX_LENGTH];
             getRecordValue(&db, i, predicate_field_index, value, VALUE_MAX_LENGTH);
-            
+
             if (!evaluateExpression(predicate_op, value, predicate_value)) {
                 continue;
             }
@@ -417,8 +417,36 @@ void skipWhitespace (const char *string, size_t *index) {
 }
 
 void skipToken (const char *string, size_t *index) {
-    while (!iscntrl(string[*index]) && string[*index] != ' ' && string[*index] != ',') {
+    if (string[*index] == '\'') {
+        // Skip open quote
         (*index)++;
+
+        while (string[*index] != '\0' && string[*index] != '\'') {
+            (*index)++;
+        }
+
+        // Skip close quote
+        if (string[*index] != '\0') {
+            (*index)++;
+        }
+    }
+    else if (string[*index] == '"') {
+        // Skip open quote
+        (*index)++;
+
+        while (string[*index] != '\0' && string[*index] != '"') {
+            (*index)++;
+        }
+
+        // Skip close quote
+        if (string[*index] != '\0') {
+            (*index)++;
+        }
+    }
+    else {
+        while (!iscntrl(string[*index]) && string[*index] != ' ' && string[*index] != ',') {
+            (*index)++;
+        }
     }
 }
 
@@ -436,13 +464,23 @@ int getToken (const char *string, size_t *index, char *token, int token_max_leng
         return -1;
     }
 
+    int quoted_flag = (string[*index] == '\'' || string[*index] == '"');
+
     int start_index = *index;
+
+    if (quoted_flag) {
+        start_index++;
+    }
 
     // printf("Token starts at %d\n", start_index);
 
     skipToken(string, index);
 
     int token_length = *index - start_index;
+
+    if (quoted_flag) {
+        token_length--;
+    }
 
     if (token_length > token_max_length) {
         return -1;
@@ -571,7 +609,7 @@ int pk_search(struct DB *db, int pk_index, char *value) {
         return -1;
     }
 
-    while (index_a < index_b - 1) { 
+    while (index_a < index_b - 1) {
         int index_curr = (index_a + index_b) / 2;
 
         getRecordValue(db, index_curr, pk_index, val, VALUE_MAX_LENGTH);
