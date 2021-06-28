@@ -2,13 +2,21 @@
 #include "sort.h"
 #include "tree.h"
 
-void sortResultRows (struct DB *db, int field_index, int direction, const int *result_rowids, int result_count, int *out_rowids) {
-    struct tree *pool = malloc(sizeof (struct tree) * result_count);
+/**
+ * @param db
+ * @param field_index
+ * @param direction
+ * @param rowids List of rowids to sort. Can be set to NULL to use 0..row_count
+ * @param row_count
+ * @param out_rowids
+ */
+void sortResultRows (struct DB *db, int field_index, int direction, const int *rowids, int row_count, int *out_rowids) {
+    struct tree *pool = malloc(sizeof (struct tree) * row_count);
     struct tree *root = pool;
 
-    for (int i = 0; i < result_count; i++) {
+    for (int i = 0; i < row_count; i++) {
         struct tree *node = pool++;
-        node->rowid = result_rowids[i];
+        node->rowid = rowids == NULL ? i : rowids[i];
 
         if (i == 0) {
             // For root node we do a dummy insert to make sure struct

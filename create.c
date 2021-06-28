@@ -102,11 +102,8 @@ int create_index (const char *index_name, const char *table_name, const char *in
 
     int field_indices[] = { index_field_index, FIELD_ROW_INDEX };
     int *result_rowids = malloc(sizeof (int) * db.record_count);
-    for (int i = 0; i < db.record_count; i++) {
-        result_rowids[i] = i;
-    }
 
-    sortResultRows(&db, index_field_index, ORDER_ASC, result_rowids, db.record_count, result_rowids);
+    sortResultRows(&db, index_field_index, ORDER_ASC, NULL, db.record_count, result_rowids);
 
     printHeaderLine(f, &db, field_indices, 2, OUTPUT_OPTION_COMMA);
 
