@@ -344,6 +344,11 @@ int query (const char *query) {
         }
     }
 
+    // Early exit if there were no results
+    if (result_count == 0) {
+        return 0;
+    }
+
     /*******************
      * Ordering
      *******************/

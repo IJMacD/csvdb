@@ -34,7 +34,7 @@ void makeDB (struct DB *db, FILE *f) {
 }
 
 int openDB (struct DB *db, const char *filename) {
-    FILE *f = fopen(filename, "rw");
+    FILE *f = fopen(filename, "r");
 
     if (!f) {
         char buffer[255];
@@ -53,7 +53,7 @@ int openDB (struct DB *db, const char *filename) {
 
 int countLines (FILE *f) {
     size_t buffer_size = 1024;
-    int count = 0; 
+    int count = 0;
     char buffer[buffer_size];
     size_t read_size;
 
@@ -69,13 +69,13 @@ int countLines (FILE *f) {
         }
     } while (read_size > 0);
 
-    // Check the last byte. 
+    // Check the last byte.
     // If the file ends in a new line, then fine
     // If it soesn't then we have one more line to count
     fseek(f, -1, SEEK_END);
-    
+
     size_t result = fread(buffer, 1, 1, f);
-    if (result == 0) 
+    if (result == 0)
         return -1;
 
     if (buffer[0] != '\n') count++;
@@ -85,7 +85,7 @@ int countLines (FILE *f) {
 
 int countFields (FILE *f) {
     size_t buffer_size = 1024;
-    int count = 1; 
+    int count = 1;
     char buffer[buffer_size];
     size_t read_size;
 
@@ -113,7 +113,7 @@ int countFields (FILE *f) {
  */
 int measureLine (FILE *f, size_t byte_offset) {
     size_t buffer_size = 1024;
-    int count = 0; 
+    int count = 0;
     char buffer[buffer_size];
     size_t read_size;
 
@@ -139,7 +139,7 @@ int measureLine (FILE *f, size_t byte_offset) {
  */
 int indexLines (FILE *f, long *indices) {
     size_t buffer_size = 1024;
-    int count = 0; 
+    int count = 0;
     char buffer[buffer_size];
     size_t read_size;
     long pos = 0;
@@ -160,13 +160,13 @@ int indexLines (FILE *f, long *indices) {
         pos += read_size;
     } while (read_size > 0);
 
-    // Check the last byte. 
+    // Check the last byte.
     // If the file ends in a new line, then fine
     // If it soesn't then we have one more line to count
     fseek(f, -1, SEEK_END);
 
     size_t result = fread(buffer, 1, 1, f);
-    if (result == 0) 
+    if (result == 0)
         return -1;
 
     if (buffer[0] != '\n') count++;
@@ -178,7 +178,7 @@ void printLine (FILE *f, long position) {
     if (fseek(f, position, SEEK_SET)) {
         return;
     }
-    
+
     size_t buffer_size = 1024;
     char buffer[buffer_size];
     size_t read_size;
@@ -237,7 +237,7 @@ int getRecordValue (struct DB *db, int record_index, int field_index, char *valu
     if (fseek(db->file, file_offset, SEEK_SET)) {
         return -1;
     }
-    
+
     size_t buffer_size = 1024;
     char buffer[buffer_size];
     size_t read_size;
@@ -284,25 +284,24 @@ int getRecordValue (struct DB *db, int record_index, int field_index, char *valu
 void prepareHeaders (struct DB *db) {
 
     db->field_count = countFields(db->file);
-    
+
     int header_length = measureLine(db->file, 0);
 
     if (header_length < 0) {
-        fprintf(stderr, "Something went wrong measuring header");
+        fprintf(stderr, "Something went wrong measuring header\n");
         exit(-1);
     }
 
     db->fields = malloc(header_length);
 
-
     fseek(db->file, 0, SEEK_SET);
 
     int count = fread(db->fields, 1, header_length, db->file);
     if (count < header_length) {
-        fprintf(stderr, "Something went wrong reading header");
+        fprintf(stderr, "Something went wrong reading header\n");
         exit(-1);
     }
-    
+
     for (int i = 0; i < header_length; i++) {
         if(db->fields[i] == ',' || db->fields[i] == '\n') {
             db->fields[i] = '\0';

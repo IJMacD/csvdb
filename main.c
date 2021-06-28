@@ -24,6 +24,7 @@ int main (int argc, char * argv[]) {
             size_t count = fread(buffer, 1, 1024, f);
 
             if (count > 0) {
+                buffer[count] = '\0';
                 query(buffer);
                 return 0;
             }
@@ -51,7 +52,7 @@ int main (int argc, char * argv[]) {
             return 0;
         }
     }
-    
+
     printUsage(argv[0]);
     return -1;
 }
