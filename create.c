@@ -107,8 +107,21 @@ int create_index (const char *index_name, const char *table_name, const char *in
 
     printHeaderLine(f, &db, field_indices, 2, OUTPUT_OPTION_COMMA);
 
+    char values[2][VALUE_MAX_LENGTH];
+
     for (int i = 0; i < db.record_count; i++) {
-        // ROW_NUMBER is offset by OFFSET from result index and is 1-index based
+        // Check for UNIQUE
+        if (unique_flag) {
+            getRecordValue(&db, result_rowids[i], index_field_index, values[i % 2], VALUE_MAX_LENGTH);
+
+            if (i > 0 && strcmp(values[0], values[1]) == 0) {
+                fprintf(stderr, "UNIQUE constraint failed. Multiple values for: '%s'\n", values[0]);
+                fclose(f);
+                remove(file_name);
+                exit(-1);
+            }
+        }
+
         printResultLine(f, &db, field_indices, 2, result_rowids[i], i + 1, OUTPUT_OPTION_COMMA);
     }
 
