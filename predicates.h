@@ -12,4 +12,4 @@ char parseOperator (const char *input);
 
 int evaluateExpression (char op, const char *left, const char *right);
 
-int pk_search(struct DB *db, int pk_index, char *value);
+int pk_search(struct DB *db, int pk_index, const char *value);

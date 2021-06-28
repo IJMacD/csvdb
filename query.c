@@ -18,6 +18,21 @@
 
 #define FIELD_MAX_COUNT     10
 
+int process_select_query (
+    const char *table,
+    const char *fields,
+    int field_count,
+    int flags,
+    int offset_value,
+    int limit_value,
+    const char *predicate_field,
+    char predicate_op,
+    const char *predicate_value,
+    const char *order_field,
+    int order_direction,
+    int output_flags
+);
+
 int query (const char *query, int output_flags) {
     /*********************
      * Begin Query parsing
@@ -46,8 +61,6 @@ int query (const char *query, int output_flags) {
     int order_direction = ORDER_ASC;
 
     int flags = 0;
-    int result_count = 0;
-    int group_specimen = -1;
     long offset_value = 0;
     long limit_value = -1;
 
@@ -206,11 +219,30 @@ int query (const char *query, int output_flags) {
         return -1;
     }
 
+    return process_select_query(table, fields, field_count, flags, offset_value, limit_value, predicate_field, predicate_op, predicate_value, order_field, order_direction, output_flags);
+}
+
+int process_select_query (
+    const char *table,
+    const char *fields,
+    int field_count,
+    int flags,
+    int offset_value,
+    int limit_value,
+    const char *predicate_field,
+    char predicate_op,
+    const char *predicate_value,
+    const char *order_field,
+    int order_direction,
+    int output_flags
+) {
     /*************************
      * Begin Query processing
      *************************/
 
     struct DB db;
+    int result_count = 0;
+    int group_specimen = -1;
 
     if (openDB(&db, table) != 0) {
         fprintf(stderr, "File not found: '%s'\n", table);
@@ -221,7 +253,7 @@ int query (const char *query, int output_flags) {
 
     // Get selected column indexes
     for (int i = 0; i < field_count; i++) {
-        char *field_name = fields + (i * FIELD_MAX_LENGTH);
+        const char *field_name = fields + (i * FIELD_MAX_LENGTH);
 
         if (strcmp(field_name, "COUNT(*)") == 0) {
             field_indices[i] = FIELD_COUNT_STAR;
@@ -247,7 +279,7 @@ int query (const char *query, int output_flags) {
      * Output headers
      ************************/
     if (output_flags & OUTPUT_FLAG_HEADERS) {
-        printHeaderLine(&db, field_indices, field_count);
+        printHeaderLine(stdout, &db, field_indices, field_count, 0);
     }
 
     /*************************
@@ -264,7 +296,7 @@ int query (const char *query, int output_flags) {
         if (limit_value >= 0L && limit_value < count) {
             count = limit_value;
         }
-        printResultLine(&db, field_indices, field_count, offset_value, count);
+        printResultLine(stdout, &db, field_indices, field_count, offset_value, count, 0);
         return 0;
     }
 
@@ -280,7 +312,7 @@ int query (const char *query, int output_flags) {
         int record_index = pk_search(&db, predicate_field_index, predicate_value);
         // If we didn't find a record we shouldn't output anything unless we're grouping
         if (record_index >= 0 || (flags & FLAG_GROUP)) {
-            printResultLine(&db, field_indices, field_count, record_index, record_index == -1 ? 0 : 1);
+            printResultLine(stdout, &db, field_indices, field_count, record_index, record_index == -1 ? 0 : 1, 0);
         }
         return 0;
     }
@@ -350,11 +382,11 @@ int query (const char *query, int output_flags) {
     // COUNT(*) will print just one row
     if (flags & FLAG_GROUP) {
         // printf("Aggregate result:\n");
-        printResultLine(&db, field_indices, field_count, group_specimen, result_count);
+        printResultLine(stdout, &db, field_indices, field_count, group_specimen, result_count, 0);
     } else for (int i = 0; i < result_count; i++) {
 
         // ROW_NUMBER is offset by OFFSET from result index and is 1-index based
-        printResultLine(&db, field_indices, field_count, result_rowids[i], offset_value + i + 1);
+        printResultLine(stdout, &db, field_indices, field_count, result_rowids[i], offset_value + i + 1, 0);
     }
 
     free(result_rowids - offset_value);

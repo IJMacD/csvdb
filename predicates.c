@@ -49,7 +49,7 @@ int evaluateExpression (char op, const char *left, const char *right) {
     return 0;
 }
 
-int pk_search(struct DB *db, int pk_index, char *value) {
+int pk_search(struct DB *db, int pk_index, const char *value) {
     int index_a = 0;
     int index_b = db->record_count - 1;
 
