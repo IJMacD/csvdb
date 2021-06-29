@@ -257,27 +257,46 @@ int getRecordValue (struct DB *db, int record_index, int field_index, char *valu
     size_t read_size;
     int current_field_index = 0;
     size_t char_index = 0;
+    int quoted_flag = 0;
 
     do {
         read_size = fread(buffer, 1, buffer_size, db->file);
 
         for (size_t i = 0; i < read_size; i++) {
+            if (char_index == 0 && buffer[i] == '"') {
+                quoted_flag = !quoted_flag;
+                continue;
+            }
+
+            // Are we currently in the correct field?
             if (current_field_index == field_index) {
-                if (buffer[i] == ',' || buffer[i] == '\n') {
+
+                // Have we found the end of a quoted value?
+                // We've found the end of a record
+                if (buffer[i] == '"' || (!quoted_flag && (buffer[i] == ',' || buffer[i] == '\n'))) {
+
+                    // There might be quotes in the middle of a values, who cares?
+                    // Let's just ignore that and pretend it won't happen
+
+                    // finish off the string and return the length
                     value[char_index] = '\0';
                     return char_index;
                 }
 
+                // Copy the current byte
                 value[char_index++] = buffer[i];
 
+                // If we've run out of storage space
                 if (char_index > value_max_length) {
                     return -1;
                 }
             } else {
-                if (buffer[i] == ',') {
+                // If we've found a comma we're moving on to the next field
+                if (!quoted_flag && buffer[i] == ',') {
                     current_field_index++;
                 }
 
+                // If we got to a newline and we're not in the correct field then the field was not found
                 if (buffer[i] == '\n') {
                     return -1;
                 }
