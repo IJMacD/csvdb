@@ -56,7 +56,7 @@ int indexUniqueScan (const char *predicate_field, int predicate_op, const char *
     struct DB index_db;
 
     if (findIndex(&index_db, predicate_field, INDEX_UNIQUE) == 0) {
-        int pk_search_result = pk_search(&index_db, 0, predicate_value, 1);
+        int pk_search_result = pk_search(&index_db, 0, predicate_value, FIELD_ROW_INDEX);
 
         if (pk_search_result == RESULT_NO_ROWS) {
             return RESULT_NO_ROWS;
