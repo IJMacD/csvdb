@@ -18,7 +18,7 @@ int explain_select_query (
     int offset_value __attribute__((unused)),
     int limit_value __attribute__((unused)),
     const char *predicate_field,
-    char predicate_op,
+    int predicate_op,
     const char *predicate_value __attribute__((unused)),
     const char *order_field __attribute__((unused)),
     int order_direction __attribute__((unused)),
@@ -90,7 +90,7 @@ int explain_select_query (
         return 0;
     }
 
-    if (flags & FLAG_HAVE_PREDICATE) {
+    if (flags & FLAG_HAVE_PREDICATE && predicate_op != OPERATOR_LIKE) {
         char index_filename[TABLE_MAX_LENGTH + 10];
         sprintf(index_filename, "%s.unique.csv", predicate_field);
 
@@ -119,30 +119,22 @@ int explain_select_query (
             printf("%d\tINDEX RANGE SCAN\t%s\t%d\t%d\n", op++, predicate_field, row_estimate, row_estimate);
             return 0;
         }
-    }
 
-    if (flags & FLAG_HAVE_PREDICATE) {
-
-        if (flags & FLAG_HAVE_PREDICATE) {
-            if (predicate_op == OPERATOR_EQ) {
-                // 10,000 is a wild guess at index statistics
-                row_estimate = row_estimate / 10000;
-            } else if (predicate_op == OPERATOR_NE) {
-                // 10,000 is a wild guess at index statistics
-                row_estimate = row_estimate - (row_estimate / 10000);
-            } else {
-                row_estimate = row_estimate / 2;
-            }
-
-            if (row_estimate < 1) {
-                row_estimate = 1;
-            }
+        if (predicate_op == OPERATOR_EQ) {
+            // 10,000 is a wild guess at index statistics
+            row_estimate = row_estimate / 10000;
+        } else if (predicate_op == OPERATOR_NE) {
+            // 10,000 is a wild guess at index statistics
+            row_estimate = row_estimate - (row_estimate / 10000);
+        } else {
+            row_estimate = row_estimate / 2;
         }
 
-        char index_filename[TABLE_MAX_LENGTH + 10];
-        sprintf(index_filename, "%s.index.csv", predicate_field);
+        if (row_estimate < 1) {
+            row_estimate = 1;
+        }
 
-        struct DB index_db;
+        sprintf(index_filename, "%s.index.csv", predicate_field);
 
         if (openDB(&index_db, index_filename) == 0) {
             int cost = row_estimate;

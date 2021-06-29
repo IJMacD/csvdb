@@ -17,9 +17,10 @@
 #define OPERATOR_GT         4
 #define OPERATOR_GE         5
 #define OPERATOR_NE         6
+#define OPERATOR_LIKE       128
 
-char parseOperator (const char *input);
+int parseOperator (const char *input);
 
 int compare (int numeric_mode, const char * valueA, long valueA_numeric, const char *valueB);
 
-int evaluateExpression (char op, const char *left, const char *right);
+int evaluateExpression (int op, const char *left, const char *right);

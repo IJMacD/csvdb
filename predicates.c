@@ -5,7 +5,7 @@
 #include "limits.h"
 #include "util.h"
 
-char parseOperator (const char *input) {
+int parseOperator (const char *input) {
     if (strcmp(input, "=") == 0)
         return OPERATOR_EQ;
     if (strcmp(input, "!=") == 0)
@@ -20,11 +20,22 @@ char parseOperator (const char *input) {
         return OPERATOR_GT;
     if (strcmp(input, ">=") == 0)
         return OPERATOR_GE;
+    if (strcmp(input, "LIKE") == 0)
+        return OPERATOR_LIKE;
     return OPERATOR_UN;
 }
 
-int evaluateExpression (char op, const char *left, const char *right) {
+int evaluateExpression (int op, const char *left, const char *right) {
     // printf("Evaluating %s OP %s\n", left, right);
+
+    if (op == OPERATOR_LIKE) {
+        size_t len = strlen(right);
+        if (right[len-1] == '%') {
+            return strncmp(left, right, len -1) == 0;
+        }
+
+        return strcmp(left, right) == 0;
+    }
 
     if (strcmp(right, "NULL") == 0) {
         size_t len = strlen(left);

@@ -31,7 +31,7 @@ int process_select_query (
     int offset_value,
     int limit_value,
     const char *predicate_field,
-    char predicate_op,
+    int predicate_op,
     const char *predicate_value,
     const char *order_field,
     int order_direction,
@@ -68,7 +68,7 @@ int select_query (const char *query, int output_flags) {
 
     char predicate_field[FIELD_MAX_LENGTH];
     char predicate_value[VALUE_MAX_LENGTH];
-    char predicate_op = OPERATOR_UN;
+    int predicate_op = OPERATOR_UN;
 
     char order_field[FIELD_MAX_LENGTH];
     int order_direction = ORDER_ASC;
@@ -139,8 +139,8 @@ int select_query (const char *query, int output_flags) {
 
             // printf("Predicate field: %s\n", predicate_field);
 
-            char op[4];
-            getToken(query, &index, op, 4);
+            char op[5];
+            getToken(query, &index, op, 5);
 
             predicate_op = parseOperator(op);
             if (predicate_op == OPERATOR_UN) {
@@ -150,12 +150,10 @@ int select_query (const char *query, int output_flags) {
 
             // Check for IS NOT
             if (strcmp(op, "IS") == 0) {
-                size_t original_index = index;
-                getToken(query, &index, op, 4);
-                if (strcmp(op, "NOT") == 0) {
+                skipWhitespace(query, &index);
+                if (strncmp(query + index, "NOT ", 4) == 0) {
                     predicate_op = OPERATOR_NE;
-                } else {
-                    index = original_index;
+                    index += 4;
                 }
             }
 
@@ -258,7 +256,7 @@ int process_select_query (
     int offset_value,
     int limit_value,
     const char *predicate_field,
-    char predicate_op,
+    int predicate_op,
     const char *predicate_value,
     const char *order_field,
     int order_direction,
@@ -378,7 +376,7 @@ int process_select_query (
         /******************
          * INDEX RANGE SCAN
          ******************/
-        result_count = indexRangeScan(result_rowids, predicate_field, predicate_op, predicate_value, flags);
+        result_count = indexRangeScan(predicate_field, predicate_op, predicate_value, result_rowids);
 
         if (result_count != RESULT_NO_INDEX) {
             plan_flags |= PLAN_INDEX_RANGE;
@@ -453,7 +451,7 @@ int process_select_query (
     // COUNT(*) will print just one row
     if (flags & FLAG_GROUP) {
         // printf("Aggregate result:\n");
-        printResultLine(stdout, &db, field_indices, field_count, result_rowids[offset_value], result_count, output_flags);
+        printResultLine(stdout, &db, field_indices, field_count, result_count > 0 ? result_rowids[offset_value] : RESULT_NO_ROWS, result_count, output_flags);
     } else for (int i = 0; i < result_count; i++) {
 
         // ROW_NUMBER is offset by OFFSET from result index and is 1-index based
