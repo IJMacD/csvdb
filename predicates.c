@@ -8,13 +8,20 @@
 int compare (int numeric_mode, const char * valueA, long valueA_numeric, const char *valueB);
 
 char parseOperator (const char *input) {
-    if (strcmp(input, "=") == 0)  return OPERATOR_EQ;
-    if (strcmp(input, "!=") == 0) return OPERATOR_NE;
-    if (strcmp(input, "IS") == 0) return OPERATOR_EQ;
-    if (strcmp(input, "<") == 0)  return OPERATOR_LT;
-    if (strcmp(input, "<=") == 0) return OPERATOR_LE;
-    if (strcmp(input, ">") == 0)  return OPERATOR_GT;
-    if (strcmp(input, ">=") == 0) return OPERATOR_GE;
+    if (strcmp(input, "=") == 0)
+        return OPERATOR_EQ;
+    if (strcmp(input, "!=") == 0)
+        return OPERATOR_NE;
+    if (strcmp(input, "IS") == 0)
+        return OPERATOR_EQ;
+    if (strcmp(input, "<") == 0)
+        return OPERATOR_LT;
+    if (strcmp(input, "<=") == 0)
+        return OPERATOR_LE;
+    if (strcmp(input, ">") == 0)
+        return OPERATOR_GT;
+    if (strcmp(input, ">=") == 0)
+        return OPERATOR_GE;
     return OPERATOR_UN;
 }
 

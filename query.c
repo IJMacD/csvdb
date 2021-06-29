@@ -15,6 +15,9 @@
 
 #define FIELD_MAX_COUNT     10
 
+#define RESULT_NO_INDEX     -2
+#define RESULT_NO_ROWS      -1
+
 int select_query (const char *query, int output_flags);
 
 int process_select_query (
@@ -32,9 +35,11 @@ int process_select_query (
     int output_flags
 );
 
-int indexUniqueScan (const char *predicate_field, char predicate_op, const char *predicate_value, int flags);
-int indexRangeScan (int *result_rowids, const char *predicate_field, char predicate_op, const char *predicate_value, int limit_value, int offset_value, int flags);
+int indexUniqueScan (const char *predicate_field, char predicate_op, const char *predicate_value, int *result_rowids);
+int indexRangeScan (int *result_rowids, const char *predicate_field, char predicate_op, const char *predicate_value, int flags);
 int fullTableScan (struct DB *db, int *result_rowids, const char *predicate_field, char predicate_op, const char *predicate_value, int limit_value, int offset_value, int flags);
+
+int rangeScan (struct DB *db, char predicate_op, int lower_index, int upper_index, int rowid_column, int *result_rowids);
 
 int query (const char *query, int output_flags) {
     if (strncmp(query, "CREATE ", 7) == 0) {
@@ -264,7 +269,7 @@ int process_select_query (
 
     struct DB db;
     int result_count = 0;
-    int group_specimen = -1;
+    int group_specimen = RESULT_NO_ROWS;
 
     if (openDB(&db, table) != 0) {
         fprintf(stderr, "File not found: '%s'\n", table);
@@ -325,67 +330,69 @@ int process_select_query (
         return 0;
     }
 
-    /******************
-     * PRIMARY KEY
-     *****************/
-    // If we have a primary key predicate then we can binary search
-    if ((flags & FLAG_PRIMARY_KEY_SEARCH) && predicate_op == OPERATOR_EQ) {
-        int predicate_field_index = getFieldIndex(&db, predicate_field);
-        int record_index = pk_search(&db, predicate_field_index, predicate_value, FIELD_ROW_INDEX);
-
-        // If we didn't find a record we shouldn't output anything unless we're grouping
-        if (record_index >= 0 || (flags & FLAG_GROUP)) {
-            printResultLine(stdout, &db, field_indices, field_count, record_index, record_index == -1 ? 0 : 1, output_flags);
-        }
-
-        return 0;
-    }
-
-    /*******************
-     * UNIQUE INDEX SCAN
-     *******************/
-    int matched_rowid = indexUniqueScan(predicate_field, predicate_op, predicate_value, flags);
-    if (matched_rowid != -2) {
-        // Either no match was found or one match was found
-
-        // If there was one match; or we're grouping - then output the row
-        if (matched_rowid >= 0 || (flags & FLAG_GROUP)) {
-            printResultLine(stdout, &db, field_indices, field_count, matched_rowid, matched_rowid == -1 ? 0 : 1, output_flags);
-        }
-
-        return 0;
-    }
-
-    // If we're here it's because there was no unique index
-
     /**********************
      * Start iterating rows
      **********************/
 
     int *result_rowids = malloc(sizeof (int) * db.record_count);
 
-    /******************
-     * INDEX RANGE SCAN
-     ******************/
-    result_count = indexRangeScan(result_rowids, predicate_field, predicate_op, predicate_value, limit_value, offset_value, flags);
+    if (flags & FLAG_PRIMARY_KEY_SEARCH) {
+        /******************
+         * PRIMARY KEY
+         *****************/
+        // If we have a primary key predicate then we can binary search
+        int predicate_field_index = getFieldIndex(&db, predicate_field);
+        int pk_index = pk_search(&db, predicate_field_index, predicate_value, FIELD_ROW_INDEX);
+
+        if (predicate_op == OPERATOR_EQ) {
+            if (pk_index == RESULT_NO_ROWS) {
+                return 0;
+            }
+
+            result_rowids[0] = pk_index;
+            result_count = 1;
+        }
+        else {
+            result_count = rangeScan(&db, predicate_op, pk_index, pk_index + 1, -1, result_rowids);
+        }
+    } else if (flags & FLAG_HAVE_PREDICATE) {
+        /*******************
+         * UNIQUE INDEX SCAN
+         *******************/
+        // Try to find a unique index
+        result_count = indexUniqueScan(predicate_field, predicate_op, predicate_value, result_rowids);
+    }
+
+    if (result_count == RESULT_NO_ROWS) {
+        free(result_rowids);
+        return 0;
+    }
+
+    if (result_count == RESULT_NO_INDEX) {
+        /******************
+         * INDEX RANGE SCAN
+         ******************/
+        result_count = indexRangeScan(result_rowids, predicate_field, predicate_op, predicate_value, flags);
+    }
 
     /******************
      * FULL TABLE SCAN
      ******************/
     // If INDEX RANGE SCAN failed then do FULL TABLE SCAN
-    if (result_count == -2) {
+    if (result_count == RESULT_NO_INDEX) {
         result_count = fullTableScan(&db, result_rowids, predicate_field, predicate_op, predicate_value, limit_value, offset_value, flags);
     }
 
     // Early exit if there were no results
-    if (result_count == 0) {
+    if (result_count == 0 && !(flags & FLAG_GROUP)) {
+        free(result_rowids);
         return 0;
     }
 
     /*******************
      * Ordering
      *******************/
-    if (flags & FLAG_ORDER) {
+    if (flags & FLAG_ORDER && !(flags & FLAG_GROUP)) {
         int order_index = getFieldIndex(&db, order_field);
         sortResultRows(&db, order_index, order_direction, result_rowids, result_count, result_rowids);
     }
@@ -420,32 +427,35 @@ int process_select_query (
 }
 
 /**
- * @return matched row index; -1 if row not found; -2 if index does not exist
+ * @return matched row count; RESULT_NO_ROWS if row not found; RESULT_NO_INDEX if index does not exist
  */
-int indexUniqueScan (const char *predicate_field, char predicate_op, const char *predicate_value, int flags) {
+int indexUniqueScan (const char *predicate_field, char predicate_op, const char *predicate_value, int *result_rowids) {
     // If we have a unique index predicate then we can binary search
-    if ((flags & FLAG_HAVE_PREDICATE) && predicate_op == OPERATOR_EQ) {
-        char index_filename[TABLE_MAX_LENGTH + 10];
-        sprintf(index_filename, "%s.unique.csv", predicate_field);
+    char index_filename[TABLE_MAX_LENGTH + 10];
+    sprintf(index_filename, "%s.unique.csv", predicate_field);
 
-        struct DB index_db;
+    struct DB index_db;
 
-        if (openDB(&index_db, index_filename) == 0) {
-            return pk_search(&index_db, 0, predicate_value, 1);
+    if (openDB(&index_db, index_filename) == 0) {
+        int pk_search_result = pk_search(&index_db, 0, predicate_value, 1);
+
+        if (pk_search_result == RESULT_NO_ROWS) {
+            return RESULT_NO_ROWS;
         }
+
+        return rangeScan(&index_db, predicate_op, pk_search_result, pk_search_result + 1, 1, result_rowids);
     }
 
-    return -2;
+    return RESULT_NO_INDEX;
 }
 
 /**
- * @return number of matched rows; -2 if index does not exist
+ * @return number of matched rows; RESULT_NO_INDEX if index does not exist
  */
-int indexRangeScan (int *result_rowids, const char *predicate_field, char predicate_op, const char *predicate_value, int limit_value, int offset_value, int flags) {
-    int result_count = 0;
+int indexRangeScan (int *result_rowids, const char *predicate_field, char predicate_op, const char *predicate_value, int flags) {
 
     // If we have a (non-unique) index predicate then we can binary search and scan
-    if ((flags & FLAG_HAVE_PREDICATE) && predicate_op == OPERATOR_EQ) {
+    if (flags & FLAG_HAVE_PREDICATE) {
         char index_filename[TABLE_MAX_LENGTH + 10];
         sprintf(index_filename, "%s.index.csv", predicate_field);
 
@@ -457,46 +467,40 @@ int indexRangeScan (int *result_rowids, const char *predicate_field, char predic
             int record_index = pk_search(&index_db, 0, predicate_value, FIELD_ROW_INDEX);
 
             if (record_index < 0) {
-                return -1;
+                if (predicate_op == OPERATOR_EQ) {
+                    return RESULT_NO_ROWS;
+                }
+
+                // TODO: check boundaries - ALL might be included or NONE depending on predicate operator
             }
+
+            int lower_index = record_index;
+            int upper_index = record_index;
 
             // Backtrack until we find the first value
-            while (record_index >= 0) {
-                getRecordValue(&index_db, --record_index, 0, value, VALUE_MAX_LENGTH);
+            while (lower_index >= 0) {
+                getRecordValue(&index_db, --lower_index, 0, value, VALUE_MAX_LENGTH);
+
+                if (strcmp(value, predicate_value) != 0) {
+                    break;
+                }
+            }
+            lower_index++;
+
+            // Forward-track until we find the last value
+            while (upper_index < index_db.record_count) {
+                getRecordValue(&index_db, ++upper_index, 0, value, VALUE_MAX_LENGTH);
 
                 if (strcmp(value, predicate_value) != 0) {
                     break;
                 }
             }
 
-            // We've found the first value; now iterate forwards again
-            record_index++;
-
-            while (record_index < index_db.record_count) {
-                getRecordValue(&index_db, record_index, 0, value, VALUE_MAX_LENGTH);
-
-                // We've reached the end of the values
-                if (strcmp(value, predicate_value) != 0) {
-                    break;
-                }
-
-                getRecordValue(&index_db, record_index, 1, value, VALUE_MAX_LENGTH);
-                result_rowids[result_count++] = atoi(value);
-
-                record_index++;
-
-                // Implement early exit FETCH FIRST/LIMIT for cases with no ORDER clause
-                if (!(flags & FLAG_ORDER) && limit_value >= 0 && (result_count - offset_value) >= limit_value) {
-                    break;
-                }
-
-            }
-
-            return result_count;
+            return rangeScan(&index_db, predicate_op, lower_index, upper_index, 1, result_rowids);
         }
     }
 
-    return -2;
+    return RESULT_NO_INDEX;
 }
 
 /**
@@ -524,6 +528,60 @@ int fullTableScan (struct DB *db, int *result_rowids, const char *predicate_fiel
         // Implement early exit FETCH FIRST/LIMIT for cases with no ORDER clause
         if (!(flags & FLAG_ORDER) && limit_value >= 0 && (result_count - offset_value) >= limit_value) {
             break;
+        }
+    }
+
+    return result_count;
+}
+
+int rangeScan (struct DB *db, char predicate_op, int lower_index, int upper_index, int rowid_column, int *result_rowids) {
+    int result_count = 0;
+    char value[VALUE_MAX_LENGTH];
+
+    if (predicate_op == OPERATOR_LT) {
+        upper_index = lower_index;
+        lower_index = 0;
+    } else if (predicate_op == OPERATOR_LE) {
+        lower_index = 0;
+    } else if (predicate_op == OPERATOR_GT) {
+        lower_index = upper_index;
+        upper_index = db->record_count;
+    } else if (predicate_op == OPERATOR_GE) {
+        upper_index = db->record_count;
+    }
+
+    // We've found the edges of the index range; now iterate as predicate operator requires
+
+    // Special treatment for NOT EQUAL
+    if (predicate_op == OPERATOR_NE) {
+        for (int i = 0; i < lower_index; i++) {
+            if (rowid_column == -1) {
+                result_rowids[result_count++] = i;
+            } else {
+                getRecordValue(db, i, rowid_column, value, VALUE_MAX_LENGTH);
+                result_rowids[result_count++] = atoi(value);
+            }
+        }
+
+        for (int i = upper_index; i < db->record_count; i++) {
+            if (rowid_column == -1) {
+                result_rowids[result_count++] = i;
+            } else {
+                getRecordValue(db, i, rowid_column, value, VALUE_MAX_LENGTH);
+                result_rowids[result_count++] = atoi(value);
+            }
+        }
+
+        return result_count;
+    }
+
+    // Iterate between the bounds we've set up
+    for (int i = lower_index; i < upper_index; i++) {
+        if (rowid_column == -1) {
+            result_rowids[result_count++] = i;
+        } else {
+            getRecordValue(db, i, rowid_column, value, VALUE_MAX_LENGTH);
+            result_rowids[result_count++] = atoi(value);
         }
     }
 
