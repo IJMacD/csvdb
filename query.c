@@ -66,11 +66,11 @@ int select_query (const char *query, int output_flags) {
 
     char table[TABLE_MAX_LENGTH] = {0};
 
-    char predicate_field[FIELD_MAX_LENGTH];
-    char predicate_value[VALUE_MAX_LENGTH];
+    char predicate_field[FIELD_MAX_LENGTH] = {0};
+    char predicate_value[VALUE_MAX_LENGTH] = {0};
     int predicate_op = OPERATOR_UN;
 
-    char order_field[FIELD_MAX_LENGTH];
+    char order_field[FIELD_MAX_LENGTH] = {0};
     int order_direction = ORDER_ASC;
 
     int flags = 0;
@@ -104,6 +104,7 @@ int select_query (const char *query, int output_flags) {
                 getToken(query, &index, field_name, FIELD_MAX_LENGTH);
 
                 // printf("Field is %s\n", field);
+
                 if (strcmp(field_name, "COUNT(*)") == 0) {
                     flags |= FLAG_GROUP;
                 }
@@ -295,6 +296,7 @@ int process_select_query (
 
             if (field_indices[i] == -1) {
                 fprintf(stderr, "Field %s not found\n", &fields[i * FIELD_MAX_LENGTH]);
+                closeDB(&db);
                 return -1;
             }
         }
@@ -325,6 +327,7 @@ int process_select_query (
             count = limit_value;
         }
         printResultLine(stdout, &db, field_indices, field_count, offset_value, count, 0);
+        closeDB(&db);
         return 0;
     }
 
@@ -369,6 +372,7 @@ int process_select_query (
 
     if (result_count == RESULT_NO_ROWS) {
         free(result_rowids);
+        closeDB(&db);
         return 0;
     }
 
@@ -392,6 +396,7 @@ int process_select_query (
             plan_flags |= PLAN_INDEX_RANGE;
             sort_needed = 0;
         }
+        closeDB(&index_db);
     }
 
     /******************
@@ -407,6 +412,7 @@ int process_select_query (
     // Early exit if there were no results
     if (result_count == 0 && !(flags & FLAG_GROUP)) {
         free(result_rowids);
+        closeDB(&db);
         return 0;
     }
 
@@ -459,6 +465,8 @@ int process_select_query (
     }
 
     free(result_rowids - offset_value);
+
+    closeDB(&db);
 
     return 0;
 }

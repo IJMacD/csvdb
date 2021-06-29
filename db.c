@@ -26,7 +26,7 @@ void makeDB (struct DB *db, FILE *f) {
 
     int line_count = countLines(f);
 
-    db->line_indices = malloc((sizeof db->line_indices[0]) * line_count);
+    db->line_indices = malloc((sizeof db->line_indices[0]) * (line_count + 1));
 
     indexLines(f, db->line_indices);
 
@@ -39,7 +39,7 @@ int openDB (struct DB *db, const char *filename) {
     if (!f) {
         char buffer[255];
         sprintf(buffer, "%s.csv", filename);
-        f = fopen(buffer, "rw");
+        f = fopen(buffer, "r");
 
         if (!f) {
             return -1;
@@ -49,6 +49,17 @@ int openDB (struct DB *db, const char *filename) {
     makeDB(db, f);
 
     return 0;
+}
+
+void closeDB (struct DB *db) {
+    free(db->line_indices);
+    db->line_indices = NULL;
+
+    free(db->fields);
+    db->fields = NULL;
+
+    fclose(db->file);
+    db->file = NULL;
 }
 
 int countLines (FILE *f) {

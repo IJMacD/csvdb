@@ -52,20 +52,22 @@ int indexUniqueScan (const char *predicate_field, int predicate_op, const char *
         return RESULT_NO_INDEX;
     }
 
+    int result = RESULT_NO_INDEX;
+
     // If we have a unique index predicate then we can binary search
     struct DB index_db;
 
     if (findIndex(&index_db, predicate_field, INDEX_UNIQUE) == 0) {
         int pk_search_result = pk_search(&index_db, 0, predicate_value, FIELD_ROW_INDEX);
 
-        if (pk_search_result == RESULT_NO_ROWS) {
-            return RESULT_NO_ROWS;
+        if (pk_search_result != RESULT_NO_ROWS) {
+            result = rangeScan(&index_db, predicate_op, pk_search_result, pk_search_result + 1, 1, result_rowids);
         }
 
-        return rangeScan(&index_db, predicate_op, pk_search_result, pk_search_result + 1, 1, result_rowids);
+        closeDB(&index_db);
     }
 
-    return RESULT_NO_INDEX;
+    return result;
 }
 
 /**
@@ -77,10 +79,12 @@ int indexRangeScan (const char *predicate_field, int predicate_op, const char *p
         return RESULT_NO_INDEX;
     }
 
+    int result = RESULT_NO_INDEX;
+
     // If we have a (non-unique) index predicate then we can binary search and scan
     struct DB index_db;
 
-    char value[VALUE_MAX_LENGTH];
+    char value[VALUE_MAX_LENGTH] = {0};
 
     if (findIndex(&index_db, predicate_field, INDEX_ANY) == 0) {
         int record_index = pk_search(&index_db, 0, predicate_value, FIELD_ROW_INDEX);
@@ -90,6 +94,7 @@ int indexRangeScan (const char *predicate_field, int predicate_op, const char *p
 
         if (record_index < 0) {
             if (predicate_op == OPERATOR_EQ) {
+                closeDB(&index_db);
                 return RESULT_NO_ROWS;
             }
 
@@ -102,6 +107,7 @@ int indexRangeScan (const char *predicate_field, int predicate_op, const char *p
             } else if (record_index == RESULT_NO_ROWS) {
                 // Implemetation limitiation
                 // Pretend the index doesn't exist
+                closeDB(&index_db);
                 return RESULT_NO_INDEX;
             }
         }
@@ -125,10 +131,12 @@ int indexRangeScan (const char *predicate_field, int predicate_op, const char *p
             }
         }
 
-        return rangeScan(&index_db, predicate_op, lower_index, upper_index, 1, result_rowids);
+        result = rangeScan(&index_db, predicate_op, lower_index, upper_index, 1, result_rowids);
+
+        closeDB(&index_db);
     }
 
-    return RESULT_NO_INDEX;
+    return result;
 }
 
 /**
@@ -141,7 +149,7 @@ int fullTableScan (struct DB *db, int *result_rowids, const char *predicate_fiel
     for (int i = 0; i < db->record_count; i++) {
         // Perform filtering if necessary
         if (flags & FLAG_HAVE_PREDICATE) {
-            char value[VALUE_MAX_LENGTH];
+            char value[VALUE_MAX_LENGTH] = {0};
             getRecordValue(db, i, predicate_field_index, value, VALUE_MAX_LENGTH);
 
             if (!evaluateExpression(predicate_op, value, predicate_value)) {
@@ -172,7 +180,7 @@ int pk_search(struct DB *db, int pk_index, const char *value, int result_index) 
 
     long search_value = atol(value);
 
-    char val[VALUE_MAX_LENGTH];
+    char val[VALUE_MAX_LENGTH] = {0};
 
     // Check boundary cases before commencing search
 
@@ -305,6 +313,7 @@ int indexWalk(struct DB *db, int rowid_column, int lower_index, int upper_index,
     int result_count = 0;
     char value[VALUE_MAX_LENGTH];
 
+    // Descending
     if (direction == ORDER_DESC) {
         for (int i = upper_index - 1; i >= lower_index; i--) {
             if (rowid_column == -1) {
@@ -315,6 +324,8 @@ int indexWalk(struct DB *db, int rowid_column, int lower_index, int upper_index,
             }
         }
     }
+
+    // Ascending
     else {
         for (int i = lower_index; i < upper_index; i++) {
             if (rowid_column == -1) {

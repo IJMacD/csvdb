@@ -15,6 +15,8 @@ void makeDB (struct DB *db, FILE *f);
 
 int openDB (struct DB *db, const char *filename);
 
+void closeDB (struct DB *db);
+
 /**
  * Max header length 1024 characters
  */

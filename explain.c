@@ -64,6 +64,7 @@ int explain_select_query (
         if (needs_table_access) {
             printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, 1, 1);
         }
+        closeDB(&db);
         return 0;
     }
 
@@ -74,6 +75,7 @@ int explain_select_query (
                 printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, 1, cost);
             }
             printf("%d\tINDEX UNIQUE SCAN\t%s\t%d\t%d\n", op++, predicate_field, 1, cost);
+            closeDB(&db);
             return 0;
         }
 
@@ -87,6 +89,7 @@ int explain_select_query (
             printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, row_estimate, row_estimate);
         }
         printf("%d\tINDEX RANGE SCAN\t%s\t%d\t%d\n", op++, predicate_field, row_estimate, row_estimate);
+        closeDB(&db);
         return 0;
     }
 
@@ -104,6 +107,8 @@ int explain_select_query (
                 }
                 printf("%d\tINDEX UNIQUE SCAN\t%s\t%d\t%d\n", op++, predicate_field, 1, cost);
 
+                closeDB(&index_db);
+                closeDB(&db);
                 return 0;
             }
 
@@ -117,6 +122,8 @@ int explain_select_query (
                 printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, row_estimate, row_estimate);
             }
             printf("%d\tINDEX RANGE SCAN\t%s\t%d\t%d\n", op++, predicate_field, row_estimate, row_estimate);
+            closeDB(&index_db);
+            closeDB(&db);
             return 0;
         }
 
@@ -152,6 +159,8 @@ int explain_select_query (
             }
             printf("%d\tINDEX RANGE SCAN\t%s\t%d\t%d\n", op++, predicate_field, row_estimate, cost);
 
+            closeDB(&index_db);
+            closeDB(&db);
             return 0;
         }
     }
@@ -166,6 +175,8 @@ int explain_select_query (
             }
             printf("%d\tINDEX RANGE SCAN\t%s\t%d\t%d\n", op++, order_field, row_estimate, log_rows);
 
+            closeDB(&index_db);
+            closeDB(&db);
             return 0;
         }
     }
@@ -178,6 +189,7 @@ int explain_select_query (
         printf("%d\tTABLE ACCESS FULL\t%s\t%d\t%d\n", op++, table, db.record_count, db.record_count);
     }
 
+    closeDB(&db);
     return 0;
 }
 
