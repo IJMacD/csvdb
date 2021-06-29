@@ -11,11 +11,7 @@
 #include "output.h"
 #include "limits.h"
 #include "create.h"
-
-#define FLAG_HAVE_PREDICATE         1
-#define FLAG_GROUP                  2
-#define FLAG_PRIMARY_KEY_SEARCH     4
-#define FLAG_ORDER                  8
+#include "explain.h"
 
 #define FIELD_MAX_COUNT     10
 
@@ -78,6 +74,13 @@ int select_query (const char *query, int output_flags) {
     int flags = 0;
     long offset_value = 0;
     long limit_value = -1;
+
+    int explain_flag = 0;
+
+    if (strncmp(query, "EXPLAIN ", 8) == 0) {
+        explain_flag = 1;
+        index += 8;
+    }
 
     char keyword[FIELD_MAX_LENGTH];
 
@@ -234,6 +237,10 @@ int select_query (const char *query, int output_flags) {
         return -1;
     }
 
+    if (explain_flag) {
+        return explain_select_query(table, fields, field_count, flags, offset_value, limit_value, predicate_field, predicate_op, predicate_value, order_field, order_direction, output_flags);
+    }
+
     return process_select_query(table, fields, field_count, flags, offset_value, limit_value, predicate_field, predicate_op, predicate_value, order_field, order_direction, output_flags);
 }
 
@@ -325,11 +332,12 @@ int process_select_query (
     if ((flags & FLAG_PRIMARY_KEY_SEARCH) && predicate_op == OPERATOR_EQ) {
         int predicate_field_index = getFieldIndex(&db, predicate_field);
         int record_index = pk_search(&db, predicate_field_index, predicate_value, FIELD_ROW_INDEX);
-        // If we didn't find a record we shouldn't output anything unless we're grouping
 
+        // If we didn't find a record we shouldn't output anything unless we're grouping
         if (record_index >= 0 || (flags & FLAG_GROUP)) {
             printResultLine(stdout, &db, field_indices, field_count, record_index, record_index == -1 ? 0 : 1, output_flags);
         }
+
         return 0;
     }
 
@@ -337,13 +345,17 @@ int process_select_query (
      * UNIQUE INDEX SCAN
      *******************/
     int matched_rowid = indexUniqueScan(predicate_field, predicate_op, predicate_value, flags);
-    // Either no match was found or one match was found
     if (matched_rowid != -2) {
+        // Either no match was found or one match was found
+
+        // If there was one match; or we're grouping - then output the row
         if (matched_rowid >= 0 || (flags & FLAG_GROUP)) {
             printResultLine(stdout, &db, field_indices, field_count, matched_rowid, matched_rowid == -1 ? 0 : 1, output_flags);
         }
+
         return 0;
     }
+
     // If we're here it's because there was no unique index
 
     /**********************
