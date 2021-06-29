@@ -5,6 +5,7 @@
 #include "predicates.h"
 #include "limits.h"
 #include "query.h"
+#include "sort.h"
 #include "util.h"
 
 int primaryKeyScan (struct DB *db, const char *predicate_field, char predicate_op, const char *predicate_value, int *result_rowids) {
@@ -47,12 +48,9 @@ int primaryKeyScan (struct DB *db, const char *predicate_field, char predicate_o
  */
 int indexUniqueScan (const char *predicate_field, char predicate_op, const char *predicate_value, int *result_rowids) {
     // If we have a unique index predicate then we can binary search
-    char index_filename[TABLE_MAX_LENGTH + 10];
-    sprintf(index_filename, "%s.unique.csv", predicate_field);
-
     struct DB index_db;
 
-    if (openDB(&index_db, index_filename) == 0) {
+    if (findIndex(&index_db, predicate_field, INDEX_UNIQUE) == 0) {
         int pk_search_result = pk_search(&index_db, 0, predicate_value, 1);
 
         if (pk_search_result == RESULT_NO_ROWS) {
@@ -72,14 +70,11 @@ int indexRangeScan (int *result_rowids, const char *predicate_field, char predic
 
     // If we have a (non-unique) index predicate then we can binary search and scan
     if (flags & FLAG_HAVE_PREDICATE) {
-        char index_filename[TABLE_MAX_LENGTH + 10];
-        sprintf(index_filename, "%s.index.csv", predicate_field);
-
         struct DB index_db;
 
         char value[VALUE_MAX_LENGTH];
 
-        if (openDB(&index_db, index_filename) == 0) {
+        if (findIndex(&index_db, predicate_field, INDEX_ANY) == 0) {
             int record_index = pk_search(&index_db, 0, predicate_value, FIELD_ROW_INDEX);
 
             int lower_index = record_index;
@@ -285,13 +280,43 @@ int rangeScan (struct DB *db, char predicate_op, int lower_index, int upper_inde
         return result_count;
     }
 
-    // Iterate between the bounds we've set up
-    for (int i = lower_index; i < upper_index; i++) {
-        if (rowid_column == -1) {
-            result_rowids[result_count++] = i;
-        } else {
-            getRecordValue(db, i, rowid_column, value, VALUE_MAX_LENGTH);
-            result_rowids[result_count++] = atoi(value);
+    // Walk between the bounds we've set up
+    return indexWalk(db, rowid_column, lower_index, upper_index, ORDER_ASC, result_rowids);
+}
+
+int findIndex(struct DB *db, const char *index_name, int index_type_flags) {
+    char index_filename[TABLE_MAX_LENGTH + 10];
+    if (index_type_flags == INDEX_UNIQUE) {
+        sprintf(index_filename, "%s.unique.csv", index_name);
+    } else {
+        sprintf(index_filename, "%s.index.csv", index_name);
+    }
+
+    return openDB(db, index_filename);
+}
+
+int indexWalk(struct DB *db, int rowid_column, int lower_index, int upper_index, int direction, int *result_rowids) {
+    int result_count = 0;
+    char value[VALUE_MAX_LENGTH];
+
+    if (direction == ORDER_DESC) {
+        for (int i = upper_index - 1; i >= lower_index; i--) {
+            if (rowid_column == -1) {
+                result_rowids[result_count++] = i;
+            } else {
+                getRecordValue(db, i, rowid_column, value, VALUE_MAX_LENGTH);
+                result_rowids[result_count++] = atoi(value);
+            }
+        }
+    }
+    else {
+        for (int i = lower_index; i < upper_index; i++) {
+            if (rowid_column == -1) {
+                result_rowids[result_count++] = i;
+            } else {
+                getRecordValue(db, i, rowid_column, value, VALUE_MAX_LENGTH);
+                result_rowids[result_count++] = atoi(value);
+            }
         }
     }
 

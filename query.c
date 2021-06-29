@@ -270,7 +270,7 @@ int process_select_query (
 
     struct DB db;
     int result_count = RESULT_NO_INDEX;
-    int group_specimen = RESULT_NO_ROWS;
+    int sort_needed = flags & FLAG_ORDER;
 
     if (openDB(&db, table) != 0) {
         fprintf(stderr, "File not found: '%s'\n", table);
@@ -374,7 +374,7 @@ int process_select_query (
         return 0;
     }
 
-    if (result_count == RESULT_NO_INDEX) {
+    if ((flags & FLAG_HAVE_PREDICATE) && result_count == RESULT_NO_INDEX) {
         /******************
          * INDEX RANGE SCAN
          ******************/
@@ -382,6 +382,17 @@ int process_select_query (
 
         if (result_count != RESULT_NO_INDEX) {
             plan_flags |= PLAN_INDEX_RANGE;
+        }
+    }
+
+    if (!(flags & FLAG_HAVE_PREDICATE) && (flags & FLAG_ORDER)) {
+        // Before we do a full table scan... we have one more opportunity to use an index
+        // To save a sort later, see if we can use an index for ordering now
+        struct DB index_db;
+        if (findIndex(&index_db, order_field, INDEX_ANY) == 0) {
+            result_count = indexWalk(&index_db, 1, 0, index_db.record_count, order_direction, result_rowids);
+            plan_flags |= PLAN_INDEX_RANGE;
+            sort_needed = 0;
         }
     }
 
@@ -404,20 +415,22 @@ int process_select_query (
     /*******************
      * Ordering
      *******************/
-    int sort_needed = flags & FLAG_ORDER;
     // If we're only outputting one row then we don't need to sort
     if (flags & FLAG_GROUP) {
         sort_needed = 0;
     }
     // If we did an index scan on the same column as the ordering then we don't need to order again;
     // the results will already be in the correct order
-    if (plan_flags & (PLAN_INDEX_RANGE | PLAN_INDEX_UNIQUE) && strcmp(predicate_field, order_field) == 0) {
+    if (plan_flags & (PLAN_INDEX_RANGE | PLAN_INDEX_UNIQUE) && (strcmp(predicate_field, order_field) == 0 || strcmp(predicate_field, order_field) == 0)) {
         sort_needed = 0;
 
+        // We know the results are already sorted but if we need them in descending order
+        // we can just reverse them now
         if (order_direction == ORDER_DESC) {
             reverse_array(result_rowids, result_count);
         }
     }
+
     if (sort_needed) {
         int order_index = getFieldIndex(&db, order_field);
         sortResultRows(&db, order_index, order_direction, result_rowids, result_count, result_rowids);
@@ -440,7 +453,7 @@ int process_select_query (
     // COUNT(*) will print just one row
     if (flags & FLAG_GROUP) {
         // printf("Aggregate result:\n");
-        printResultLine(stdout, &db, field_indices, field_count, group_specimen, result_count, output_flags);
+        printResultLine(stdout, &db, field_indices, field_count, result_rowids[offset_value], result_count, output_flags);
     } else for (int i = 0; i < result_count; i++) {
 
         // ROW_NUMBER is offset by OFFSET from result index and is 1-index based

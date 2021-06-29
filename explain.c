@@ -3,14 +3,17 @@
 #include "explain.h"
 #include "query.h"
 #include "predicates.h"
+#include "indices.h"
 #include "limits.h"
+
+#define COVERING_INDEX_SUPPORT 0
 
 int log_10 (int value);
 
 int explain_select_query (
     const char *table,
-    const char *fields __attribute__((unused)),
-    int field_count __attribute__((unused)),
+    const char *fields,
+    int field_count,
     int flags,
     int offset_value __attribute__((unused)),
     int limit_value __attribute__((unused)),
@@ -34,6 +37,20 @@ int explain_select_query (
 
     int row_estimate = db.record_count;
     int log_rows = log_10(row_estimate);
+    int needs_table_access = 1;
+
+    // If we supported covering indices it would save a table lookup
+    if (COVERING_INDEX_SUPPORT && (field_count == 1)) {
+        if ((flags & FLAG_HAVE_PREDICATE) && strcmp(fields, predicate_field) == 0) {
+            needs_table_access = 0;
+        }
+        else if ((flags & FLAG_ORDER) && strcmp(fields, order_field) == 0) {
+            needs_table_access = 0;
+        }
+        else if (strcmp(fields, "COUNT(*)") == 0) {
+            needs_table_access = 0;
+        }
+    }
 
     int op = 0;
 
@@ -44,14 +61,18 @@ int explain_select_query (
     }
 
     if ((flags & FLAG_GROUP) && !(flags & FLAG_HAVE_PREDICATE)) {
-        printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, 1, 1);
+        if (needs_table_access) {
+            printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, 1, 1);
+        }
         return 0;
     }
 
     if (flags & FLAG_PRIMARY_KEY_SEARCH) {
         if (predicate_op == OPERATOR_EQ) {
             int cost = log_rows;
-            printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, 1, cost);
+            if (needs_table_access) {
+                printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, 1, cost);
+            }
             printf("%d\tINDEX UNIQUE SCAN\t%s\t%d\t%d\n", op++, predicate_field, 1, cost);
             return 0;
         }
@@ -62,7 +83,9 @@ int explain_select_query (
             printf("%d\tSORT ORDER BY\t\t\t%d\t%ld\n", op++, row_estimate, (long)row_estimate * row_estimate);
         }
 
-        printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, row_estimate, row_estimate);
+        if (needs_table_access) {
+            printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, row_estimate, row_estimate);
+        }
         printf("%d\tINDEX RANGE SCAN\t%s\t%d\t%d\n", op++, predicate_field, row_estimate, row_estimate);
         return 0;
     }
@@ -76,7 +99,9 @@ int explain_select_query (
         if (openDB(&index_db, index_filename) == 0) {
             if (predicate_op == OPERATOR_EQ) {
                 int cost = log_rows;
-                printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, 1, cost);
+                if (needs_table_access) {
+                    printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, 1, cost);
+                }
                 printf("%d\tINDEX UNIQUE SCAN\t%s\t%d\t%d\n", op++, predicate_field, 1, cost);
 
                 return 0;
@@ -88,7 +113,9 @@ int explain_select_query (
                 printf("%d\tSORT ORDER BY\t\t\t%d\t%ld\n", op++, row_estimate, (long)row_estimate * row_estimate);
             }
 
-            printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, row_estimate, row_estimate);
+            if (needs_table_access) {
+                printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, row_estimate, row_estimate);
+            }
             printf("%d\tINDEX RANGE SCAN\t%s\t%d\t%d\n", op++, predicate_field, row_estimate, row_estimate);
             return 0;
         }
@@ -128,8 +155,24 @@ int explain_select_query (
                 printf("%d\tSORT ORDER BY\t\t\t%d\t%ld\n", op++, row_estimate, (long)row_estimate * row_estimate);
             }
 
-            printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, row_estimate, cost);
+            if (needs_table_access) {
+                printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, row_estimate, cost);
+            }
             printf("%d\tINDEX RANGE SCAN\t%s\t%d\t%d\n", op++, predicate_field, row_estimate, cost);
+
+            return 0;
+        }
+    }
+
+    if (!(flags & FLAG_HAVE_PREDICATE) && (flags & FLAG_ORDER)) {
+        // Before we do a full table scan... we have one more opportunity to use an index
+        // To save a sort later, see if we can use an index for ordering now
+        struct DB index_db;
+        if (findIndex(&index_db, order_field, INDEX_ANY) == 0) {
+            if (needs_table_access) {
+                printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, row_estimate, row_estimate);
+            }
+            printf("%d\tINDEX RANGE SCAN\t%s\t%d\t%d\n", op++, order_field, row_estimate, log_rows);
 
             return 0;
         }
@@ -139,7 +182,9 @@ int explain_select_query (
         printf("%d\tSORT ORDER BY\t\t\t%d\t%ld\n", op++, row_estimate, (long)row_estimate * row_estimate);
     }
 
-    printf("%d\tTABLE ACCESS FULL\t%s\t%d\t%d\n", op++, table, db.record_count, db.record_count);
+    if (needs_table_access) {
+        printf("%d\tTABLE ACCESS FULL\t%s\t%d\t%d\n", op++, table, db.record_count, db.record_count);
+    }
 
     return 0;
 }
