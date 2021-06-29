@@ -20,6 +20,6 @@
 
 char parseOperator (const char *input);
 
-int evaluateExpression (char op, const char *left, const char *right);
+int compare (int numeric_mode, const char * valueA, long valueA_numeric, const char *valueB);
 
-int pk_search(struct DB *db, int pk_index, const char *value, int result_index);
+int evaluateExpression (char op, const char *left, const char *right);
