@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "explain.h"
 #include "query.h"
 #include "predicates.h"
@@ -35,7 +37,11 @@ int explain_select_query (
 
     int op = 0;
 
-    printf("%d\tSELECT STATEMENT\t\n", op++);
+    if (flags & FLAG_GROUP) {
+        printf("%d\tSELECT STATEMENT\t\t%d\n", op++, 1);
+    } else {
+        printf("%d\tSELECT STATEMENT\t\n", op++);
+    }
 
     if ((flags & FLAG_GROUP) && !(flags & FLAG_HAVE_PREDICATE)) {
         printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, 1, 1);
@@ -52,7 +58,7 @@ int explain_select_query (
 
         row_estimate /= 2;
 
-        if (flags & FLAG_ORDER) {
+        if ((flags & FLAG_ORDER) && !(flags & FLAG_GROUP) && strcmp(predicate_field, order_field) != 0) {
             printf("%d\tSORT ORDER BY\t\t\t%d\t%ld\n", op++, row_estimate, (long)row_estimate * row_estimate);
         }
 
@@ -78,7 +84,7 @@ int explain_select_query (
 
             row_estimate /= 2;
 
-            if (flags & FLAG_ORDER) {
+            if ((flags & FLAG_ORDER) && !(flags & FLAG_GROUP) && strcmp(predicate_field, order_field) != 0) {
                 printf("%d\tSORT ORDER BY\t\t\t%d\t%ld\n", op++, row_estimate, (long)row_estimate * row_estimate);
             }
 
@@ -106,10 +112,6 @@ int explain_select_query (
             }
         }
 
-        if (flags & FLAG_ORDER) {
-            printf("%d\tSORT ORDER BY\t\t\t%d\t%ld\n", op++, row_estimate, (long)row_estimate * row_estimate);
-        }
-
         char index_filename[TABLE_MAX_LENGTH + 10];
         sprintf(index_filename, "%s.index.csv", predicate_field);
 
@@ -122,11 +124,19 @@ int explain_select_query (
                 cost = log_rows * 2;
             }
 
+            if ((flags & FLAG_ORDER) && !(flags & FLAG_GROUP) && strcmp(predicate_field, order_field) != 0) {
+                printf("%d\tSORT ORDER BY\t\t\t%d\t%ld\n", op++, row_estimate, (long)row_estimate * row_estimate);
+            }
+
             printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, table, row_estimate, cost);
             printf("%d\tINDEX RANGE SCAN\t%s\t%d\t%d\n", op++, predicate_field, row_estimate, cost);
 
             return 0;
         }
+    }
+
+    if ((flags & FLAG_ORDER) && !(flags & FLAG_GROUP)) {
+        printf("%d\tSORT ORDER BY\t\t\t%d\t%ld\n", op++, row_estimate, (long)row_estimate * row_estimate);
     }
 
     printf("%d\tTABLE ACCESS FULL\t%s\t%d\t%d\n", op++, table, db.record_count, db.record_count);

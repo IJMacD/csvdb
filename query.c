@@ -12,11 +12,16 @@
 #include "limits.h"
 #include "create.h"
 #include "explain.h"
+#include "util.h"
 
 #define FIELD_MAX_COUNT     10
 
 #define RESULT_NO_INDEX     -2
 #define RESULT_NO_ROWS      -1
+
+#define PLAN_INDEX_UNIQUE   1
+#define PLAN_INDEX_RANGE    2
+#define PLAN_FULL_TABLE     4
 
 int select_query (const char *query, int output_flags);
 
@@ -103,9 +108,13 @@ int select_query (const char *query, int output_flags) {
 
             int curr_index = 0;
             while (index < query_length) {
-                getToken(query, &index, fields + (FIELD_MAX_LENGTH * curr_index++), FIELD_MAX_LENGTH);
+                char *field_name = fields + (FIELD_MAX_LENGTH * curr_index++);
+                getToken(query, &index, field_name, FIELD_MAX_LENGTH);
 
                 // printf("Field is %s\n", field);
+                if (strcmp(field_name, "COUNT(*)") == 0) {
+                    flags |= FLAG_GROUP;
+                }
 
                 skipWhitespace(query, &index);
 
@@ -284,7 +293,6 @@ int process_select_query (
 
         if (strcmp(field_name, "COUNT(*)") == 0) {
             field_indices[i] = FIELD_COUNT_STAR;
-            flags |= FLAG_GROUP;
         } else if (strcmp(field_name, "*") == 0) {
             field_indices[i] = FIELD_STAR;
         } else if (strcmp(field_name, "ROW_NUMBER()") == 0) {
@@ -336,6 +344,8 @@ int process_select_query (
 
     int *result_rowids = malloc(sizeof (int) * db.record_count);
 
+    int plan_flags = 0;
+
     if (flags & FLAG_PRIMARY_KEY_SEARCH) {
         /******************
          * PRIMARY KEY
@@ -351,9 +361,13 @@ int process_select_query (
 
             result_rowids[0] = pk_index;
             result_count = 1;
+
+            plan_flags |= PLAN_INDEX_UNIQUE;
         }
         else {
             result_count = rangeScan(&db, predicate_op, pk_index, pk_index + 1, -1, result_rowids);
+
+            plan_flags |= PLAN_INDEX_RANGE;
         }
     } else if (flags & FLAG_HAVE_PREDICATE) {
         /*******************
@@ -361,6 +375,12 @@ int process_select_query (
          *******************/
         // Try to find a unique index
         result_count = indexUniqueScan(predicate_field, predicate_op, predicate_value, result_rowids);
+
+        if (predicate_op == OPERATOR_EQ) {
+            plan_flags |= PLAN_INDEX_UNIQUE;
+        } else {
+            plan_flags |= PLAN_INDEX_RANGE;
+        }
     }
 
     if (result_count == RESULT_NO_ROWS) {
@@ -373,6 +393,10 @@ int process_select_query (
          * INDEX RANGE SCAN
          ******************/
         result_count = indexRangeScan(result_rowids, predicate_field, predicate_op, predicate_value, flags);
+
+        if (result_count != RESULT_NO_INDEX) {
+            plan_flags |= PLAN_INDEX_RANGE;
+        }
     }
 
     /******************
@@ -381,6 +405,8 @@ int process_select_query (
     // If INDEX RANGE SCAN failed then do FULL TABLE SCAN
     if (result_count == RESULT_NO_INDEX) {
         result_count = fullTableScan(&db, result_rowids, predicate_field, predicate_op, predicate_value, limit_value, offset_value, flags);
+
+        plan_flags |= PLAN_FULL_TABLE;
     }
 
     // Early exit if there were no results
@@ -392,7 +418,21 @@ int process_select_query (
     /*******************
      * Ordering
      *******************/
-    if (flags & FLAG_ORDER && !(flags & FLAG_GROUP)) {
+    int sort_needed = flags & FLAG_ORDER;
+    // If we're only outputting one row then we don't need to sort
+    if (flags & FLAG_GROUP) {
+        sort_needed = 0;
+    }
+    // If we did an index scan on the same column as the ordering then we don't need to order again;
+    // the results will already be in the correct order
+    if (plan_flags & (PLAN_INDEX_RANGE | PLAN_INDEX_UNIQUE) && strcmp(predicate_field, order_field) == 0) {
+        sort_needed = 0;
+
+        if (order_direction == ORDER_DESC) {
+            reverse_array(result_rowids, result_count);
+        }
+    }
+    if (sort_needed) {
         int order_index = getFieldIndex(&db, order_field);
         sortResultRows(&db, order_index, order_direction, result_rowids, result_count, result_rowids);
     }
