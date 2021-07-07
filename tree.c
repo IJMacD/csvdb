@@ -10,9 +10,15 @@
 #define MODE_ALPHA      0
 #define MODE_NUMERIC    1
 
+/**
+ * This function also prepares `node` for use
+ */
 void insertNode (struct DB *db, int field_index, struct tree *root, struct tree *node) {
     char field_value[VALUE_MAX_LENGTH];
     getRecordValue(db, node->rowid, field_index, field_value, VALUE_MAX_LENGTH);
+
+    node->left = NULL;
+    node->right = NULL;
 
     if (is_numeric(field_value)) {
         node->value = atol(field_value);

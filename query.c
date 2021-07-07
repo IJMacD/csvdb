@@ -200,8 +200,8 @@ int process_select_query (
             result_count = indexWalk(&index_db, 1, 0, index_db.record_count, q->order_direction, result_rowids);
             plan_flags |= PLAN_INDEX_RANGE;
             sort_needed = 0;
+            closeDB(&index_db);
         }
-        closeDB(&index_db);
     }
 
     /******************
@@ -300,6 +300,8 @@ int information_query (const char *table) {
     for (int i = 0; i < db.field_count; i++) {
         printf("%s\tN\n", getFieldName(&db, i));
     }
+
+    closeDB(&db);
 
     return 0;
 }
