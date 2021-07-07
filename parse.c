@@ -34,7 +34,7 @@ int parseQuery (struct Query *q, const char *query) {
         index += 8;
     }
 
-    char keyword[FIELD_MAX_LENGTH];
+    char keyword[FIELD_MAX_LENGTH] = {0};
 
     while (index < query_length) {
 

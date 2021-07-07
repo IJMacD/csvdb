@@ -164,7 +164,7 @@ int process_select_query (
          * UNIQUE INDEX SCAN
          *******************/
         // Try to find a unique index
-        result_count = indexUniqueScan(q->predicate_field, q->predicate_op, q->predicate_value, result_rowids);
+        result_count = indexUniqueScan(q->table, q->predicate_field, q->predicate_op, q->predicate_value, result_rowids);
 
         if (result_count >= 0) {
             if (q->predicate_op == OPERATOR_EQ) {
@@ -185,7 +185,7 @@ int process_select_query (
         /******************
          * INDEX RANGE SCAN
          ******************/
-        result_count = indexRangeScan(q->predicate_field, q->predicate_op, q->predicate_value, result_rowids);
+        result_count = indexRangeScan(q->table, q->predicate_field, q->predicate_op, q->predicate_value, result_rowids);
 
         if (result_count != RESULT_NO_INDEX) {
             plan_flags |= PLAN_INDEX_RANGE;
@@ -196,7 +196,7 @@ int process_select_query (
         // Before we do a full table scan... we have one more opportunity to use an index
         // To save a sort later, see if we can use an index for ordering now
         struct DB index_db;
-        if (findIndex(&index_db, q->order_field, INDEX_ANY) == 0) {
+        if (findIndex(&index_db, q->table, q->order_field, INDEX_ANY) == 0) {
             result_count = indexWalk(&index_db, 1, 0, index_db.record_count, q->order_direction, result_rowids);
             plan_flags |= PLAN_INDEX_RANGE;
             sort_needed = 0;
@@ -242,6 +242,12 @@ int process_select_query (
 
     if (sort_needed) {
         int order_index = getFieldIndex(&db, q->order_field);
+        if (order_index < 0) {
+            fprintf(stderr, "Column not found: %s\n", q->order_field);
+            free(result_rowids);
+            closeDB(&db);
+            return -1;
+        }
         sortResultRows(&db, order_index, q->order_direction, result_rowids, result_count, result_rowids);
     }
 

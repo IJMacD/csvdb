@@ -46,7 +46,7 @@ int primaryKeyScan (struct DB *db, const char *predicate_field, int predicate_op
 /**
  * @return matched row count; RESULT_NO_ROWS if row not found; RESULT_NO_INDEX if index does not exist
  */
-int indexUniqueScan (const char *predicate_field, int predicate_op, const char *predicate_value, int *result_rowids) {
+int indexUniqueScan (const char *table, const char *predicate_field, int predicate_op, const char *predicate_value, int *result_rowids) {
     // We can't handle LIKE with this index (yet)
     if (predicate_op == OPERATOR_LIKE) {
         return RESULT_NO_INDEX;
@@ -57,7 +57,7 @@ int indexUniqueScan (const char *predicate_field, int predicate_op, const char *
     // If we have a unique index predicate then we can binary search
     struct DB index_db;
 
-    if (findIndex(&index_db, predicate_field, INDEX_UNIQUE) == 0) {
+    if (findIndex(&index_db, table, predicate_field, INDEX_UNIQUE) == 0) {
         int pk_search_result = pk_search(&index_db, 0, predicate_value, FIELD_ROW_INDEX);
 
         if (pk_search_result != RESULT_NO_ROWS) {
@@ -73,7 +73,7 @@ int indexUniqueScan (const char *predicate_field, int predicate_op, const char *
 /**
  * @return number of matched rows; RESULT_NO_INDEX if index does not exist
  */
-int indexRangeScan (const char *predicate_field, int predicate_op, const char *predicate_value, int *result_rowids) {
+int indexRangeScan (const char *table, const char *predicate_field, int predicate_op, const char *predicate_value, int *result_rowids) {
     // We can't handle LIKE with this index (yet)
     if (predicate_op == OPERATOR_LIKE) {
         return RESULT_NO_INDEX;
@@ -86,7 +86,7 @@ int indexRangeScan (const char *predicate_field, int predicate_op, const char *p
 
     char value[VALUE_MAX_LENGTH] = {0};
 
-    if (findIndex(&index_db, predicate_field, INDEX_ANY) == 0) {
+    if (findIndex(&index_db, table, predicate_field, INDEX_ANY) == 0) {
         int record_index = pk_search(&index_db, 0, predicate_value, FIELD_ROW_INDEX);
 
         int lower_index = record_index;
@@ -298,12 +298,24 @@ int rangeScan (struct DB *db, int predicate_op, int lower_index, int upper_index
     return indexWalk(db, rowid_column, lower_index, upper_index, ORDER_ASC, result_rowids);
 }
 
-int findIndex(struct DB *db, const char *index_name, int index_type_flags) {
-    char index_filename[TABLE_MAX_LENGTH + 10];
-    if (index_type_flags == INDEX_UNIQUE) {
-        sprintf(index_filename, "%s.unique.csv", index_name);
+int findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags) {
+    char index_filename[TABLE_MAX_LENGTH + FIELD_MAX_LENGTH + 12];
+    size_t len = strlen(index_name);
+
+    if (strncmp(index_name, "UNIQUE(", 7) == 0) {
+        size_t index_name_len = len - 8;
+        strncpy(index_filename, index_name + 7, index_name_len);
+        strcpy(index_filename + index_name_len, ".unique.csv");
+    }
+    else if (strncmp(index_name, "INDEX(", 6) == 0) {
+        size_t index_name_len = len - 7;
+        strncpy(index_filename, index_name + 6, index_name_len);
+        strcpy(index_filename + index_name_len, ".index.csv");
+    }
+    else if (index_type_flags == INDEX_UNIQUE) {
+        sprintf(index_filename, "%s__%s.unique.csv", table_name, index_name);
     } else {
-        sprintf(index_filename, "%s.index.csv", index_name);
+        sprintf(index_filename, "%s__%s.index.csv", table_name, index_name);
     }
 
     return openDB(db, index_filename);

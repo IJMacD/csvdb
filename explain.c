@@ -84,12 +84,10 @@ int explain_select_query (
     }
 
     if (q->flags & FLAG_HAVE_PREDICATE && q->predicate_op != OPERATOR_LIKE) {
-        char index_filename[TABLE_MAX_LENGTH + 10];
-        sprintf(index_filename, "%s.unique.csv", q->predicate_field);
 
         struct DB index_db;
 
-        if (openDB(&index_db, index_filename) == 0) {
+        if (findIndex(&index_db, q->table, q->predicate_field, INDEX_UNIQUE) == 0) {
             if (q->predicate_op == OPERATOR_EQ) {
                 int cost = log_rows;
                 if (needs_table_access) {
@@ -131,9 +129,7 @@ int explain_select_query (
             row_estimate = 1;
         }
 
-        sprintf(index_filename, "%s.index.csv", q->predicate_field);
-
-        if (openDB(&index_db, index_filename) == 0) {
+        if (findIndex(&index_db, q->table, q->predicate_field, INDEX_ANY) == 0) {
             int cost = row_estimate;
 
             if (q->predicate_op == OPERATOR_EQ) {
@@ -159,7 +155,7 @@ int explain_select_query (
         // Before we do a full table scan... we have one more opportunity to use an index
         // To save a sort later, see if we can use an index for ordering now
         struct DB index_db;
-        if (findIndex(&index_db, q->order_field, INDEX_ANY) == 0) {
+        if (findIndex(&index_db, q->table, q->order_field, INDEX_ANY) == 0) {
             if (needs_table_access) {
                 printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, q->table, row_estimate, row_estimate);
             }

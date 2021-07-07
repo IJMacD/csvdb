@@ -13,15 +13,16 @@ int create_index (const char *index_name, const char *table_name, const char *in
 
 int create_query (const char *query) {
     int unique_flag = 0;
+    int auto_name = 0;
 
-    size_t index;
+    size_t index = 0;
 
-    char index_name[TABLE_MAX_LENGTH] = {0};
+    char index_name[TABLE_MAX_LENGTH + FIELD_MAX_LENGTH + 2] = {0};
     char table_name[TABLE_MAX_LENGTH] = {0};
 
     char index_field[FIELD_MAX_LENGTH] = {0};
 
-    char keyword[FIELD_MAX_LENGTH];
+    char keyword[FIELD_MAX_LENGTH] = {0};
 
     getToken(query, &index, keyword, FIELD_MAX_LENGTH);
 
@@ -43,7 +44,14 @@ int create_query (const char *query) {
         return -1;
     }
 
-    getToken(query, &index, index_name, TABLE_MAX_LENGTH);
+    skipWhitespace(query, &index);
+
+    if (strncmp(query + index, "ON ", 3) == 0) {
+        // Auto generated index name
+        auto_name = 1;
+    } else {
+        getToken(query, &index, index_name, TABLE_MAX_LENGTH);
+    }
 
     getToken(query, &index, keyword, FIELD_MAX_LENGTH);
 
@@ -70,6 +78,10 @@ int create_query (const char *query) {
 
     index_field[length - 1] = '\0';
 
+    if (auto_name) {
+        sprintf(index_name, "%s__%s", table_name, index_field);
+    }
+
     create_index(index_name, table_name, index_field, unique_flag);
 
     return 0;
@@ -90,7 +102,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
         return -1;
     }
 
-    char file_name[TABLE_MAX_LENGTH + 10];
+    char file_name[TABLE_MAX_LENGTH + FIELD_MAX_LENGTH + 12];
     sprintf(file_name, "%s.%s.csv", index_name, unique_flag ? "unique" : "index");
 
     FILE *f = fopen(file_name, "w");
