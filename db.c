@@ -284,7 +284,7 @@ int getRecordValue (struct DB *db, int record_index, int field_index, char *valu
 
                 // Have we found the end of a quoted value?
                 // We've found the end of a record
-                if (buffer[i] == '"' || (!quoted_flag && (buffer[i] == ',' || buffer[i] == '\n'))) {
+                if (buffer[i] == '"' || (!quoted_flag && (buffer[i] == ',' || buffer[i] == '\n' || buffer[i] == '\r'))) {
 
                     // There might be quotes in the middle of a values, who cares?
                     // Let's just ignore that and pretend it won't happen
@@ -347,7 +347,7 @@ void prepareHeaders (struct DB *db) {
     }
 
     for (int i = 0; i < header_length; i++) {
-        if(db->fields[i] == ',' || db->fields[i] == '\n') {
+        if(db->fields[i] == ',' || db->fields[i] == '\n' || db->fields[i] == '\r') {
             db->fields[i] = '\0';
         }
     }
