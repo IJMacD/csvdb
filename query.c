@@ -296,15 +296,20 @@ int information_query (const char *table) {
 
     printf("\n");
 
-    char *field_name = getFieldName(&db, 10);
-    size_t len = strlen(field_name);
-    printf("field 10\n--------\nlength: %ld\nvalue:\n%s\nlast char: %02x\n\n", len, field_name, field_name[len-1]);
-
     printf("field\tindex\n");
     printf("-----\t-----\n");
 
+    struct DB index_db;
+
     for (int i = 0; i < db.field_count; i++) {
-        printf("%s\tN\n", getFieldName(&db, i));
+        int have_index = 0;
+
+        if (findIndex(&index_db, table, getFieldName(&db, i), INDEX_ANY) == 0) {
+            have_index = 1;
+            closeDB(&index_db);
+        }
+
+        printf("%s\t%c\n", getFieldName(&db, i), have_index ? 'Y' : 'N');
     }
 
     closeDB(&db);

@@ -33,6 +33,9 @@ void makeDB (struct DB *db, FILE *f) {
     db->record_count = line_count - 1;
 }
 
+/**
+ * Returns 0 on success; -1 on failure
+ */
 int openDB (struct DB *db, const char *filename) {
     FILE *f = fopen(filename, "r");
 
