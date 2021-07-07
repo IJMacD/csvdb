@@ -1,6 +1,201 @@
-#include "parse.h"
 #include <string.h>
 #include <ctype.h>
+
+#include "parse.h"
+#include "predicates.h"
+#include "sort.h"
+
+int parseQuery (struct Query *q, const char *query) {
+    /*********************
+     * Begin Query parsing
+     *********************/
+
+    size_t index = 0;
+
+    size_t query_length = strlen(query);
+
+    // printf("Query length: %ld\n", query_length);
+
+    // Allow SELECT to be optional and default to SELECT *
+    q->fields[0] = '*';
+    q->fields[1] = '\0';
+    q->field_count = 1;
+
+    q->predicate_op = OPERATOR_UN;
+
+    q->order_direction = ORDER_ASC;
+
+    q->flags = 0;
+    q->offset_value = 0;
+    q->limit_value = -1;
+
+    if (strncmp(query, "EXPLAIN ", 8) == 0) {
+        q->flags |= FLAG_EXPLAIN;
+        index += 8;
+    }
+
+    char keyword[FIELD_MAX_LENGTH];
+
+    while (index < query_length) {
+
+        int token_length = getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+        if (token_length <= 0) {
+            break;
+        }
+
+        // printf("Token: '%s'\n", keyword);
+
+        if (strcmp(keyword, "SELECT") == 0) {
+
+            int curr_index = 0;
+            while (index < query_length) {
+                char *field_name = q->fields + (FIELD_MAX_LENGTH * curr_index++);
+                getToken(query, &index, field_name, FIELD_MAX_LENGTH);
+
+                // printf("Field is %s\n", field);
+
+                if (strcmp(field_name, "COUNT(*)") == 0) {
+                    q->flags |= FLAG_GROUP;
+                }
+
+                skipWhitespace(query, &index);
+
+                if (query[index] != ',') {
+                    break;
+                }
+
+                index++;
+            }
+
+            q->field_count = curr_index;
+        }
+        else if (strcmp(keyword, "FROM") == 0) {
+            getToken(query, &index, q->table, TABLE_MAX_LENGTH);
+        }
+        else if (strcmp(keyword, "WHERE") == 0) {
+            q->flags |= FLAG_HAVE_PREDICATE;
+
+            getToken(query, &index, q->predicate_field, FIELD_MAX_LENGTH);
+
+            if (strncmp(q->predicate_field, "PK(", 3) == 0) {
+                q->flags |= FLAG_PRIMARY_KEY_SEARCH;
+                size_t len = strlen(q->predicate_field);
+                // remove trailing ')'
+                for (size_t i = 0; i < len - 4; i++) {
+                    q->predicate_field[i] = q->predicate_field[i+3];
+                }
+                q->predicate_field[len - 4] = '\0';
+            }
+
+            // printf("Predicate field: %s\n", predicate_field);
+
+            char op[5];
+            getToken(query, &index, op, 5);
+
+            q->predicate_op = parseOperator(op);
+            if (q->predicate_op == OPERATOR_UN) {
+                fprintf(stderr, "Bad query - expected =|!=|<|<=|>|>=\n");
+                return -1;
+            }
+
+            // Check for IS NOT
+            if (strcmp(op, "IS") == 0) {
+                skipWhitespace(query, &index);
+                if (strncmp(query + index, "NOT ", 4) == 0) {
+                    q->predicate_op = OPERATOR_NE;
+                    index += 4;
+                }
+            }
+
+            getToken(query, &index, q->predicate_value, VALUE_MAX_LENGTH);
+        }
+        else if (strcmp(keyword, "OFFSET") == 0) {
+            q->offset_value = getNumericToken(query, &index);
+
+            if (q->offset_value < 0) {
+                fprintf(stderr, "OFFSET cannot be negative\n");
+                return -1;
+            }
+        }
+        else if (strcmp(keyword, "FETCH") == 0) {
+            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+            if (strcmp(keyword, "FIRST") != 0 && strcmp(keyword, "NEXT") != 0) {
+                fprintf(stderr, "Bad query - expected FIRST|NEXT\n");
+                return -1;
+            }
+
+            skipWhitespace(query, &index);
+
+            if (isdigit(query[index])) {
+
+                q->limit_value = getNumericToken(query, &index);
+
+                if (q->limit_value < 0) {
+                    fprintf(stderr, "FETCH FIRST cannot be negative\n");
+                    return -1;
+                }
+            } else {
+                q->limit_value = 1;
+            }
+
+            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+            if (strcmp(keyword, "ROW") != 0 && strcmp(keyword, "ROWS") != 0) {
+                fprintf(stderr, "Bad query - expected ROW|ROWS; Got '%s'\n", keyword);
+                return -1;
+            }
+
+            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+            if (strcmp(keyword, "ONLY") != 0) {
+                fprintf(stderr, "Bad query - expected ONLY; Got '%s'\n", keyword);
+                return -1;
+            }
+        }
+        else if (strcmp(keyword, "LIMIT") == 0) {
+            q->limit_value = getNumericToken(query, &index);
+
+            if (q->limit_value < 0) {
+                fprintf(stderr, "LIMIT cannot be negative\n");
+                return -1;
+            }
+        }
+        else if (strcmp(keyword, "ORDER") == 0) {
+            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+            if (strcmp(keyword, "BY") != 0) {
+                fprintf(stderr, "Bad query - expected BY\n");
+                return -1;
+            }
+
+            q->flags |= FLAG_ORDER;
+
+            getToken(query, &index, q->order_field, FIELD_MAX_LENGTH);
+
+            size_t original_index = index;
+
+            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+            if (strcmp(keyword, "ASC") == 0) {
+                q->order_direction = ORDER_ASC;
+            } else if (strcmp(keyword, "DESC") == 0) {
+                q->order_direction = ORDER_DESC;
+            } else {
+                index = original_index;
+            }
+
+        }
+        else {
+            fprintf(stderr, "Bad query - expected WHERE|OFFSET|FETCH FIRST|LIMIT\n");
+            fprintf(stderr, "Found: '%s'\n", keyword);
+            return -1;
+        }
+    }
+
+    return 0;
+}
 
 void skipWhitespace (const char *string, size_t *index) {
     while (string[*index] != '\0') {

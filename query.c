@@ -15,8 +15,6 @@
 #include "explain.h"
 #include "util.h"
 
-#define FIELD_MAX_COUNT     10
-
 #define PLAN_INDEX_UNIQUE   1
 #define PLAN_INDEX_RANGE    2
 #define PLAN_FULL_TABLE     4
@@ -24,19 +22,11 @@
 int select_query (const char *query, int output_flags);
 
 int process_select_query (
-    const char *table,
-    const char *fields,
-    int field_count,
-    int flags,
-    int offset_value,
-    int limit_value,
-    const char *predicate_field,
-    int predicate_op,
-    const char *predicate_value,
-    const char *order_field,
-    int order_direction,
+    struct Query *q,
     int output_flags
 );
+
+int information_query (const char *table);
 
 int query (const char *query, int output_flags) {
     if (strncmp(query, "CREATE ", 7) == 0) {
@@ -47,220 +37,35 @@ int query (const char *query, int output_flags) {
 }
 
 int select_query (const char *query, int output_flags) {
-    /*********************
-     * Begin Query parsing
-     *********************/
+    struct Query q = {0};
 
-    size_t index = 0;
-
-    size_t query_length = strlen(query);
-
-    // printf("Query length: %ld\n", query_length);
-
-    char fields[FIELD_MAX_COUNT * FIELD_MAX_LENGTH];
-    // Allow SELECT to be optional and default to SELECT *
-    fields[0] = '*';
-    int field_count = 1;
-
-    // printf("Asked for %d field(s)\n", curr_index);
-
-    char table[TABLE_MAX_LENGTH] = {0};
-
-    char predicate_field[FIELD_MAX_LENGTH] = {0};
-    char predicate_value[VALUE_MAX_LENGTH] = {0};
-    int predicate_op = OPERATOR_UN;
-
-    char order_field[FIELD_MAX_LENGTH] = {0};
-    int order_direction = ORDER_ASC;
-
-    int flags = 0;
-    long offset_value = 0;
-    long limit_value = -1;
-
-    int explain_flag = 0;
-
-    if (strncmp(query, "EXPLAIN ", 8) == 0) {
-        explain_flag = 1;
-        index += 8;
+    if (parseQuery(&q, query) < 0) {
+        fprintf(stderr, "Error parsing query");
+        return -1;
     }
 
-    char keyword[FIELD_MAX_LENGTH];
-
-    while (index < query_length) {
-
-        int token_length = getToken(query, &index, keyword, FIELD_MAX_LENGTH);
-
-        if (token_length <= 0) {
-            break;
-        }
-
-        // printf("Token: '%s'\n", keyword);
-
-        if (strcmp(keyword, "SELECT") == 0) {
-
-            int curr_index = 0;
-            while (index < query_length) {
-                char *field_name = fields + (FIELD_MAX_LENGTH * curr_index++);
-                getToken(query, &index, field_name, FIELD_MAX_LENGTH);
-
-                // printf("Field is %s\n", field);
-
-                if (strcmp(field_name, "COUNT(*)") == 0) {
-                    flags |= FLAG_GROUP;
-                }
-
-                skipWhitespace(query, &index);
-
-                if (query[index] != ',') {
-                    break;
-                }
-
-                index++;
-            }
-
-            field_count = curr_index;
-        }
-        else if (strcmp(keyword, "FROM") == 0) {
-            getToken(query, &index, table, TABLE_MAX_LENGTH);
-        }
-        else if (strcmp(keyword, "WHERE") == 0) {
-            flags |= FLAG_HAVE_PREDICATE;
-
-            getToken(query, &index, predicate_field, FIELD_MAX_LENGTH);
-
-            if (strncmp(predicate_field, "PK(", 3) == 0) {
-                flags |= FLAG_PRIMARY_KEY_SEARCH;
-                size_t len = strlen(predicate_field);
-                // remove trailing ')'
-                for (size_t i = 0; i < len - 4; i++) {
-                    predicate_field[i] = predicate_field[i+3];
-                }
-                predicate_field[len - 4] = '\0';
-            }
-
-            // printf("Predicate field: %s\n", predicate_field);
-
-            char op[5];
-            getToken(query, &index, op, 5);
-
-            predicate_op = parseOperator(op);
-            if (predicate_op == OPERATOR_UN) {
-                fprintf(stderr, "Bad query - expected =|!=|<|<=|>|>=\n");
-                return -1;
-            }
-
-            // Check for IS NOT
-            if (strcmp(op, "IS") == 0) {
-                skipWhitespace(query, &index);
-                if (strncmp(query + index, "NOT ", 4) == 0) {
-                    predicate_op = OPERATOR_NE;
-                    index += 4;
-                }
-            }
-
-            getToken(query, &index, predicate_value, VALUE_MAX_LENGTH);
-        }
-        else if (strcmp(keyword, "OFFSET") == 0) {
-            offset_value = getNumericToken(query, &index);
-
-            if (offset_value < 0) {
-                fprintf(stderr, "OFFSET cannot be negative\n");
-                return -1;
-            }
-        }
-        else if (strcmp(keyword, "FETCH") == 0) {
-            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
-
-            if (strcmp(keyword, "FIRST") != 0 && strcmp(keyword, "NEXT") != 0) {
-                fprintf(stderr, "Bad query - expected FIRST|NEXT\n");
-                return -1;
-            }
-
-            skipWhitespace(query, &index);
-
-            if (isdigit(query[index])) {
-
-                limit_value = getNumericToken(query, &index);
-
-                if (limit_value < 0) {
-                    fprintf(stderr, "FETCH FIRST cannot be negative\n");
-                    return -1;
-                }
-            } else {
-                limit_value = 1;
-            }
-
-            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
-
-            if (strcmp(keyword, "ROW") != 0 && strcmp(keyword, "ROWS") != 0) {
-                fprintf(stderr, "Bad query - expected ROW|ROWS; Got '%s'\n", keyword);
-                return -1;
-            }
-        }
-        else if (strcmp(keyword, "LIMIT") == 0) {
-            limit_value = getNumericToken(query, &index);
-
-            if (limit_value < 0) {
-                fprintf(stderr, "LIMIT cannot be negative\n");
-                return -1;
-            }
-        }
-        else if (strcmp(keyword, "ORDER") == 0) {
-            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
-
-            if (strcmp(keyword, "BY") != 0) {
-                fprintf(stderr, "Bad query - expected BY\n");
-                return -1;
-            }
-
-            flags |= FLAG_ORDER;
-
-            getToken(query, &index, order_field, FIELD_MAX_LENGTH);
-
-            size_t original_index = index;
-
-            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
-
-            if (strcmp(keyword, "ASC") == 0) {
-                order_direction = ORDER_ASC;
-            } else if (strcmp(keyword, "DESC") == 0) {
-                order_direction = ORDER_DESC;
-            } else {
-                index = original_index;
-            }
-
-        }
-        else {
-            fprintf(stderr, "Bad query - expected WHERE|OFFSET|FETCH FIRST|LIMIT\n");
-            fprintf(stderr, "Found: '%s'\n", keyword);
-            return -1;
-        }
-    }
-
-    if (strlen(table) == 0) {
+    if (strlen(q.table) == 0) {
         fprintf(stderr, "Table not specified\n");
         return -1;
     }
 
-    if (explain_flag) {
-        return explain_select_query(table, fields, field_count, flags, offset_value, limit_value, predicate_field, predicate_op, predicate_value, order_field, order_direction, output_flags);
+    if (strcmp(q.table, "INFORMATION") == 0) {
+        if (strlen(q.predicate_value) < 1) {
+            return -1;
+        }
+
+        return information_query(q.predicate_value);
     }
 
-    return process_select_query(table, fields, field_count, flags, offset_value, limit_value, predicate_field, predicate_op, predicate_value, order_field, order_direction, output_flags);
+    if (q.flags & FLAG_EXPLAIN) {
+        return explain_select_query(&q, output_flags);
+    }
+
+    return process_select_query(&q, output_flags);
 }
 
 int process_select_query (
-    const char *table,
-    const char *fields,
-    int field_count,
-    int flags,
-    int offset_value,
-    int limit_value,
-    const char *predicate_field,
-    int predicate_op,
-    const char *predicate_value,
-    const char *order_field,
-    int order_direction,
+    struct Query *q,
     int output_flags
 ) {
     /*************************
@@ -269,18 +74,18 @@ int process_select_query (
 
     struct DB db;
     int result_count = RESULT_NO_INDEX;
-    int sort_needed = flags & FLAG_ORDER;
+    int sort_needed = q->flags & FLAG_ORDER;
 
-    if (openDB(&db, table) != 0) {
-        fprintf(stderr, "File not found: '%s'\n", table);
+    if (openDB(&db, q->table) != 0) {
+        fprintf(stderr, "File not found: '%s'\n", q->table);
         return -1;
     }
 
     int field_indices[FIELD_MAX_COUNT];
 
     // Get selected column indexes
-    for (int i = 0; i < field_count; i++) {
-        const char *field_name = fields + (i * FIELD_MAX_LENGTH);
+    for (int i = 0; i < q->field_count; i++) {
+        const char *field_name = q->fields + (i * FIELD_MAX_LENGTH);
 
         if (strcmp(field_name, "COUNT(*)") == 0) {
             field_indices[i] = FIELD_COUNT_STAR;
@@ -295,7 +100,7 @@ int process_select_query (
             field_indices[i] = getFieldIndex(&db, field_name);
 
             if (field_indices[i] == -1) {
-                fprintf(stderr, "Field %s not found\n", &fields[i * FIELD_MAX_LENGTH]);
+                fprintf(stderr, "Field %s not found\n", &q->fields[i * FIELD_MAX_LENGTH]);
                 closeDB(&db);
                 return -1;
             }
@@ -306,7 +111,7 @@ int process_select_query (
      * Output headers
      ************************/
     if (output_flags & OUTPUT_FLAG_HEADERS) {
-        printHeaderLine(stdout, &db, field_indices, field_count, 0);
+        printHeaderLine(stdout, &db, field_indices, q->field_count, 0);
     }
 
     /*************************
@@ -318,15 +123,15 @@ int process_select_query (
      ****************************/
     // If we have COUNT(*) and there's no predicate then just early exit
     // we already know how many records there are
-    if ((flags & FLAG_GROUP) && !(flags & FLAG_HAVE_PREDICATE)) {
+    if ((q->flags & FLAG_GROUP) && !(q->flags & FLAG_HAVE_PREDICATE)) {
         // We also need to provide a specimen row
         // "0 was chosen by a fair dice roll"
         // > But now we'll use offset value
         long count = db.record_count;
-        if (limit_value >= 0L && limit_value < count) {
-            count = limit_value;
+        if (q->limit_value >= 0L && q->limit_value < count) {
+            count = q->limit_value;
         }
-        printResultLine(stdout, &db, field_indices, field_count, offset_value, count, 0);
+        printResultLine(stdout, &db, field_indices, q->field_count, q->offset_value, count, 0);
         closeDB(&db);
         return 0;
     }
@@ -339,14 +144,14 @@ int process_select_query (
 
     int plan_flags = 0;
 
-    if (flags & FLAG_PRIMARY_KEY_SEARCH) {
+    if (q->flags & FLAG_PRIMARY_KEY_SEARCH) {
         /******************
          * PRIMARY KEY
          *****************/
-        result_count = primaryKeyScan(&db, predicate_field, predicate_op, predicate_value, result_rowids);
+        result_count = primaryKeyScan(&db, q->predicate_field, q->predicate_op, q->predicate_value, result_rowids);
 
         if (result_count >= 0) {
-            if (predicate_op == OPERATOR_EQ) {
+            if (q->predicate_op == OPERATOR_EQ) {
                 plan_flags |= PLAN_INDEX_UNIQUE;
             } else {
                 plan_flags |= PLAN_INDEX_RANGE;
@@ -354,15 +159,15 @@ int process_select_query (
         }
     }
 
-    if ((flags & FLAG_HAVE_PREDICATE) && result_count == RESULT_NO_INDEX) {
+    if ((q->flags & FLAG_HAVE_PREDICATE) && result_count == RESULT_NO_INDEX) {
         /*******************
          * UNIQUE INDEX SCAN
          *******************/
         // Try to find a unique index
-        result_count = indexUniqueScan(predicate_field, predicate_op, predicate_value, result_rowids);
+        result_count = indexUniqueScan(q->predicate_field, q->predicate_op, q->predicate_value, result_rowids);
 
         if (result_count >= 0) {
-            if (predicate_op == OPERATOR_EQ) {
+            if (q->predicate_op == OPERATOR_EQ) {
                 plan_flags |= PLAN_INDEX_UNIQUE;
             } else {
                 plan_flags |= PLAN_INDEX_RANGE;
@@ -376,23 +181,23 @@ int process_select_query (
         return 0;
     }
 
-    if ((flags & FLAG_HAVE_PREDICATE) && result_count == RESULT_NO_INDEX) {
+    if ((q->flags & FLAG_HAVE_PREDICATE) && result_count == RESULT_NO_INDEX) {
         /******************
          * INDEX RANGE SCAN
          ******************/
-        result_count = indexRangeScan(predicate_field, predicate_op, predicate_value, result_rowids);
+        result_count = indexRangeScan(q->predicate_field, q->predicate_op, q->predicate_value, result_rowids);
 
         if (result_count != RESULT_NO_INDEX) {
             plan_flags |= PLAN_INDEX_RANGE;
         }
     }
 
-    if (!(flags & FLAG_HAVE_PREDICATE) && (flags & FLAG_ORDER)) {
+    if (!(q->flags & FLAG_HAVE_PREDICATE) && (q->flags & FLAG_ORDER)) {
         // Before we do a full table scan... we have one more opportunity to use an index
         // To save a sort later, see if we can use an index for ordering now
         struct DB index_db;
-        if (findIndex(&index_db, order_field, INDEX_ANY) == 0) {
-            result_count = indexWalk(&index_db, 1, 0, index_db.record_count, order_direction, result_rowids);
+        if (findIndex(&index_db, q->order_field, INDEX_ANY) == 0) {
+            result_count = indexWalk(&index_db, 1, 0, index_db.record_count, q->order_direction, result_rowids);
             plan_flags |= PLAN_INDEX_RANGE;
             sort_needed = 0;
         }
@@ -404,13 +209,13 @@ int process_select_query (
      ******************/
     // If INDEX RANGE SCAN failed then do FULL TABLE SCAN
     if (result_count == RESULT_NO_INDEX) {
-        result_count = fullTableScan(&db, result_rowids, predicate_field, predicate_op, predicate_value, limit_value, offset_value, flags);
+        result_count = fullTableScan(&db, result_rowids, q->predicate_field, q->predicate_op, q->predicate_value, q->limit_value, q->offset_value, q->flags);
 
         plan_flags |= PLAN_FULL_TABLE;
     }
 
     // Early exit if there were no results
-    if (result_count == 0 && !(flags & FLAG_GROUP)) {
+    if (result_count == 0 && !(q->flags & FLAG_GROUP)) {
         free(result_rowids);
         closeDB(&db);
         return 0;
@@ -420,34 +225,34 @@ int process_select_query (
      * Ordering
      *******************/
     // If we're only outputting one row then we don't need to sort
-    if (flags & FLAG_GROUP) {
+    if (q->flags & FLAG_GROUP) {
         sort_needed = 0;
     }
     // If we did an index scan on the same column as the ordering then we don't need to order again;
     // the results will already be in the correct order
-    if (plan_flags & (PLAN_INDEX_RANGE | PLAN_INDEX_UNIQUE) && (strcmp(predicate_field, order_field) == 0 || strcmp(predicate_field, order_field) == 0)) {
+    if (plan_flags & (PLAN_INDEX_RANGE | PLAN_INDEX_UNIQUE) && (strcmp(q->predicate_field, q->order_field) == 0 || strcmp(q->predicate_field, q->order_field) == 0)) {
         sort_needed = 0;
 
         // We know the results are already sorted but if we need them in descending order
         // we can just reverse them now
-        if (order_direction == ORDER_DESC) {
+        if (q->order_direction == ORDER_DESC) {
             reverse_array(result_rowids, result_count);
         }
     }
 
     if (sort_needed) {
-        int order_index = getFieldIndex(&db, order_field);
-        sortResultRows(&db, order_index, order_direction, result_rowids, result_count, result_rowids);
+        int order_index = getFieldIndex(&db, q->order_field);
+        sortResultRows(&db, order_index, q->order_direction, result_rowids, result_count, result_rowids);
     }
 
     /********************
      * OFFSET/FETCH FIRST
      ********************/
-    result_rowids += offset_value;
-    result_count -= offset_value;
+    result_rowids += q->offset_value;
+    result_count -= q->offset_value;
 
-    if (limit_value >= 0 && limit_value < result_count) {
-        result_count = limit_value;
+    if (q->limit_value >= 0 && q->limit_value < result_count) {
+        result_count = q->limit_value;
     }
 
     /*******************
@@ -455,18 +260,46 @@ int process_select_query (
      *******************/
 
     // COUNT(*) will print just one row
-    if (flags & FLAG_GROUP) {
+    if (q->flags & FLAG_GROUP) {
         // printf("Aggregate result:\n");
-        printResultLine(stdout, &db, field_indices, field_count, result_count > 0 ? result_rowids[offset_value] : RESULT_NO_ROWS, result_count, output_flags);
+        printResultLine(stdout, &db, field_indices, q->field_count, result_count > 0 ? result_rowids[q->offset_value] : RESULT_NO_ROWS, result_count, output_flags);
     } else for (int i = 0; i < result_count; i++) {
 
         // ROW_NUMBER is offset by OFFSET from result index and is 1-index based
-        printResultLine(stdout, &db, field_indices, field_count, result_rowids[i], offset_value + i + 1, output_flags);
+        printResultLine(stdout, &db, field_indices, q->field_count, result_rowids[i], q->offset_value + i + 1, output_flags);
     }
 
-    free(result_rowids - offset_value);
+    free(result_rowids - q->offset_value);
 
     closeDB(&db);
+
+    return 0;
+}
+
+int information_query (const char *table) {
+    struct DB db;
+
+    if (openDB(&db, table) != 0) {
+        fprintf(stderr, "File not found: '%s'\n", table);
+        return -1;
+    }
+
+    printf("Table:\t%s\n", table);
+    printf("Fields:\t%d\n", db.field_count);
+    printf("Records:\t%d\n", db.record_count);
+
+    printf("\n");
+
+    char *field_name = getFieldName(&db, 10);
+    size_t len = strlen(field_name);
+    printf("field 10\n--------\nlength: %ld\nvalue:\n%s\nlast char: %02x\n\n", len, field_name, field_name[len-1]);
+
+    printf("field\tindex\n");
+    printf("-----\t-----\n");
+
+    for (int i = 0; i < db.field_count; i++) {
+        printf("%s\tN\n", getFieldName(&db, i));
+    }
 
     return 0;
 }

@@ -1,5 +1,11 @@
 #include <stdlib.h>
 
+#include "query.h"
+
+int parseQuery (struct Query *q, const char *query);
+
+int destroyQuery (struct Query *q);
+
 void skipWhitespace (const char *string, size_t *index);
 
 void skipToken (const char *string, size_t *index);
