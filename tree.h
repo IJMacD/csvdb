@@ -1,6 +1,6 @@
 struct tree {
     int rowid;
-    long value;
+    unsigned long value;
     struct tree *left;
     struct tree *right;
 };
