@@ -71,6 +71,63 @@ int parseQuery (struct Query *q, const char *query) {
                 else if (strcmp(column->text, "rowid") == 0) {
                     column->field = FIELD_ROW_INDEX;
                 }
+                else if (strncmp(column->text, "EXTRACT(", 8) == 0) {
+                    char part[10];
+                    strcpy(part, column->text + 8);
+
+                    if (strcmp(part, "YEAR") == 0) {
+                        column->function = FUNC_EXTRACT_YEAR;
+                    }
+                    else if (strcmp(part, "MONTH") == 0) {
+                        column->function = FUNC_EXTRACT_MONTH;
+                    }
+                    else if (strcmp(part, "DAY") == 0) {
+                        column->function = FUNC_EXTRACT_DAY;
+                    }
+                    else if (strcmp(part, "HEYEAR") == 0) {
+                        column->function = FUNC_EXTRACT_HEYEAR;
+                    }
+                    else if (strcmp(part, "YEARDAY") == 0) {
+                        column->function = FUNC_EXTRACT_YEARDAY;
+                    }
+                    else {
+                        fprintf(stderr, "Bad query - expected valid extract part - got %s\n", part);
+                        return -1;
+                    }
+
+                    skipWhitespace(query, &index);
+
+                    char value[10];
+                    getToken(query, &index, value, 10);
+
+                    if (strcmp(value, "FROM") != 0) {
+                        fprintf(stderr, "Bad query - expected FROM\n");
+                        return -1;
+                    }
+
+                    skipWhitespace(query, &index);
+
+                    getToken(query, &index, column->text, FIELD_MAX_LENGTH);
+
+                    size_t len = strlen(column->text);
+
+                    if (column->text[len - 1] == ')') {
+                        column->text[len - 1] = '\0';
+                    }
+                    else {
+                        skipWhitespace(query, &index);
+
+                        if (query[index] != ')') {
+                            fprintf(stderr, "Bad query - expected ')' got '%c'\n", query[index]);
+                            fprintf(stderr, "column->text = %s\n", column->text);
+                            return -1;
+                        }
+
+                        index++;
+                    }
+
+                    sprintf(column->alias, "EXTRACT(%s FROM %s)", part, column->text);
+                }
 
                 skipWhitespace(query, &index);
 

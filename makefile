@@ -1,7 +1,7 @@
 #
 # Compiler flags
 #
-CC     = gcc
+CC     = clang
 CFLAGS = -Wall -Werror -Wextra
 
 #
