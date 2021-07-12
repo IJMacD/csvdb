@@ -17,9 +17,8 @@ int parseQuery (struct Query *q, const char *query) {
     // printf("Query length: %ld\n", query_length);
 
     // Allow SELECT to be optional and default to SELECT *
-    q->fields[0] = '*';
-    q->fields[1] = '\0';
-    q->field_count = 1;
+    q->columns[0].field = FIELD_STAR;
+    q->column_count = 1;
 
     q->predicate_op = OPERATOR_UN;
 
@@ -50,13 +49,27 @@ int parseQuery (struct Query *q, const char *query) {
 
             int curr_index = 0;
             while (index < query_length) {
-                char *field_name = q->fields + (FIELD_MAX_LENGTH * curr_index++);
-                getToken(query, &index, field_name, FIELD_MAX_LENGTH);
+                struct ResultColumn *column = &(q->columns[curr_index++]);
+                column->field = FIELD_UNKNOWN;
+                column->function = FUNC_UNITY;
+                strcpy(column->alias, "");
+
+                getToken(query, &index, column->text, FIELD_MAX_LENGTH);
 
                 // printf("Field is %s\n", field);
 
-                if (strcmp(field_name, "COUNT(*)") == 0) {
+                if (strcmp(column->text, "COUNT(*)") == 0) {
+                    column->field = FIELD_COUNT_STAR;
                     q->flags |= FLAG_GROUP;
+                }
+                else if (strcmp(column->text, "*") == 0) {
+                    column->field = FIELD_STAR;
+                }
+                else if (strcmp(column->text, "ROW_NUMBER()") == 0) {
+                    column->field = FIELD_ROW_NUMBER;
+                }
+                else if (strcmp(column->text, "rowid") == 0) {
+                    column->field = FIELD_ROW_INDEX;
                 }
 
                 skipWhitespace(query, &index);
@@ -68,7 +81,7 @@ int parseQuery (struct Query *q, const char *query) {
                 index++;
             }
 
-            q->field_count = curr_index;
+            q->column_count = curr_index;
         }
         else if (strcmp(keyword, "FROM") == 0) {
             getToken(query, &index, q->table, TABLE_MAX_LENGTH);

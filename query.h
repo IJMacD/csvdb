@@ -4,11 +4,31 @@
 
 #define OUTPUT_FLAG_HEADERS    1
 
-#define FIELD_UNKNOWN       -1
-#define FIELD_STAR          -2
-#define FIELD_COUNT_STAR    -3
-#define FIELD_ROW_NUMBER    -4
-#define FIELD_ROW_INDEX     -5
+#define FIELD_UNKNOWN                       -1
+#define FIELD_STAR                          -2
+#define FIELD_COUNT_STAR                    -3
+#define FIELD_ROW_NUMBER                    -4
+#define FIELD_ROW_INDEX                     -5
+
+#define MASK_FUNC_FAMILY            0xD0
+// xxxa aaaa
+// xxx          = family (mask 0xD0)
+//    a aaaa    = function (mask 0x1F)
+#define FUNC_UNITY                  0
+// Family 000 (0x00)
+#define FUNC_FORMAT                 10
+// Family 001 (0x20)
+
+// Family 010 (0x40)
+#define FUNC_EXTRACT                0x40
+#define FUNC_EXTRACT_YEAR           0x41
+#define FUNC_EXTRACT_MONTH          0x42
+#define FUNC_EXTRACT_DAY            0x43
+#define FUNC_EXTRACT_WEEK           0x44
+#define FUNC_EXTRACT_WEEKDAY        0x45
+#define FUNC_EXTRACT_WEEKYEAR       0x46
+#define FUNC_EXTRACT_YEARDAY        0x47
+#define FUNC_EXTRACT_HEYEAR         0x48
 
 #define FLAG_HAVE_PREDICATE         1
 #define FLAG_GROUP                  2
@@ -18,10 +38,18 @@
 
 #define FIELD_MAX_COUNT     10
 
+struct ResultColumn {
+    int field;
+    int function;
+    char text[FIELD_MAX_LENGTH];
+    char alias[FIELD_MAX_LENGTH];
+    int table_id;
+};
+
 struct Query {
     char table[TABLE_MAX_LENGTH];
-    char fields[FIELD_MAX_COUNT * FIELD_MAX_LENGTH];
-    int field_count;
+    struct ResultColumn columns[FIELD_MAX_COUNT];
+    int column_count;
     int flags;
     int offset_value;
     int limit_value;

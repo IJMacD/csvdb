@@ -85,37 +85,11 @@ int process_select_query (
         return -1;
     }
 
-    int field_indices[FIELD_MAX_COUNT];
-
-    // Get selected column indexes
-    for (int i = 0; i < q->field_count; i++) {
-        const char *field_name = q->fields + (i * FIELD_MAX_LENGTH);
-
-        if (strcmp(field_name, "COUNT(*)") == 0) {
-            field_indices[i] = FIELD_COUNT_STAR;
-        } else if (strcmp(field_name, "*") == 0) {
-            field_indices[i] = FIELD_STAR;
-        } else if (strcmp(field_name, "ROW_NUMBER()") == 0) {
-            field_indices[i] = FIELD_ROW_NUMBER;
-        } else if (strcmp(field_name, "rowid") == 0) {
-            field_indices[i] = FIELD_ROW_INDEX;
-        }
-        else {
-            field_indices[i] = getFieldIndex(&db, field_name);
-
-            if (field_indices[i] == -1) {
-                fprintf(stderr, "Field %s not found\n", &q->fields[i * FIELD_MAX_LENGTH]);
-                closeDB(&db);
-                return -1;
-            }
-        }
-    }
-
     /*************************
      * Output headers
      ************************/
     if (output_flags & OUTPUT_FLAG_HEADERS) {
-        printHeaderLine(stdout, &db, field_indices, q->field_count, 0);
+        printHeaderLine(stdout, &db, q->columns, q->column_count, 0);
     }
 
     /*************************
@@ -135,12 +109,12 @@ int process_select_query (
         if (q->limit_value >= 0L && q->limit_value < count) {
             count = q->limit_value;
         }
-        printResultLine(stdout, &db, field_indices, q->field_count, q->offset_value, count, 0);
+        printResultLine(stdout, &db, q->columns, q->column_count, q->offset_value, count, 0);
         closeDB(&db);
         return 0;
     }
 
-
+    // Provision enough result space for maximum of all rows
     int *result_rowids = malloc(sizeof (int) * db.record_count);
 
     int result_count = RESULT_NO_INDEX;
@@ -153,47 +127,78 @@ int process_select_query (
         }
         else if (s.type == PLAN_INDEX_UNIQUE) {
             result_count = indexUniqueScan(q->table, q->predicate_field, q->predicate_op, q->predicate_value, result_rowids);
-        } else if (s.type == PLAN_INDEX_RANGE) {
+        }
+        else if (s.type == PLAN_INDEX_RANGE) {
             struct Predicate p = s.predicates[0];
             result_count = indexRangeScan(q->table, p.field, p.op, p.value, result_rowids);
-        } else if (s.type == PLAN_TABLE_ACCESS_FULL) {
+        }
+        else if (s.type == PLAN_TABLE_ACCESS_FULL) {
             if (s.predicate_count > 0) {
                 struct Predicate p = s.predicates[i];
                 result_count = fullTableScan(&db, result_rowids, p.field, p.op, p.value, q->limit_value, q->offset_value, q->flags);
-            } else {
+            }
+            else {
                 result_count = fullTableAccess(&db, result_rowids);
             }
-        } else if (s.type == PLAN_TABLE_ACCESS_ROWID ) {
+        }
+        else if (s.type == PLAN_TABLE_ACCESS_ROWID ) {
             for (int i = 0; i < s.predicate_count; i++) {
                 struct Predicate p = s.predicates[i];
                 result_count = filterRows(&db, result_rowids, result_count, &p, result_rowids);
             }
-        } else if (s.type == PLAN_SORT) {
+        }
+        else if (s.type == PLAN_SORT) {
             int order_index = getFieldIndex(&db, s.predicates[0].field);
             sortResultRows(&db, order_index, s.predicates[0].op, result_rowids, result_count, result_rowids);
-        } else if (s.type == PLAN_REVERSE) {
+        }
+        else if (s.type == PLAN_REVERSE) {
             reverse_array(result_rowids, result_count);
-        } else if (s.type == PLAN_SLICE) {
+        }
+        else if (s.type == PLAN_SLICE) {
             result_rowids += s.param1;
             result_count -= s.param1;
 
             if (s.param2 >= 0 && s.param2 < result_count) {
                 result_count = s.param2;
             }
-        } else if (s.type == PLAN_SELECT) {
+        }
+        else if (s.type == PLAN_GROUP) {
+            // NOP
+        }
+        else if (s.type == PLAN_SELECT) {
             /*******************
              * Output result set
              *******************/
 
+            // Fill in selected column indexes
+            for (int i = 0; i < q->column_count; i++) {
+                struct ResultColumn *column = &(q->columns[i]);
+
+                if (column->field == FIELD_UNKNOWN) {
+                    column->field = getFieldIndex(&db, column->text);
+
+                    if (column->field == FIELD_UNKNOWN) {
+                        fprintf(stderr, "Field %s not found\n", column->text);
+                        closeDB(&db);
+                        return -1;
+                    }
+                }
+            }
+
             // COUNT(*) will print just one row
             if (q->flags & FLAG_GROUP) {
                 // printf("Aggregate result:\n");
-                printResultLine(stdout, &db, field_indices, q->field_count, result_count > 0 ? result_rowids[q->offset_value] : RESULT_NO_ROWS, result_count, output_flags);
-            } else for (int i = 0; i < result_count; i++) {
+                printResultLine(stdout, &db, q->columns, q->column_count, result_count > 0 ? result_rowids[q->offset_value] : RESULT_NO_ROWS, result_count, output_flags);
+            }
+            else for (int i = 0; i < result_count; i++) {
 
                 // ROW_NUMBER is offset by OFFSET from result index and is 1-index based
-                printResultLine(stdout, &db, field_indices, q->field_count, result_rowids[i], q->offset_value + i + 1, output_flags);
+                printResultLine(stdout, &db, q->columns, q->column_count, result_rowids[i], q->offset_value + i + 1, output_flags);
             }
+        }
+        else {
+            fprintf(stderr, "Whoops. Unimplemented OP code: %d\n", s.type);
+            return -1;
         }
     }
 

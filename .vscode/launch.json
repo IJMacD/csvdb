@@ -11,6 +11,7 @@
             "program": "${workspaceFolder}/debug/csvdb",
             "args": [
                 // "SELECT * FROM test"
+                "--headers",
                 "--",
                 "test.sql"
             ],
