@@ -39,8 +39,7 @@ int main (int argc, char * argv[]) {
 
             if (count > 0) {
                 buffer[count] = '\0';
-                query(buffer, flags);
-                return 0;
+                return query(buffer, flags);
             }
 
             printf("File '%s' was empty\n", argv[2]);
@@ -52,8 +51,7 @@ int main (int argc, char * argv[]) {
     }
 
     if (argc > arg) {
-        query(argv[arg], flags);
-        return 0;
+        return query(argv[arg], flags);
     }
 
     // If stdin is something more than a tty (i.e pipe or redirected file) then

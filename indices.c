@@ -71,6 +71,7 @@ int indexUniqueScan (const char *table, const char *predicate_field, int predica
 }
 
 /**
+ * @param predicate_value If set to NULL then the whole index will be walked in the ascending order
  * @return number of matched rows; RESULT_NO_INDEX if index does not exist
  */
 int indexRangeScan (const char *table, const char *predicate_field, int predicate_op, const char *predicate_value, int *result_rowids) {
@@ -87,6 +88,14 @@ int indexRangeScan (const char *table, const char *predicate_field, int predicat
     char value[VALUE_MAX_LENGTH] = {0};
 
     if (findIndex(&index_db, table, predicate_field, INDEX_ANY) == 0) {
+
+        // If the value is NULL then we're being asked to walk the entire index
+        if (predicate_value == NULL) {
+            int result = indexWalk(&index_db, 1, 0, index_db.record_count, predicate_op, result_rowids);
+            closeDB(&index_db);
+            return result;
+        }
+
         int record_index = pk_search(&index_db, 0, predicate_value, FIELD_ROW_INDEX);
 
         int lower_index = record_index;
@@ -167,6 +176,18 @@ int fullTableScan (struct DB *db, int *result_rowids, const char *predicate_fiel
     }
 
     return result_count;
+}
+
+/**
+ * A sort of dummy access function to just populate the result_rowids
+ * array with all rowids in ascending numerical order
+ */
+int fullTableAccess (struct DB *db, int result_rowids[]) {
+    for (int i = 0; i < db->record_count; i++) {
+        result_rowids[i] = i;
+    }
+
+    return db->record_count;
 }
 
 /**
@@ -313,6 +334,8 @@ int findIndex(struct DB *db, const char *table_name, const char *index_name, int
         strcpy(index_filename + index_name_len, ".unique.csv");
     }
     else if (strncmp(index_name, "INDEX(", 6) == 0) {
+        if (index_type_flags != INDEX_ANY) return -1;
+
         size_t index_name_len = len - 7;
         strncpy(index_filename, index_name + 6, index_name_len);
         strcpy(index_filename + index_name_len, ".index.csv");

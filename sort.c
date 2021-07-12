@@ -11,6 +11,10 @@
  * @param out_rowids
  */
 void sortResultRows (struct DB *db, int field_index, int direction, const int *rowids, int row_count, int *out_rowids) {
+    if (row_count <= 0) {
+        return;
+    }
+
     struct tree *pool = malloc(sizeof (struct tree) * row_count);
     struct tree *root = pool;
 

@@ -14,15 +14,13 @@
 #include "create.h"
 #include "explain.h"
 #include "util.h"
-
-#define PLAN_INDEX_UNIQUE   1
-#define PLAN_INDEX_RANGE    2
-#define PLAN_FULL_TABLE     4
+#include "plan.h"
 
 int select_query (const char *query, int output_flags);
 
 int process_select_query (
     struct Query *q,
+    struct Plan *plan,
     int output_flags
 );
 
@@ -40,7 +38,7 @@ int select_query (const char *query, int output_flags) {
     struct Query q = {0};
 
     if (parseQuery(&q, query) < 0) {
-        fprintf(stderr, "Error parsing query");
+        fprintf(stderr, "Error parsing query\n");
         return -1;
     }
 
@@ -57,15 +55,23 @@ int select_query (const char *query, int output_flags) {
         return information_query(q.predicate_value);
     }
 
+    /**********************
+     * Make Plan
+     **********************/
+    struct Plan plan;
+
+    makePlan(&q, &plan);
+
     if (q.flags & FLAG_EXPLAIN) {
-        return explain_select_query(&q, output_flags);
+        return explain_select_query(&q, &plan, output_flags);
     }
 
-    return process_select_query(&q, output_flags);
+    return process_select_query(&q, &plan, output_flags);
 }
 
 int process_select_query (
     struct Query *q,
+    struct Plan *plan,
     int output_flags
 ) {
     /*************************
@@ -73,8 +79,6 @@ int process_select_query (
      *************************/
 
     struct DB db;
-    int result_count = RESULT_NO_INDEX;
-    int sort_needed = q->flags & FLAG_ORDER;
 
     if (openDB(&db, q->table) != 0) {
         fprintf(stderr, "File not found: '%s'\n", q->table);
@@ -136,144 +140,64 @@ int process_select_query (
         return 0;
     }
 
-    /**********************
-     * Start iterating rows
-     **********************/
 
     int *result_rowids = malloc(sizeof (int) * db.record_count);
 
-    int plan_flags = 0;
+    int result_count = RESULT_NO_INDEX;
 
-    if (q->flags & FLAG_PRIMARY_KEY_SEARCH) {
-        /******************
-         * PRIMARY KEY
-         *****************/
-        result_count = primaryKeyScan(&db, q->predicate_field, q->predicate_op, q->predicate_value, result_rowids);
+    for (int i = 0; i < plan->step_count; i++) {
+        struct PlanStep s = plan->steps[i];
 
-        if (result_count >= 0) {
-            if (q->predicate_op == OPERATOR_EQ) {
-                plan_flags |= PLAN_INDEX_UNIQUE;
+        if (s.type == PLAN_PK_UNIQUE || s.type == PLAN_PK_RANGE) {
+            result_count = primaryKeyScan(&db, q->predicate_field, q->predicate_op, q->predicate_value, result_rowids);
+        }
+        else if (s.type == PLAN_INDEX_UNIQUE) {
+            result_count = indexUniqueScan(q->table, q->predicate_field, q->predicate_op, q->predicate_value, result_rowids);
+        } else if (s.type == PLAN_INDEX_RANGE) {
+            struct Predicate p = s.predicates[0];
+            result_count = indexRangeScan(q->table, p.field, p.op, p.value, result_rowids);
+        } else if (s.type == PLAN_TABLE_ACCESS_FULL) {
+            if (s.predicate_count > 0) {
+                struct Predicate p = s.predicates[i];
+                result_count = fullTableScan(&db, result_rowids, p.field, p.op, p.value, q->limit_value, q->offset_value, q->flags);
             } else {
-                plan_flags |= PLAN_INDEX_RANGE;
+                result_count = fullTableAccess(&db, result_rowids);
             }
-        }
-    }
-
-    if ((q->flags & FLAG_HAVE_PREDICATE) && result_count == RESULT_NO_INDEX) {
-        /*******************
-         * UNIQUE INDEX SCAN
-         *******************/
-        // Try to find a unique index
-        result_count = indexUniqueScan(q->table, q->predicate_field, q->predicate_op, q->predicate_value, result_rowids);
-
-        if (result_count >= 0) {
-            if (q->predicate_op == OPERATOR_EQ) {
-                plan_flags |= PLAN_INDEX_UNIQUE;
-            } else {
-                plan_flags |= PLAN_INDEX_RANGE;
+        } else if (s.type == PLAN_TABLE_ACCESS_ROWID ) {
+            for (int i = 0; i < s.predicate_count; i++) {
+                struct Predicate p = s.predicates[i];
+                result_count = filterRows(&db, result_rowids, result_count, &p, result_rowids);
             }
-        }
-    }
-
-    if (result_count == RESULT_NO_ROWS) {
-        free(result_rowids);
-        closeDB(&db);
-        return 0;
-    }
-
-    if ((q->flags & FLAG_HAVE_PREDICATE) && result_count == RESULT_NO_INDEX) {
-        /******************
-         * INDEX RANGE SCAN
-         ******************/
-        result_count = indexRangeScan(q->table, q->predicate_field, q->predicate_op, q->predicate_value, result_rowids);
-
-        if (result_count != RESULT_NO_INDEX) {
-            plan_flags |= PLAN_INDEX_RANGE;
-        }
-    }
-
-    if (!(q->flags & FLAG_HAVE_PREDICATE) && (q->flags & FLAG_ORDER)) {
-        // Before we do a full table scan... we have one more opportunity to use an index
-        // To save a sort later, see if we can use an index for ordering now
-        struct DB index_db;
-        if (findIndex(&index_db, q->table, q->order_field, INDEX_ANY) == 0) {
-            result_count = indexWalk(&index_db, 1, 0, index_db.record_count, q->order_direction, result_rowids);
-            plan_flags |= PLAN_INDEX_RANGE;
-            sort_needed = 0;
-            closeDB(&index_db);
-        }
-    }
-
-    /******************
-     * FULL TABLE SCAN
-     ******************/
-    // If INDEX RANGE SCAN failed then do FULL TABLE SCAN
-    if (result_count == RESULT_NO_INDEX) {
-        result_count = fullTableScan(&db, result_rowids, q->predicate_field, q->predicate_op, q->predicate_value, q->limit_value, q->offset_value, q->flags);
-
-        plan_flags |= PLAN_FULL_TABLE;
-    }
-
-    // Early exit if there were no results
-    if (result_count == 0 && !(q->flags & FLAG_GROUP)) {
-        free(result_rowids);
-        closeDB(&db);
-        return 0;
-    }
-
-    /*******************
-     * Ordering
-     *******************/
-    // If we're only outputting one row then we don't need to sort
-    if (q->flags & FLAG_GROUP) {
-        sort_needed = 0;
-    }
-    // If we did an index scan on the same column as the ordering then we don't need to order again;
-    // the results will already be in the correct order
-    if (plan_flags & (PLAN_INDEX_RANGE | PLAN_INDEX_UNIQUE) && (strcmp(q->predicate_field, q->order_field) == 0 || strcmp(q->predicate_field, q->order_field) == 0)) {
-        sort_needed = 0;
-
-        // We know the results are already sorted but if we need them in descending order
-        // we can just reverse them now
-        if (q->order_direction == ORDER_DESC) {
+        } else if (s.type == PLAN_SORT) {
+            int order_index = getFieldIndex(&db, s.predicates[0].field);
+            sortResultRows(&db, order_index, s.predicates[0].op, result_rowids, result_count, result_rowids);
+        } else if (s.type == PLAN_REVERSE) {
             reverse_array(result_rowids, result_count);
+        } else if (s.type == PLAN_SLICE) {
+            result_rowids += s.param1;
+            result_count -= s.param1;
+
+            if (s.param2 >= 0 && s.param2 < result_count) {
+                result_count = s.param2;
+            }
+        } else if (s.type == PLAN_SELECT) {
+            /*******************
+             * Output result set
+             *******************/
+
+            // COUNT(*) will print just one row
+            if (q->flags & FLAG_GROUP) {
+                // printf("Aggregate result:\n");
+                printResultLine(stdout, &db, field_indices, q->field_count, result_count > 0 ? result_rowids[q->offset_value] : RESULT_NO_ROWS, result_count, output_flags);
+            } else for (int i = 0; i < result_count; i++) {
+
+                // ROW_NUMBER is offset by OFFSET from result index and is 1-index based
+                printResultLine(stdout, &db, field_indices, q->field_count, result_rowids[i], q->offset_value + i + 1, output_flags);
+            }
         }
     }
 
-    if (sort_needed) {
-        int order_index = getFieldIndex(&db, q->order_field);
-        if (order_index < 0) {
-            fprintf(stderr, "Column not found: %s\n", q->order_field);
-            free(result_rowids);
-            closeDB(&db);
-            return -1;
-        }
-        sortResultRows(&db, order_index, q->order_direction, result_rowids, result_count, result_rowids);
-    }
-
-    /********************
-     * OFFSET/FETCH FIRST
-     ********************/
-    result_rowids += q->offset_value;
-    result_count -= q->offset_value;
-
-    if (q->limit_value >= 0 && q->limit_value < result_count) {
-        result_count = q->limit_value;
-    }
-
-    /*******************
-     * Output result set
-     *******************/
-
-    // COUNT(*) will print just one row
-    if (q->flags & FLAG_GROUP) {
-        // printf("Aggregate result:\n");
-        printResultLine(stdout, &db, field_indices, q->field_count, result_count > 0 ? result_rowids[q->offset_value] : RESULT_NO_ROWS, result_count, output_flags);
-    } else for (int i = 0; i < result_count; i++) {
-
-        // ROW_NUMBER is offset by OFFSET from result index and is 1-index based
-        printResultLine(stdout, &db, field_indices, q->field_count, result_rowids[i], q->offset_value + i + 1, output_flags);
-    }
+    destroyPlan(plan);
 
     free(result_rowids - q->offset_value);
 

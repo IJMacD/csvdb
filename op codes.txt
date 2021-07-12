@@ -1,0 +1,105 @@
+OP code     Description             Predicate(s)    Pop     Push
+00          Table access full       0+                      1
+01          Table access by rowid   1+              1       1
+02          Primary key unique      1                       1
+03          Primary key range       1                       1
+04          Index unique scan       1                       1
+05          Index range scan        1                       1
+
+10          Sort                    1               1       1
+11          Reverse                 0               1       1
+12          Slice                   (2 operands)    1       1
+
+15          Group                   0+              1       1
+
+20          UNION                   0               2       1
+21          INTERSECT               0               2       1
+
+50          Select                  0               1       0
+
+[
+    {
+        type: int
+        predicate_count: int
+        predicates: [
+            op: int
+            field: char *
+            value: char *
+        ]
+    },
+    {
+        type: int,
+        predicate_count: int
+        predicates: [
+            op: int
+            field: char *
+            value: char *
+        ]
+    },
+]
+
+
+WHERE PK(a) = x
+02
+
+WHERE PK(a) = x AND b = y
+02 01
+[
+    {
+        type: 02
+        field: a
+        value: x
+    },
+    {
+        type: 01
+        field: b
+        value: y
+    },
+]
+
+
+WHERE UNIQUE(a) = x
+03
+
+WHERE UNIQUE(a) = x AND b = y
+03 01
+
+WHERE INDEX(a) = x
+04
+
+WHERE INDEX(a) = x AND b = y
+04 01
+
+ORDER BY PK(a)
+00
+
+WHERE b = y ORDER BY PK(a)
+01
+
+[
+    {
+        type: 01
+        field: b
+        value: y
+    }
+]
+
+
+ORDER BY UNIQUE(a)
+03
+
+WHERE b = y ORDER BY UNIQUE(a)
+03 01
+
+[
+    {
+        type: 03
+        field: a
+        value: NULL
+    },
+    {
+        type: 01
+        field: b
+        value: y
+    },
+]

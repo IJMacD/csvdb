@@ -12,6 +12,7 @@ int log_10 (int value);
 
 int explain_select_query (
     struct Query *q,
+    struct Plan *plan,
     int output_flags
 ) {
     struct DB db;
@@ -22,157 +23,94 @@ int explain_select_query (
     }
 
     if (output_flags & OUTPUT_FLAG_HEADERS) {
-        printf("ID\tOperation\t\tName\tRows\tCost\n");
+        printf("ID\tOperation\t\tName\t\tRows\tCost\n");
     }
 
     int row_estimate = db.record_count;
     int log_rows = log_10(row_estimate);
-    int needs_table_access = 1;
 
-    // If we supported covering indices it would save a table lookup
-    if (COVERING_INDEX_SUPPORT && (q->field_count == 1)) {
-        if ((q->flags & FLAG_HAVE_PREDICATE) && strcmp(q->fields, q->predicate_field) == 0) {
-            needs_table_access = 0;
-        }
-        else if ((q->flags & FLAG_ORDER) && strcmp(q->fields, q->order_field) == 0) {
-            needs_table_access = 0;
-        }
-        else if (strcmp(q->fields, "COUNT(*)") == 0) {
-            needs_table_access = 0;
-        }
-    }
+    long rows = 0;
+    long cost = 0;
 
-    int op = 0;
+    for (int i = 0; i < plan->step_count; i++) {
+        struct PlanStep s = plan->steps[i];
 
-    if (q->flags & FLAG_GROUP) {
-        printf("%d\tSELECT STATEMENT\t\t%d\n", op++, 1);
-    } else {
-        printf("%d\tSELECT STATEMENT\t\n", op++);
-    }
+        char *operation = "";
+        char *predicate = s.predicate_count > 0 ? s.predicates[0].field : "";
 
-    if ((q->flags & FLAG_GROUP) && !(q->flags & FLAG_HAVE_PREDICATE)) {
-        if (needs_table_access) {
-            printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, q->table, 1, 1);
-        }
-        closeDB(&db);
-        return 0;
-    }
+        if (s.type == PLAN_TABLE_ACCESS_FULL){
+            operation = "TABLE ACCESS FULL";
+            rows = row_estimate;
+            cost = rows;
 
-    if (q->flags & FLAG_PRIMARY_KEY_SEARCH) {
-        if (q->predicate_op == OPERATOR_EQ) {
-            int cost = log_rows;
-            if (needs_table_access) {
-                printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, q->table, 1, cost);
-            }
-            printf("%d\tINDEX UNIQUE SCAN\t%s\t%d\t%d\n", op++, q->predicate_field, 1, cost);
-            closeDB(&db);
-            return 0;
-        }
-
-        row_estimate /= 2;
-
-        if ((q->flags & FLAG_ORDER) && !(q->flags & FLAG_GROUP) && strcmp(q->predicate_field, q->order_field) != 0) {
-            printf("%d\tSORT ORDER BY\t\t\t%d\t%ld\n", op++, row_estimate, (long)row_estimate * row_estimate);
-        }
-
-        if (needs_table_access) {
-            printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, q->table, row_estimate, row_estimate);
-        }
-        printf("%d\tINDEX RANGE SCAN\t%s\t%d\t%d\n", op++, q->predicate_field, row_estimate, row_estimate);
-        closeDB(&db);
-        return 0;
-    }
-
-    if (q->flags & FLAG_HAVE_PREDICATE && q->predicate_op != OPERATOR_LIKE) {
-
-        struct DB index_db;
-
-        if (findIndex(&index_db, q->table, q->predicate_field, INDEX_UNIQUE) == 0) {
-            if (q->predicate_op == OPERATOR_EQ) {
-                int cost = log_rows;
-                if (needs_table_access) {
-                    printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, q->table, 1, cost);
+            if (s.predicate_count > 0) {
+                predicate = s.predicates[0].field;
+                if (s.predicates[0].op == OPERATOR_EQ) {
+                    rows = rows / 1000;
+                } else {
+                    rows = rows / 2;
                 }
-                printf("%d\tINDEX UNIQUE SCAN\t%s\t%d\t%d\n", op++, q->predicate_field, 1, cost);
+            }
+        }
+        else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
+            operation = "TABLE ACCESS BY ROWID";
 
-                closeDB(&index_db);
-                closeDB(&db);
-                return 0;
+            if (s.predicate_count > 0) {
+                predicate = s.predicates[0].field;
+            } else {
+                predicate = q->table;
             }
 
-            row_estimate /= 2;
-
-            if ((q->flags & FLAG_ORDER) && !(q->flags & FLAG_GROUP) && strcmp(q->predicate_field, q->order_field) != 0) {
-                printf("%d\tSORT ORDER BY\t\t\t%d\t%ld\n", op++, row_estimate, (long)row_estimate * row_estimate);
+            if (cost < rows) {
+                cost = rows;
             }
-
-            if (needs_table_access) {
-                printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, q->table, row_estimate, row_estimate);
-            }
-            printf("%d\tINDEX RANGE SCAN\t%s\t%d\t%d\n", op++, q->predicate_field, row_estimate, row_estimate);
-            closeDB(&index_db);
-            closeDB(&db);
-            return 0;
         }
-
-        if (q->predicate_op == OPERATOR_EQ) {
-            // 10,000 is a wild guess at index statistics
-            row_estimate = row_estimate / 10000;
-        } else if (q->predicate_op == OPERATOR_NE) {
-            // 10,000 is a wild guess at index statistics
-            row_estimate = row_estimate - (row_estimate / 10000);
-        } else {
-            row_estimate = row_estimate / 2;
+        else if (s.type == PLAN_PK_UNIQUE) {
+            operation = "PRIMARY KEY UNIQUE";
+            rows = 1;
+            cost = log_rows;
         }
-
-        if (row_estimate < 1) {
-            row_estimate = 1;
+        else if (s.type == PLAN_PK_RANGE) {
+            operation = "PRIMARY KEY RANGE";
+            rows = row_estimate / 2;
+            cost = rows;
         }
-
-        if (findIndex(&index_db, q->table, q->predicate_field, INDEX_ANY) == 0) {
-            int cost = row_estimate;
-
-            if (q->predicate_op == OPERATOR_EQ) {
+        else if (s.type == PLAN_INDEX_UNIQUE) {
+            operation = "INDEX UNIQUE";
+            rows = 1;
+            cost = log_rows;
+        }
+        else if (s.type == PLAN_INDEX_RANGE) {
+            operation = "INDEX RANGE";
+            if (s.predicate_count > 0 && s.predicates[0].op == OPERATOR_EQ) {
+                rows = row_estimate / 1000;
                 cost = log_rows * 2;
+            } else {
+                rows = row_estimate / 2;
+                cost = rows;
             }
-
-            if ((q->flags & FLAG_ORDER) && !(q->flags & FLAG_GROUP) && strcmp(q->predicate_field, q->order_field) != 0) {
-                printf("%d\tSORT ORDER BY\t\t\t%d\t%ld\n", op++, row_estimate, (long)row_estimate * row_estimate);
-            }
-
-            if (needs_table_access) {
-                printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, q->table, row_estimate, cost);
-            }
-            printf("%d\tINDEX RANGE SCAN\t%s\t%d\t%d\n", op++, q->predicate_field, row_estimate, cost);
-
-            closeDB(&index_db);
-            closeDB(&db);
-            return 0;
         }
-    }
-
-    if (!(q->flags & FLAG_HAVE_PREDICATE) && (q->flags & FLAG_ORDER)) {
-        // Before we do a full table scan... we have one more opportunity to use an index
-        // To save a sort later, see if we can use an index for ordering now
-        struct DB index_db;
-        if (findIndex(&index_db, q->table, q->order_field, INDEX_ANY) == 0) {
-            if (needs_table_access) {
-                printf("%d\tTABLE ACCESS BY ROWID\t%s\t%d\t%d\n", op++, q->table, row_estimate, row_estimate);
-            }
-            printf("%d\tINDEX RANGE SCAN\t%s\t%d\t%d\n", op++, q->order_field, row_estimate, log_rows);
-
-            closeDB(&index_db);
-            closeDB(&db);
-            return 0;
+        else if (s.type == PLAN_SORT) {
+            operation = "SORT";
+            cost = rows * rows;
         }
-    }
+        else if (s.type == PLAN_REVERSE) {
+            operation = "REVERSE";
+            if (cost < rows) {
+                cost = rows;
+            }
+        }
+        else if (s.type == PLAN_SLICE) {
+            operation = "SLICE";
+            if (s.param2 < rows) {
+                rows = s.param2;
+            }
+        }
+        else if (s.type == PLAN_SELECT) {
+            operation = "SELECT";
+        }
 
-    if ((q->flags & FLAG_ORDER) && !(q->flags & FLAG_GROUP)) {
-        printf("%d\tSORT ORDER BY\t\t\t%d\t%ld\n", op++, row_estimate, (long)row_estimate * row_estimate);
-    }
-
-    if (needs_table_access) {
-        printf("%d\tTABLE ACCESS FULL\t%s\t%d\t%d\n", op++, q->table, db.record_count, db.record_count);
+        printf("%d\t%-23s\t%-15s\t%ld\t%ld\n", i, operation, predicate, rows, cost);
     }
 
     closeDB(&db);

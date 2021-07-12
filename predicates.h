@@ -1,14 +1,18 @@
+#pragma once
+
 #include "db.h"
 
 // Operator bitmap
 //
 //          GT      LT      EQ
+// NV                           |   0   Never ??
 // EQ                       1   |   1
 // LT               1       0   |   2
 // LE               1       1   |   3
 // GT       1       0       0   |   4
 // GE       1       0       1   |   5
 // NE       1       1       0   |   6
+// AL       1       1       1   |   7   Always ??
 
 #define OPERATOR_UN         0
 #define OPERATOR_EQ         1
@@ -19,8 +23,16 @@
 #define OPERATOR_NE         6
 #define OPERATOR_LIKE       128
 
+struct Predicate {
+    int op;
+    char *field;
+    char *value;
+};
+
 int parseOperator (const char *input);
 
 int compare (int numeric_mode, const char * valueA, long valueA_numeric, const char *valueB);
 
 int evaluateExpression (int op, const char *left, const char *right);
+
+int filterRows (struct DB *db, int *source_rowids, int source_count, struct Predicate *p, int *result_rowids);
