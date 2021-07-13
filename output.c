@@ -79,6 +79,21 @@ void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
                         int leap_day = month > 2 && (year % 4 == 0 && (year % 400 == 0 || year % 100 != 0)) ? 1 : 0;
                         fprintf(f, "%d", month_index[month - 1] + day + leap_day);
                     }
+                    else if (column.function == FUNC_EXTRACT_MILLENNIUM) {
+                        fprintf(f, "%d", year / 1000);
+                    }
+                    else if (column.function == FUNC_EXTRACT_CENTURY) {
+                        fprintf(f, "%d", year / 100);
+                    }
+                    else if (column.function == FUNC_EXTRACT_DECADE) {
+                        fprintf(f, "%d", year / 10);
+                    }
+                    else if (column.function == FUNC_EXTRACT_QUARTER) {
+                        fprintf(f, "%d", (month - 1) / 3 + 1);
+                    }
+                    else if (column.function == FUNC_EXTRACT_DATE) {
+                        fprintf(f, "%04d-%02d-%02d", year, month, day);
+                    }
                     else {
                         fprintf(f, "BADEXTRACT");
                     }

@@ -8,7 +8,7 @@
 #define FIELD_ROW_NUMBER                    -4
 #define FIELD_ROW_INDEX                     -5
 
-#define MASK_FUNC_FAMILY            0xD0
+#define MASK_FUNC_FAMILY            0xE0
 // xxxa aaaa
 // xxx          = family (mask 0xD0)
 //    a aaaa    = function (mask 0x1F)
@@ -27,6 +27,13 @@
 #define FUNC_EXTRACT_WEEKYEAR       0x46
 #define FUNC_EXTRACT_YEARDAY        0x47
 #define FUNC_EXTRACT_HEYEAR         0x48
+#define FUNC_EXTRACT_MILLENNIUM     0x49
+#define FUNC_EXTRACT_CENTURY        0x4A
+#define FUNC_EXTRACT_DECADE         0x4B
+#define FUNC_EXTRACT_QUARTER        0x4C
+#define FUNC_EXTRACT_DATE           0x5D
+#define FUNC_EXTRACT_TIME           0x5E
+#define FUNC_EXTRACT_DATETIME       0x5F
 
 #define FLAG_HAVE_PREDICATE         1
 #define FLAG_GROUP                  2

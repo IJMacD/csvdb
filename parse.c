@@ -74,7 +74,7 @@ int parseQuery (struct Query *q, const char *query) {
                     column->field = FIELD_ROW_INDEX;
                 }
                 else if (strncmp(column->text, "EXTRACT(", 8) == 0) {
-                    char part[10];
+                    char part[FIELD_MAX_LENGTH - 8];
                     strcpy(part, column->text + 8);
 
                     if (strcmp(part, "YEAR") == 0) {
@@ -91,6 +91,21 @@ int parseQuery (struct Query *q, const char *query) {
                     }
                     else if (strcmp(part, "YEARDAY") == 0) {
                         column->function = FUNC_EXTRACT_YEARDAY;
+                    }
+                    else if (strcmp(part, "MILLENNIUM") == 0) {
+                        column->function = FUNC_EXTRACT_MILLENNIUM;
+                    }
+                    else if (strcmp(part, "CENTURY") == 0) {
+                        column->function = FUNC_EXTRACT_CENTURY;
+                    }
+                    else if (strcmp(part, "DECADE") == 0) {
+                        column->function = FUNC_EXTRACT_DECADE;
+                    }
+                    else if (strcmp(part, "QUARTER") == 0) {
+                        column->function = FUNC_EXTRACT_QUARTER;
+                    }
+                    else if (strcmp(part, "DATE") == 0) {
+                        column->function = FUNC_EXTRACT_DATE;
                     }
                     else {
                         fprintf(stderr, "Bad query - expected valid extract part - got %s\n", part);
@@ -121,7 +136,6 @@ int parseQuery (struct Query *q, const char *query) {
 
                         if (query[index] != ')') {
                             fprintf(stderr, "Bad query - expected ')' got '%c'\n", query[index]);
-                            fprintf(stderr, "column->text = %s\n", column->text);
                             return -1;
                         }
 

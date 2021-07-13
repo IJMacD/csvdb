@@ -1,6 +1,6 @@
 debug/
 release/
 gen
-test*.csv
+*.csv
 *.index.csv
 *.unique.csv
