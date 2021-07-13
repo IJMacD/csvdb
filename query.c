@@ -125,12 +125,6 @@ int process_select_query (
         if (s.type == PLAN_PK_UNIQUE || s.type == PLAN_PK_RANGE) {
             struct Predicate p = s.predicates[0];
             result_count = primaryKeyScan(&db, p.field, p.op, p.value, result_rowids);
-
-            // Implementation limitation (we can't do ranges on keys that don't exist)
-            // Fall back to full table scan
-            if (result_count == RESULT_NO_INDEX) {
-                result_count = fullTableScan(&db, result_rowids, p.field, p.op, p.value, q->limit_value, q->offset_value, q->flags);
-            }
         }
         else if (s.type == PLAN_INDEX_UNIQUE) {
             result_count = indexUniqueScan(q->table, q->predicate_field, q->predicate_op, q->predicate_value, result_rowids);

@@ -17,7 +17,7 @@ int fullTableAccess (struct DB *db, int *result_rowids);
 
 int findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);
 
-int indexWalk(struct DB *db, int rowid_column, int lower_index, int upper_index, int direction, int *result_rowids);
+int indexWalk(struct DB *db, int rowid_column, int lower_index, int upper_index, int *result_rowids);
 
 int pk_search(struct DB *db, int pk_index, const char *value, int result_index);
 int rangeScan (struct DB *db, int predicate_op, int lower_index, int upper_index, int rowid_column, int *result_rowids);

@@ -8,7 +8,7 @@
 
 #define COVERING_INDEX_SUPPORT 0
 
-int log_10 (int value);
+long log_10 (long value);
 
 int explain_select_query (
     struct Query *q,
@@ -92,13 +92,16 @@ int explain_select_query (
         }
         else if (s.type == PLAN_SORT) {
             operation = "SORT";
-            cost = rows * rows;
+            long new_cost = rows * rows;
+            if (cost < new_cost) {
+                cost = new_cost;
+            }
         }
         else if (s.type == PLAN_REVERSE) {
             operation = "REVERSE";
-            if (cost < rows) {
-                cost = rows;
-            }
+            // if (cost < rows) {
+            //     cost = rows;
+            // }
         }
         else if (s.type == PLAN_SLICE) {
             operation = "SLICE";
@@ -127,8 +130,8 @@ int explain_select_query (
     return 0;
 }
 
-int log_10 (int value) {
-    int i = 0;
+long log_10 (long value) {
+    long i = 0;
     while (value > 0) {
         value /= 10;
         i++;

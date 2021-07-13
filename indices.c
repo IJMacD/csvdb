@@ -8,6 +8,8 @@
 #include "sort.h"
 #include "util.h"
 
+int indexWalkForValue (struct DB *db, int rowid_column, int value_column, int operator, const char *search_value, int result_rowids[]);
+
 int primaryKeyScan (struct DB *db, const char *predicate_field, int predicate_op, const char *predicate_value, int *result_rowids) {
     // If we have a primary key predicate then we can binary search
     int predicate_field_index = getFieldIndex(db, predicate_field);
@@ -23,9 +25,19 @@ int primaryKeyScan (struct DB *db, const char *predicate_field, int predicate_op
     }
     else {
         if (pk_index == RESULT_NO_ROWS) {
-            // We weren't able to use the index (implementation limitation)
-            // So pretend the PK doesn't exist and fallback to slower implentation
-            return RESULT_NO_INDEX;
+            if (predicate_op == OPERATOR_NE) {
+                // If the predicate was NE then that's exactly waht we're looking for
+                // We'll return an array 0..N
+                return indexWalk(db, -1, 0, db->record_count, result_rowids);
+            }
+            else {
+                // Slow implementation limitation
+
+                // We'll walk the entire index looking for the value
+                // It'll take a long time but the caller might be relying on an ordered output
+
+                return indexWalkForValue(db, -1, predicate_field_index, predicate_op, predicate_value, result_rowids);
+            }
         }
 
         int lower_index = pk_index;
@@ -91,7 +103,7 @@ int indexRangeScan (const char *table, const char *predicate_field, int predicat
 
         // If the value is NULL then we're being asked to walk the entire index
         if (predicate_value == NULL) {
-            int result = indexWalk(&index_db, 1, 0, index_db.record_count, predicate_op, result_rowids);
+            int result = indexWalk(&index_db, 1, 0, index_db.record_count, result_rowids);
             closeDB(&index_db);
             return result;
         }
@@ -107,17 +119,27 @@ int indexRangeScan (const char *table, const char *predicate_field, int predicat
                 return RESULT_NO_ROWS;
             }
 
-            if (record_index == RESULT_BELOW_MIN) {
+            if (predicate_op == OPERATOR_NE) {
+                lower_index = 0;
+                upper_index = index_db.record_count;
+            }
+            else if (record_index == RESULT_BELOW_MIN) {
                 lower_index = 0;
                 upper_index = 0;
-            } else if (record_index == RESULT_ABOVE_MAX) {
+            }
+            else if (record_index == RESULT_ABOVE_MAX) {
                 lower_index = index_db.record_count;
                 upper_index = index_db.record_count;
-            } else if (record_index == RESULT_NO_ROWS) {
-                // Implemetation limitiation
-                // Pretend the index doesn't exist
+            }
+            else if (record_index == RESULT_NO_ROWS) {
+                // Slow implementation limitation
+
+                // We'll walk the entire index looking for the value
+                // It'll take a long time but the caller might be relying on an ordered output
+
+                int result_count = indexWalkForValue(&index_db, 1, 0, predicate_op, predicate_value, result_rowids);
                 closeDB(&index_db);
-                return RESULT_NO_INDEX;
+                return result_count;
             }
         }
 
@@ -276,7 +298,6 @@ int pk_search(struct DB *db, int pk_index, const char *value, int result_index) 
 
 int rangeScan (struct DB *db, int predicate_op, int lower_index, int upper_index, int rowid_column, int *result_rowids) {
     int result_count = 0;
-    char value[VALUE_MAX_LENGTH];
 
     if (predicate_op == OPERATOR_LT) {
         upper_index = lower_index;
@@ -292,31 +313,16 @@ int rangeScan (struct DB *db, int predicate_op, int lower_index, int upper_index
 
     // We've found the edges of the index range; now iterate as predicate operator requires
 
-    // Special treatment for NOT EQUAL
+    // Special treatment for NOT EQUAL; do the two halves separately
     if (predicate_op == OPERATOR_NE) {
-        for (int i = 0; i < lower_index; i++) {
-            if (rowid_column == -1) {
-                result_rowids[result_count++] = i;
-            } else {
-                getRecordValue(db, i, rowid_column, value, VALUE_MAX_LENGTH);
-                result_rowids[result_count++] = atoi(value);
-            }
-        }
-
-        for (int i = upper_index; i < db->record_count; i++) {
-            if (rowid_column == -1) {
-                result_rowids[result_count++] = i;
-            } else {
-                getRecordValue(db, i, rowid_column, value, VALUE_MAX_LENGTH);
-                result_rowids[result_count++] = atoi(value);
-            }
-        }
+        result_count = indexWalk(db, rowid_column, 0, lower_index, result_rowids);
+        result_count += indexWalk(db, rowid_column, upper_index, db->record_count, result_rowids + result_count);
 
         return result_count;
     }
 
     // Walk between the bounds we've set up
-    return indexWalk(db, rowid_column, lower_index, upper_index, ORDER_ASC, result_rowids);
+    return indexWalk(db, rowid_column, lower_index, upper_index, result_rowids);
 }
 
 /**
@@ -349,32 +355,59 @@ int findIndex(struct DB *db, const char *table_name, const char *index_name, int
     return openDB(db, index_filename);
 }
 
-int indexWalk(struct DB *db, int rowid_column, int lower_index, int upper_index, int direction, int *result_rowids) {
+int indexWalk(struct DB *db, int rowid_column, int lower_index, int upper_index, int *result_rowids) {
     int result_count = 0;
     char value[VALUE_MAX_LENGTH];
 
-    // Descending
-    if (direction == ORDER_DESC) {
-        for (int i = upper_index - 1; i >= lower_index; i--) {
-            if (rowid_column == -1) {
-                result_rowids[result_count++] = i;
-            } else {
-                getRecordValue(db, i, rowid_column, value, VALUE_MAX_LENGTH);
-                result_rowids[result_count++] = atoi(value);
-            }
+    // Always ascending
+    for (int i = lower_index; i < upper_index; i++) {
+        if (rowid_column == -1) {
+            result_rowids[result_count++] = i;
+        } else {
+            getRecordValue(db, i, rowid_column, value, VALUE_MAX_LENGTH);
+            result_rowids[result_count++] = atoi(value);
         }
     }
 
-    // Ascending
-    else {
-        for (int i = lower_index; i < upper_index; i++) {
-            if (rowid_column == -1) {
-                result_rowids[result_count++] = i;
-            } else {
-                getRecordValue(db, i, rowid_column, value, VALUE_MAX_LENGTH);
-                result_rowids[result_count++] = atoi(value);
+    return result_count;
+}
+
+int indexWalkForValue (struct DB *db, int rowid_column, int value_column, int operator, const char *search_value, int result_rowids[]) {
+    int result_count = 0;
+    char value[VALUE_MAX_LENGTH];
+    char rowid_value[VALUE_MAX_LENGTH];
+
+    for (int i = 0; i < db->record_count; i++) {
+        getRecordValue(db, i, value_column, value, VALUE_MAX_LENGTH);
+
+        int rowid = i;
+        if (rowid_column >= 0) {
+            getRecordValue(db, i, rowid_column, rowid_value, VALUE_MAX_LENGTH);
+            rowid = atoi(rowid_value);
+        }
+
+        int result = compareValues(value, search_value);
+
+        if (result < 0) {
+            if (operator & OPERATOR_LT) {
+                result_rowids[result_count++] = rowid;
             }
         }
+        else if (result == 0) {
+            if (operator & OPERATOR_EQ) {
+                result_rowids[result_count++] = rowid;
+            }
+        }
+        else {
+            if (operator & OPERATOR_GT) {
+                result_rowids[result_count++] = rowid;
+            }
+            else {
+                // We've come the the end of useful values
+                break;
+            }
+        }
+
     }
 
     return result_count;

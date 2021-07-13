@@ -28,7 +28,9 @@ int parseQuery (struct Query *q, const char *query) {
     q->offset_value = 0;
     q->limit_value = -1;
 
-    if (strncmp(query, "EXPLAIN ", 8) == 0) {
+    skipWhitespace(query, &index);
+
+    if (strncmp(query + index, "EXPLAIN ", 8) == 0) {
         q->flags |= FLAG_EXPLAIN;
         index += 8;
     }

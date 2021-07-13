@@ -7,7 +7,7 @@
 
 void addStep (struct Plan *plan, int type);
 
-void addOrderStep (struct Plan *plan, struct Query *q);
+void addOrderStepIfRequired (struct Plan *plan, struct Query *q);
 
 void addStepWithPredicate (struct Plan *plan, int type, struct Predicate *p);
 
@@ -34,9 +34,9 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
         addStepWithPredicate(plan, type, p);
 
-        // Do we need an explicit sort?
-        if (q->flags & FLAG_ORDER) {
-            addOrderStep(plan, q);
+        // Sort is never required if the index is PK_UNIQUE
+        if (type == PLAN_PK_RANGE) {
+            addOrderStepIfRequired(plan, q);
         }
     }
     else if (q->flags & FLAG_HAVE_PREDICATE) {
@@ -64,9 +64,15 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
             addStepWithPredicate(plan, type, p);
 
-            // Do we need an explicit sort?
-            if (q->flags & FLAG_ORDER) {
-                addOrderStep(plan, q);
+            // Sort is never required if the index is INDEX_UNIQUE
+            if (type == PLAN_INDEX_RANGE && (q->flags & FLAG_ORDER) && strcmp(q->predicate_field, q->order_field) == 0) {
+                // We're sorting on the same column as we've just traversed in the index
+                // so a sort is not necessary but we might need to reverse
+                if (q->order_direction == ORDER_DESC && !(q->flags & FLAG_GROUP)) {
+                    addStep(plan, PLAN_REVERSE);
+                }
+            } else {
+                addOrderStepIfRequired(plan, q);
             }
         }
         /*******************
@@ -77,29 +83,38 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
             addStepWithPredicate(plan, PLAN_INDEX_RANGE, p);
 
-            // Do we need an explicit sort?
-            if (q->flags & FLAG_ORDER) {
-                addOrderStep(plan, q);
+            if ((q->flags & FLAG_ORDER) && strcmp(q->predicate_field, q->order_field) == 0) {
+                // We're sorting on the same column as we've just traversed in the index
+                // so a sort is not necessary but we might need to reverse
+                if (q->order_direction == ORDER_DESC && !(q->flags & FLAG_GROUP)) {
+                    addStep(plan, PLAN_REVERSE);
+                }
+            } else {
+                addOrderStepIfRequired(plan, q);
             }
         }
         // Before we do a full table scan... we have one more opportunity to use an index
         // To save a sort later, see if we can use an index for ordering now
         else if (
-            q->flags & FLAG_ORDER &&
+            (q->flags & FLAG_ORDER) &&
             // If we're selecting a lot of rows this optimisation is probably worth it.
             // If we have an EQ operator then it's probably cheaper to filter first
-            p->op != OPERATOR_EQ &&
+            (p->op != OPERATOR_EQ) &&
             findIndex(&index_db, q->table, q->order_field, INDEX_ANY) == 0
         ) {
             closeDB(&index_db);
 
             struct Predicate *order_p = malloc(sizeof(*order_p));
             order_p->field = q->order_field;
-            order_p->op = q->order_direction;
+            order_p->op = 0;
             order_p->value = NULL;
 
             // Add step for Sorted index access
             addStepWithPredicate(plan, PLAN_INDEX_RANGE, order_p);
+
+            if (q->order_direction == ORDER_DESC && !(q->flags & FLAG_GROUP)) {
+                addStep(plan, PLAN_REVERSE);
+            }
 
             // Add step for predicate filter
             addStepWithPredicate(plan, PLAN_TABLE_ACCESS_ROWID, p);
@@ -111,12 +126,10 @@ int makePlan (struct Query *q, struct Plan *plan) {
             addStepWithPredicate(plan, PLAN_TABLE_ACCESS_FULL, p);
 
             // Do we need an explicit sort?
-            if (q->flags & FLAG_ORDER) {
-                addOrderStep(plan, q);
-            }
+            addOrderStepIfRequired(plan, q);
         }
     }
-    else if (q->flags & FLAG_ORDER) {
+    else if ((q->flags & FLAG_ORDER) && !(q->flags & FLAG_GROUP)) {
         // Before we do a full table scan... we have one more opportunity to use an index
         // To save a sort later, see if we can use an index for ordering now
         struct DB index_db;
@@ -125,15 +138,19 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
             struct Predicate *order_p = malloc(sizeof(*order_p));
             order_p->field = q->order_field;
-            order_p->op = q->order_direction;
+            order_p->op = 0;
             order_p->value = NULL;
 
             addStepWithPredicate(plan, PLAN_INDEX_RANGE, order_p);
 
+            if (q->order_direction == ORDER_DESC) {
+                addStep(plan, PLAN_REVERSE);
+            }
+
         } else {
             addStep(plan, PLAN_TABLE_ACCESS_FULL);
 
-            addOrderStep(plan, q);
+            addOrderStepIfRequired(plan, q);
         }
     } else {
         addStep(plan, PLAN_TABLE_ACCESS_FULL);
@@ -175,8 +192,23 @@ void addStep (struct Plan *plan, int type) {
 
 }
 
-void addOrderStep (struct Plan *plan, struct Query *q) {
+/**
+ * Will not necessarily add order step.
+ * Will check if it's necessary
+ */
+void addOrderStepIfRequired (struct Plan *plan, struct Query *q) {
     int i = plan->step_count;
+
+    // Check if there's an order by clause
+    if (!(q->flags & FLAG_ORDER)) {
+        return;
+    }
+
+    // At the moment grouping always results in a single row so sorting
+    // is never neccessary.
+    if (q->flags & FLAG_GROUP) {
+        return;
+    }
 
     struct Predicate *order_p = malloc(sizeof(*order_p));
     order_p->field = q->order_field;

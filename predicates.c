@@ -78,6 +78,28 @@ int evaluateExpression (int op, const char *left, const char *right) {
 }
 
 
+
+/**
+ * Returns -ve if left is less than right
+ * Returns   0 if left are right are equal
+ * Returns +ve if left is greater than right
+ */
+int compareValues (const char *left, const char *right) {
+    // printf("Comparing %s to %s\n", left, right);
+
+    // TODO: Handle null
+
+    if (is_numeric(left)) {
+        long left_num = strtol(left, NULL, 10);
+        long right_num = strtol(right, NULL, 10);
+
+        return left_num - right_num;
+    }
+
+    return strcmp(left, right);
+}
+
+
 int compare (int numeric_mode, const char * valueA, long valueA_numeric, const char *valueB) {
     if (numeric_mode) {
         long valueB_numeric = atol(valueB);
