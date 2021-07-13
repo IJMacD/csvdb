@@ -2,8 +2,9 @@
 #include "db.h"
 #include "query.h"
 
-#define OUTPUT_OPTION_TAB   1
-#define OUTPUT_OPTION_COMMA 2
+#define OUTPUT_OPTION_HEADERS   1
+#define OUTPUT_OPTION_TAB       2
+#define OUTPUT_OPTION_COMMA     4
 
 void printHeaderLine (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int flags);
 

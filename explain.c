@@ -5,6 +5,7 @@
 #include "predicates.h"
 #include "indices.h"
 #include "limits.h"
+#include "output.h"
 
 #define COVERING_INDEX_SUPPORT 0
 
@@ -22,7 +23,7 @@ int explain_select_query (
         return -1;
     }
 
-    if (output_flags & OUTPUT_FLAG_HEADERS) {
+    if (output_flags & OUTPUT_OPTION_HEADERS) {
         printf("ID\tOperation\t\tName\t\tRows\tCost\n");
     }
 

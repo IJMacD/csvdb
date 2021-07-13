@@ -4,14 +4,18 @@
 #include <unistd.h>
 
 #include "query.h"
+#include "output.h"
 
 void printUsage (const char* name) {
     printf(
         "Usage:\n"
-        "\t%1$s [-h|--headers] \"SELECT <fields, ...> FROM <file> [WHERE] [ORDER BY] [OFFSET FETCH FIRST]\"\n"
-        "\t%1$s [-h|--headers] \"CREATE [UNIQUE] INDEX <index_file> ON <file> (<field>)\"\n"
-        "\t%1$s [-h|--headers] -- file.sql\n"
-        "\t%1$s [-h|--headers] (expects input on stdin)\n"
+        "\t%1$s <options> \"SELECT <fields, ...> FROM <file> [WHERE] [ORDER BY] [OFFSET FETCH FIRST]\"\n"
+        "\t%1$s <options> -- file.sql\n"
+        "\t%1$s <options> (expects input on stdin)\n"
+        "\t%1$s \"CREATE [UNIQUE] INDEX [<index_file>] ON <file> (<field>)\"\n"
+        "\n"
+        "Options:\n"
+        "\t[-h|--headers] [-f (tsv|csv)|--format=(tsv|csv)]\n"
     , name);
 }
 
@@ -22,7 +26,28 @@ int main (int argc, char * argv[]) {
     int arg = 1;
 
     if (argc > arg && (strcmp(argv[arg], "-h") == 0 || strcmp(argv[arg], "--headers") == 0)) {
-        flags |= OUTPUT_FLAG_HEADERS;
+        flags |= OUTPUT_OPTION_HEADERS;
+        arg++;
+    }
+
+    if (argc > arg && strcmp(argv[arg], "-f") == 0) {
+        arg++;
+        if (argc > arg && strcmp(argv[arg], "tsv") == 0) {
+            flags |= OUTPUT_OPTION_TAB;
+            arg++;
+        } else if (argc > arg && strcmp(argv[arg], "csv") == 0) {
+            flags |= OUTPUT_OPTION_COMMA;
+            arg++;
+        }
+    }
+
+    if (argc > arg && strcmp(argv[arg], "--format=tsv") == 0) {
+        flags |= OUTPUT_OPTION_TAB;
+        arg++;
+    }
+
+    if (argc > arg && strcmp(argv[arg], "--format=csv") == 0) {
+        flags |= OUTPUT_OPTION_COMMA;
         arg++;
     }
 

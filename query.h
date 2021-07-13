@@ -2,8 +2,6 @@
 
 #include "limits.h"
 
-#define OUTPUT_FLAG_HEADERS    1
-
 #define FIELD_UNKNOWN                       -1
 #define FIELD_STAR                          -2
 #define FIELD_COUNT_STAR                    -3

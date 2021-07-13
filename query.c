@@ -88,8 +88,8 @@ int process_select_query (
     /*************************
      * Output headers
      ************************/
-    if (output_flags & OUTPUT_FLAG_HEADERS) {
-        printHeaderLine(stdout, &db, q->columns, q->column_count, 0);
+    if (output_flags & OUTPUT_OPTION_HEADERS) {
+        printHeaderLine(stdout, &db, q->columns, q->column_count, output_flags);
     }
 
     /*************************

@@ -2,8 +2,13 @@
 
 int is_numeric (const char *string) {
     const char *ptr = string;
+    int decimal = 0;
     while (*ptr != '\0') {
-        if (!isdigit(*ptr)) return 0;
+        if (*ptr == '.') {
+            if (decimal) return 0;
+            decimal = 1;
+        }
+        else if (!isdigit(*ptr)) return 0;
         ptr++;
     }
     return 1;
