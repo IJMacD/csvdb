@@ -106,6 +106,16 @@ int explain_select_query (
                 rows = s.param2;
             }
         }
+        else if (s.type == PLAN_GROUP) {
+            operation = "GROUP";
+
+            if (s.predicate_count > 0) {
+                predicate = s.predicates[0].field;
+                rows /= 10;
+            } else {
+                rows = 1;
+            }
+        }
         else if (s.type == PLAN_SELECT) {
             operation = "SELECT";
         }
