@@ -133,6 +133,12 @@ int parseQuery (struct Query *q, const char *query) {
 
                 skipWhitespace(query, &index);
 
+                if (strncmp(query + index, "AS ", 3) == 0) {
+                    index += 3;
+
+                    getToken(query, &index, column->alias, FIELD_MAX_LENGTH);
+                }
+
                 if (query[index] != ',') {
                     break;
                 }

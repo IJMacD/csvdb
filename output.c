@@ -109,7 +109,10 @@ void printHeaderLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
     for (int j = 0; j < column_count; j++) {
         struct ResultColumn column = columns[j];
 
-        if (column.field == FIELD_STAR) {
+        if (column.alias[0] != '\0') {
+            fprintf(f, "%s", column.alias);
+        }
+        else if (column.field == FIELD_STAR) {
             for (int k = 0; k < db->field_count; k++) {
                 fprintf(f, "%s", getFieldName(db, k));
 
@@ -129,7 +132,7 @@ void printHeaderLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
             fprintf(f, "rowid");
         }
         else {
-            fprintf(f, "%s", column.alias[0] != '\0' ? column.alias : column.text);
+            fprintf(f, "%s", column.text);
         }
 
         if (j < column_count - 1) {
