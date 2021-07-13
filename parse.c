@@ -86,6 +86,9 @@ int parseQuery (struct Query *q, const char *query) {
                     else if (strcmp(part, "DAY") == 0) {
                         column->function = FUNC_EXTRACT_DAY;
                     }
+                    else if (strcmp(part, "WEEKDAY") == 0) {
+                        column->function = FUNC_EXTRACT_WEEKDAY;
+                    }
                     else if (strcmp(part, "HEYEAR") == 0) {
                         column->function = FUNC_EXTRACT_HEYEAR;
                     }
