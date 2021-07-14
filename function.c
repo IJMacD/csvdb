@@ -20,7 +20,7 @@ int parseDateTime(const char *input, struct DateTime *output);
 
 int checkFormat(const char *input, const char *format);
 
-int datetimeIsLeapYear(struct DateTime *dt);
+int isLeapYear(int year);
 
 int datetimeGetYearDay(struct DateTime *dt);
 
@@ -170,12 +170,12 @@ int checkFormat(const char *input, const char *format) {
     return 1;
 }
 
-int datetimeIsLeapYear(struct DateTime *dt) {
-    return (dt->year % 4 == 0 && (dt->year % 400 == 0 || dt->year % 100 != 0));
+int isLeapYear(int year) {
+    return (year % 4 == 0 && (year % 400 == 0 || year % 100 != 0));
 }
 
 int datetimeGetYearDay(struct DateTime *dt) {
-    int leap_day = dt->month > 2 && datetimeIsLeapYear(dt) ? 1 : 0;
+    int leap_day = dt->month > 2 && isLeapYear(dt->year) ? 1 : 0;
     return month_index[dt->month - 1] + dt->day + leap_day;
 }
 
@@ -187,9 +187,9 @@ int datetimeGetDayDiff(struct DateTime *dt1, struct DateTime *dt2) {
     int yd2 = datetimeGetYearDay(dt2);
     int delta = -yd1;
 
-    struct DateTime dummy = *dt1;
-    while (dummy.year++ < dt2->year) {
-        delta += datetimeIsLeapYear(&dummy) ? 366 : 365;
+    int year = dt1->year;
+    while (year++ < dt2->year) {
+        delta += isLeapYear(year) ? 366 : 365;
     }
 
     delta += yd2;
