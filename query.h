@@ -41,8 +41,6 @@
 #define FLAG_ORDER                  8
 #define FLAG_EXPLAIN                4096
 
-#define FIELD_MAX_COUNT     10
-
 struct ResultColumn {
     int field;
     int function;

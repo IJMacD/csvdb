@@ -26,7 +26,11 @@ int datetimeGetYearDay(struct DateTime *dt);
 
 int datetimeGetDayDiff(struct DateTime *dt1, struct DateTime *dt2);
 
-int datetimeGetDayOfWeek (struct DateTime *dt);
+int datetimeGetWeek (struct DateTime *dt);
+
+int datetimeGetWeekYear (struct DateTime *dt);
+
+int datetimeGetWeekDay (struct DateTime *dt);
 
 int outputFunction(FILE *f, struct DB *db, struct ResultColumn *column, int record_index) {
     char value[VALUE_MAX_LENGTH];
@@ -51,8 +55,14 @@ int outputFunction(FILE *f, struct DB *db, struct ResultColumn *column, int reco
             else if (column->function == FUNC_EXTRACT_DAY) {
                 fprintf(f, "%d", dt.day);
             }
+            else if (column->function == FUNC_EXTRACT_WEEK) {
+                fprintf(f, "%d", datetimeGetWeek(&dt));
+            }
+            else if (column->function == FUNC_EXTRACT_WEEKYEAR) {
+                fprintf(f, "%d", datetimeGetWeekYear(&dt));
+            }
             else if (column->function == FUNC_EXTRACT_WEEKDAY) {
-                fprintf(f, "%d", datetimeGetDayOfWeek(&dt));
+                fprintf(f, "%d", datetimeGetWeekDay(&dt));
             }
             else if (column->function == FUNC_EXTRACT_HEYEAR) {
                 fprintf(f, "%d", dt.year + 10000);
@@ -198,17 +208,113 @@ int datetimeGetDayDiff(struct DateTime *dt1, struct DateTime *dt2) {
 }
 
 /**
- * 1 is Monday
- * 7 is Sunday
+ * ISO Week Number
+ * Algorithm from https://www.tondering.dk/claus/cal/week.php
  */
-int datetimeGetDayOfWeek (struct DateTime *dt) {
-    // 2018-01-01 was a Monday
-    struct DateTime epoch;
-    epoch.year = 2018;
-    epoch.month = 1;
-    epoch.day = 1;
+int datetimeGetWeek (struct DateTime *dt) {
+    int n, g, s;
 
-    int diff = datetimeGetDayDiff(&epoch, dt);
+    if (dt->month < 3) {
+        int a = dt->year - 1;
+        int b = a / 4 - a / 100 + a / 400;
+        int c = (a - 1) / 4 - (a - 1) / 100 + (a - 1) / 400;
+        s = b - c;
+        int e = 0;
+        int f = dt->day - 1 + 31 * (dt->month - 1);
+        g = (a + b) % 7;
+        int d = (f + g - e) % 7;
+        n = f + 3 - d;
+    }
+    else {
+        int a = dt->year;
+        int b = a / 4 - a / 100 + a / 400;
+        int c = (a - 1) / 4 - (a - 1) / 100 + (a - 1) / 400;
+        s = b - c;
+        int e = s + 1;
+        int f = dt->day + (153 * (dt->month - 3) + 2) / 5 + 58 + s;
+        g = (a + b) % 7;
+        int d = (f + g - e) % 7;
+        n = f + 3 - d;
+    }
 
-    return (diff % 7) + 1;
+    if (n < 0) {
+        return 53 - (g - s) / 5;
+    }
+    else if (n > 364 + s) {
+        return 1;
+    }
+    else {
+        return n / 7 + 1;
+    }
+}
+
+
+/**
+ * ISO Week Year
+ * Algorithm from https://www.tondering.dk/claus/cal/week.php
+ */
+int datetimeGetWeekYear (struct DateTime *dt) {
+    int n, g, s;
+
+    if (dt->month < 3) {
+        int a = dt->year - 1;
+        int b = a / 4 - a / 100 + a / 400;
+        int c = (a - 1) / 4 - (a - 1) / 100 + (a - 1) / 400;
+        s = b - c;
+        int e = 0;
+        int f = dt->day - 1 + 31 * (dt->month - 1);
+        g = (a + b) % 7;
+        int d = (f + g - e) % 7;
+        n = f + 3 - d;
+    }
+    else {
+        int a = dt->year;
+        int b = a / 4 - a / 100 + a / 400;
+        int c = (a - 1) / 4 - (a - 1) / 100 + (a - 1) / 400;
+        s = b - c;
+        int e = s + 1;
+        int f = dt->day + (153 * (dt->month - 3) + 2) / 5 + 58 + s;
+        g = (a + b) % 7;
+        int d = (f + g - e) % 7;
+        n = f + 3 - d;
+    }
+
+    if (n < 0) {
+        return dt->year - 1;
+    }
+    else if (n > 364 + s) {
+        return dt->year + 1;
+    }
+    else {
+        return dt->year;
+    }
+}
+
+/**
+ * ISO Week Number
+ * Algorithm from https://www.tondering.dk/claus/cal/week.php
+ */
+int datetimeGetWeekDay (struct DateTime *dt) {
+    int d;
+
+    if (dt->month < 3) {
+        int a = dt->year - 1;
+        int b = a / 4 - a / 100 + a / 400;
+        int e = 0;
+        int f = dt->day - 1 + 31 * (dt->month - 1);
+        int g = (a + b) % 7;
+        d = (f + g - e) % 7;
+    }
+    else {
+        int a = dt->year;
+        int b = a / 4 - a / 100 + a / 400;
+        int c = (a - 1) / 4 - (a - 1) / 100 + (a - 1) / 400;
+        int s = b - c;
+        int e = s + 1;
+        int f = dt->day + (153 * (dt->month - 3) + 2) / 5 + 58 + s;
+        int g = (a + b) % 7;
+        d = (f + g - e) % 7;
+    }
+
+    return d + 1;
 }

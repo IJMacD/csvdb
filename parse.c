@@ -52,6 +52,12 @@ int parseQuery (struct Query *q, const char *query) {
             int curr_index = 0;
             while (index < query_length) {
                 struct ResultColumn *column = &(q->columns[curr_index++]);
+
+                if (curr_index >= FIELD_MAX_COUNT + 1) {
+                    fprintf(stderr, "Too many columns\n");
+                    return -1;
+                }
+
                 column->field = FIELD_UNKNOWN;
                 column->function = FUNC_UNITY;
                 strcpy(column->alias, "");
@@ -85,6 +91,12 @@ int parseQuery (struct Query *q, const char *query) {
                     }
                     else if (strcmp(part, "DAY") == 0) {
                         column->function = FUNC_EXTRACT_DAY;
+                    }
+                    else if (strcmp(part, "WEEK") == 0) {
+                        column->function = FUNC_EXTRACT_WEEK;
+                    }
+                    else if (strcmp(part, "WEEKYEAR") == 0) {
+                        column->function = FUNC_EXTRACT_WEEKYEAR;
                     }
                     else if (strcmp(part, "WEEKDAY") == 0) {
                         column->function = FUNC_EXTRACT_WEEKDAY;
