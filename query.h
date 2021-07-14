@@ -31,6 +31,7 @@
 #define FUNC_EXTRACT_CENTURY        0x4A
 #define FUNC_EXTRACT_DECADE         0x4B
 #define FUNC_EXTRACT_QUARTER        0x4C
+#define FUNC_EXTRACT_JULIAN         0x5C
 #define FUNC_EXTRACT_DATE           0x5D
 #define FUNC_EXTRACT_TIME           0x5E
 #define FUNC_EXTRACT_DATETIME       0x5F

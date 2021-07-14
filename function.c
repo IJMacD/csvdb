@@ -32,6 +32,8 @@ int datetimeGetWeekYear (struct DateTime *dt);
 
 int datetimeGetWeekDay (struct DateTime *dt);
 
+int datetimeGetJulian (struct DateTime *dt);
+
 int outputFunction(FILE *f, struct DB *db, struct ResultColumn *column, int record_index) {
     char value[VALUE_MAX_LENGTH];
     if (getRecordValue(db, record_index, column->field, value, VALUE_MAX_LENGTH) > 0) {
@@ -82,8 +84,14 @@ int outputFunction(FILE *f, struct DB *db, struct ResultColumn *column, int reco
             else if (column->function == FUNC_EXTRACT_QUARTER) {
                 fprintf(f, "%d", (dt.month - 1) / 3 + 1);
             }
+            else if (column->function == FUNC_EXTRACT_JULIAN) {
+                fprintf(f, "%d", datetimeGetJulian(&dt));
+            }
             else if (column->function == FUNC_EXTRACT_DATE) {
                 fprintf(f, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
+            }
+            else if (column->function == FUNC_EXTRACT_DATETIME) {
+                fprintf(f, "%04d-%02d-%02dT%02d:%02d:%02d", dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second);
             }
             else {
                 fprintf(f, "BADEXTRACT");
@@ -117,6 +125,10 @@ int parseDateTime(const char *input, struct DateTime *output) {
         v[2] = '\0';
         output->day = atoi(v);
 
+        output->hour = 0;
+        output->minute = 0;
+        output->second = 0;
+
         return 1;
     }
 
@@ -145,6 +157,10 @@ int parseDateTime(const char *input, struct DateTime *output) {
         memcpy(v, input + 7, 4);
         v[4] = '\0';
         output->year = atoi(v);
+
+        output->hour = 0;
+        output->minute = 0;
+        output->second = 0;
 
         return 1;
     }
@@ -190,21 +206,10 @@ int datetimeGetYearDay(struct DateTime *dt) {
 }
 
 /**
- * dt1 must be less than dt2;
+ * Result is negative if dt1 is less than dt2
  */
 int datetimeGetDayDiff(struct DateTime *dt1, struct DateTime *dt2) {
-    int yd1 = datetimeGetYearDay(dt1);
-    int yd2 = datetimeGetYearDay(dt2);
-    int delta = -yd1;
-
-    int year = dt1->year;
-    while (year++ < dt2->year) {
-        delta += isLeapYear(year) ? 366 : 365;
-    }
-
-    delta += yd2;
-
-    return delta;
+    return datetimeGetJulian(dt1) - datetimeGetJulian(dt2);
 }
 
 /**
@@ -317,4 +322,30 @@ int datetimeGetWeekDay (struct DateTime *dt) {
     }
 
     return d + 1;
+}
+
+/**
+ * Algorithm from https://quasar.as.utexas.edu/BillInfo/JulianDatesG.html
+ */
+int datetimeGetJulian (struct DateTime *dt) {
+    int y = dt->year;
+    int m = dt->month;
+    int d = dt->day;
+
+    if (m < 3) {
+        y--;
+        m += 12;
+    }
+
+    int a = y / 100;
+    int b = a / 4;
+    int c = 2 - a + b;
+    int e = 365.25 * (y + 4716);
+    int f = 30.6001 * (m + 1);
+
+    int h = dt->hour;
+
+    int g = h < 12 ? 1 : 0;
+
+    return c + d + e + f - 1524 - g;
 }

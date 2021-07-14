@@ -122,6 +122,12 @@ int parseQuery (struct Query *q, const char *query) {
                     else if (strcmp(part, "DATE") == 0) {
                         column->function = FUNC_EXTRACT_DATE;
                     }
+                    else if (strcmp(part, "DATETIME") == 0) {
+                        column->function = FUNC_EXTRACT_DATETIME;
+                    }
+                    else if (strcmp(part, "JULIAN") == 0) {
+                        column->function = FUNC_EXTRACT_JULIAN;
+                    }
                     else {
                         fprintf(stderr, "Bad query - expected valid extract part - got %s\n", part);
                         return -1;
