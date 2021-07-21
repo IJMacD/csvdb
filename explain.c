@@ -37,16 +37,40 @@ int explain_select_query (
         struct PlanStep s = plan->steps[i];
 
         char *operation = "";
-        char *predicate = s.predicate_count > 0 ? s.predicates[0].field : "";
+        char predicate[FIELD_MAX_LENGTH];
+
+        if (s.predicate_count == 0) {
+            predicate[0] = '\0';
+        }
+        else if (s.predicate_count == 1) {
+            strcpy(predicate, q->predicates[0].field);
+        }
+        else {
+            char *ptr = predicate;
+            for (int i = 0; i < s.predicate_count; i++) {
+                size_t l = strlen(s.predicates[i].field);
+
+                if (ptr + l > predicate + FIELD_MAX_LENGTH) break;
+
+                if (i > 0) {
+                    *(ptr++) = ',';
+                }
+
+                strcpy(ptr, s.predicates[i].field);
+
+                ptr += l;
+
+                *ptr = '\0';
+            }
+        }
 
         if (s.type == PLAN_TABLE_ACCESS_FULL){
             operation = "TABLE ACCESS FULL";
             rows = row_estimate;
             cost = rows;
 
-            if (s.predicate_count > 0) {
-                predicate = s.predicates[0].field;
-                if (s.predicates[0].op == OPERATOR_EQ) {
+            for (int i = 0; i < s.predicate_count; i++) {
+                if (s.predicates[i].op == OPERATOR_EQ) {
                     rows = rows / 1000;
                 } else {
                     rows = rows / 2;
@@ -56,14 +80,20 @@ int explain_select_query (
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
             operation = "TABLE ACCESS BY ROWID";
 
-            if (s.predicate_count > 0) {
-                predicate = s.predicates[0].field;
-            } else {
-                predicate = q->table;
-            }
-
             if (cost < rows) {
                 cost = rows;
+            }
+
+            for (int i = 0; i < s.predicate_count; i++) {
+                if (s.predicates[i].op == OPERATOR_EQ) {
+                    rows = rows / 1000;
+                } else {
+                    rows = rows / 2;
+                }
+            }
+
+            if (s.predicate_count == 0) {
+                strcpy(predicate, q->table);
             }
         }
         else if (s.type == PLAN_PK_UNIQUE) {
@@ -114,7 +144,6 @@ int explain_select_query (
             operation = "GROUP";
 
             if (s.predicate_count > 0) {
-                predicate = s.predicates[0].field;
                 rows /= 10;
             } else {
                 rows = 1;
