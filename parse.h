@@ -4,7 +4,7 @@
 
 int parseQuery (struct Query *q, const char *query);
 
-int destroyQuery (struct Query *q);
+void destroyQuery (struct Query *q);
 
 void skipWhitespace (const char *string, size_t *index);
 

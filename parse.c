@@ -20,7 +20,7 @@ int parseQuery (struct Query *q, const char *query) {
     q->columns[0].field = FIELD_STAR;
     q->column_count = 1;
 
-    q->predicate_op = OPERATOR_UN;
+    q->predicate_count = 0;
 
     q->order_direction = ORDER_ASC;
 
@@ -189,16 +189,21 @@ int parseQuery (struct Query *q, const char *query) {
         else if (strcmp(keyword, "WHERE") == 0) {
             q->flags |= FLAG_HAVE_PREDICATE;
 
-            getToken(query, &index, q->predicate_field, FIELD_MAX_LENGTH);
+            q->predicates = malloc(sizeof (*q->predicates));
+            q->predicate_count = 1;
 
-            if (strncmp(q->predicate_field, "PK(", 3) == 0) {
+            struct Predicate *p = q->predicates;
+
+            getToken(query, &index, p->field, FIELD_MAX_LENGTH);
+
+            if (strncmp(p->field, "PK(", 3) == 0) {
                 q->flags |= FLAG_PRIMARY_KEY_SEARCH;
-                size_t len = strlen(q->predicate_field);
+                size_t len = strlen(p->field);
                 // remove trailing ')'
                 for (size_t i = 0; i < len - 4; i++) {
-                    q->predicate_field[i] = q->predicate_field[i+3];
+                    p->field[i] = p->field[i+3];
                 }
-                q->predicate_field[len - 4] = '\0';
+                p->field[len - 4] = '\0';
             }
 
             // printf("Predicate field: %s\n", predicate_field);
@@ -206,8 +211,8 @@ int parseQuery (struct Query *q, const char *query) {
             char op[5];
             getToken(query, &index, op, 5);
 
-            q->predicate_op = parseOperator(op);
-            if (q->predicate_op == OPERATOR_UN) {
+            p->op = parseOperator(op);
+            if (p->op == OPERATOR_UN) {
                 fprintf(stderr, "Bad query - expected =|!=|<|<=|>|>=\n");
                 return -1;
             }
@@ -216,12 +221,12 @@ int parseQuery (struct Query *q, const char *query) {
             if (strcmp(op, "IS") == 0) {
                 skipWhitespace(query, &index);
                 if (strncmp(query + index, "NOT ", 4) == 0) {
-                    q->predicate_op = OPERATOR_NE;
+                    p->op = OPERATOR_NE;
                     index += 4;
                 }
             }
 
-            getToken(query, &index, q->predicate_value, VALUE_MAX_LENGTH);
+            getToken(query, &index, p->value, VALUE_MAX_LENGTH);
         }
         else if (strcmp(keyword, "OFFSET") == 0) {
             q->offset_value = getNumericToken(query, &index);
@@ -308,6 +313,12 @@ int parseQuery (struct Query *q, const char *query) {
     }
 
     return 0;
+}
+
+void destroyQuery (struct Query *query) {
+    if (query->predicate_count > 0) {
+        free(query->predicates);
+    }
 }
 
 void skipWhitespace (const char *string, size_t *index) {

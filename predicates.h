@@ -1,6 +1,7 @@
 #pragma once
 
 #include "db.h"
+#include "limits.h"
 
 // Operator bitmap
 //
@@ -25,8 +26,8 @@
 
 struct Predicate {
     int op;
-    char *field;
-    char *value;
+    char field[FIELD_MAX_LENGTH];
+    char value[VALUE_MAX_LENGTH];
 };
 
 int parseOperator (const char *input);

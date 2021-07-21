@@ -48,11 +48,13 @@ int select_query (const char *query, int output_flags) {
     }
 
     if (strcmp(q.table, "INFORMATION") == 0) {
-        if (strlen(q.predicate_value) < 1) {
+        if (q.predicate_count < 1) {
             return -1;
         }
 
-        return information_query(q.predicate_value);
+        int result = information_query(q.predicates[0].value);
+        destroyQuery(&q);
+        return result;
     }
 
     /**********************
@@ -63,10 +65,14 @@ int select_query (const char *query, int output_flags) {
     makePlan(&q, &plan);
 
     if (q.flags & FLAG_EXPLAIN) {
-        return explain_select_query(&q, &plan, output_flags);
+        int result =  explain_select_query(&q, &plan, output_flags);
+        destroyQuery(&q);
+        return result;
     }
 
-    return process_select_query(&q, &plan, output_flags);
+    int result = process_select_query(&q, &plan, output_flags);
+    destroyQuery(&q);
+    return result;
 }
 
 int process_select_query (
@@ -127,7 +133,8 @@ int process_select_query (
             result_count = primaryKeyScan(&db, p.field, p.op, p.value, result_rowids);
         }
         else if (s.type == PLAN_INDEX_UNIQUE) {
-            result_count = indexUniqueScan(q->table, q->predicate_field, q->predicate_op, q->predicate_value, result_rowids);
+            struct Predicate p = s.predicates[0];
+            result_count = indexUniqueScan(q->table, p.field, p.op, p.value, result_rowids);
         }
         else if (s.type == PLAN_INDEX_RANGE) {
             struct Predicate p = s.predicates[0];

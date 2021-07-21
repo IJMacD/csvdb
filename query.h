@@ -57,9 +57,8 @@ struct Query {
     int flags;
     int offset_value;
     int limit_value;
-    char predicate_field[FIELD_MAX_LENGTH];
-    int predicate_op;
-    char predicate_value[VALUE_MAX_LENGTH];
+    struct Predicate *predicates;
+    int predicate_count;
     char order_field[FIELD_MAX_LENGTH];
     int order_direction;
 };

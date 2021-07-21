@@ -20,19 +20,15 @@ int makePlan (struct Query *q, struct Plan *plan) {
         /******************
          * PRIMARY KEY
          *****************/
-        struct Predicate *p = malloc(sizeof(*p));
-        p->field = q->predicate_field;
-        p->op = q->predicate_op;
-        p->value = q->predicate_value;
 
         int type;
-        if (q->predicate_op == OPERATOR_EQ) {
+        if (q->predicates[0].op == OPERATOR_EQ) {
             type = PLAN_PK_UNIQUE;
         } else {
             type = PLAN_PK_RANGE;
         }
 
-        addStepWithPredicate(plan, type, p);
+        addStepWithPredicate(plan, type, q->predicates + 0);
 
         // Sort is never required if the index is PK_UNIQUE
         if (type == PLAN_PK_RANGE) {
@@ -41,10 +37,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
     }
     else if (q->flags & FLAG_HAVE_PREDICATE) {
 
-        struct Predicate *p = malloc(sizeof(*p));
-        p->field = q->predicate_field;
-        p->op = q->predicate_op;
-        p->value = q->predicate_value;
+        struct Predicate *p = q->predicates + 0;
 
         struct DB index_db;
 
@@ -52,11 +45,11 @@ int makePlan (struct Query *q, struct Plan *plan) {
          * UNIQUE INDEX SCAN
          *******************/
         // Try to find a unique index
-        if (p->op != OPERATOR_LIKE && findIndex(&index_db, q->table, q->predicate_field, INDEX_UNIQUE) == 0) {
+        if (p->op != OPERATOR_LIKE && findIndex(&index_db, q->table, p->field, INDEX_UNIQUE) == 0) {
             closeDB(&index_db);
 
             int type;
-            if (q->predicate_op == OPERATOR_EQ) {
+            if (p->op == OPERATOR_EQ) {
                 type = PLAN_INDEX_UNIQUE;
             } else {
                 type = PLAN_INDEX_RANGE;
@@ -65,7 +58,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
             addStepWithPredicate(plan, type, p);
 
             // Sort is never required if the index is INDEX_UNIQUE
-            if (type == PLAN_INDEX_RANGE && (q->flags & FLAG_ORDER) && strcmp(q->predicate_field, q->order_field) == 0) {
+            if (type == PLAN_INDEX_RANGE && (q->flags & FLAG_ORDER) && strcmp(p->field, q->order_field) == 0) {
                 // We're sorting on the same column as we've just traversed in the index
                 // so a sort is not necessary but we might need to reverse
                 if (q->order_direction == ORDER_DESC && !(q->flags & FLAG_GROUP)) {
@@ -78,12 +71,12 @@ int makePlan (struct Query *q, struct Plan *plan) {
         /*******************
          * INDEX RANGE SCAN
          *******************/
-        else if (p->op != OPERATOR_LIKE && findIndex(&index_db, q->table, q->predicate_field, INDEX_ANY) == 0) {
+        else if (p->op != OPERATOR_LIKE && findIndex(&index_db, q->table, p->field, INDEX_ANY) == 0) {
             closeDB(&index_db);
 
             addStepWithPredicate(plan, PLAN_INDEX_RANGE, p);
 
-            if ((q->flags & FLAG_ORDER) && strcmp(q->predicate_field, q->order_field) == 0) {
+            if ((q->flags & FLAG_ORDER) && strcmp(p->field, q->order_field) == 0) {
                 // We're sorting on the same column as we've just traversed in the index
                 // so a sort is not necessary but we might need to reverse
                 if (q->order_direction == ORDER_DESC && !(q->flags & FLAG_GROUP)) {
@@ -105,9 +98,9 @@ int makePlan (struct Query *q, struct Plan *plan) {
             closeDB(&index_db);
 
             struct Predicate *order_p = malloc(sizeof(*order_p));
-            order_p->field = q->order_field;
+            strcpy(order_p->field, q->order_field);
             order_p->op = 0;
-            order_p->value = NULL;
+            order_p->value[0] = '\0';
 
             // Add step for Sorted index access
             addStepWithPredicate(plan, PLAN_INDEX_RANGE, order_p);
@@ -137,9 +130,9 @@ int makePlan (struct Query *q, struct Plan *plan) {
             closeDB(&index_db);
 
             struct Predicate *order_p = malloc(sizeof(*order_p));
-            order_p->field = q->order_field;
+            strcpy(order_p->field, q->order_field);
             order_p->op = 0;
-            order_p->value = NULL;
+            order_p->value[0] = '\0';
 
             addStepWithPredicate(plan, PLAN_INDEX_RANGE, order_p);
 
@@ -178,7 +171,9 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
 void destroyPlan (struct Plan *plan) {
     for (int i = 0; i < plan->step_count; i++) {
-        if (plan->steps[i].predicate_count > 0) free(plan->steps[i].predicates);
+        // don't double free
+        // Most predicates will be free'd in destroyQuery
+        if (plan->steps[i].predicate_count > 0 && plan->steps[i].predicates[0].value[0] == '\0') free(plan->steps[i].predicates);
     }
 }
 
@@ -211,9 +206,9 @@ void addOrderStepIfRequired (struct Plan *plan, struct Query *q) {
     }
 
     struct Predicate *order_p = malloc(sizeof(*order_p));
-    order_p->field = q->order_field;
-    order_p->op = q->order_direction;
-    order_p->value = NULL;
+    strcpy(order_p->field, q->order_field);
+    order_p->op = 0;
+    order_p->value[0] = '\0';
 
     plan->steps[i].predicate_count = 1;
     plan->steps[i].predicates = order_p;
