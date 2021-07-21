@@ -218,6 +218,13 @@ void addOrderStepIfRequired (struct Plan *plan, struct Query *q) {
         return;
     }
 
+    // Don't need to sort if the order field has an equality predicate on it
+    for (int j = 0; j < q->predicate_count; j++) {
+        if (strcmp(q->predicates[j].field, q->order_field) == 0 && q->predicates[j].op == OPERATOR_EQ) {
+            return;
+        }
+    }
+
     struct Predicate *order_p = malloc(sizeof(*order_p));
     strcpy(order_p->field, q->order_field);
     order_p->op = q->order_direction;

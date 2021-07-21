@@ -18,3 +18,4 @@ SELECT COUNT(*) FROM test3
 SELECT COUNT(*) FROM test3 WHERE name = 'Walter KELLY'
 SELECT COUNT(*) FROM test3 WHERE birth_date = '2021-01-18'
 SELECT COUNT(*) FROM test3 WHERE score = 42
+FROM test3 WHERE name < 'Bob' AND score > 50 FETCH FIRST 5 ROWS ONLY
