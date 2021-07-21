@@ -220,7 +220,7 @@ void addOrderStepIfRequired (struct Plan *plan, struct Query *q) {
 
     struct Predicate *order_p = malloc(sizeof(*order_p));
     strcpy(order_p->field, q->order_field);
-    order_p->op = 0;
+    order_p->op = q->order_direction;
     order_p->value[0] = '\0';
 
     plan->steps[i].predicate_count = 1;
