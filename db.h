@@ -1,9 +1,13 @@
-#ifndef DB_H
-#define DB_H
+#pragma once
 
 #include <stdio.h>
 
+#define VFS_NULL        0
+#define VFS_CSV         1
+#define VFS_INTERNAL    2
+
 struct DB {
+    int vfs;
     FILE *file;
     char *fields;
     int field_count;
@@ -25,5 +29,3 @@ int getFieldIndex (struct DB *db, const char *field);
 char * getFieldName (struct DB *db, int field_index);
 
 int getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length);
-
-#endif
