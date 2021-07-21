@@ -11,6 +11,8 @@ void addOrderStepIfRequired (struct Plan *plan, struct Query *q);
 
 void addStepWithPredicate (struct Plan *plan, int type, struct Predicate *p);
 
+void addStepWithPredicates (struct Plan *plan, int type, struct Predicate *p, int predicate_count);
+
 void addStepWithParams (struct Plan *plan, int type, int param1, int param2);
 
 int makePlan (struct Query *q, struct Plan *plan) {
@@ -22,6 +24,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
          *****************/
 
         int type;
+        // WARNING: Assumes PK is first predicate
         if (q->predicates[0].op == OPERATOR_EQ) {
             type = PLAN_PK_UNIQUE;
         } else {
@@ -36,6 +39,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
         }
     }
     else if (q->flags & FLAG_HAVE_PREDICATE) {
+
+        // Limitation: Only first predicate is considered for indexes
 
         struct Predicate *p = q->predicates + 0;
 
@@ -57,6 +62,10 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
             addStepWithPredicate(plan, type, p);
 
+            if (q->predicate_count > 1) {
+                addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + 1, q->predicate_count - 1);
+            }
+
             // Sort is never required if the index is INDEX_UNIQUE
             if (type == PLAN_INDEX_RANGE && (q->flags & FLAG_ORDER) && strcmp(p->field, q->order_field) == 0) {
                 // We're sorting on the same column as we've just traversed in the index
@@ -75,6 +84,10 @@ int makePlan (struct Query *q, struct Plan *plan) {
             closeDB(&index_db);
 
             addStepWithPredicate(plan, PLAN_INDEX_RANGE, p);
+
+            if (q->predicate_count > 1) {
+                addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + 1, q->predicate_count - 1);
+            }
 
             if ((q->flags & FLAG_ORDER) && strcmp(p->field, q->order_field) == 0) {
                 // We're sorting on the same column as we've just traversed in the index
@@ -109,14 +122,14 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 addStep(plan, PLAN_REVERSE);
             }
 
-            // Add step for predicate filter
-            addStepWithPredicate(plan, PLAN_TABLE_ACCESS_ROWID, p);
+            // Add step for predicates filter
+            addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, p, q->predicate_count);
         }
         /********************
          * TABLE ACCESS FULL
          ********************/
         else {
-            addStepWithPredicate(plan, PLAN_TABLE_ACCESS_FULL, p);
+            addStepWithPredicates(plan, PLAN_TABLE_ACCESS_FULL, q->predicates, q->predicate_count);
 
             // Do we need an explicit sort?
             addOrderStepIfRequired(plan, q);
@@ -218,9 +231,13 @@ void addOrderStepIfRequired (struct Plan *plan, struct Query *q) {
 }
 
 void addStepWithPredicate (struct Plan *plan, int type, struct Predicate *p) {
+    addStepWithPredicates(plan, type, p, 1);
+}
+
+void addStepWithPredicates (struct Plan *plan, int type, struct Predicate *p, int predicate_count) {
     int i = plan->step_count;
 
-    plan->steps[i].predicate_count = 1;
+    plan->steps[i].predicate_count = predicate_count;
     plan->steps[i].predicates = p;
     plan->steps[i].type = type;
 

@@ -189,44 +189,66 @@ int parseQuery (struct Query *q, const char *query) {
         else if (strcmp(keyword, "WHERE") == 0) {
             q->flags |= FLAG_HAVE_PREDICATE;
 
-            q->predicates = malloc(sizeof (*q->predicates));
-            q->predicate_count = 1;
+            while (index < query_length) {
+                void *mem;
 
-            struct Predicate *p = q->predicates;
-
-            getToken(query, &index, p->field, FIELD_MAX_LENGTH);
-
-            if (strncmp(p->field, "PK(", 3) == 0) {
-                q->flags |= FLAG_PRIMARY_KEY_SEARCH;
-                size_t len = strlen(p->field);
-                // remove trailing ')'
-                for (size_t i = 0; i < len - 4; i++) {
-                    p->field[i] = p->field[i+3];
+                if (q->predicate_count == 0) {
+                    mem = malloc(sizeof (*q->predicates));
+                } else {
+                    mem = realloc(q->predicates, sizeof (*q->predicates) * (q->predicate_count + 1));
                 }
-                p->field[len - 4] = '\0';
-            }
 
-            // printf("Predicate field: %s\n", predicate_field);
+                if (mem == NULL) {
+                    fprintf(stderr, "Out of memory\n");
+                    return -1;
+                }
 
-            char op[5];
-            getToken(query, &index, op, 5);
+                q->predicates = mem;
 
-            p->op = parseOperator(op);
-            if (p->op == OPERATOR_UN) {
-                fprintf(stderr, "Bad query - expected =|!=|<|<=|>|>=\n");
-                return -1;
-            }
+                struct Predicate *p = &(q->predicates[q->predicate_count++]);
 
-            // Check for IS NOT
-            if (strcmp(op, "IS") == 0) {
+                getToken(query, &index, p->field, FIELD_MAX_LENGTH);
+
+                if (strncmp(p->field, "PK(", 3) == 0) {
+                    q->flags |= FLAG_PRIMARY_KEY_SEARCH;
+                    size_t len = strlen(p->field);
+                    // remove trailing ')'
+                    for (size_t i = 0; i < len - 4; i++) {
+                        p->field[i] = p->field[i+3];
+                    }
+                    p->field[len - 4] = '\0';
+                }
+
+                // printf("Predicate field: %s\n", predicate_field);
+
+                char op[5];
+                getToken(query, &index, op, 5);
+
+                p->op = parseOperator(op);
+                if (p->op == OPERATOR_UN) {
+                    fprintf(stderr, "Bad query - expected =|!=|<|<=|>|>=\n");
+                    return -1;
+                }
+
+                // Check for IS NOT
+                if (strcmp(op, "IS") == 0) {
+                    skipWhitespace(query, &index);
+                    if (strncmp(query + index, "NOT ", 4) == 0) {
+                        p->op = OPERATOR_NE;
+                        index += 4;
+                    }
+                }
+
+                getToken(query, &index, p->value, VALUE_MAX_LENGTH);
+
                 skipWhitespace(query, &index);
-                if (strncmp(query + index, "NOT ", 4) == 0) {
-                    p->op = OPERATOR_NE;
+
+                if (strncmp(query + index, "AND ", 4) == 0) {
                     index += 4;
+                } else {
+                    break;
                 }
             }
-
-            getToken(query, &index, p->value, VALUE_MAX_LENGTH);
         }
         else if (strcmp(keyword, "OFFSET") == 0) {
             q->offset_value = getNumericToken(query, &index);
