@@ -43,7 +43,7 @@ int explain_select_query (
             predicate[0] = '\0';
         }
         else if (s.predicate_count == 1) {
-            strcpy(predicate, q->predicates[0].field);
+            strcpy(predicate, s.predicates[0].field);
         }
         else {
             char *ptr = predicate;

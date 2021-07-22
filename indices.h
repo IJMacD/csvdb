@@ -12,10 +12,6 @@
 int primaryKeyScan (struct DB *db, const char *predicate_field, int predicate_op, const char *predicate_value, int *result_rowids);
 int indexUniqueScan (const char *table_name, const char *predicate_field, int predicate_op, const char *predicate_value, int *result_rowids);
 int indexRangeScan (const char *table_name, const char *predicate_field, int predicate_op, const char *predicate_value, int *result_rowids);
-int fullTableScan (struct DB *db, int *result_rowids, const char *predicate_field, int predicate_op, const char *predicate_value, int limit_value, int offset_value, int flags);
-int fullTableAccess (struct DB *db, int *result_rowids);
-
-int findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);
 
 int indexWalk(struct DB *db, int rowid_column, int lower_index, int upper_index, int *result_rowids);
 

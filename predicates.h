@@ -1,6 +1,5 @@
 #pragma once
 
-#include "db.h"
 #include "limits.h"
 
 // Operator bitmap
@@ -37,5 +36,3 @@ int compare (int numeric_mode, const char * valueA, long valueA_numeric, const c
 int evaluateExpression (int op, const char *left, const char *right);
 
 int compareValues (const char *left, const char *right);
-
-int filterRows (struct DB *db, int *source_rowids, int source_count, struct Predicate *p, int *result_rowids);

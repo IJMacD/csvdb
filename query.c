@@ -8,6 +8,7 @@
 #include "parse.h"
 #include "predicates.h"
 #include "indices.h"
+#include "filter.h"
 #include "sort.h"
 #include "output.h"
 #include "limits.h"
@@ -142,8 +143,7 @@ int process_select_query (
         }
         else if (s.type == PLAN_TABLE_ACCESS_FULL) {
             if (s.predicate_count > 0) {
-                struct Predicate p = s.predicates[i];
-                result_count = fullTableScan(&db, result_rowids, p.field, p.op, p.value, q->limit_value, q->offset_value, q->flags);
+                result_count = fullTableScan(&db, result_rowids, s.predicates, s.predicate_count, q->limit_value, q->offset_value);
             }
             else {
                 result_count = fullTableAccess(&db, result_rowids);

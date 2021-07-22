@@ -1,10 +1,12 @@
 #pragma once
 
 #include <stdio.h>
+#include "predicates.h"
 
 #define VFS_NULL        0
 #define VFS_CSV         1
 #define VFS_INTERNAL    2
+#define VFS_CALENDAR    3
 
 struct DB {
     int vfs;
@@ -29,3 +31,9 @@ int getFieldIndex (struct DB *db, const char *field);
 char * getFieldName (struct DB *db, int field_index);
 
 int getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length);
+
+int findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);
+
+int fullTableScan (struct DB *db, int *result_rowids, struct Predicate *predicates, int predicate_count, int limit_value, int offset_value);
+
+int fullTableAccess (struct DB *db, int *result_rowids);
