@@ -13,7 +13,12 @@ char *field_names[] = {
     "month",
     "day",
     "week",
-    "weekday"
+    "weekday",
+    "weekyear",
+    "yearday",
+    "millenium",
+    "century",
+    "decade",
 };
 
 
@@ -85,6 +90,31 @@ int calendar_getRecordValue (__attribute__((unused)) struct DB *db, int record_i
     // weekday
     if (field_index == 6) {
         return sprintf(value, "%d", datetimeGetWeekDay(&dt));
+    }
+
+    // weekyear
+    if (field_index == 7) {
+        return sprintf(value, "%d", datetimeGetWeekYear(&dt));
+    }
+
+    // yearday
+    if (field_index == 8) {
+        return sprintf(value, "%d", datetimeGetYearDay(&dt));
+    }
+
+    // millenium
+    if (field_index == 9) {
+        return sprintf(value, "%d", dt.year / 1000);
+    }
+
+    // century
+    if (field_index == 10) {
+        return sprintf(value, "%d", dt.year / 100);
+    }
+
+    // decade
+    if (field_index == 11) {
+        return sprintf(value, "%d", dt.year / 10);
     }
 
     return 0;
