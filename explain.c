@@ -67,6 +67,10 @@ int explain_select_query (
         if (s.type == PLAN_TABLE_ACCESS_FULL){
             operation = "TABLE ACCESS FULL";
             rows = row_estimate;
+            int l = q->limit_value + q->offset_value;
+            if (l >= 0 && l < rows) {
+                rows = l;
+            }
             cost = rows;
 
             for (int i = 0; i < s.predicate_count; i++) {

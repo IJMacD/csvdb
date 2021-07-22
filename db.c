@@ -72,10 +72,10 @@ int findIndex(struct DB *db, const char *table_name, const char *index_name, int
 /**
  * @return number of matched rows
  */
-int fullTableScan (struct DB *db, int *result_rowids, struct Predicate *predicates, int predicate_count, int limit_value, int offset_value) {
+int fullTableScan (struct DB *db, int *result_rowids, struct Predicate *predicates, int predicate_count, int limit_value) {
     // Special implementation for calendar
     if (db->vfs == VFS_CALENDAR) {
-        return calendar_fullTableScan(db, result_rowids, predicates, predicate_count, limit_value, offset_value);
+        return calendar_fullTableScan(db, result_rowids, predicates, predicate_count, limit_value);
     }
 
     // VFS-agnostic implementation
@@ -105,7 +105,7 @@ int fullTableScan (struct DB *db, int *result_rowids, struct Predicate *predicat
         }
 
         // Implement early exit FETCH FIRST/LIMIT for cases with no ORDER clause
-        if (limit_value >= 0 && (result_count - offset_value) >= limit_value) {
+        if (limit_value >= 0 && result_count >= limit_value) {
             break;
         }
     }
@@ -117,15 +117,21 @@ int fullTableScan (struct DB *db, int *result_rowids, struct Predicate *predicat
  * A sort of dummy access function to just populate the result_rowids
  * array with all rowids in ascending numerical order
  */
-int fullTableAccess (struct DB *db, int result_rowids[]) {
+int fullTableAccess (struct DB *db, int result_rowids[], int limit_value) {
     if (db->vfs == VFS_CALENDAR) {
-        return calendar_fullTableScan(db, result_rowids, NULL, 0, 0, 0);
+        return calendar_fullTableScan(db, result_rowids, NULL, 0, limit_value);
     }
 
     // VFS-agnostic implementation
-    for (int i = 0; i < db->record_count; i++) {
+
+    int l = db->record_count;
+    if (limit_value >= 0 && limit_value < l) {
+        l = limit_value;
+    }
+
+    for (int i = 0; i < l; i++) {
         result_rowids[i] = i;
     }
 
-    return db->record_count;
+    return l;
 }

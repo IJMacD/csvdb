@@ -143,13 +143,13 @@ int process_select_query (
         }
         else if (s.type == PLAN_TABLE_ACCESS_FULL) {
             if (s.predicate_count > 0) {
-                result_count = fullTableScan(&db, result_rowids, s.predicates, s.predicate_count, q->limit_value, q->offset_value);
+                result_count = fullTableScan(&db, result_rowids, s.predicates, s.predicate_count, q->limit_value + q->offset_value);
             }
             else {
-                result_count = fullTableAccess(&db, result_rowids);
+                result_count = fullTableAccess(&db, result_rowids, q->limit_value + q->offset_value);
             }
         }
-        else if (s.type == PLAN_TABLE_ACCESS_ROWID ) {
+        else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
             for (int i = 0; i < s.predicate_count; i++) {
                 struct Predicate p = s.predicates[i];
                 result_count = filterRows(&db, result_rowids, result_count, &p, result_rowids);

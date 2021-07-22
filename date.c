@@ -257,16 +257,17 @@ int datetimeGetJulian (struct DateTime *dt) {
  * Algorithm from https://quasar.as.utexas.edu/BillInfo/JulianDatesG.html
  */
 void datetimeFromJulian (struct DateTime *dt, int julian) {
-    int W = (julian - 1867216.25)/36524.25;
+    int Z = julian + 1;
+    int W = (Z - 1867216.25)/36524.25;
     int X = W/4;
-    int A = julian+1+W-X;
+    int A = Z+1+W-X;
     int B = A+1524;
     int C = (B-122.1)/365.25;
     int D = 365.25 * C;
     int E = (B-D)/30.6001;
     int F = 30.6001 * E;
 
-    dt->day = B-D-F+1;
+    dt->day = B-D-F;
     dt->month = E-1;
     if (dt->month > 12) {
         dt->month -= 12;

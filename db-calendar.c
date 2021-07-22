@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "db.h"
 #include "db-calendar.h"
@@ -94,7 +95,31 @@ int calendar_findIndex(__attribute__((unused)) struct DB *db, __attribute__((unu
     return -1;
 }
 
-int calendar_fullTableScan (__attribute__((unused)) struct DB *db, int *result_rowids, __attribute__((unused)) struct Predicate *predicates, __attribute__((unused)) int predicate_count, __attribute__((unused)) int limit_value, __attribute__((unused)) int offset_value) {
-    *result_rowids = 2459417;
-    return 1;
+int calendar_fullTableScan (__attribute__((unused)) struct DB *db, int *result_rowids, __attribute__((unused)) struct Predicate *predicates, __attribute__((unused)) int predicate_count, int limit_value) {
+    time_t t = time(NULL);
+    struct tm *local = localtime(&t);
+
+    struct DateTime dt = {0};
+    dt.year = local->tm_year + 1900;
+    dt.month = local->tm_mon + 1;
+    dt.day = local->tm_mday;
+
+    // printf("%04d-%02d-%02d\n", dt.year, dt.month, dt.day);
+
+    int julian = datetimeGetJulian(&dt);
+
+    // printf("%d\n", julian);
+
+    if (limit_value < 0) {
+        limit_value = 1;
+    }
+
+    int max_julian = julian + limit_value;
+    int count = 0;
+
+    for (; julian < max_julian; julian++) {
+        result_rowids[count++] = julian;
+    }
+
+    return count;
 }
