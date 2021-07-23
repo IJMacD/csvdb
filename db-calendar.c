@@ -6,6 +6,7 @@
 #include "db.h"
 #include "db-calendar.h"
 #include "date.h"
+#include "predicates.h"
 
 char *field_names[] = {
     "julian",
@@ -127,7 +128,7 @@ int calendar_findIndex(__attribute__((unused)) struct DB *db, __attribute__((unu
     return -1;
 }
 
-int calendar_fullTableScan (__attribute__((unused)) struct DB *db, int *result_rowids, struct Predicate *predicates, int predicate_count, int limit_value) {
+int calendar_fullTableScan (struct DB *db, int *result_rowids, struct Predicate *predicates, int predicate_count, int limit_value) {
     int julian = -1, max_julian = -1;
 
     // Try to get range from predicates
@@ -148,27 +149,23 @@ int calendar_fullTableScan (__attribute__((unused)) struct DB *db, int *result_r
         julian = datetimeGetJulian(&dt);
     }
 
+    // No limit means we'll use the limit defined for the VFS
+    // (hopefully there are enough predicates that we won't have that many results though)
+    if (limit_value < 0) {
+        limit_value = db->record_count;
+    }
+
     // Start: YES; End: NO
     if (julian >= 0 && max_julian < 0) {
-        if (limit_value < 0) {
-            max_julian = julian + 1;
-        }
-        else {
-            max_julian = julian + limit_value;
-        }
+        max_julian = julian + limit_value;
     }
     // Start: NO; End: YES
     else if (julian < 0 && max_julian >= 0) {
-        if (limit_value < 0) {
-            julian = max_julian - 1;
-        }
-        else {
-            julian = max_julian - limit_value;
-        }
+        julian = max_julian - limit_value;
     }
     // Start: YES; End: YES
     else {
-        if (limit_value >= 0 && (max_julian - julian) > limit_value) {
+        if ((max_julian - julian) > limit_value) {
             max_julian = julian + limit_value;
         }
     }
@@ -177,8 +174,34 @@ int calendar_fullTableScan (__attribute__((unused)) struct DB *db, int *result_r
 
     int count = 0;
 
+    char value[VALUE_MAX_LENGTH];
+
     for (; julian < max_julian; julian++) {
-        result_rowids[count++] = julian;
+        int matching = 1;
+
+        // Perform filtering if necessary
+        for (int j = 0; j < predicate_count && matching; j++) {
+            struct Predicate *predicate = predicates + j;
+
+            // Note: Could factor out next line if there are performance issues
+            int predicate_field_index = calendar_getFieldIndex(db, predicate->field);
+            calendar_getRecordValue(db, julian, predicate_field_index, value, VALUE_MAX_LENGTH);
+
+            if (!evaluateExpression(predicate->op, value, predicate->value)) {
+                matching = 0;
+                break;
+            }
+        }
+
+        if (matching) {
+            // Add to result set
+            result_rowids[count++] = julian;
+        }
+
+        // Implement early exit FETCH FIRST/LIMIT for cases with no ORDER clause
+        if (count >= limit_value) {
+            break;
+        }
     }
 
     return count;

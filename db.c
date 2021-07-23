@@ -96,6 +96,7 @@ int fullTableScan (struct DB *db, int *result_rowids, struct Predicate *predicat
 
             if (!evaluateExpression(predicate->op, value, predicate->value)) {
                 matching = 0;
+                break;
             }
         }
 
