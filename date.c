@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 
 #include "date.h"
 
@@ -13,6 +14,21 @@ const int month_index[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334
  * Returns 1 on success; 0 on failure
  */
 int parseDateTime(const char *input, struct DateTime *output) {
+    if (strcmp(input, "TODAY") == 0) {
+        time_t t = time(NULL);
+        struct tm *local = localtime(&t);
+
+        output->year = local->tm_year + 1900;
+        output->month = local->tm_mon + 1;
+        output->day = local->tm_mday;
+
+        output->hour = 0;
+        output->minute = 0;
+        output->second = 0;
+
+        return 1;
+    }
+
     if (checkFormat(input, "nnnn-nn-nn")) {
         char v[5] = {0};
 

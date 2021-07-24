@@ -4,6 +4,7 @@
 #include "query.h"
 #include "limits.h"
 #include "util.h"
+#include "date.h"
 
 int parseOperator (const char *input) {
     if (strcmp(input, "=") == 0)
@@ -27,6 +28,22 @@ int parseOperator (const char *input) {
 
 int evaluateExpression (int op, const char *left, const char *right) {
     // printf("Evaluating %s OP %s\n", left, right);
+
+    struct DateTime dt_left, dt_right;
+    if (parseDateTime(left, &dt_left) && parseDateTime(right, &dt_right)) {
+        // Date comparison
+        int julian_left = datetimeGetJulian(&dt_left);
+        int julian_right = datetimeGetJulian(&dt_right);
+
+        if (op == OPERATOR_EQ) return julian_left == julian_right;
+        if (op == OPERATOR_NE) return julian_left != julian_right;
+        if (op == OPERATOR_LT) return julian_left < julian_right;
+        if (op == OPERATOR_LE) return julian_left <= julian_right;
+        if (op == OPERATOR_GT) return julian_left > julian_right;
+        if (op == OPERATOR_GE) return julian_left >= julian_right;
+
+        return 0;
+    }
 
     if (op == OPERATOR_LIKE) {
         size_t len = strlen(right);

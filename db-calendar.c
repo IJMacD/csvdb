@@ -14,9 +14,9 @@ char *field_names[] = {
     "year",
     "month",
     "day",
+    "weekyear",
     "week",
     "weekday",
-    "weekyear",
     "yearday",
     "millenium",
     "century",
@@ -85,19 +85,19 @@ int calendar_getRecordValue (__attribute__((unused)) struct DB *db, int record_i
         return snprintf(value, value_max_length, "%d", dt.day);
     }
 
-    // week
+    // weekyear
     if (field_index == 5) {
+        return snprintf(value, value_max_length, "%d", datetimeGetWeekYear(&dt));
+    }
+
+    // week
+    if (field_index == 6) {
         return snprintf(value, value_max_length, "%d", datetimeGetWeek(&dt));
     }
 
     // weekday
-    if (field_index == 6) {
-        return snprintf(value, value_max_length, "%d", datetimeGetWeekDay(&dt));
-    }
-
-    // weekyear
     if (field_index == 7) {
-        return snprintf(value, value_max_length, "%d", datetimeGetWeekYear(&dt));
+        return snprintf(value, value_max_length, "%d", datetimeGetWeekDay(&dt));
     }
 
     // yearday
@@ -149,31 +149,25 @@ int calendar_fullTableScan (struct DB *db, int *result_rowids, struct Predicate 
         julian = datetimeGetJulian(&dt);
     }
 
+    // Maxiumums
+    // Start: YES; End: NO
+    if (julian >= 0 && max_julian < 0) {
+        max_julian = julian + db->record_count;
+    }
+    // Start: NO; End: YES
+    else if (julian < 0 && max_julian >= 0) {
+        julian = max_julian - db->record_count;
+    }
+
+    // printf("%d\n", julian);
+
     // No limit means we'll use the limit defined for the VFS
     // (hopefully there are enough predicates that we won't have that many results though)
     if (limit_value < 0) {
         limit_value = db->record_count;
     }
 
-    // Start: YES; End: NO
-    if (julian >= 0 && max_julian < 0) {
-        max_julian = julian + limit_value;
-    }
-    // Start: NO; End: YES
-    else if (julian < 0 && max_julian >= 0) {
-        julian = max_julian - limit_value;
-    }
-    // Start: YES; End: YES
-    else {
-        if ((max_julian - julian) > limit_value) {
-            max_julian = julian + limit_value;
-        }
-    }
-
-    // printf("%d\n", julian);
-
     int count = 0;
-
     char value[VALUE_MAX_LENGTH];
 
     for (; julian < max_julian; julian++) {
