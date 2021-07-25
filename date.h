@@ -1,6 +1,6 @@
 
 struct DateTime {
-    unsigned short year;
+    short year;
     unsigned char month;
     unsigned char day;
     unsigned char hour;

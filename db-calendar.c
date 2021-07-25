@@ -67,12 +67,16 @@ int calendar_getRecordValue (__attribute__((unused)) struct DB *db, int record_i
 
     // date
     if (field_index == 1) {
-        return snprintf(value, value_max_length, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
+        if (dt.year >= 0 && dt.year < 10000) {
+            return snprintf(value, value_max_length, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
+        } else {
+            return snprintf(value, value_max_length, "%+06d-%02d-%02d", dt.year, dt.month, dt.day);
+        }
     }
 
     // year
     if (field_index == 2) {
-        return snprintf(value, value_max_length, "%04d", dt.year);
+        return snprintf(value, value_max_length, "%d", dt.year);
     }
 
     // month
