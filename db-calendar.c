@@ -8,6 +8,29 @@
 #include "date.h"
 #include "predicates.h"
 
+#define COL_JULIAN              0
+#define COL_DATE                1
+#define COL_YEAR                2
+#define COL_MONTH               3
+#define COL_DAY                 4
+#define COL_WEEKYEAR            5
+#define COL_WEEK                6
+#define COL_WEEKDAY             7
+#define COL_YEARDAY             8
+#define COL_MILLENIUM           9
+#define COL_CENTURY             10
+#define COL_DECADE              11
+#define COL_QUARTER             12
+#define COL_FIRST_OF_YEAR       13
+#define COL_LAST_OF_YEAR        14
+#define COL_FIRST_OF_QUARTER    15
+#define COL_LAST_OF_QUARTER     16
+#define COL_FIRST_OF_MONTH      17
+#define COL_LAST_OF_MONTH       18
+#define COL_FIRST_OF_WEEK       19
+#define COL_LAST_OF_WEEK        20
+#define COL_IS_LEAP_YEAR        21
+
 char *field_names[] = {
     "julian",
     "date",
@@ -21,9 +44,23 @@ char *field_names[] = {
     "millenium",
     "century",
     "decade",
+    "quarter",
+    "firstOfYear",
+    "lastOfYear",
+    "firstOfQuarter",
+    "lastOfQuarter",
+    "firstOfMonth",
+    "lastOfMonth",
+    "firstOfWeek",
+    "lastOfWeek",
+    "isLeapYear",
 };
 
+const int month_lengths[] = {31,28,31,30,31,30,31,31,30,31,30,31};
+
 void getJulianRange (struct Predicate *predicates, int predicate_count, int *julian_start, int *julian_end);
+
+int printDate (char *value, int max_length, struct DateTime date);
 
 int calendar_openDB (struct DB *db, const char *filename) {
     if (strcmp(filename, "CALENDAR") != 0) {
@@ -58,70 +95,150 @@ char *calendar_getFieldName (__attribute__((unused)) struct DB *db, int field_in
 
 int calendar_getRecordValue (__attribute__((unused)) struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
     // julian
-    if (field_index == 0) {
+    if (field_index == COL_JULIAN) {
         return snprintf(value, value_max_length, "%d", record_index);
     }
 
     struct DateTime dt;
     datetimeFromJulian(&dt, record_index);
 
+    struct DateTime dt2 = {0};
+
     // date
-    if (field_index == 1) {
-        if (dt.year >= 0 && dt.year < 10000) {
-            return snprintf(value, value_max_length, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
-        } else {
-            return snprintf(value, value_max_length, "%+06d-%02d-%02d", dt.year, dt.month, dt.day);
-        }
+    if (field_index == COL_DATE) {
+        return printDate(value, value_max_length, dt);
     }
 
     // year
-    if (field_index == 2) {
+    if (field_index == COL_YEAR) {
         return snprintf(value, value_max_length, "%d", dt.year);
     }
 
     // month
-    if (field_index == 3) {
+    if (field_index == COL_MONTH) {
         return snprintf(value, value_max_length, "%d", dt.month);
     }
 
     // day
-    if (field_index == 4) {
+    if (field_index == COL_DAY) {
         return snprintf(value, value_max_length, "%d", dt.day);
     }
 
     // weekyear
-    if (field_index == 5) {
+    if (field_index == COL_WEEKYEAR) {
         return snprintf(value, value_max_length, "%d", datetimeGetWeekYear(&dt));
     }
 
     // week
-    if (field_index == 6) {
+    if (field_index == COL_WEEK) {
         return snprintf(value, value_max_length, "%d", datetimeGetWeek(&dt));
     }
 
     // weekday
-    if (field_index == 7) {
+    if (field_index == COL_WEEKDAY) {
         return snprintf(value, value_max_length, "%d", datetimeGetWeekDay(&dt));
     }
 
     // yearday
-    if (field_index == 8) {
+    if (field_index == COL_YEARDAY) {
         return snprintf(value, value_max_length, "%d", datetimeGetYearDay(&dt));
     }
 
     // millenium
-    if (field_index == 9) {
+    if (field_index == COL_MILLENIUM) {
         return snprintf(value, value_max_length, "%d", dt.year / 1000);
     }
 
     // century
-    if (field_index == 10) {
+    if (field_index == COL_CENTURY) {
         return snprintf(value, value_max_length, "%d", dt.year / 100);
     }
 
     // decade
-    if (field_index == 11) {
+    if (field_index == COL_DECADE) {
         return snprintf(value, value_max_length, "%d", dt.year / 10);
+    }
+
+    // quarter
+    if (field_index == COL_QUARTER) {
+        return snprintf(value, value_max_length, "%d", (dt.month - 1) / 3 + 1);
+    }
+
+    // firstOfYear
+    if (field_index == COL_FIRST_OF_YEAR) {
+        dt2.year = dt.year;
+        dt2.month = 1;
+        dt2.day = 1;
+        return printDate(value, value_max_length, dt2);
+    }
+
+    // lastOfYear
+    if (field_index == COL_LAST_OF_YEAR) {
+        dt2.year = dt.year;
+        dt2.month = 12;
+        dt2.day = 31;
+        return printDate(value, value_max_length, dt2);
+    }
+
+    // firstOfQuarter
+    if (field_index == COL_FIRST_OF_QUARTER) {
+        dt2.year = dt.year;
+        dt2.month = ((dt.month - 1) / 3) * 3 + 1;
+        dt2.day = 1;
+        return printDate(value, value_max_length, dt2);
+    }
+
+    // lastOfQuarter
+    if (field_index == COL_LAST_OF_QUARTER) {
+        dt2.year = dt.year;
+        dt2.month = (((dt.month - 1) / 3) + 1) * 3;
+
+        dt2.day = month_lengths[dt2.month - 1];
+        if (dt2.month == 2 && isLeapYear(dt2.year)) {
+            dt2.day++;
+        }
+
+        return printDate(value, value_max_length, dt2);
+    }
+
+    // firstOfMonth
+    if (field_index == COL_FIRST_OF_MONTH) {
+        dt2.year = dt.year;
+        dt2.month = dt.month;
+        dt2.day = 1;
+        return printDate(value, value_max_length, dt2);
+    }
+
+    // lastOfMonth
+    if (field_index == COL_LAST_OF_MONTH) {
+        dt2.year = dt.year;
+        dt2.month = dt.month;
+
+        dt2.day = month_lengths[dt2.month - 1];
+        if (dt2.month == 2 && isLeapYear(dt2.year)) {
+            dt2.day++;
+        }
+
+        return printDate(value, value_max_length, dt2);
+    }
+
+    // firstOfWeek
+    if (field_index == COL_FIRST_OF_WEEK) {
+        int weekDay = datetimeGetWeekDay(&dt);
+        datetimeFromJulian(&dt2, record_index - weekDay + 1);
+        return printDate(value, value_max_length, dt2);
+    }
+
+    // lastOfWeek
+    if (field_index == COL_LAST_OF_WEEK) {
+        int weekDay = datetimeGetWeekDay(&dt);
+        datetimeFromJulian(&dt2, record_index - weekDay + 7);
+        return printDate(value, value_max_length, dt2);
+    }
+
+    // isLeapYear
+    if (field_index == COL_IS_LEAP_YEAR) {
+        return snprintf(value, value_max_length, "%d", isLeapYear(dt.year) ? 1 : 0);
     }
 
     return 0;
@@ -263,4 +380,12 @@ void getJulianRange (struct Predicate *predicates, int predicate_count, int *jul
         }
     }
 
+}
+
+int printDate (char *value, int max_length, struct DateTime date) {
+    if (date.year >= 0 && date.year < 10000) {
+        return snprintf(value, max_length, "%04d-%02d-%02d", date.year, date.month, date.day);
+    } else {
+        return snprintf(value, max_length, "%+06d-%02d-%02d", date.year, date.month, date.day);
+    }
 }
