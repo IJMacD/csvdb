@@ -30,6 +30,7 @@
 #define COL_FIRST_OF_WEEK       19
 #define COL_LAST_OF_WEEK        20
 #define COL_IS_LEAP_YEAR        21
+#define COL_WEEKDAY_IN_MONTH    22
 
 char *field_names[] = {
     "julian",
@@ -54,6 +55,7 @@ char *field_names[] = {
     "firstOfWeek",
     "lastOfWeek",
     "isLeapYear",
+    "weekdayInMonth",
 };
 
 const int month_lengths[] = {31,28,31,30,31,30,31,31,30,31,30,31};
@@ -239,6 +241,11 @@ int calendar_getRecordValue (__attribute__((unused)) struct DB *db, int record_i
     // isLeapYear
     if (field_index == COL_IS_LEAP_YEAR) {
         return snprintf(value, value_max_length, "%d", isLeapYear(dt.year) ? 1 : 0);
+    }
+
+    // weekdayInMonth
+    if (field_index == COL_WEEKDAY_IN_MONTH) {
+        return snprintf(value, value_max_length, "%d", (dt.day - 1) / 7 + 1);
     }
 
     return 0;
