@@ -1,0 +1,21 @@
+.csvdb {
+    font-family: sans-serif;
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.csvdb th {
+    text-transform: capitalize;
+}
+
+.csvdb th {
+    border-bottom: 1px solid #333;
+}
+
+.csvdb td {
+    padding: 0.5em 0;
+}
+
+.csvdb tr:hover td {
+    background-color: #f8f8f8;
+}
