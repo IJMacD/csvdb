@@ -341,12 +341,14 @@ void getJulianRange (struct Predicate *predicates, int predicate_count, int *jul
     for (int i = 0; i < predicate_count; i++) {
         struct Predicate *p = predicates + i;
 
+        // An exact Julian
         if (strcmp(p->field, "julian") == 0 && p->op == OPERATOR_EQ) {
             *julian_start = atoi(p->value);
             *julian_end = *julian_start + 1;
             return;
         }
 
+        // An exact date
         if (strcmp(p->field, "date") == 0 && p->op == OPERATOR_EQ) {
             struct DateTime dt;
             parseDateTime(p->value, &dt);
@@ -355,6 +357,7 @@ void getJulianRange (struct Predicate *predicates, int predicate_count, int *jul
             return;
         }
 
+        // Dates after a specific Julian
         if (strcmp(p->field, "julian") == 0 && (p->op & OPERATOR_GT)) {
             *julian_start = atoi(p->value);
 
@@ -363,6 +366,7 @@ void getJulianRange (struct Predicate *predicates, int predicate_count, int *jul
             }
         }
 
+        // Dates before a specific Julian
         if (strcmp(p->field, "julian") == 0 && (p->op & OPERATOR_LT)) {
             *julian_end = atoi(p->value);
 
@@ -372,6 +376,7 @@ void getJulianRange (struct Predicate *predicates, int predicate_count, int *jul
             }
         }
 
+        // Dates after a specific date
         if (strcmp(p->field, "date") == 0 && (p->op & OPERATOR_GT)) {
             struct DateTime dt;
             parseDateTime(p->value, &dt);
@@ -382,6 +387,7 @@ void getJulianRange (struct Predicate *predicates, int predicate_count, int *jul
             }
         }
 
+        // Dates before a specific date
         if (strcmp(p->field, "date") == 0 && (p->op & OPERATOR_LT)) {
             struct DateTime dt;
             parseDateTime(p->value, &dt);
@@ -391,6 +397,45 @@ void getJulianRange (struct Predicate *predicates, int predicate_count, int *jul
             if (p->op & OPERATOR_EQ) {
                 (*julian_end)++;
             }
+        }
+
+        // All dates in the given year
+        if (strcmp(p->field, "year") == 0 && p->op == OPERATOR_EQ) {
+            struct DateTime dt;
+
+            dt.year = atoi(p->value);
+            dt.month = 1;
+            dt.day = 1;
+
+            *julian_start = datetimeGetJulian(&dt);
+
+            // End is exclusive
+            dt.year++;
+
+            *julian_end = datetimeGetJulian(&dt);
+        }
+
+        // All dates up to and including the given year
+        if (strcmp(p->field, "year") == 0 && p->op == OPERATOR_LE) {
+            struct DateTime dt;
+
+            // End is exclusive
+            dt.year = atoi(p->value) + 1;
+            dt.month = 1;
+            dt.day = 1;
+
+            *julian_end = datetimeGetJulian(&dt);
+        }
+
+        // All dates starting from the beginning of the given year
+        if (strcmp(p->field, "year") == 0 && p->op == OPERATOR_GE) {
+            struct DateTime dt;
+
+            dt.year = atoi(p->value);
+            dt.month = 1;
+            dt.day = 1;
+
+            *julian_start = datetimeGetJulian(&dt);
         }
     }
 
