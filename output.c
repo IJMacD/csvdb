@@ -119,7 +119,7 @@ void printHeaderLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
 
 void printPreamble (FILE *f, __attribute__((unused)) struct DB *db, __attribute__((unused)) struct ResultColumn columns[], __attribute__((unused)) int column_count, int flags) {
     if (flags & OUTPUT_FORMAT_HTML) {
-        fprintf(f, "<TABLE>\n");
+        fputs("<STYLE>.csvdb{font-family:sans-serif;width:100%;border-collapse:collapse}.csvdb th{text-transform:capitalize}.csvdb th{border-bottom:1px solid #333}.csvdb td{padding:.5em 0}.csvdb tr:hover td{background-color:#f8f8f8}</STYLE>\n<TABLE CLASS=\"csvdb\">\n", f);
     }
 }
 
