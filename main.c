@@ -10,12 +10,13 @@ void printUsage (const char* name) {
     printf(
         "Usage:\n"
         "\t%1$s <options> \"SELECT <fields, ...> FROM <file> [WHERE] [ORDER BY] [OFFSET FETCH FIRST]\"\n"
-        "\t%1$s <options> -- file.sql\n"
+        "\t%1$s <options> -f file.sql\n"
         "\t%1$s <options> (expects input on stdin)\n"
         "\t%1$s \"CREATE [UNIQUE] INDEX [<index_file>] ON <file> (<field>)\"\n"
+        "\t%1$s -h|--help\n"
         "\n"
         "Options:\n"
-        "\t[-h|--headers] [-f (tsv|csv)|--format=(tsv|csv)]\n"
+        "\t[-H|--headers] [-F (tsv|csv)|--format=(tsv|csv)]\n"
     , name);
 }
 
@@ -25,12 +26,17 @@ int main (int argc, char * argv[]) {
 
     int arg = 1;
 
-    if (argc > arg && (strcmp(argv[arg], "-h") == 0 || strcmp(argv[arg], "--headers") == 0)) {
+    if (argc > arg && (strcmp(argv[arg], "-h") == 0 || strcmp(argv[arg], "--help") == 0)) {
+        printUsage(argv[0]);
+        return 0;
+    }
+
+    if (argc > arg && (strcmp(argv[arg], "-H") == 0 || strcmp(argv[arg], "--headers") == 0)) {
         flags |= OUTPUT_OPTION_HEADERS;
         arg++;
     }
 
-    if (argc > arg && strcmp(argv[arg], "-f") == 0) {
+    if (argc > arg && strcmp(argv[arg], "-F") == 0) {
         arg++;
         if (argc > arg && strcmp(argv[arg], "tsv") == 0) {
             flags |= OUTPUT_OPTION_TAB;
@@ -51,8 +57,8 @@ int main (int argc, char * argv[]) {
         arg++;
     }
 
-    if (argc > arg + 1) {
-        if (strcmp(argv[arg], "--") == 0) {
+    if (argc > arg && strcmp(argv[arg], "-f") == 0) {
+        if (argc > arg + 1) {
             FILE *f = fopen(argv[arg + 1], "r");
 
             if (!f) {
@@ -67,15 +73,22 @@ int main (int argc, char * argv[]) {
                 return query(buffer, flags);
             }
 
-            printf("File '%s' was empty\n", argv[2]);
+            fprintf(stderr, "File '%s' was empty\n", argv[2]);
             return -1;
         }
 
+        fprintf(stderr, "Expecting file to be specified\n");
         printUsage(argv[0]);
         return -1;
     }
 
     if (argc > arg) {
+        if (argv[arg][0] == '-') {
+            fprintf(stderr, "Unknown option %s\n", argv[arg]);
+            printUsage(argv[0]);
+            return -1;
+        }
+
         return query(argv[arg], flags);
     }
 
