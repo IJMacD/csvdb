@@ -122,7 +122,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
 
     sortResultRows(&db, index_field_index, ORDER_ASC, NULL, db.record_count, result_rowids);
 
-    printHeaderLine(f, &db, columns, 2, OUTPUT_OPTION_COMMA);
+    printHeaderLine(f, &db, columns, 2, OUTPUT_FORMAT_COMMA);
 
     char values[2][VALUE_MAX_LENGTH];
 
@@ -139,7 +139,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
             }
         }
 
-        printResultLine(f, &db, columns, 2, result_rowids[i], i + 1, OUTPUT_OPTION_COMMA);
+        printResultLine(f, &db, columns, 2, result_rowids[i], i + 1, OUTPUT_FORMAT_COMMA);
     }
 
     free(result_rowids);

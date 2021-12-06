@@ -9,9 +9,17 @@
 
 void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int record_index, int result_count, int flags) {
     const char * field_sep = "\t";
+    const char * line_end = "\n";
 
-    if (flags & OUTPUT_OPTION_COMMA) {
+    if (flags & OUTPUT_FORMAT_COMMA) {
         field_sep = ",";
+    }
+    else if (flags & OUTPUT_FORMAT_HTML) {
+        fprintf(f, "<TR><TD>");
+
+        field_sep = "</TD><TD>";
+
+        line_end = "</TD></TR>\n";
     }
 
     for (int j = 0; j < column_count; j++) {
@@ -25,7 +33,7 @@ void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
                 }
 
                 if (k < db->field_count - 1) {
-                    fwrite(field_sep, 1, 1, f);
+                    fprintf(f, "%s", field_sep);
                 }
             }
         }
@@ -50,17 +58,26 @@ void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
         }
 
         if (j < column_count - 1) {
-            fwrite(field_sep, 1, 1, f);
+            fprintf(f, "%s", field_sep);
         }
     }
-    fprintf(f, "\n");
+
+    fprintf(f, "%s", line_end);
 }
 
 void printHeaderLine (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int flags) {
     const char * field_sep = "\t";
+    const char * line_end = "\n";
 
-    if (flags & OUTPUT_OPTION_COMMA) {
+    if (flags & OUTPUT_FORMAT_COMMA) {
         field_sep = ",";
+    }
+    else if (flags & OUTPUT_FORMAT_HTML) {
+        fprintf(f, "<TR><TH>");
+
+        field_sep = "</TH><TH>";
+
+        line_end = "</TH></TR>\n";
     }
 
     for (int j = 0; j < column_count; j++) {
@@ -74,7 +91,7 @@ void printHeaderLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
                 fprintf(f, "%s", getFieldName(db, k));
 
                 if (k < db->field_count - 1) {
-                    fwrite(field_sep, 1, 1, f);
+                    fprintf(f, "%s", field_sep);
                 }
             }
         }
@@ -93,8 +110,21 @@ void printHeaderLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
         }
 
         if (j < column_count - 1) {
-            fwrite(field_sep, 1, 1, f);
+            fprintf(f, "%s", field_sep);
         }
     }
-    fprintf(f, "\n");
+
+    fprintf(f, "%s", line_end);
+}
+
+void printPreamble (FILE *f, __attribute__((unused)) struct DB *db, __attribute__((unused)) struct ResultColumn columns[], __attribute__((unused)) int column_count, int flags) {
+    if (flags & OUTPUT_FORMAT_HTML) {
+        fprintf(f, "<TABLE>\n");
+    }
+}
+
+void printPostamble (FILE *f, __attribute__((unused)) struct DB *db, __attribute__((unused)) struct ResultColumn columns[], __attribute__((unused)) int column_count, __attribute__((unused)) int result_count, int flags) {
+    if (flags & OUTPUT_FORMAT_HTML) {
+        fprintf(f, "</TABLE>\n");
+    }
 }

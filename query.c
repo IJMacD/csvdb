@@ -95,6 +95,8 @@ int process_select_query (
     /*************************
      * Output headers
      ************************/
+    printPreamble(stdout, &db, q->columns, q->column_count, output_flags);
+
     if (output_flags & OUTPUT_OPTION_HEADERS) {
         printHeaderLine(stdout, &db, q->columns, q->column_count, output_flags);
     }
@@ -116,8 +118,11 @@ int process_select_query (
         if (q->limit_value >= 0L && q->limit_value < count) {
             count = q->limit_value;
         }
-        printResultLine(stdout, &db, q->columns, q->column_count, q->offset_value, count, 0);
+        printResultLine(stdout, &db, q->columns, q->column_count, q->offset_value, count, output_flags);
         closeDB(&db);
+
+        printPostamble(stdout, &db, q->columns, q->column_count, 1, output_flags);
+
         return 0;
     }
 
@@ -209,6 +214,8 @@ int process_select_query (
             return -1;
         }
     }
+
+    printPostamble(stdout, &db, q->columns, q->column_count, result_count, output_flags);
 
     destroyPlan(plan);
 

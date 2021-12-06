@@ -16,7 +16,7 @@ void printUsage (const char* name) {
         "\t%1$s -h|--help\n"
         "\n"
         "Options:\n"
-        "\t[-H|--headers] [-F (tsv|csv)|--format=(tsv|csv)]\n"
+        "\t[-H|--headers] [-F (tsv|csv|html)|--format=(tsv|csv|html)]\n"
     , name);
 }
 
@@ -39,21 +39,29 @@ int main (int argc, char * argv[]) {
     if (argc > arg && strcmp(argv[arg], "-F") == 0) {
         arg++;
         if (argc > arg && strcmp(argv[arg], "tsv") == 0) {
-            flags |= OUTPUT_OPTION_TAB;
+            flags |= OUTPUT_FORMAT_TAB;
             arg++;
         } else if (argc > arg && strcmp(argv[arg], "csv") == 0) {
-            flags |= OUTPUT_OPTION_COMMA;
+            flags |= OUTPUT_FORMAT_COMMA;
+            arg++;
+        } else if (argc > arg && strcmp(argv[arg], "html") == 0) {
+            flags |= OUTPUT_FORMAT_HTML;
             arg++;
         }
     }
 
     if (argc > arg && strcmp(argv[arg], "--format=tsv") == 0) {
-        flags |= OUTPUT_OPTION_TAB;
+        flags |= OUTPUT_FORMAT_TAB;
         arg++;
     }
 
     if (argc > arg && strcmp(argv[arg], "--format=csv") == 0) {
-        flags |= OUTPUT_OPTION_COMMA;
+        flags |= OUTPUT_FORMAT_COMMA;
+        arg++;
+    }
+
+    if (argc > arg && strcmp(argv[arg], "--format=html") == 0) {
+        flags |= OUTPUT_FORMAT_HTML;
         arg++;
     }
 
