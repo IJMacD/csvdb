@@ -31,6 +31,7 @@
 #define COL_LAST_OF_WEEK        20
 #define COL_IS_LEAP_YEAR        21
 #define COL_WEEKDAY_IN_MONTH    22
+#define COL_IS_WEEKEND          23
 
 char *field_names[] = {
     "julian",
@@ -56,6 +57,7 @@ char *field_names[] = {
     "lastOfWeek",
     "isLeapYear",
     "weekdayInMonth",
+    "isWeekend",
 };
 
 const int month_lengths[] = {31,28,31,30,31,30,31,31,30,31,30,31};
@@ -246,6 +248,11 @@ int calendar_getRecordValue (__attribute__((unused)) struct DB *db, int record_i
     // weekdayInMonth
     if (field_index == COL_WEEKDAY_IN_MONTH) {
         return snprintf(value, value_max_length, "%d", (dt.day - 1) / 7 + 1);
+    }
+
+    // isWeekend
+    if (field_index == COL_IS_WEEKEND) {
+        return snprintf(value, value_max_length, "%d", datetimeGetWeekDay(&dt) >= 6 ? 1 : 0);
     }
 
     return 0;
