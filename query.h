@@ -52,9 +52,40 @@
 #define FLAG_ORDER                  8
 #define FLAG_EXPLAIN                4096
 
+// Operator bitmap
+//
+//          GT      LT      EQ
+// NV                           |   0   Never ??
+// EQ                       1   |   1
+// LT               1       0   |   2
+// LE               1       1   |   3
+// GT       1       0       0   |   4
+// GE       1       0       1   |   5
+// NE       1       1       0   |   6
+// AL       1       1       1   |   7   Always ??
+
+#define OPERATOR_UN         0
+#define OPERATOR_EQ         1
+#define OPERATOR_LT         2
+#define OPERATOR_LE         3
+#define OPERATOR_GT         4
+#define OPERATOR_GE         5
+#define OPERATOR_NE         6
+#define OPERATOR_LIKE       8
+
+#define OPERATOR_NULL       0x10
+#define OPERATOR_ADD        0x11
+#define OPERATOR_SUB        0x12
+#define OPERATOR_SUB_INV    0x13
+#define OPERATOR_MUL        0x14
+#define OPERATOR_DIV        0x15
+#define OPERATOR_DIV_INV    0x16
+
 struct ResultColumn {
     int field;
     int function;
+    int operator;
+    int operand;
     char text[FIELD_MAX_LENGTH];
     char alias[FIELD_MAX_LENGTH];
     int table_id;

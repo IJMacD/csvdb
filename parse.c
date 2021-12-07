@@ -271,11 +271,57 @@ int parseQuery (struct Query *q, const char *query) {
 
                 skipWhitespace(query, &index);
 
+                if (query[index] == '+') {
+                    char operand[FIELD_MAX_LENGTH];
+                    index++;
+
+                    skipWhitespace(query, &index);
+
+                    getToken(query, &index, operand, FIELD_MAX_LENGTH);
+
+                    column->operator = OPERATOR_ADD;
+                    column->operand = atoi(operand);
+                } else if (query[index] == '-') {
+                    char operand[FIELD_MAX_LENGTH];
+                    index++;
+
+                    skipWhitespace(query, &index);
+
+                    getToken(query, &index, operand, FIELD_MAX_LENGTH);
+
+                    column->operator = OPERATOR_SUB;
+                    column->operand = atoi(operand);
+                } else if (query[index] == '*') {
+                    char operand[FIELD_MAX_LENGTH];
+                    index++;
+
+                    skipWhitespace(query, &index);
+
+                    getToken(query, &index, operand, FIELD_MAX_LENGTH);
+
+                    column->operator = OPERATOR_MUL;
+                    column->operand = atoi(operand);
+                } else if (query[index] == '/') {
+                    char operand[FIELD_MAX_LENGTH];
+                    index++;
+
+                    skipWhitespace(query, &index);
+
+                    getToken(query, &index, operand, FIELD_MAX_LENGTH);
+
+                    column->operator = OPERATOR_DIV;
+                    column->operand = atoi(operand);
+                }
+
+                skipWhitespace(query, &index);
+
                 if (strncmp(query + index, "AS ", 3) == 0) {
                     index += 3;
 
                     getToken(query, &index, column->alias, FIELD_MAX_LENGTH);
                 }
+
+                skipWhitespace(query, &index);
 
                 if (query[index] != ',') {
                     break;
