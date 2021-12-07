@@ -54,21 +54,27 @@ int evaluateExpression (int op, const char *left, const char *right) {
         return strcmp(left, right) == 0;
     }
 
-    if (strcmp(right, "NULL") == 0) {
-        size_t len = strlen(left);
+    size_t l_len = strlen(left);
+    size_t r_len = strlen(right);
 
-        if (op == OPERATOR_EQ) return len == 0;
-        if (op == OPERATOR_NE) return len != 0;
+    if (strcmp(right, "NULL") == 0) {
+
+        if (op == OPERATOR_EQ) return l_len == 0;
+        if (op == OPERATOR_NE) return l_len != 0;
 
         return 0;
     }
 
     if (strcmp(left, "NULL") == 0) {
-        size_t len = strlen(right);
 
-        if (op == OPERATOR_EQ) return len == 0;
-        if (op == OPERATOR_NE) return len != 0;
+        if (op == OPERATOR_EQ) return r_len == 0;
+        if (op == OPERATOR_NE) return r_len != 0;
 
+        return 0;
+    }
+
+    // NULL values do not evaluate true with any other operator
+    if (l_len == 0 || r_len == 0) {
         return 0;
     }
 
