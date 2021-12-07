@@ -7,26 +7,58 @@
 #include "limits.h"
 #include "function.h"
 
-void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int record_index, int * result_ids, int result_count, int flags) {
+void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int result_index, int * result_ids, int result_count, int flags) {
     const char * field_sep = "\t";
-    const char * line_end = "\n";
+    const char * record_end = "\n";
+    const char * record_sep = "";
 
-    if (flags & OUTPUT_FORMAT_COMMA) {
+    int format = flags & OUTPUT_MASK_FORMAT;
+
+    if (format == OUTPUT_FORMAT_COMMA) {
         field_sep = ",";
     }
-    else if (flags & OUTPUT_FORMAT_HTML) {
+    else if (format == OUTPUT_FORMAT_HTML) {
         fprintf(f, "<TR><TD>");
 
         field_sep = "</TD><TD>";
 
-        line_end = "</TD></TR>\n";
+        record_end = "</TD></TR>\n";
     }
+    else if (format == OUTPUT_FORMAT_JSON_ARRAY) {
+        fprintf(f, "[\"");
+
+        field_sep = "\",\"";
+
+        record_end = "\"]";
+
+        record_sep = ",";
+    }
+    else if (format == OUTPUT_FORMAT_JSON) {
+        fprintf(f, "{");
+
+        field_sep = "\",";
+
+        record_end = "\"}";
+
+        record_sep = ",";
+    }
+
+    int record_index = result_ids[result_index];
 
     for (int j = 0; j < column_count; j++) {
         struct ResultColumn column = columns[j];
 
+        if (format == OUTPUT_FORMAT_JSON && column.field != FIELD_STAR) {
+            fprintf(f, "\"%s\": \"", column.alias);
+        }
+
         if (column.field == FIELD_STAR) {
             for (int k = 0; k < db->field_count; k++) {
+
+                if (format == OUTPUT_FORMAT_JSON) {
+                    fprintf(f, "\"%s\": \"", getFieldName(db, k));
+                }
+
                 char value[VALUE_MAX_LENGTH];
                 if (getRecordValue(db, record_index, k, value, VALUE_MAX_LENGTH) > 0) {
                     fprintf(f, "%s", value);
@@ -37,11 +69,14 @@ void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
                 }
             }
         }
-        else if (column.field == FIELD_COUNT_STAR || column.field == FIELD_ROW_NUMBER) {
-            // Same logic is recycled when printing result
-            // FIELD_COUNT_STAR causes grouping and gets total at end
-            // FIELD_ROW_NUMBER uses current matched result count at each iteration
+        else if (column.field == FIELD_COUNT_STAR) {
             fprintf(f, "%d", result_count);
+        }
+        else if (column.field == FIELD_ROW_NUMBER) {
+            /**
+             * @todo Bug: Should add q->offset_value
+             */
+            fprintf(f, "%d", result_index);
         }
         else if (column.field == FIELD_ROW_INDEX) {
             // FIELD_ROW_INDEX is the input line (0 indexed)
@@ -68,22 +103,38 @@ void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
         }
     }
 
-    fprintf(f, "%s", line_end);
+    fprintf(f, "%s", record_end);
+
+    if (result_index < result_count - 1) {
+        fprintf(f, "%s", record_sep);
+    }
 }
 
 void printHeaderLine (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int flags) {
     const char * field_sep = "\t";
     const char * line_end = "\n";
 
-    if (flags & OUTPUT_FORMAT_COMMA) {
+    int format = flags & OUTPUT_MASK_FORMAT;
+
+    if (format == OUTPUT_FORMAT_COMMA) {
         field_sep = ",";
     }
-    else if (flags & OUTPUT_FORMAT_HTML) {
+    else if (format == OUTPUT_FORMAT_HTML) {
         fprintf(f, "<TR><TH>");
 
         field_sep = "</TH><TH>";
 
         line_end = "</TH></TR>\n";
+    }
+    else if (format == OUTPUT_FORMAT_JSON_ARRAY) {
+        fprintf(f, "[\"");
+
+        field_sep = "\",\"";
+
+        line_end = "\"],";
+    }
+    else if (format == OUTPUT_FORMAT_JSON) {
+        return;
     }
 
     for (int j = 0; j < column_count; j++) {
@@ -92,6 +143,7 @@ void printHeaderLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
         if (column.alias[0] != '\0') {
             fprintf(f, "%s", column.alias);
         }
+
         else if (column.field == FIELD_STAR) {
             for (int k = 0; k < db->field_count; k++) {
                 fprintf(f, "%s", getFieldName(db, k));
@@ -124,13 +176,25 @@ void printHeaderLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
 }
 
 void printPreamble (FILE *f, __attribute__((unused)) struct DB *db, __attribute__((unused)) struct ResultColumn columns[], __attribute__((unused)) int column_count, int flags) {
-    if (flags & OUTPUT_FORMAT_HTML) {
+
+    int format = flags & OUTPUT_MASK_FORMAT;
+
+    if (format == OUTPUT_FORMAT_HTML) {
         fprintf(f, "<TABLE>\n");
+    }
+    else if (format == OUTPUT_FORMAT_JSON_ARRAY || format == OUTPUT_FORMAT_JSON) {
+        fprintf(f, "[");
     }
 }
 
 void printPostamble (FILE *f, __attribute__((unused)) struct DB *db, __attribute__((unused)) struct ResultColumn columns[], __attribute__((unused)) int column_count, __attribute__((unused)) int result_count, int flags) {
-    if (flags & OUTPUT_FORMAT_HTML) {
+
+    int format = flags & OUTPUT_MASK_FORMAT;
+
+    if (format == OUTPUT_FORMAT_HTML) {
         fprintf(f, "</TABLE>\n");
+    }
+    else if (format == OUTPUT_FORMAT_JSON_ARRAY || format == OUTPUT_FORMAT_JSON) {
+        fprintf(f, "]\n");
     }
 }

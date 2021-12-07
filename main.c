@@ -47,6 +47,12 @@ int main (int argc, char * argv[]) {
         } else if (argc > arg && strcmp(argv[arg], "html") == 0) {
             flags |= OUTPUT_FORMAT_HTML;
             arg++;
+        } else if (argc > arg && strcmp(argv[arg], "json_array") == 0) {
+            flags |= OUTPUT_FORMAT_JSON_ARRAY;
+            arg++;
+        } else if (argc > arg && strcmp(argv[arg], "json") == 0) {
+            flags |= OUTPUT_FORMAT_JSON;
+            arg++;
         }
     }
 
@@ -62,6 +68,11 @@ int main (int argc, char * argv[]) {
 
     if (argc > arg && strcmp(argv[arg], "--format=html") == 0) {
         flags |= OUTPUT_FORMAT_HTML;
+        arg++;
+    }
+
+    if (argc > arg && strcmp(argv[arg], "--format=json_array") == 0) {
+        flags |= OUTPUT_FORMAT_JSON_ARRAY;
         arg++;
     }
 

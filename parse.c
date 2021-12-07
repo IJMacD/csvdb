@@ -60,11 +60,10 @@ int parseQuery (struct Query *q, const char *query) {
 
                 column->field = FIELD_UNKNOWN;
                 column->function = FUNC_UNITY;
-                strcpy(column->alias, "");
 
                 getToken(query, &index, column->text, FIELD_MAX_LENGTH);
 
-                // printf("Field is %s\n", field);
+                strcpy(column->alias, column->text);
 
                 if (strcmp(column->text, "COUNT(*)") == 0) {
                     column->field = FIELD_COUNT_STAR;

@@ -176,12 +176,12 @@ int process_select_query (
             // Aggregate functions will print just one row
             if (q->flags & FLAG_GROUP) {
                 // printf("Aggregate result:\n");
-                printResultLine(stdout, &db, q->columns, q->column_count, result_count > 0 ? result_rowids[q->offset_value] : RESULT_NO_ROWS, result_rowids, result_count, output_flags);
+                printResultLine(stdout, &db, q->columns, q->column_count, result_count > 0 ? q->offset_value : RESULT_NO_ROWS, result_rowids, result_count, output_flags);
             }
             else for (int i = 0; i < result_count; i++) {
 
                 // ROW_NUMBER is offset by OFFSET from result index and is 1-index based
-                printResultLine(stdout, &db, q->columns, q->column_count, result_rowids[i], result_rowids, q->offset_value + i + 1, output_flags);
+                printResultLine(stdout, &db, q->columns, q->column_count, i, result_rowids, result_count, output_flags);
             }
         }
         else {
