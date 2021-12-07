@@ -24,6 +24,7 @@
 #define FUNC_AGG_COUNT              0x21
 #define FUNC_AGG_MAX                0x22
 #define FUNC_AGG_MIN                0x23
+#define FUNC_AGG_AVG                0x24
 
 // Family 010 (0x40)
 #define FUNC_EXTRACT                0x40

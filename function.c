@@ -141,5 +141,25 @@ int evaluateAggregateFunction (FILE *f, struct DB *db, struct ResultColumn *colu
         return 0;
     }
 
+    if (column->function == FUNC_AGG_AVG) {
+        int count = 0;
+        int sum = 0;
+
+        for (int i = 0; i < result_count; i++) {
+            int record_index = result_ids[i];
+
+            // Count up the non-NULL values
+            if (getRecordValue(db, record_index, column->field, value, VALUE_MAX_LENGTH) > 0) {
+                count++;
+
+                sum += atoi(value);
+            }
+        }
+
+        fprintf(f, "%d", sum / count);
+
+        return 0;
+    }
+
     return -1;
 }
