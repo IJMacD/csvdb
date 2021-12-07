@@ -1,9 +1,11 @@
 #include <stdlib.h>
+#include <limits.h>
 
 #include "function.h"
 
-int outputFunction(FILE *f, struct DB *db, struct ResultColumn *column, int record_index) {
+int evaluateFunction(FILE *f, struct DB *db, struct ResultColumn *column, int record_index) {
     char value[VALUE_MAX_LENGTH];
+
     if (getRecordValue(db, record_index, column->field, value, VALUE_MAX_LENGTH) > 0) {
 
         if (column->function == FUNC_UNITY) {
@@ -71,4 +73,73 @@ int outputFunction(FILE *f, struct DB *db, struct ResultColumn *column, int reco
     }
 
     return 0;
+}
+
+int evaluateAggregateFunction (FILE *f, struct DB *db, struct ResultColumn *column, int *result_ids, int result_count) {
+    char value[VALUE_MAX_LENGTH];
+
+    if ((column->function & MASK_FUNC_FAMILY) != FUNC_AGG) {
+        return -1;
+    }
+
+    if (column->function == FUNC_AGG_COUNT) {
+        int count = 0;
+
+        for (int i = 0; i < result_count; i++) {
+            int record_index = result_ids[i];
+
+            // Count up the non-NULL values
+            if (getRecordValue(db, record_index, column->field, value, VALUE_MAX_LENGTH) > 0) {
+                count++;
+            }
+        }
+
+        fprintf(f, "%d", count);
+
+        return 0;
+    }
+
+    if (column->function == FUNC_AGG_MIN) {
+        int min = INT_MAX;
+
+        for (int i = 0; i < result_count; i++) {
+            int record_index = result_ids[i];
+
+            // Only consider the non-NULL values
+            if (getRecordValue(db, record_index, column->field, value, VALUE_MAX_LENGTH) > 0) {
+                int v = atoi(value);
+
+                if (v < min) min = v;
+            }
+        }
+
+        if (min < INT_MAX) {
+            fprintf(f, "%d", min);
+        }
+
+        return 0;
+    }
+
+    if (column->function == FUNC_AGG_MAX) {
+        int max = INT_MIN;
+
+        for (int i = 0; i < result_count; i++) {
+            int record_index = result_ids[i];
+
+            // Only consider the non-NULL values
+            if (getRecordValue(db, record_index, column->field, value, VALUE_MAX_LENGTH) > 0) {
+                int v = atoi(value);
+
+                if (v > max) max = v;
+            }
+        }
+
+        if (max > INT_MIN) {
+            fprintf(f, "%d", max);
+        }
+
+        return 0;
+    }
+
+    return -1;
 }

@@ -15,7 +15,7 @@
 
 void printHeaderLine (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int flags);
 
-void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int record_index, int result_count, int flags);
+void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int record_index, int * result_ids, int result_count, int flags);
 
 void printPreamble (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int flags);
 

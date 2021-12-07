@@ -7,7 +7,7 @@
 #include "limits.h"
 #include "function.h"
 
-void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int record_index, int result_count, int flags) {
+void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int record_index, int * result_ids, int result_count, int flags) {
     const char * field_sep = "\t";
     const char * line_end = "\n";
 
@@ -47,8 +47,14 @@ void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
             // FIELD_ROW_INDEX is the input line (0 indexed)
             fprintf(f, "%d", record_index);
         }
+        else if ((column.function & MASK_FUNC_FAMILY) == FUNC_AGG) {
+            int result = evaluateAggregateFunction(f, db, columns + j, result_ids, result_count);
+            if (result < 0) {
+                fprintf(f, "BADFUNC");
+            }
+        }
         else if (column.field >= 0) {
-            int result = outputFunction(f, db, columns + j, record_index);
+            int result = evaluateFunction(f, db, columns + j, record_index);
             if (result < 0) {
                 fprintf(f, "BADFUNC");
             }

@@ -139,7 +139,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
             }
         }
 
-        printResultLine(f, &db, columns, 2, result_rowids[i], i + 1, OUTPUT_FORMAT_COMMA);
+        printResultLine(f, &db, columns, 2, result_rowids[i], NULL, i + 1, OUTPUT_FORMAT_COMMA);
     }
 
     free(result_rowids);

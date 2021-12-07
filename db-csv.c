@@ -90,7 +90,7 @@ int countLines (FILE *f) {
 
     // Check the last byte.
     // If the file ends in a new line, then fine
-    // If it soesn't then we have one more line to count
+    // If it doesn't then we have one more line to count
     fseek(f, -1, SEEK_END);
 
     size_t result = fread(buffer, 1, 1, f);

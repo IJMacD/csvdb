@@ -12,13 +12,22 @@
 // xxxa aaaa
 // xxx          = family (mask 0xD0)
 //    a aaaa    = function (mask 0x1F)
-#define FUNC_UNITY                  0
+
 // Family 000 (0x00)
+#define FUNC_UNITY                  0
+
 #define FUNC_FORMAT                 10
+
 // Family 001 (0x20)
+#define FUNC_AGG                    0x20
+
+#define FUNC_AGG_COUNT              0x21
+#define FUNC_AGG_MAX                0x22
+#define FUNC_AGG_MIN                0x23
 
 // Family 010 (0x40)
 #define FUNC_EXTRACT                0x40
+
 #define FUNC_EXTRACT_YEAR           0x41
 #define FUNC_EXTRACT_MONTH          0x42
 #define FUNC_EXTRACT_DAY            0x43

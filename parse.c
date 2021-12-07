@@ -165,6 +165,84 @@ int parseQuery (struct Query *q, const char *query) {
 
                     sprintf(column->alias, "EXTRACT(%s FROM %s)", part, column->text);
                 }
+                else if (strncmp(column->text, "COUNT(", 6) == 0) {
+                    char field[FIELD_MAX_LENGTH];
+                    strcpy(field, column->text + 6);
+                    strcpy(column->text, field);
+
+                    column->function = FUNC_AGG_COUNT;
+                    q->flags |= FLAG_GROUP;
+
+                    size_t len = strlen(column->text);
+
+                    if (column->text[len - 1] == ')') {
+                        column->text[len - 1] = '\0';
+                    }
+                    else {
+                        skipWhitespace(query, &index);
+
+                        if (query[index] != ')') {
+                            fprintf(stderr, "Bad query - expected ')' got '%c'\n", query[index]);
+                            return -1;
+                        }
+
+                        index++;
+                    }
+
+                    sprintf(column->alias, "COUNT(%s)", column->text);
+                }
+                else if (strncmp(column->text, "MAX(", 4) == 0) {
+                    char field[FIELD_MAX_LENGTH];
+                    strcpy(field, column->text + 4);
+                    strcpy(column->text, field);
+
+                    column->function = FUNC_AGG_MAX;
+                    q->flags |= FLAG_GROUP;
+
+                    size_t len = strlen(column->text);
+
+                    if (column->text[len - 1] == ')') {
+                        column->text[len - 1] = '\0';
+                    }
+                    else {
+                        skipWhitespace(query, &index);
+
+                        if (query[index] != ')') {
+                            fprintf(stderr, "Bad query - expected ')' got '%c'\n", query[index]);
+                            return -1;
+                        }
+
+                        index++;
+                    }
+
+                    sprintf(column->alias, "MAX(%s)", column->text);
+                }
+                else if (strncmp(column->text, "MIN(", 4) == 0) {
+                    char field[FIELD_MAX_LENGTH];
+                    strcpy(field, column->text + 4);
+                    strcpy(column->text, field);
+
+                    column->function = FUNC_AGG_MIN;
+                    q->flags |= FLAG_GROUP;
+
+                    size_t len = strlen(column->text);
+
+                    if (column->text[len - 1] == ')') {
+                        column->text[len - 1] = '\0';
+                    }
+                    else {
+                        skipWhitespace(query, &index);
+
+                        if (query[index] != ')') {
+                            fprintf(stderr, "Bad query - expected ')' got '%c'\n", query[index]);
+                            return -1;
+                        }
+
+                        index++;
+                    }
+
+                    sprintf(column->alias, "MIN(%s)", column->text);
+                }
 
                 skipWhitespace(query, &index);
 

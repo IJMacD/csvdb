@@ -101,31 +101,6 @@ int process_select_query (
         printHeaderLine(stdout, &db, q->columns, q->column_count, output_flags);
     }
 
-    /*************************
-     * Special Cases
-     *************************/
-
-    /****************************
-     * COUNT(*) with no predicate
-     ****************************/
-    // If we have COUNT(*) and there's no predicate then just early exit
-    // we already know how many records there are
-    if ((q->flags & FLAG_GROUP) && !(q->flags & FLAG_HAVE_PREDICATE)) {
-        // We also need to provide a specimen row
-        // "0 was chosen by a fair dice roll"
-        // > But now we'll use offset value
-        long count = db.record_count;
-        if (q->limit_value >= 0L && q->limit_value < count) {
-            count = q->limit_value;
-        }
-        printResultLine(stdout, &db, q->columns, q->column_count, q->offset_value, count, output_flags);
-        closeDB(&db);
-
-        printPostamble(stdout, &db, q->columns, q->column_count, 1, output_flags);
-
-        return 0;
-    }
-
     // Provision enough result space for maximum of all rows
     int *result_rowids = malloc(sizeof (int) * db.record_count);
 
@@ -198,15 +173,15 @@ int process_select_query (
                 }
             }
 
-            // COUNT(*) will print just one row
+            // Aggregate functions will print just one row
             if (q->flags & FLAG_GROUP) {
                 // printf("Aggregate result:\n");
-                printResultLine(stdout, &db, q->columns, q->column_count, result_count > 0 ? result_rowids[q->offset_value] : RESULT_NO_ROWS, result_count, output_flags);
+                printResultLine(stdout, &db, q->columns, q->column_count, result_count > 0 ? result_rowids[q->offset_value] : RESULT_NO_ROWS, result_rowids, result_count, output_flags);
             }
             else for (int i = 0; i < result_count; i++) {
 
                 // ROW_NUMBER is offset by OFFSET from result index and is 1-index based
-                printResultLine(stdout, &db, q->columns, q->column_count, result_rowids[i], q->offset_value + i + 1, output_flags);
+                printResultLine(stdout, &db, q->columns, q->column_count, result_rowids[i], result_rowids, q->offset_value + i + 1, output_flags);
             }
         }
         else {

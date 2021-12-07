@@ -23,7 +23,8 @@ void closeDB (struct DB *db) {
     if (db->vfs == VFS_CSV) {
         csv_closeDB(db);
     }
-    else if (db->vfs == VFS_CALENDAR) {
+
+    if (db->vfs == VFS_CALENDAR) {
         calendar_closeDB(db);
     }
 }
@@ -32,7 +33,8 @@ int getFieldIndex (struct DB *db, const char *field) {
     if (db->vfs == VFS_CSV) {
         return csv_getFieldIndex(db, field);
     }
-    else if (db->vfs == VFS_CALENDAR) {
+
+    if (db->vfs == VFS_CALENDAR) {
         return calendar_getFieldIndex(db, field);
     }
 
@@ -43,18 +45,23 @@ char *getFieldName (struct DB *db, int field_index) {
     if (db->vfs == VFS_CSV) {
         return csv_getFieldName(db, field_index);
     }
-    else if (db->vfs == VFS_CALENDAR) {
+
+    if (db->vfs == VFS_CALENDAR) {
         return calendar_getFieldName(db, field_index);
     }
 
     return NULL;
 }
 
+/**
+ * Returns the number of bytes read, or -1 on error
+ */
 int getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
     if (db->vfs == VFS_CSV) {
         return csv_getRecordValue(db, record_index, field_index, value, value_max_length);
     }
-    else if (db->vfs == VFS_CALENDAR) {
+
+    if (db->vfs == VFS_CALENDAR) {
         return calendar_getRecordValue(db, record_index, field_index, value, value_max_length);
     }
 
