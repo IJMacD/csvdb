@@ -102,7 +102,7 @@ int indexRangeScan (const char *table, const char *predicate_field, int predicat
     if (findIndex(&index_db, table, predicate_field, INDEX_ANY) == 0) {
 
         // If the value is NULL then we're being asked to walk the entire index
-        if (predicate_value == NULL) {
+        if (strlen(predicate_value) == 0) {
             int result = indexWalk(&index_db, 1, 0, index_db.record_count, result_rowids);
             closeDB(&index_db);
             return result;
