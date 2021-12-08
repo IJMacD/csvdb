@@ -431,7 +431,7 @@ int parseQuery (struct Query *q, const char *query) {
 
         }
         else {
-            fprintf(stderr, "Bad query - expected WHERE|OFFSET|FETCH FIRST|LIMIT\n");
+            fprintf(stderr, "Bad query - expected SELECT|FROM|WHERE|OFFSET|FETCH FIRST|LIMIT\n");
             fprintf(stderr, "Found: '%s'\n", keyword);
             return -1;
         }
