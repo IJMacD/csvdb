@@ -3,6 +3,8 @@
 #include <string.h>
 #include <ctype.h>
 
+#include <unistd.h>
+
 #include "query.h"
 #include "db.h"
 #include "parse.h"
@@ -44,8 +46,16 @@ int select_query (const char *query, int output_flags) {
     }
 
     if (strlen(q.table) == 0) {
-        fprintf(stderr, "Table not specified\n");
-        return -1;
+        // No table was specified.
+        // However, if stdin is something more than a tty (i.e pipe or redirected file)
+        // then we can default to it.
+        if (!isatty(fileno(stdin))) {
+            strcpy(q.table, "stdin");
+        }
+        else {
+            fprintf(stderr, "Table not specified\n");
+            return -1;
+        }
     }
 
     if (strcmp(q.table, "INFORMATION") == 0) {

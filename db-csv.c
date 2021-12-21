@@ -42,7 +42,14 @@ void makeDB (struct DB *db, FILE *f) {
  * Returns 0 on success; -1 on failure
  */
 int csv_openDB (struct DB *db, const char *filename) {
-    FILE *f = fopen(filename, "r");
+    FILE *f;
+
+    if (strcmp(filename, "stdin") == 0) {
+        f = stdin;
+    }
+    else {
+        f = fopen(filename, "r");
+    }
 
     if (!f) {
         char buffer[255];
@@ -150,7 +157,7 @@ int measureLine (FILE *f, size_t byte_offset) {
         count += read_size;
     } while (read_size > 0);
 
-    return -1;
+    return count + read_size;
 }
 
 /**
@@ -346,7 +353,10 @@ void prepareHeaders (struct DB *db) {
 
     db->fields = malloc(header_length);
 
-    fseek(db->file, 0, SEEK_SET);
+    if (fseek(db->file, 0, SEEK_SET)) {
+        fprintf(stderr, "File is not seekable\n");
+        exit(-1);
+    }
 
     int count = fread(db->fields, 1, header_length, db->file);
     if (count < header_length) {

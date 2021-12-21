@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include <unistd.h>
 
 #include "query.h"
@@ -10,13 +11,14 @@ void printUsage (const char* name) {
     printf(
         "Usage:\n"
         "\t%1$s <options> \"SELECT <fields, ...> FROM <file> [WHERE] [ORDER BY] [OFFSET FETCH FIRST]\"\n"
+        "\t%1$s <options> \"SELECT <fields, ...> FROM stdin [WHERE] [ORDER BY] [OFFSET FETCH FIRST]\"\n"
         "\t%1$s <options> -f file.sql\n"
-        "\t%1$s <options> (expects input on stdin)\n"
+        "\t%1$s <options> -f - (expects SQL on stdin)\n"
         "\t%1$s \"CREATE [UNIQUE] INDEX [<index_file>] ON <file> (<field>)\"\n"
         "\t%1$s -h|--help\n"
         "\n"
         "Options:\n"
-        "\t[-H|--headers] [-F (tsv|csv|html|json|json_array)|--format=(tsv|csv|html|json|json_array)]\n"
+        "\t[-H|--headers] [(-F| --format=)(tsv|csv|html|json|json_array)]\n"
     , name);
 }
 
@@ -70,11 +72,18 @@ int main (int argc, char * argv[]) {
 
     if (argc > arg && strcmp(argv[arg], "-f") == 0) {
         if (argc > arg + 1) {
-            FILE *f = fopen(argv[arg + 1], "r");
+            FILE *f;
 
-            if (!f) {
-                fprintf(stderr, "Couldn't open file %s\n", argv[2]);
-                return -1;
+            if(strcmp(argv[arg + 1], "-") == 0) {
+                f = stdin;
+            }
+            else {
+                f = fopen(argv[arg + 1], "r");
+
+                if (!f) {
+                    fprintf(stderr, "Couldn't open file %s\n", argv[2]);
+                    return -1;
+                }
             }
 
             size_t count = fread(buffer, 1, 1024, f);
@@ -103,15 +112,12 @@ int main (int argc, char * argv[]) {
         return query(argv[arg], flags);
     }
 
-    // If stdin is something more than a tty (i.e pipe or redirected file) then
-    // we should read from it.
+    // If we're here it means we don't yet have a query.
+    // If stdin is something more than a tty (i.e pipe or redirected file)
+    // then we will assume the following query:
     if (!isatty(fileno(stdin))) {
-        size_t count = fread(buffer, 1, 1024, stdin);
-        if (count > 0) {
-            buffer[count] = '\0';
-            query(buffer, flags);
-            return 0;
-        }
+        query("SELECT * FROM stdin", flags);
+        return 0;
     }
 
     printUsage(argv[0]);
