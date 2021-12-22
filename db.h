@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include "predicates.h"
+#include "result.h"
 
 #define VFS_NULL        0
 #define VFS_CSV         1
@@ -34,6 +35,6 @@ int getRecordValue (struct DB *db, int record_index, int field_index, char *valu
 
 int findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);
 
-int fullTableScan (struct DB *db, int *result_rowids, struct Predicate *predicates, int predicate_count, int limit_value);
+int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value);
 
-int fullTableAccess (struct DB *db, int *result_rowids, int limit);
+int fullTableAccess (struct DB *db, struct RowList * row_list, int limit);

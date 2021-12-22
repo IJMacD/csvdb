@@ -1,6 +1,7 @@
 #pragma once
 
 #include "limits.h"
+#include "result.h"
 
 #define FIELD_UNKNOWN                       -1
 #define FIELD_STAR                          -2
@@ -52,14 +53,6 @@
 #define FLAG_PRIMARY_KEY_SEARCH     4
 #define FLAG_ORDER                  8
 #define FLAG_EXPLAIN                4096
-
-struct ResultColumn {
-    int field;
-    int function;
-    char text[FIELD_MAX_LENGTH];
-    char alias[FIELD_MAX_LENGTH];
-    int table_id;
-};
 
 struct Query {
     char table[TABLE_MAX_LENGTH];

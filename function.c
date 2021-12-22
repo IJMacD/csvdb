@@ -75,7 +75,7 @@ int evaluateFunction(FILE *f, struct DB *db, struct ResultColumn *column, int re
     return 0;
 }
 
-int evaluateAggregateFunction (FILE *f, struct DB *db, struct ResultColumn *column, int *result_ids, int result_count) {
+int evaluateAggregateFunction (FILE *f, struct DB *db, struct ResultColumn *column, struct RowList * row_list) {
     char value[VALUE_MAX_LENGTH];
 
     if ((column->function & MASK_FUNC_FAMILY) != FUNC_AGG) {
@@ -85,11 +85,11 @@ int evaluateAggregateFunction (FILE *f, struct DB *db, struct ResultColumn *colu
     if (column->function == FUNC_AGG_COUNT) {
         int count = 0;
 
-        for (int i = 0; i < result_count; i++) {
-            int record_index = result_ids[i];
+        for (int i = 0; i < row_list->row_count; i++) {
+            int rowid = getRowID(row_list, 0, i);
 
             // Count up the non-NULL values
-            if (getRecordValue(db, record_index, column->field, value, VALUE_MAX_LENGTH) > 0) {
+            if (getRecordValue(db, rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
                 count++;
             }
         }
@@ -102,11 +102,11 @@ int evaluateAggregateFunction (FILE *f, struct DB *db, struct ResultColumn *colu
     if (column->function == FUNC_AGG_MIN) {
         int min = INT_MAX;
 
-        for (int i = 0; i < result_count; i++) {
-            int record_index = result_ids[i];
+        for (int i = 0; i < row_list->row_count; i++) {
+            int rowid = getRowID(row_list, 0, i);
 
             // Only consider the non-NULL values
-            if (getRecordValue(db, record_index, column->field, value, VALUE_MAX_LENGTH) > 0) {
+            if (getRecordValue(db, rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
                 int v = atoi(value);
 
                 if (v < min) min = v;
@@ -123,11 +123,11 @@ int evaluateAggregateFunction (FILE *f, struct DB *db, struct ResultColumn *colu
     if (column->function == FUNC_AGG_MAX) {
         int max = INT_MIN;
 
-        for (int i = 0; i < result_count; i++) {
-            int record_index = result_ids[i];
+        for (int i = 0; i < row_list->row_count; i++) {
+            int rowid = getRowID(row_list, 0, i);
 
             // Only consider the non-NULL values
-            if (getRecordValue(db, record_index, column->field, value, VALUE_MAX_LENGTH) > 0) {
+            if (getRecordValue(db, rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
                 int v = atoi(value);
 
                 if (v > max) max = v;
@@ -145,11 +145,11 @@ int evaluateAggregateFunction (FILE *f, struct DB *db, struct ResultColumn *colu
         int count = 0;
         int sum = 0;
 
-        for (int i = 0; i < result_count; i++) {
-            int record_index = result_ids[i];
+        for (int i = 0; i < row_list->row_count; i++) {
+            int rowid = getRowID(row_list, 0, i);
 
             // Count up the non-NULL values
-            if (getRecordValue(db, record_index, column->field, value, VALUE_MAX_LENGTH) > 0) {
+            if (getRecordValue(db, rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
                 count++;
 
                 sum += atoi(value);

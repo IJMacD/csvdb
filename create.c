@@ -8,6 +8,7 @@
 #include "sort.h"
 #include "output.h"
 #include "limits.h"
+#include "result.h"
 
 int create_index (const char *index_name, const char *table_name, const char *index_field, int unique_flag);
 
@@ -118,9 +119,14 @@ int create_index (const char *index_name, const char *table_name, const char *in
     strcpy(columns[0].text, index_field);
     columns[1].field = FIELD_ROW_INDEX;
 
-    int *result_rowids = malloc(sizeof (int) * db.record_count);
+    struct RowList row_list;
 
-    sortResultRows(&db, index_field_index, ORDER_ASC, NULL, db.record_count, result_rowids);
+    row_list.row_ids = malloc(sizeof (int) * db.record_count);
+
+    // Fill row list with every sequential rowid
+    fullTableAccess(&db, &row_list, -1);
+
+    sortResultRows(&db, index_field_index, ORDER_ASC, &row_list, &row_list);
 
     printHeaderLine(f, &db, columns, 2, OUTPUT_FORMAT_COMMA);
 
@@ -129,7 +135,8 @@ int create_index (const char *index_name, const char *table_name, const char *in
     for (int i = 0; i < db.record_count; i++) {
         // Check for UNIQUE
         if (unique_flag) {
-            getRecordValue(&db, result_rowids[i], index_field_index, values[i % 2], VALUE_MAX_LENGTH);
+            int row_id = getRowID(&row_list, 0, i);
+            getRecordValue(&db, row_id, index_field_index, values[i % 2], VALUE_MAX_LENGTH);
 
             if (i > 0 && strcmp(values[0], values[1]) == 0) {
                 fprintf(stderr, "UNIQUE constraint failed. Multiple values for: '%s'\n", values[0]);
@@ -139,10 +146,10 @@ int create_index (const char *index_name, const char *table_name, const char *in
             }
         }
 
-        printResultLine(f, &db, columns, 2, i, result_rowids, i + 1, OUTPUT_FORMAT_COMMA);
+        printResultLine(f, &db, columns, 2, i, &row_list, OUTPUT_FORMAT_COMMA);
     }
 
-    free(result_rowids);
+    free(row_list.row_ids);
 
     return 0;
 }

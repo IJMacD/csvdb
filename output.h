@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "db.h"
 #include "query.h"
+#include "result.h"
 
 // xxxx aaa h
 //          h - headers
@@ -18,7 +19,7 @@
 
 void printHeaderLine (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int flags);
 
-void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int result_index, int * result_ids, int result_count, int flags);
+void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int result_index, struct RowList * row_list, int flags);
 
 void printPreamble (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int flags);
 

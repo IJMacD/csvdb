@@ -7,6 +7,7 @@
 #include "db-calendar.h"
 #include "date.h"
 #include "predicates.h"
+#include "result.h"
 
 #define COL_JULIAN              0
 #define COL_DATE                1
@@ -263,7 +264,7 @@ int calendar_findIndex(__attribute__((unused)) struct DB *db, __attribute__((unu
     return -1;
 }
 
-int calendar_fullTableScan (struct DB *db, int *result_rowids, struct Predicate *predicates, int predicate_count, int limit_value) {
+int calendar_fullTableScan (struct DB *db, struct RowList *row_list, struct Predicate *predicates, int predicate_count, int limit_value) {
     int julian = -1, max_julian = -1;
 
     // Try to get range from predicates
@@ -324,7 +325,7 @@ int calendar_fullTableScan (struct DB *db, int *result_rowids, struct Predicate 
 
         if (matching) {
             // Add to result set
-            result_rowids[count++] = julian;
+            appendRowID(row_list, julian);
         }
 
         // Implement early exit FETCH FIRST/LIMIT for cases with no ORDER clause

@@ -18,6 +18,7 @@
 #include "explain.h"
 #include "util.h"
 #include "plan.h"
+#include "result.h"
 
 int select_query (const char *query, int output_flags);
 
@@ -111,53 +112,62 @@ int process_select_query (
         printHeaderLine(stdout, &db, q->columns, q->column_count, output_flags);
     }
 
-    // Provision enough result space for maximum of all rows
-    int *result_rowids = malloc(sizeof (int) * db.record_count);
+    struct ResultSet results;
 
-    int result_count = RESULT_NO_INDEX;
+    results.list_count = 1;
+
+    struct RowList row_list;
+
+    results.row_lists = &row_list;
+
+    // Provision enough result space for maximum of all rows
+    row_list.row_ids = malloc(sizeof (int) * db.record_count);
+
+    row_list.join_count = 1;
+    row_list.row_count = 0;
 
     for (int i = 0; i < plan->step_count; i++) {
         struct PlanStep s = plan->steps[i];
 
         if (s.type == PLAN_PK_UNIQUE || s.type == PLAN_PK_RANGE) {
             struct Predicate p = s.predicates[0];
-            result_count = primaryKeyScan(&db, p.field, p.op, p.value, result_rowids);
+            primaryKeyScan(&db, p.field, p.op, p.value, &row_list);
         }
         else if (s.type == PLAN_INDEX_UNIQUE) {
             struct Predicate p = s.predicates[0];
-            result_count = indexUniqueScan(q->table, p.field, p.op, p.value, result_rowids);
+            indexUniqueScan(q->table, p.field, p.op, p.value, &row_list);
         }
         else if (s.type == PLAN_INDEX_RANGE) {
             struct Predicate p = s.predicates[0];
-            result_count = indexRangeScan(q->table, p.field, p.op, p.value, result_rowids);
+            indexRangeScan(q->table, p.field, p.op, p.value, &row_list);
         }
         else if (s.type == PLAN_TABLE_ACCESS_FULL) {
             if (s.predicate_count > 0) {
-                result_count = fullTableScan(&db, result_rowids, s.predicates, s.predicate_count, q->limit_value + q->offset_value);
+                fullTableScan(&db, &row_list, s.predicates, s.predicate_count, q->limit_value + q->offset_value);
             }
             else {
-                result_count = fullTableAccess(&db, result_rowids, q->limit_value + q->offset_value);
+                fullTableAccess(&db, &row_list, q->limit_value + q->offset_value);
             }
         }
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
             for (int i = 0; i < s.predicate_count; i++) {
                 struct Predicate p = s.predicates[i];
-                result_count = filterRows(&db, result_rowids, result_count, &p, result_rowids);
+                filterRows(&db, &row_list, &p, &row_list);
             }
         }
         else if (s.type == PLAN_SORT) {
             int order_index = getFieldIndex(&db, s.predicates[0].field);
-            sortResultRows(&db, order_index, s.predicates[0].op, result_rowids, result_count, result_rowids);
+            sortResultRows(&db, order_index, s.predicates[0].op, &row_list, &row_list);
         }
         else if (s.type == PLAN_REVERSE) {
-            reverse_array(result_rowids, result_count);
+            reverse_array(row_list.row_ids, row_list.row_count * row_list.join_count);
         }
         else if (s.type == PLAN_SLICE) {
-            result_rowids += s.param1;
-            result_count -= s.param1;
+            row_list.row_ids += s.param1 * row_list.join_count;
+            row_list.row_count -= s.param1;
 
-            if (s.param2 >= 0 && s.param2 < result_count) {
-                result_count = s.param2;
+            if (s.param2 >= 0 && s.param2 < row_list.row_count) {
+                row_list.row_count = s.param2;
             }
         }
         else if (s.type == PLAN_GROUP) {
@@ -186,12 +196,12 @@ int process_select_query (
             // Aggregate functions will print just one row
             if (q->flags & FLAG_GROUP) {
                 // printf("Aggregate result:\n");
-                printResultLine(stdout, &db, q->columns, q->column_count, result_count > 0 ? q->offset_value : RESULT_NO_ROWS, result_rowids, result_count, output_flags);
+                printResultLine(stdout, &db, q->columns, q->column_count, row_list.row_count > 0 ? q->offset_value : RESULT_NO_ROWS, &row_list, output_flags);
             }
-            else for (int i = 0; i < result_count; i++) {
+            else for (int i = 0; i < row_list.row_count; i++) {
 
                 // ROW_NUMBER is offset by OFFSET from result index and is 1-index based
-                printResultLine(stdout, &db, q->columns, q->column_count, i, result_rowids, result_count, output_flags);
+                printResultLine(stdout, &db, q->columns, q->column_count, i, &row_list, output_flags);
             }
         }
         else {
@@ -200,11 +210,11 @@ int process_select_query (
         }
     }
 
-    printPostamble(stdout, &db, q->columns, q->column_count, result_count, output_flags);
+    printPostamble(stdout, &db, q->columns, q->column_count, row_list.row_count, output_flags);
 
     destroyPlan(plan);
 
-    free(result_rowids - q->offset_value);
+    free(row_list.row_ids - q->offset_value);
 
     closeDB(&db);
 

@@ -6,21 +6,20 @@
  * @param db
  * @param field_index
  * @param direction
- * @param rowids List of rowids to sort. Can be set to NULL to use 0..row_count
- * @param row_count
- * @param out_rowids
+ * @param source_list Can be NULL to default to every row
+ * @param target_list
  */
-void sortResultRows (struct DB *db, int field_index, int direction, const int *rowids, int row_count, int *out_rowids) {
-    if (row_count <= 0) {
+void sortResultRows (struct DB *db, int field_index, int direction, struct RowList * source_list, struct RowList * target_list) {
+    if (source_list->row_count <= 0) {
         return;
     }
 
-    struct tree *pool = malloc(sizeof (struct tree) * row_count);
+    struct tree *pool = malloc(sizeof (struct tree) * source_list->row_count);
     struct tree *root = pool;
 
-    for (int i = 0; i < row_count; i++) {
+    for (int i = 0; i < source_list->row_count; i++) {
         struct tree *node = pool++;
-        node->rowid = rowids == NULL ? i : rowids[i];
+        node->rowid = getRowID(source_list, 0 , i);
 
         if (i == 0) {
             // For root node we do a dummy insert to make sure struct
@@ -32,12 +31,12 @@ void sortResultRows (struct DB *db, int field_index, int direction, const int *r
     }
 
     // Walk tree overwriting result_rowids array
-    int *result_ptr = out_rowids;
+    target_list->row_count = 0;
     if (direction == ORDER_ASC) {
-        walkTree(root, &result_ptr);
+        walkTree(root, target_list);
     }
     else {
-        walkTreeBackwards(root, &result_ptr);
+        walkTreeBackwards(root, target_list);
     }
 
     free(root);

@@ -6,6 +6,7 @@
 #include "tree.h"
 #include "limits.h"
 #include "util.h"
+#include "result.h"
 
 #define MODE_ALPHA      0
 #define MODE_NUMERIC    1
@@ -90,37 +91,35 @@ void insertTextNode (struct DB *db, int field_index, struct tree *root, struct t
     }
 }
 
-void walkTree (struct tree *node, int **rowids) {
+void walkTree (struct tree *node, struct RowList * row_list) {
     // printf("{ \"value\": %ld, \"left\": ", node->value);
 
     if (node->left != NULL) {
-        walkTree(node->left, rowids);
+        walkTree(node->left, row_list);
     }
     // else printf(" null ");
 
     // printf(", \"right\": ");
 
-    **rowids = node->rowid;
-    (*rowids)++;
+    appendRowID(row_list, node->rowid);
 
     if (node->right != NULL) {
-        walkTree(node->right, rowids);
+        walkTree(node->right, row_list);
     }
     // else printf(" null ");
 
     // printf(" }");
 }
 
-void walkTreeBackwards (struct tree *node, int **rowids) {
+void walkTreeBackwards (struct tree *node, struct RowList * row_list) {
     if (node->right != NULL) {
-        walkTreeBackwards(node->right, rowids);
+        walkTreeBackwards(node->right, row_list);
     }
 
-    **rowids = node->rowid;
-    (*rowids)++;
+    appendRowID(row_list, node->rowid);
 
     if (node->left != NULL) {
-        walkTreeBackwards(node->left, rowids);
+        walkTreeBackwards(node->left, row_list);
     }
 }
 

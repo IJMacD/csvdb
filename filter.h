@@ -1,4 +1,5 @@
 #include "db.h"
 #include "predicates.h"
+#include "result.h"
 
-int filterRows (struct DB *db, int *source_rowids, int source_count, struct Predicate *p, int *result_rowids);
+int filterRows (struct DB *db, struct RowList * source_list, struct Predicate *p, struct RowList * target_list);
