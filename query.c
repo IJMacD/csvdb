@@ -175,19 +175,21 @@ int basic_select_query (
 
             struct RowList new_list;
 
-            if (row_list.join_count != 1) {
+            if (row_list.join_count != 1 || q->table_count != 2) {
                 fprintf(stderr, "Unimplemented: Cannot do multiple joins\n");
                 exit(-1);
             }
 
+            struct DB *db2 = &q->tables[1].db;
+
             new_list.join_count = 2;
             new_list.row_count = 0;
-            new_list.row_ids = malloc((sizeof (int *)) * row_list.row_count * row_list.row_count);
+            new_list.row_ids = malloc((sizeof (int *)) * row_list.row_count * db2->record_count);
 
             for (int i = 0; i < row_list.row_count; i++) {
-                for (int j = 0; j < row_list.row_count; j++) {
+                for (int j = 0; j < db2->record_count; j++) {
                     int rowid1 = getRowID(&row_list, 0, i);
-                    int rowid2 = getRowID(&row_list, 0, j);
+                    int rowid2 = j;
                     appendRowID2(&new_list, rowid1, rowid2);
                     // int n = new_list.row_count - 1;
                     // printf("%d: (%d, %d)\n", n, getRowID(&new_list, 0, n), getRowID(&new_list, 1, n));

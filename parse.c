@@ -90,11 +90,32 @@ int parseQuery (struct Query *q, const char *query) {
             q->column_count = curr_index;
         }
         else if (strcmp(keyword, "FROM") == 0) {
-            // TESTING
-            q->table_count = 2;
-            q->tables = malloc(sizeof (struct Table) * q->table_count);
-            getQuotedToken(query, &index, q->tables[0].name, TABLE_MAX_LENGTH);
-            strcpy(q->tables[1].name, q->tables[0].name);
+            while (index < query_length) {
+                q->table_count++;
+
+                if (q->table_count == 1) {
+                    q->tables = malloc(sizeof (struct Table) * q->table_count);
+                } else {
+                    void * ptr = realloc(q->tables, sizeof (struct Table) * q->table_count);
+
+                    if (ptr == NULL) {
+                        fprintf(stderr, "Can't allocate memory\n");
+                        exit(-1);
+                    }
+
+                    q->tables = ptr;
+                }
+
+                getQuotedToken(query, &index, q->tables[q->table_count-1].name, TABLE_MAX_LENGTH);
+
+                skipWhitespace(query, &index);
+
+                if (query[index] != ',') {
+                    break;
+                }
+
+                index++;
+            }
         }
         else if (strcmp(keyword, "WHERE") == 0) {
             q->flags |= FLAG_HAVE_PREDICATE;
