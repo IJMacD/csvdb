@@ -71,6 +71,7 @@ int parseQuery (struct Query *q, const char *query) {
                 }
                 else if (strcmp(column->text, "*") == 0) {
                     column->field = FIELD_STAR;
+                    column->alias[0] = '\0';
                 }
                 else if (strcmp(column->text, "ROW_NUMBER()") == 0) {
                     column->field = FIELD_ROW_NUMBER;
