@@ -50,7 +50,7 @@ int create_query (const char *query) {
         // Auto generated index name
         auto_name = 1;
     } else {
-        getToken(query, &index, index_name, TABLE_MAX_LENGTH);
+        getQuotedToken(query, &index, index_name, TABLE_MAX_LENGTH);
     }
 
     getToken(query, &index, keyword, FIELD_MAX_LENGTH);
@@ -60,7 +60,7 @@ int create_query (const char *query) {
         return -1;
     }
 
-    getToken(query, &index, table_name, TABLE_MAX_LENGTH);
+    getQuotedToken(query, &index, table_name, TABLE_MAX_LENGTH);
 
     skipWhitespace(query, &index);
 

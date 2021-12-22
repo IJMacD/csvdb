@@ -61,11 +61,17 @@ int parseQuery (struct Query *q, const char *query) {
                 column->field = FIELD_UNKNOWN;
                 column->function = FUNC_UNITY;
 
-                getToken(query, &index, column->text, FIELD_MAX_LENGTH);
+                int quoted_flag = getQuotedToken(query, &index, column->text, FIELD_MAX_LENGTH);
 
                 strcpy(column->alias, column->text);
 
-                if (strcmp(column->text, "COUNT(*)") == 0) {
+                if (quoted_flag == 1) {
+                    column->field = FIELD_CONSTANT;
+                }
+                else if (quoted_flag == 0 && isdigit(column->text[0])) {
+                    column->field = FIELD_CONSTANT;
+                }
+                else if (strcmp(column->text, "COUNT(*)") == 0) {
                     column->field = FIELD_COUNT_STAR;
                     q->flags |= FLAG_GROUP;
                 }
@@ -145,7 +151,7 @@ int parseQuery (struct Query *q, const char *query) {
 
                     skipWhitespace(query, &index);
 
-                    getToken(query, &index, column->text, FIELD_MAX_LENGTH);
+                    getQuotedToken(query, &index, column->text, FIELD_MAX_LENGTH);
 
                     size_t len = strlen(column->text);
 
@@ -275,7 +281,7 @@ int parseQuery (struct Query *q, const char *query) {
                 if (strncmp(query + index, "AS ", 3) == 0) {
                     index += 3;
 
-                    getToken(query, &index, column->alias, FIELD_MAX_LENGTH);
+                    getQuotedToken(query, &index, column->alias, FIELD_MAX_LENGTH);
                 }
 
                 if (query[index] != ',') {
@@ -288,7 +294,7 @@ int parseQuery (struct Query *q, const char *query) {
             q->column_count = curr_index;
         }
         else if (strcmp(keyword, "FROM") == 0) {
-            getToken(query, &index, q->table, TABLE_MAX_LENGTH);
+            getQuotedToken(query, &index, q->table, TABLE_MAX_LENGTH);
         }
         else if (strcmp(keyword, "WHERE") == 0) {
             q->flags |= FLAG_HAVE_PREDICATE;
@@ -343,7 +349,7 @@ int parseQuery (struct Query *q, const char *query) {
                     }
                 }
 
-                getToken(query, &index, p->value, VALUE_MAX_LENGTH);
+                getQuotedToken(query, &index, p->value, VALUE_MAX_LENGTH);
 
                 skipWhitespace(query, &index);
 
@@ -416,7 +422,7 @@ int parseQuery (struct Query *q, const char *query) {
 
             q->flags |= FLAG_ORDER;
 
-            getToken(query, &index, q->order_field, FIELD_MAX_LENGTH);
+            getQuotedToken(query, &index, q->order_field, FIELD_MAX_LENGTH);
 
             size_t original_index = index;
 
@@ -500,14 +506,59 @@ void skipLine (const char *string, size_t *index) {
     if (string[*index] == '\n') (*index)++;
 }
 
+/**
+ * @brief Get the next token in the stream
+ *
+ * @param string
+ * @param index
+ * @param token
+ * @param token_max_length
+ * @return int Length of token
+ */
 int getToken (const char *string, size_t *index, char *token, int token_max_length) {
     skipWhitespace(string, index);
 
     if (string[*index] == '\0') {
         return -1;
     }
+    int start_index = *index;
 
-    int quoted_flag = (string[*index] == '\'' || string[*index] == '"');
+    // printf("Token starts at %d\n", start_index);
+
+    skipToken(string, index);
+
+    int token_length = *index - start_index;
+
+    if (token_length > token_max_length) {
+        return -1;
+    }
+
+    // printf("Token is %d characters\n", token_length);
+
+    memcpy(token, string + start_index, token_length);
+
+    token[token_length] = '\0';
+
+    return token_length;
+}
+
+/**
+ * @brief Get the next token in the stream, optionally quoted
+ *
+ * @param string
+ * @param index
+ * @param token
+ * @param token_max_length
+ * @return int 0 means no quotes, 1 means single quotes, 2 means double quotes
+ */
+int getQuotedToken (const char *string, size_t *index, char *token, int token_max_length) {
+    skipWhitespace(string, index);
+
+    if (string[*index] == '\0') {
+        return -1;
+    }
+
+    int quoted_flag = string[*index] == '\'' ? 1 : (string[*index] == '"' ? 2 : 0);
 
     int start_index = *index;
 
@@ -535,7 +586,7 @@ int getToken (const char *string, size_t *index, char *token, int token_max_leng
 
     token[token_length] = '\0';
 
-    return token_length;
+    return quoted_flag;
 }
 
 int getNumericToken (const char *string, size_t *index) {

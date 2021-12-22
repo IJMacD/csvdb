@@ -82,6 +82,9 @@ void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
             // FIELD_ROW_INDEX is the input line (0 indexed)
             fprintf(f, "%d", record_index);
         }
+        else if (column.field == FIELD_CONSTANT) {
+            fprintf(f, "%s", column.text);
+        }
         else if ((column.function & MASK_FUNC_FAMILY) == FUNC_AGG) {
             int result = evaluateAggregateFunction(f, db, columns + j, result_ids, result_count);
             if (result < 0) {

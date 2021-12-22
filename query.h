@@ -7,6 +7,7 @@
 #define FIELD_COUNT_STAR                    -3
 #define FIELD_ROW_NUMBER                    -4
 #define FIELD_ROW_INDEX                     -5
+#define FIELD_CONSTANT                      -6
 
 #define MASK_FUNC_FAMILY            0xE0
 // xxxa aaaa
