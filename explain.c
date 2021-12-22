@@ -16,10 +16,11 @@ int explain_select_query (
     struct Plan *plan,
     int output_flags
 ) {
-    struct DB db;
+    struct Table table = q->tables[0];
+    struct DB db = table.db;
 
-    if (openDB(&db, q->table) != 0) {
-        fprintf(stderr, "File not found: '%s'\n", q->table);
+    if (openDB(&db, table.name) != 0) {
+        fprintf(stderr, "File not found: '%s'\n", table.name);
         return -1;
     }
 
@@ -97,7 +98,7 @@ int explain_select_query (
             }
 
             if (s.predicate_count == 0) {
-                strcpy(predicate, q->table);
+                strcpy(predicate, table.name);
             }
         }
         else if (s.type == PLAN_PK_UNIQUE) {

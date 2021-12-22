@@ -22,11 +22,7 @@
 
 int select_query (const char *query, int output_flags);
 
-int process_select_query (
-    struct Query *q,
-    struct Plan *plan,
-    int output_flags
-);
+int basic_select_query (struct Query *q, struct Plan *plan, int output_flags);
 
 int information_query (const char *table);
 
@@ -46,12 +42,14 @@ int select_query (const char *query, int output_flags) {
         return -1;
     }
 
-    if (strlen(q.table) == 0) {
+    if (q.table_count == 0) {
         // No table was specified.
         // However, if stdin is something more than a tty (i.e pipe or redirected file)
         // then we can default to it.
         if (!isatty(fileno(stdin))) {
-            strcpy(q.table, "stdin");
+            q.tables = malloc(sizeof (struct Table));
+            q.table_count = 1;
+            strcpy(q.tables[0].name, "stdin");
         }
         else {
             fprintf(stderr, "Table not specified\n");
@@ -59,7 +57,7 @@ int select_query (const char *query, int output_flags) {
         }
     }
 
-    if (strcmp(q.table, "INFORMATION") == 0) {
+    if (strcmp(q.tables[0].name, "INFORMATION") == 0) {
         if (q.predicate_count < 1) {
             return -1;
         }
@@ -82,12 +80,12 @@ int select_query (const char *query, int output_flags) {
         return result;
     }
 
-    int result = process_select_query(&q, &plan, output_flags);
+    int result = basic_select_query(&q, &plan, output_flags);
     destroyQuery(&q);
     return result;
 }
 
-int process_select_query (
+int basic_select_query (
     struct Query *q,
     struct Plan *plan,
     int output_flags
@@ -96,20 +94,32 @@ int process_select_query (
      * Begin Query processing
      *************************/
 
-    struct DB db;
+    // Handy array copy for giving to output functions
+    struct DB *dbs[TABLE_MAX_COUNT];
 
-    if (openDB(&db, q->table) != 0) {
-        fprintf(stderr, "File not found: '%s'\n", q->table);
-        return -1;
+    if (q->table_count == 0) {
+        fprintf(stderr, "No tables\n");
+        exit(-1);
+    }
+
+    for (int i = 0; i < q->table_count; i++) {
+        struct Table *table = &q->tables[i];
+
+        if (openDB(&table->db, table->name) != 0) {
+            fprintf(stderr, "File not found: '%s'\n", table->name);
+            return -1;
+        }
+
+        dbs[i] = &table->db;
     }
 
     /*************************
      * Output headers
      ************************/
-    printPreamble(stdout, &db, q->columns, q->column_count, output_flags);
+    printPreamble(stdout, NULL, q->columns, q->column_count, output_flags);
 
     if (output_flags & OUTPUT_OPTION_HEADERS) {
-        printHeaderLine(stdout, &db, q->columns, q->column_count, output_flags);
+        printHeaderLine(stdout, dbs, q->table_count, q->columns, q->column_count, output_flags);
     }
 
     struct ResultSet results;
@@ -120,8 +130,8 @@ int process_select_query (
 
     results.row_lists = &row_list;
 
-    // Provision enough result space for maximum of all rows
-    row_list.row_ids = malloc(sizeof (int) * db.record_count);
+    // Provision enough result space for maximum of all rows in first table
+    row_list.row_ids = malloc(sizeof (int) * q->tables[0].db.record_count);
 
     row_list.join_count = 1;
     row_list.row_count = 0;
@@ -129,17 +139,21 @@ int process_select_query (
     for (int i = 0; i < plan->step_count; i++) {
         struct PlanStep s = plan->steps[i];
 
+        // Handy reference to first table
+        struct Table table = q->tables[0];
+        struct DB db = table.db;
+
         if (s.type == PLAN_PK_UNIQUE || s.type == PLAN_PK_RANGE) {
             struct Predicate p = s.predicates[0];
             primaryKeyScan(&db, p.field, p.op, p.value, &row_list);
         }
         else if (s.type == PLAN_INDEX_UNIQUE) {
             struct Predicate p = s.predicates[0];
-            indexUniqueScan(q->table, p.field, p.op, p.value, &row_list);
+            indexUniqueScan(table.name, p.field, p.op, p.value, &row_list);
         }
         else if (s.type == PLAN_INDEX_RANGE) {
             struct Predicate p = s.predicates[0];
-            indexRangeScan(q->table, p.field, p.op, p.value, &row_list);
+            indexRangeScan(table.name, p.field, p.op, p.value, &row_list);
         }
         else if (s.type == PLAN_TABLE_ACCESS_FULL) {
             if (s.predicate_count > 0) {
@@ -154,6 +168,39 @@ int process_select_query (
                 struct Predicate p = s.predicates[i];
                 filterRows(&db, &row_list, &p, &row_list);
             }
+        }
+        else if (s.type == PLAN_CROSS_JOIN) {
+            // Actually we're just doing CROSS-SELF JOIN here
+            // TODO: implement more of proper join
+
+            struct RowList new_list;
+
+            if (row_list.join_count != 1) {
+                fprintf(stderr, "Unimplemented: Cannot do multiple joins\n");
+                exit(-1);
+            }
+
+            new_list.join_count = 2;
+            new_list.row_count = 0;
+            new_list.row_ids = malloc((sizeof (int *)) * row_list.row_count * row_list.row_count);
+
+            for (int i = 0; i < row_list.row_count; i++) {
+                for (int j = 0; j < row_list.row_count; j++) {
+                    int rowid1 = getRowID(&row_list, 0, i);
+                    int rowid2 = getRowID(&row_list, 0, j);
+                    appendRowID2(&new_list, rowid1, rowid2);
+                    // int n = new_list.row_count - 1;
+                    // printf("%d: (%d, %d)\n", n, getRowID(&new_list, 0, n), getRowID(&new_list, 1, n));
+                }
+            }
+
+            // Free the old list
+            free(row_list.row_ids);
+
+            // Copy updated values back
+            row_list.join_count = new_list.join_count;
+            row_list.row_count = new_list.row_count;
+            row_list.row_ids = new_list.row_ids;
         }
         else if (s.type == PLAN_SORT) {
             int order_index = getFieldIndex(&db, s.predicates[0].field);
@@ -183,6 +230,8 @@ int process_select_query (
                 struct ResultColumn *column = &(q->columns[i]);
 
                 if (column->field == FIELD_UNKNOWN) {
+                    struct DB db = q->tables[column->table_id].db;
+
                     column->field = getFieldIndex(&db, column->text);
 
                     if (column->field == FIELD_UNKNOWN) {
@@ -196,12 +245,12 @@ int process_select_query (
             // Aggregate functions will print just one row
             if (q->flags & FLAG_GROUP) {
                 // printf("Aggregate result:\n");
-                printResultLine(stdout, &db, q->columns, q->column_count, row_list.row_count > 0 ? q->offset_value : RESULT_NO_ROWS, &row_list, output_flags);
+                printResultLine(stdout, dbs, q->table_count, q->columns, q->column_count, row_list.row_count > 0 ? q->offset_value : RESULT_NO_ROWS, &row_list, output_flags);
             }
             else for (int i = 0; i < row_list.row_count; i++) {
 
                 // ROW_NUMBER is offset by OFFSET from result index and is 1-index based
-                printResultLine(stdout, &db, q->columns, q->column_count, i, &row_list, output_flags);
+                printResultLine(stdout, dbs, q->table_count, q->columns, q->column_count, i, &row_list, output_flags);
             }
         }
         else {
@@ -210,13 +259,15 @@ int process_select_query (
         }
     }
 
-    printPostamble(stdout, &db, q->columns, q->column_count, row_list.row_count, output_flags);
+    printPostamble(stdout, NULL, q->columns, q->column_count, row_list.row_count, output_flags);
 
     destroyPlan(plan);
 
     free(row_list.row_ids - q->offset_value);
 
-    closeDB(&db);
+    for (int i = 0; i < q->table_count; i++) {
+        closeDB(&q->tables[i].db);
+    }
 
     return 0;
 }

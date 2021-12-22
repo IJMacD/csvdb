@@ -90,7 +90,11 @@ int parseQuery (struct Query *q, const char *query) {
             q->column_count = curr_index;
         }
         else if (strcmp(keyword, "FROM") == 0) {
-            getQuotedToken(query, &index, q->table, TABLE_MAX_LENGTH);
+            // TESTING
+            q->table_count = 2;
+            q->tables = malloc(sizeof (struct Table) * q->table_count);
+            getQuotedToken(query, &index, q->tables[0].name, TABLE_MAX_LENGTH);
+            strcpy(q->tables[1].name, q->tables[0].name);
         }
         else if (strcmp(keyword, "WHERE") == 0) {
             q->flags |= FLAG_HAVE_PREDICATE;
@@ -246,6 +250,10 @@ int parseQuery (struct Query *q, const char *query) {
 void destroyQuery (struct Query *query) {
     if (query->predicate_count > 0) {
         free(query->predicates);
+    }
+
+    if (query->table_count > 0) {
+        free(query->tables);
     }
 }
 

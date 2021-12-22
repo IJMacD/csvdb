@@ -7,7 +7,7 @@
 #include "limits.h"
 #include "function.h"
 
-void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int result_index, struct RowList * row_list, int flags) {
+void printResultLine (FILE *f, struct DB *tables[], int db_count, struct ResultColumn columns[], int column_count, int result_index, struct RowList * row_list, int flags) {
     const char * field_sep = "\t";
     const char * record_end = "\n";
     const char * record_sep = "";
@@ -43,8 +43,6 @@ void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
         record_sep = ",";
     }
 
-    int rowid = getRowID(row_list, 0, result_index);
-
     for (int j = 0; j < column_count; j++) {
         struct ResultColumn column = columns[j];
 
@@ -53,19 +51,24 @@ void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
         }
 
         if (column.field == FIELD_STAR) {
-            for (int k = 0; k < db->field_count; k++) {
+            for (int m = 0; m < db_count; m++) {
+                struct DB *db = tables[m];
+                int rowid = getRowID(row_list, m, result_index);
 
-                if (format == OUTPUT_FORMAT_JSON) {
-                    fprintf(f, "\"%s\": \"", getFieldName(db, k));
-                }
+                for (int k = 0; k < db->field_count; k++) {
 
-                char value[VALUE_MAX_LENGTH];
-                if (getRecordValue(db, rowid, k, value, VALUE_MAX_LENGTH) > 0) {
-                    fprintf(f, "%s", value);
-                }
+                    if (format == OUTPUT_FORMAT_JSON) {
+                        fprintf(f, "\"%s\": \"", getFieldName(db, k));
+                    }
 
-                if (k < db->field_count - 1) {
-                    fprintf(f, "%s", field_sep);
+                    char value[VALUE_MAX_LENGTH];
+                    if (getRecordValue(db, rowid, k, value, VALUE_MAX_LENGTH) > 0) {
+                        fprintf(f, "%s", value);
+                    }
+
+                    if (k < db->field_count - 1) {
+                        fprintf(f, "%s", field_sep);
+                    }
                 }
             }
         }
@@ -80,19 +83,25 @@ void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
         }
         else if (column.field == FIELD_ROW_INDEX) {
             // FIELD_ROW_INDEX is the input line (0 indexed)
+            int rowid = getRowID(row_list, column.table_id, result_index);
             fprintf(f, "%d", rowid);
         }
         else if (column.field == FIELD_CONSTANT) {
             fprintf(f, "%s", column.text);
         }
         else if ((column.function & MASK_FUNC_FAMILY) == FUNC_AGG) {
-            int result = evaluateAggregateFunction(f, db, columns + j, row_list);
+            int result = evaluateAggregateFunction(f, tables, db_count, columns + j, row_list);
             if (result < 0) {
                 fprintf(f, "BADFUNC");
             }
         }
         else if (column.field >= 0) {
+            // Evaluate plain columns as well as functions
+            int rowid = getRowID(row_list, column.table_id, result_index);
+            struct DB *db = tables[column.table_id];
+
             int result = evaluateFunction(f, db, columns + j, rowid);
+
             if (result < 0) {
                 fprintf(f, "BADFUNC");
             }
@@ -113,7 +122,7 @@ void printResultLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
     }
 }
 
-void printHeaderLine (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int flags) {
+void printHeaderLine (FILE *f, struct DB *tables[], int table_count, struct ResultColumn columns[], int column_count, int flags) {
     const char * field_sep = "\t";
     const char * line_end = "\n";
 
@@ -148,11 +157,14 @@ void printHeaderLine (FILE *f, struct DB *db, struct ResultColumn columns[], int
         }
 
         else if (column.field == FIELD_STAR) {
-            for (int k = 0; k < db->field_count; k++) {
-                fprintf(f, "%s", getFieldName(db, k));
+            for (int m = 0; m < table_count; m++) {
+                struct DB *db = tables[m];
+                for (int k = 0; k < db->field_count; k++) {
+                    fprintf(f, "%s", getFieldName(db, k));
 
-                if (k < db->field_count - 1) {
-                    fprintf(f, "%s", field_sep);
+                    if (k < db->field_count - 1) {
+                        fprintf(f, "%s", field_sep);
+                    }
                 }
             }
         }

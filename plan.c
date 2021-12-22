@@ -46,11 +46,13 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
         struct DB index_db;
 
+        struct Table table = q->tables[0];
+
         /*******************
          * UNIQUE INDEX SCAN
          *******************/
         // Try to find a unique index
-        if (p->op != OPERATOR_LIKE && findIndex(&index_db, q->table, p->field, INDEX_UNIQUE) == 0) {
+        if (p->op != OPERATOR_LIKE && findIndex(&index_db, table.name, p->field, INDEX_UNIQUE) == 0) {
             closeDB(&index_db);
 
             int type;
@@ -80,7 +82,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
         /*******************
          * INDEX RANGE SCAN
          *******************/
-        else if (p->op != OPERATOR_LIKE && findIndex(&index_db, q->table, p->field, INDEX_ANY) == 0) {
+        else if (p->op != OPERATOR_LIKE && findIndex(&index_db, table.name, p->field, INDEX_ANY) == 0) {
             closeDB(&index_db);
 
             addStepWithPredicate(plan, PLAN_INDEX_RANGE, p);
@@ -106,7 +108,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
             // If we're selecting a lot of rows this optimisation is probably worth it.
             // If we have an EQ operator then it's probably cheaper to filter first
             (p->op != OPERATOR_EQ) &&
-            findIndex(&index_db, q->table, q->order_field, INDEX_ANY) == 0
+            findIndex(&index_db, table.name, q->order_field, INDEX_ANY) == 0
         ) {
             closeDB(&index_db);
 
@@ -139,7 +141,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
         // Before we do a full table scan... we have one more opportunity to use an index
         // To save a sort later, see if we can use an index for ordering now
         struct DB index_db;
-        if (findIndex(&index_db, q->table, q->order_field, INDEX_ANY) == 0) {
+        struct Table table = q->tables[0];
+        if (findIndex(&index_db, table.name, q->order_field, INDEX_ANY) == 0) {
             closeDB(&index_db);
 
             struct Predicate *order_p = malloc(sizeof(*order_p));
@@ -160,6 +163,14 @@ int makePlan (struct Query *q, struct Plan *plan) {
         }
     } else {
         addStep(plan, PLAN_TABLE_ACCESS_FULL);
+    }
+
+    /*******************
+     * JOIN
+     *******************/
+    // TESTING
+    if (q->table_count > 1) {
+        addStep(plan, PLAN_CROSS_JOIN);
     }
 
     /*******************
