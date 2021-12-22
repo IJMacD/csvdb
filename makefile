@@ -7,7 +7,7 @@ CFLAGS = -Wall -Werror -Wextra
 #
 # Project files
 #
-SRCS = main.c db.c db-csv.c db-calendar.c query.c parse.c predicates.c filter.c sort.c tree.c output.c create.c util.c explain.c indices.c plan.c function.c date.c
+SRCS = main.c db.c db-csv.c db-calendar.c db-csv-mem.c query.c parse.c predicates.c filter.c sort.c tree.c output.c create.c util.c explain.c indices.c plan.c function.c date.c
 OBJS = $(SRCS:.c=.o)
 EXE  = csvdb
 

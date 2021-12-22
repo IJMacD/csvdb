@@ -10,10 +10,10 @@
             "request": "launch",
             "program": "${workspaceFolder}/debug/csvdb",
             "args": [
-                // "SELECT * FROM test"
-                "--headers",
-                "--",
-                "test.sql"
+                "SELECT * FROM test"
+                // "--headers",
+                // "-f",
+                // "test.sql"
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

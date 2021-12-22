@@ -5,27 +5,33 @@
 #include "db.h"
 #include "indices.h"
 #include "limits.h"
+#include "db-csv-mem.h"
 
-void makeDB (struct DB *db, FILE *f);
+static int makeDB (struct DB *db, FILE *f);
 
-int countFields (FILE *f);
+static int countFields (FILE *f);
 
-int countLines (FILE *f);
+static int countLines (FILE *f);
 
-int measureLine (FILE *f, size_t byte_offset);
+static int measureLine (FILE *f, size_t byte_offset);
 
-void prepareHeaders (struct DB *db);
+static void prepareHeaders (struct DB *db);
 
 /**
  * Indices must point to enough memory to contain all the indices
  */
-int indexLines (FILE *f, long *indices);
+static int indexLines (FILE *f, long *indices);
 
-void printLine (FILE *f, long position);
-
-void makeDB (struct DB *db, FILE *f) {
+static int makeDB (struct DB *db, FILE *f) {
     db->vfs = VFS_CSV;
     db->file = f;
+
+    // Try to seek to see if we have a stream
+    if (fseek(db->file, 0, SEEK_SET)) {
+        // File is not seekable
+        // Fallback to VFS_CSV_MEM
+        return csvMem_makeDB(db, f);
+    }
 
     prepareHeaders(db);
 
@@ -36,6 +42,8 @@ void makeDB (struct DB *db, FILE *f) {
     indexLines(f, db->line_indices);
 
     db->record_count = line_count - 1;
+
+    return 0;
 }
 
 /**
@@ -61,9 +69,7 @@ int csv_openDB (struct DB *db, const char *filename) {
         }
     }
 
-    makeDB(db, f);
-
-    return 0;
+    return makeDB(db, f);
 }
 
 void csv_closeDB (struct DB *db) {
@@ -77,7 +83,7 @@ void csv_closeDB (struct DB *db) {
     db->file = NULL;
 }
 
-int countLines (FILE *f) {
+static int countLines (FILE *f) {
     size_t buffer_size = 1024;
     int count = 0;
     char buffer[buffer_size];
@@ -109,7 +115,7 @@ int countLines (FILE *f) {
     return count;
 }
 
-int countFields (FILE *f) {
+static int countFields (FILE *f) {
     size_t buffer_size = 1024;
     int count = 1;
     char buffer[buffer_size];
@@ -137,7 +143,7 @@ int countFields (FILE *f) {
 /**
  * Including \n
  */
-int measureLine (FILE *f, size_t byte_offset) {
+static int measureLine (FILE *f, size_t byte_offset) {
     size_t buffer_size = 1024;
     int count = 0;
     char buffer[buffer_size];
@@ -163,7 +169,7 @@ int measureLine (FILE *f, size_t byte_offset) {
 /**
  * Indices must point to enough memory to contain all the indices
  */
-int indexLines (FILE *f, long *indices) {
+static int indexLines (FILE *f, long *indices) {
     size_t buffer_size = 1024;
     int count = 0;
     char buffer[buffer_size];
@@ -340,7 +346,7 @@ int csv_getRecordValue (struct DB *db, int record_index, int field_index, char *
     return -1;
 }
 
-void prepareHeaders (struct DB *db) {
+static void prepareHeaders (struct DB *db) {
 
     db->field_count = countFields(db->file);
 

@@ -7,6 +7,7 @@
 #define VFS_CSV         1
 #define VFS_INTERNAL    2
 #define VFS_CALENDAR    3
+#define VFS_CSV_MEM     4
 
 struct DB {
     int vfs;
@@ -15,9 +16,8 @@ struct DB {
     int field_count;
     long *line_indices;
     int record_count;
+    char * data;
 };
-
-void makeDB (struct DB *db, FILE *f);
 
 int openDB (struct DB *db, const char *filename);
 
