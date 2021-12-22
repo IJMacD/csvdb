@@ -5,6 +5,10 @@
 #include "predicates.h"
 #include "sort.h"
 
+int parseColumn (const char * query, size_t * index, struct ResultColumn *column);
+
+int parseFunction (const char * query, size_t * index, struct ResultColumn * column, int name_length);
+
 int parseQuery (struct Query *q, const char *query) {
     /*********************
      * Begin Query parsing
@@ -58,223 +62,13 @@ int parseQuery (struct Query *q, const char *query) {
                     return -1;
                 }
 
-                column->field = FIELD_UNKNOWN;
-                column->function = FUNC_UNITY;
+                int result = parseColumn(query, &index, column);
 
-                int quoted_flag = getQuotedToken(query, &index, column->text, FIELD_MAX_LENGTH);
-
-                strcpy(column->alias, column->text);
-
-                if (quoted_flag == 1) {
-                    column->field = FIELD_CONSTANT;
+                if (result < 0) {
+                    return result;
                 }
-                else if (quoted_flag == 0 && isdigit(column->text[0])) {
-                    column->field = FIELD_CONSTANT;
-                }
-                else if (strcmp(column->text, "COUNT(*)") == 0) {
-                    column->field = FIELD_COUNT_STAR;
-                    q->flags |= FLAG_GROUP;
-                }
-                else if (strcmp(column->text, "*") == 0) {
-                    column->field = FIELD_STAR;
-                    column->alias[0] = '\0';
-                }
-                else if (strcmp(column->text, "ROW_NUMBER()") == 0) {
-                    column->field = FIELD_ROW_NUMBER;
-                }
-                else if (strcmp(column->text, "rowid") == 0) {
-                    column->field = FIELD_ROW_INDEX;
-                }
-                else if (strncmp(column->text, "EXTRACT(", 8) == 0) {
-                    char part[FIELD_MAX_LENGTH - 8];
-                    strcpy(part, column->text + 8);
 
-                    if (strcmp(part, "YEAR") == 0) {
-                        column->function = FUNC_EXTRACT_YEAR;
-                    }
-                    else if (strcmp(part, "MONTH") == 0) {
-                        column->function = FUNC_EXTRACT_MONTH;
-                    }
-                    else if (strcmp(part, "DAY") == 0) {
-                        column->function = FUNC_EXTRACT_DAY;
-                    }
-                    else if (strcmp(part, "WEEK") == 0) {
-                        column->function = FUNC_EXTRACT_WEEK;
-                    }
-                    else if (strcmp(part, "WEEKYEAR") == 0) {
-                        column->function = FUNC_EXTRACT_WEEKYEAR;
-                    }
-                    else if (strcmp(part, "WEEKDAY") == 0) {
-                        column->function = FUNC_EXTRACT_WEEKDAY;
-                    }
-                    else if (strcmp(part, "HEYEAR") == 0) {
-                        column->function = FUNC_EXTRACT_HEYEAR;
-                    }
-                    else if (strcmp(part, "YEARDAY") == 0) {
-                        column->function = FUNC_EXTRACT_YEARDAY;
-                    }
-                    else if (strcmp(part, "MILLENNIUM") == 0) {
-                        column->function = FUNC_EXTRACT_MILLENNIUM;
-                    }
-                    else if (strcmp(part, "CENTURY") == 0) {
-                        column->function = FUNC_EXTRACT_CENTURY;
-                    }
-                    else if (strcmp(part, "DECADE") == 0) {
-                        column->function = FUNC_EXTRACT_DECADE;
-                    }
-                    else if (strcmp(part, "QUARTER") == 0) {
-                        column->function = FUNC_EXTRACT_QUARTER;
-                    }
-                    else if (strcmp(part, "DATE") == 0) {
-                        column->function = FUNC_EXTRACT_DATE;
-                    }
-                    else if (strcmp(part, "DATETIME") == 0) {
-                        column->function = FUNC_EXTRACT_DATETIME;
-                    }
-                    else if (strcmp(part, "JULIAN") == 0) {
-                        column->function = FUNC_EXTRACT_JULIAN;
-                    }
-                    else {
-                        fprintf(stderr, "Bad query - expected valid extract part - got %s\n", part);
-                        return -1;
-                    }
-
-                    skipWhitespace(query, &index);
-
-                    char value[10];
-                    getToken(query, &index, value, 10);
-
-                    if (strcmp(value, "FROM") != 0) {
-                        fprintf(stderr, "Bad query - expected FROM\n");
-                        return -1;
-                    }
-
-                    skipWhitespace(query, &index);
-
-                    getQuotedToken(query, &index, column->text, FIELD_MAX_LENGTH);
-
-                    size_t len = strlen(column->text);
-
-                    if (column->text[len - 1] == ')') {
-                        column->text[len - 1] = '\0';
-                    }
-                    else {
-                        skipWhitespace(query, &index);
-
-                        if (query[index] != ')') {
-                            fprintf(stderr, "Bad query - expected ')' got '%c'\n", query[index]);
-                            return -1;
-                        }
-
-                        index++;
-                    }
-
-                    sprintf(column->alias, "EXTRACT(%s FROM %s)", part, column->text);
-                }
-                else if (strncmp(column->text, "COUNT(", 6) == 0) {
-                    char field[FIELD_MAX_LENGTH];
-                    strcpy(field, column->text + 6);
-                    strcpy(column->text, field);
-
-                    column->function = FUNC_AGG_COUNT;
-                    q->flags |= FLAG_GROUP;
-
-                    size_t len = strlen(column->text);
-
-                    if (column->text[len - 1] == ')') {
-                        column->text[len - 1] = '\0';
-                    }
-                    else {
-                        skipWhitespace(query, &index);
-
-                        if (query[index] != ')') {
-                            fprintf(stderr, "Bad query - expected ')' got '%c'\n", query[index]);
-                            return -1;
-                        }
-
-                        index++;
-                    }
-
-                    sprintf(column->alias, "COUNT(%s)", column->text);
-                }
-                else if (strncmp(column->text, "MAX(", 4) == 0) {
-                    char field[FIELD_MAX_LENGTH];
-                    strcpy(field, column->text + 4);
-                    strcpy(column->text, field);
-
-                    column->function = FUNC_AGG_MAX;
-                    q->flags |= FLAG_GROUP;
-
-                    size_t len = strlen(column->text);
-
-                    if (column->text[len - 1] == ')') {
-                        column->text[len - 1] = '\0';
-                    }
-                    else {
-                        skipWhitespace(query, &index);
-
-                        if (query[index] != ')') {
-                            fprintf(stderr, "Bad query - expected ')' got '%c'\n", query[index]);
-                            return -1;
-                        }
-
-                        index++;
-                    }
-
-                    sprintf(column->alias, "MAX(%s)", column->text);
-                }
-                else if (strncmp(column->text, "MIN(", 4) == 0) {
-                    char field[FIELD_MAX_LENGTH];
-                    strcpy(field, column->text + 4);
-                    strcpy(column->text, field);
-
-                    column->function = FUNC_AGG_MIN;
-                    q->flags |= FLAG_GROUP;
-
-                    size_t len = strlen(column->text);
-
-                    if (column->text[len - 1] == ')') {
-                        column->text[len - 1] = '\0';
-                    }
-                    else {
-                        skipWhitespace(query, &index);
-
-                        if (query[index] != ')') {
-                            fprintf(stderr, "Bad query - expected ')' got '%c'\n", query[index]);
-                            return -1;
-                        }
-
-                        index++;
-                    }
-
-                    sprintf(column->alias, "MIN(%s)", column->text);
-                }
-                else if (strncmp(column->text, "AVG(", 4) == 0) {
-                    char field[FIELD_MAX_LENGTH];
-                    strcpy(field, column->text + 4);
-                    strcpy(column->text, field);
-
-                    column->function = FUNC_AGG_AVG;
-                    q->flags |= FLAG_GROUP;
-
-                    size_t len = strlen(column->text);
-
-                    if (column->text[len - 1] == ')') {
-                        column->text[len - 1] = '\0';
-                    }
-                    else {
-                        skipWhitespace(query, &index);
-
-                        if (query[index] != ')') {
-                            fprintf(stderr, "Bad query - expected ')' got '%c'\n", query[index]);
-                            return -1;
-                        }
-
-                        index++;
-                    }
-
-                    sprintf(column->alias, "AVG(%s)", column->text);
-                }
+                q->flags |= result;
 
                 skipWhitespace(query, &index);
 
@@ -283,6 +77,8 @@ int parseQuery (struct Query *q, const char *query) {
 
                     getQuotedToken(query, &index, column->alias, FIELD_MAX_LENGTH);
                 }
+
+                skipWhitespace(query, &index);
 
                 if (query[index] != ',') {
                     break;
@@ -593,4 +389,193 @@ int getNumericToken (const char *string, size_t *index) {
     char val[10];
     getToken(string, index, val, 10);
     return atol(val);
+}
+
+int parseColumn (const char * query, size_t * index, struct ResultColumn *column) {
+    int flags = 0;
+
+    column->field = FIELD_UNKNOWN;
+    column->function = FUNC_UNITY;
+
+    int quoted_flag = getQuotedToken(query, index, column->text, FIELD_MAX_LENGTH);
+
+    strcpy(column->alias, column->text);
+
+    if (quoted_flag == 1) {
+        column->field = FIELD_CONSTANT;
+    }
+    else if (quoted_flag == 2) {
+        // Field is explicit
+        // Nothing else to do
+    }
+    else if (isdigit(column->text[0])) {
+        column->field = FIELD_CONSTANT;
+    }
+    else if (strcmp(column->text, "COUNT(*)") == 0) {
+        column->field = FIELD_COUNT_STAR;
+        flags |= FLAG_GROUP;
+    }
+    else if (strcmp(column->text, "*") == 0) {
+        column->field = FIELD_STAR;
+        column->alias[0] = '\0';
+    }
+    else if (strcmp(column->text, "ROW_NUMBER()") == 0) {
+        column->field = FIELD_ROW_NUMBER;
+    }
+    else if (strcmp(column->text, "rowid") == 0) {
+        column->field = FIELD_ROW_INDEX;
+    }
+    else if (strncmp(column->text, "EXTRACT(", 8) == 0) {
+        char part[FIELD_MAX_LENGTH - 8];
+        strcpy(part, column->text + 8);
+
+        if (strcmp(part, "YEAR") == 0) {
+            column->function = FUNC_EXTRACT_YEAR;
+        }
+        else if (strcmp(part, "MONTH") == 0) {
+            column->function = FUNC_EXTRACT_MONTH;
+        }
+        else if (strcmp(part, "DAY") == 0) {
+            column->function = FUNC_EXTRACT_DAY;
+        }
+        else if (strcmp(part, "WEEK") == 0) {
+            column->function = FUNC_EXTRACT_WEEK;
+        }
+        else if (strcmp(part, "WEEKYEAR") == 0) {
+            column->function = FUNC_EXTRACT_WEEKYEAR;
+        }
+        else if (strcmp(part, "WEEKDAY") == 0) {
+            column->function = FUNC_EXTRACT_WEEKDAY;
+        }
+        else if (strcmp(part, "HEYEAR") == 0) {
+            column->function = FUNC_EXTRACT_HEYEAR;
+        }
+        else if (strcmp(part, "YEARDAY") == 0) {
+            column->function = FUNC_EXTRACT_YEARDAY;
+        }
+        else if (strcmp(part, "MILLENNIUM") == 0) {
+            column->function = FUNC_EXTRACT_MILLENNIUM;
+        }
+        else if (strcmp(part, "CENTURY") == 0) {
+            column->function = FUNC_EXTRACT_CENTURY;
+        }
+        else if (strcmp(part, "DECADE") == 0) {
+            column->function = FUNC_EXTRACT_DECADE;
+        }
+        else if (strcmp(part, "QUARTER") == 0) {
+            column->function = FUNC_EXTRACT_QUARTER;
+        }
+        else if (strcmp(part, "DATE") == 0) {
+            column->function = FUNC_EXTRACT_DATE;
+        }
+        else if (strcmp(part, "DATETIME") == 0) {
+            column->function = FUNC_EXTRACT_DATETIME;
+        }
+        else if (strcmp(part, "JULIAN") == 0) {
+            column->function = FUNC_EXTRACT_JULIAN;
+        }
+        else {
+            fprintf(stderr, "Bad query - expected valid extract part - got %s\n", part);
+            return -1;
+        }
+
+        skipWhitespace(query, index);
+
+        char value[10];
+        getToken(query, index, value, 10);
+
+        if (strcmp(value, "FROM") != 0) {
+            fprintf(stderr, "Bad query - expected FROM\n");
+            return -1;
+        }
+
+        skipWhitespace(query, index);
+
+        getQuotedToken(query, index, column->text, FIELD_MAX_LENGTH);
+
+        size_t len = strlen(column->text);
+
+        if (column->text[len - 1] == ')') {
+            column->text[len - 1] = '\0';
+        }
+        else {
+            skipWhitespace(query, index);
+
+            if (query[*index] != ')') {
+                fprintf(stderr, "Bad query - expected ')' got '%c'\n", query[*index]);
+                return -1;
+            }
+
+            (*index)++;
+        }
+
+        sprintf(column->alias, "EXTRACT(%s FROM %s)", part, column->text);
+    }
+    else if (strncmp(column->text, "COUNT(", 6) == 0) {
+        column->function = FUNC_AGG_COUNT;
+        flags |= FLAG_GROUP;
+
+        if (parseFunction(query, index, column, strlen("COUNT")) < 0) {
+            return -1;
+        }
+
+        sprintf(column->alias, "COUNT(%s)", column->text);
+    }
+    else if (strncmp(column->text, "MAX(", 4) == 0) {
+        column->function = FUNC_AGG_MAX;
+        flags |= FLAG_GROUP;
+
+        if (parseFunction(query, index, column, strlen("MAX")) < 0) {
+            return -1;
+        }
+
+        sprintf(column->alias, "MAX(%s)", column->text);
+    }
+    else if (strncmp(column->text, "MIN(", 4) == 0) {
+        column->function = FUNC_AGG_MIN;
+        flags |= FLAG_GROUP;
+
+        if (parseFunction(query, index, column, strlen("MIN")) < 0) {
+            return -1;
+        }
+
+        sprintf(column->alias, "MIN(%s)", column->text);
+    }
+    else if (strncmp(column->text, "AVG(", 4) == 0) {
+        column->function = FUNC_AGG_AVG;
+        flags |= FLAG_GROUP;
+
+        if (parseFunction(query, index, column, strlen("AVG")) < 0) {
+            return -1;
+        }
+
+        sprintf(column->alias, "AVG(%s)", column->text);
+    }
+
+    return flags;
+}
+
+int parseFunction (const char * query, size_t * index, struct ResultColumn * column, int name_length) {
+
+    char field[FIELD_MAX_LENGTH];
+    strcpy(field, column->text + name_length + 1);
+    strcpy(column->text, field);
+
+    size_t len = strlen(column->text);
+
+    if (column->text[len - 1] == ')') {
+        column->text[len - 1] = '\0';
+    }
+    else {
+        skipWhitespace(query, index);
+
+        if (query[*index] != ')') {
+            fprintf(stderr, "Bad query - expected ')' got '%c'\n", query[*index]);
+            return -1;
+        }
+
+        (*index)++;
+    }
+
+    return 0;
 }
