@@ -81,7 +81,7 @@ int main (int argc, char * argv[]) {
                 f = fopen(argv[arg + 1], "r");
 
                 if (!f) {
-                    fprintf(stderr, "Couldn't open file %s\n", argv[2]);
+                    fprintf(stderr, "Couldn't open file '%s'\n", argv[arg + 1]);
                     return -1;
                 }
             }

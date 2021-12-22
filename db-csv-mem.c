@@ -33,7 +33,8 @@ int csvMem_makeDB (struct DB *db, FILE *f) {
 
     int line_count = countLines(db);
 
-    db->line_indices = malloc((sizeof db->line_indices[0]) * line_count);
+    // Include extra slot for end of file
+    db->line_indices = malloc((sizeof db->line_indices[0]) * (line_count + 1));
 
     indexLines(db, db->line_indices);
 
