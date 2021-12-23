@@ -465,6 +465,9 @@ int parseColumn (const char * query, size_t * index, struct ResultColumn *column
     }
     else if (strcmp(column->text, "rowid") == 0) {
         column->field = FIELD_ROW_INDEX;
+
+        // default to first table
+        column->table_id = 0;
     }
     else if (strncmp(column->text, "EXTRACT(", 8) == 0) {
         char part[FIELD_MAX_LENGTH - 8];

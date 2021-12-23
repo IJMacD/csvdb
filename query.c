@@ -322,6 +322,9 @@ static int populateColumns (struct Query * q) {
                         if (column->text[dot_index + 1] == '*') {
                             column->field = FIELD_STAR;
                         }
+                        else if (strcmp(column->text + dot_index + 1, "rowid") == 0) {
+                            column->field = FIELD_ROW_INDEX;
+                        }
                         else {
                             struct DB *db = &q->tables[i].db;
 
