@@ -22,3 +22,12 @@ void reverse_array (int * array, int size) {
         array[i] = temp;
     }
 }
+
+int str_find_index (const char * string, char chr) {
+    int i = 0;
+    while (string[i] != '\0') {
+        if (string[i] == chr) return i;
+        i++;
+    }
+    return -1;
+}

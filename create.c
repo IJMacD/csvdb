@@ -96,6 +96,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
         return -1;
     }
 
+
     int index_field_index = getFieldIndex(&db, index_field);
 
     if (index_field_index < 0) {
@@ -128,7 +129,10 @@ int create_index (const char *index_name, const char *table_name, const char *in
 
     sortResultRows(&db, index_field_index, ORDER_ASC, &row_list, &row_list);
 
-    printHeaderLine(f, &db, columns, 2, OUTPUT_FORMAT_COMMA);
+    // Output functions assume array of DBs
+    struct DB *dbs[1];
+    dbs[0] = &db;
+    printHeaderLine(f, dbs, 1, columns, 2, OUTPUT_FORMAT_COMMA);
 
     char values[2][VALUE_MAX_LENGTH];
 
@@ -146,7 +150,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
             }
         }
 
-        printResultLine(f, &db, columns, 2, i, &row_list, OUTPUT_FORMAT_COMMA);
+        printResultLine(f, dbs, 1, columns, 2, i, &row_list, OUTPUT_FORMAT_COMMA);
     }
 
     free(row_list.row_ids);

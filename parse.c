@@ -4,6 +4,7 @@
 #include "parse.h"
 #include "predicates.h"
 #include "sort.h"
+#include "util.h"
 
 int parseColumn (const char * query, size_t * index, struct ResultColumn *column);
 
@@ -22,6 +23,7 @@ int parseQuery (struct Query *q, const char *query) {
 
     // Allow SELECT to be optional and default to SELECT *
     q->columns[0].field = FIELD_STAR;
+    q->columns[0].table_id = -1;
     q->column_count = 1;
 
     q->predicate_count = 0;
@@ -90,7 +92,40 @@ int parseQuery (struct Query *q, const char *query) {
             q->column_count = curr_index;
         }
         else if (strcmp(keyword, "FROM") == 0) {
-            getQuotedToken(query, &index, q->table, TABLE_MAX_LENGTH);
+            while (index < query_length) {
+                q->table_count++;
+
+                if (q->table_count == 1) {
+                    q->tables = malloc(sizeof (struct Table) * q->table_count);
+                } else {
+                    void * ptr = realloc(q->tables, sizeof (struct Table) * q->table_count);
+
+                    if (ptr == NULL) {
+                        fprintf(stderr, "Can't allocate memory\n");
+                        exit(-1);
+                    }
+
+                    q->tables = ptr;
+                }
+
+                getQuotedToken(query, &index, q->tables[q->table_count-1].name, TABLE_MAX_LENGTH);
+
+                skipWhitespace(query, &index);
+
+                if (strncmp(query + index, "AS ", 3) == 0) {
+                    index += 3;
+
+                    getQuotedToken(query, &index, q->tables[q->table_count-1].alias, FIELD_MAX_LENGTH);
+                }
+
+                skipWhitespace(query, &index);
+
+                if (query[index] != ',') {
+                    break;
+                }
+
+                index++;
+            }
         }
         else if (strcmp(keyword, "WHERE") == 0) {
             q->flags |= FLAG_HAVE_PREDICATE;
@@ -246,6 +281,10 @@ int parseQuery (struct Query *q, const char *query) {
 void destroyQuery (struct Query *query) {
     if (query->predicate_count > 0) {
         free(query->predicates);
+    }
+
+    if (query->table_count > 0) {
+        free(query->tables);
     }
 }
 
@@ -408,7 +447,7 @@ int parseColumn (const char * query, size_t * index, struct ResultColumn *column
         // Field is explicit
         // Nothing else to do
     }
-    else if (isdigit(column->text[0])) {
+    else if (is_numeric(column->text)) {
         column->field = FIELD_CONSTANT;
     }
     else if (strcmp(column->text, "COUNT(*)") == 0) {
@@ -417,7 +456,9 @@ int parseColumn (const char * query, size_t * index, struct ResultColumn *column
     }
     else if (strcmp(column->text, "*") == 0) {
         column->field = FIELD_STAR;
-        column->alias[0] = '\0';
+
+        // '*' will default to ALL tables
+        column->table_id = -1;
     }
     else if (strcmp(column->text, "ROW_NUMBER()") == 0) {
         column->field = FIELD_ROW_NUMBER;

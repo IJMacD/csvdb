@@ -1,5 +1,6 @@
 #pragma once
 
+#include "db.h"
 #include "limits.h"
 #include "result.h"
 
@@ -54,8 +55,15 @@
 #define FLAG_ORDER                  8
 #define FLAG_EXPLAIN                4096
 
+struct Table {
+    char name[TABLE_MAX_LENGTH];
+    char alias[FIELD_MAX_LENGTH];
+    struct DB db;
+};
+
 struct Query {
-    char table[TABLE_MAX_LENGTH];
+    struct Table *tables;
+    int table_count;
     struct ResultColumn columns[FIELD_MAX_COUNT];
     int column_count;
     int flags;
