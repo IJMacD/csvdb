@@ -9,6 +9,7 @@
 #define VFS_INTERNAL    2
 #define VFS_CALENDAR    3
 #define VFS_CSV_MEM     4
+#define VFS_SEQUENCE    5
 
 struct DB {
     int vfs;

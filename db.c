@@ -4,11 +4,16 @@
 #include "db-csv.h"
 #include "db-calendar.h"
 #include "db-csv-mem.h"
+#include "db-sequence.h"
 #include "limits.h"
 
 int openDB (struct DB *db, const char *filename) {
     if (strcmp(filename, "CALENDAR") == 0) {
         return calendar_openDB(db, filename);
+    }
+
+    if (strncmp(filename, "SEQUENCE(", 9) == 0) {
+        return sequence_openDB(db, filename);
     }
 
     int result = csv_openDB(db, filename);
@@ -24,13 +29,14 @@ void closeDB (struct DB *db) {
     if (db->vfs == VFS_CSV) {
         csv_closeDB(db);
     }
-
     else if (db->vfs == VFS_CSV_MEM) {
         csvMem_closeDB(db);
     }
-
     else if (db->vfs == VFS_CALENDAR) {
         calendar_closeDB(db);
+    }
+    else if (db->vfs == VFS_SEQUENCE) {
+        sequence_closeDB(db);
     }
 }
 
@@ -47,6 +53,10 @@ int getFieldIndex (struct DB *db, const char *field) {
         return calendar_getFieldIndex(db, field);
     }
 
+    if (db->vfs == VFS_SEQUENCE) {
+        return sequence_getFieldIndex(db, field);
+    }
+
     return -1;
 }
 
@@ -61,6 +71,10 @@ char *getFieldName (struct DB *db, int field_index) {
 
     if (db->vfs == VFS_CALENDAR) {
         return calendar_getFieldName(db, field_index);
+    }
+
+    if (db->vfs == VFS_SEQUENCE) {
+        return sequence_getFieldName(db, field_index);
     }
 
     return NULL;
@@ -82,12 +96,20 @@ int getRecordValue (struct DB *db, int record_index, int field_index, char *valu
         return calendar_getRecordValue(db, record_index, field_index, value, value_max_length);
     }
 
+    if (db->vfs == VFS_SEQUENCE) {
+        return sequence_getRecordValue(db, record_index, field_index, value, value_max_length);
+    }
+
     return -1;
 }
 
 int findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags) {
     if (strcmp(table_name, "CALENDAR") == 0) {
         return calendar_findIndex(db, table_name, index_name, index_type_flags);
+    }
+
+    if (strncmp(table_name, "SEQUENCE(", 9) == 0) {
+        return sequence_findIndex(db, table_name, index_name, index_type_flags);
     }
 
     return csv_findIndex(db, table_name, index_name, index_type_flags);
