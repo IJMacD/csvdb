@@ -26,6 +26,8 @@ int basic_select_query (struct Query *q, struct Plan *plan, int output_flags);
 
 int information_query (const char *table);
 
+static int populateColumns (struct Query *q);
+
 int query (const char *query, int output_flags) {
     if (strncmp(query, "CREATE ", 7) == 0) {
         return create_query(query);
@@ -227,21 +229,9 @@ int basic_select_query (
              * Output result set
              *******************/
 
-            // Fill in selected column indexes
-            for (int i = 0; i < q->column_count; i++) {
-                struct ResultColumn *column = &(q->columns[i]);
-
-                if (column->field == FIELD_UNKNOWN) {
-                    struct DB db = q->tables[column->table_id].db;
-
-                    column->field = getFieldIndex(&db, column->text);
-
-                    if (column->field == FIELD_UNKNOWN) {
-                        fprintf(stderr, "Field %s not found\n", column->text);
-                        closeDB(&db);
-                        return -1;
-                    }
-                }
+            int result = populateColumns(q);
+            if (result < 0) {
+                return result;
             }
 
             // Aggregate functions will print just one row
@@ -305,6 +295,63 @@ int information_query (const char *table) {
     }
 
     closeDB(&db);
+
+    return 0;
+}
+
+static int populateColumns (struct Query * q) {
+    // Fill in selected table id and column indexes
+    for (int i = 0; i < q->column_count; i++) {
+        struct ResultColumn *column = &(q->columns[i]);
+
+        if (column->field == FIELD_UNKNOWN) {
+            int dot_index = str_find_index(column->text, '.');
+
+            if (dot_index >= 0) {
+                char value[FIELD_MAX_LENGTH];
+
+                strncpy(value, column->text, dot_index);
+                value[dot_index] = '\0';
+
+                for (int i = 0; i < q->table_count; i++) {
+                    if (strcmp(q->tables[i].name, value) == 0 ||
+                        strcmp(q->tables[i].alias, value) == 0)
+                    {
+                        column->table_id = i;
+
+                        if (column->text[dot_index + 1] == '*') {
+                            column->field = FIELD_STAR;
+                        }
+                        else {
+                            struct DB *db = &q->tables[i].db;
+
+                            column->field = getFieldIndex(db, column->text + dot_index + 1);
+                        }
+
+                        break;
+                    }
+                }
+            }
+            else {
+                for (int i = 0; i < q->table_count; i++) {
+                    struct DB *db = &q->tables[i].db;
+
+                    column->field = getFieldIndex(db, column->text);
+
+                    if (column->field != FIELD_UNKNOWN) {
+                        column->table_id = i;
+
+                        break;
+                    }
+                }
+            }
+
+            if (column->field == FIELD_UNKNOWN) {
+                fprintf(stderr, "Field %s not found\n", column->text);
+                return -1;
+            }
+        }
+    }
 
     return 0;
 }

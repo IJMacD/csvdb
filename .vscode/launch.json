@@ -11,7 +11,8 @@
             "program": "${workspaceFolder}/debug/csvdb",
             "args": [
                 // "SELECT * FROM test"
-                "FROM \\\"simple test\\\" ORDER BY name"
+                // "FROM \\\"simple test\\\" ORDER BY name"
+                "FROM suits,ranks ORDER BY name"
                 // "--headers",
                 // "-f",
                 // "test.sql"

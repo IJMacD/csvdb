@@ -7,6 +7,9 @@
 #include "limits.h"
 #include "function.h"
 
+static void printAllColumns (FILE *f, struct DB *db, int rowid, int format, const char * field_sep);
+static void printAllHeaders (FILE *f, struct DB *db, const char * field_sep);
+
 void printResultLine (FILE *f, struct DB *tables[], int db_count, struct ResultColumn columns[], int column_count, int result_index, struct RowList * row_list, int flags) {
     const char * field_sep = "\t";
     const char * record_end = "\n";
@@ -51,22 +54,19 @@ void printResultLine (FILE *f, struct DB *tables[], int db_count, struct ResultC
         }
 
         if (column.field == FIELD_STAR) {
-            for (int m = 0; m < db_count; m++) {
-                struct DB *db = tables[m];
-                int rowid = getRowID(row_list, m, result_index);
+            if (column.table_id >= 0) {
+                // e.g. table.*
+                struct DB *db = tables[column.table_id];
+                int rowid = getRowID(row_list, column.table_id, result_index);
+                printAllColumns(f, db, rowid, format, field_sep);
+            } else {
+                // e.g. *
+                for (int m = 0; m < db_count; m++) {
+                    struct DB *db = tables[m];
+                    int rowid = getRowID(row_list, m, result_index);
+                    printAllColumns(f, db, rowid, format, field_sep);
 
-                for (int k = 0; k < db->field_count; k++) {
-
-                    if (format == OUTPUT_FORMAT_JSON) {
-                        fprintf(f, "\"%s\": \"", getFieldName(db, k));
-                    }
-
-                    char value[VALUE_MAX_LENGTH];
-                    if (getRecordValue(db, rowid, k, value, VALUE_MAX_LENGTH) > 0) {
-                        fprintf(f, "%s", value);
-                    }
-
-                    if (k < db->field_count - 1) {
+                    if (m < db_count - 1) {
                         fprintf(f, "%s", field_sep);
                     }
                 }
@@ -152,17 +152,21 @@ void printHeaderLine (FILE *f, struct DB *tables[], int table_count, struct Resu
     for (int j = 0; j < column_count; j++) {
         struct ResultColumn column = columns[j];
 
-        if (column.alias[0] != '\0') {
+        if (column.field != FIELD_STAR && column.alias[0] != '\0') {
             fprintf(f, "%s", column.alias);
         }
 
         else if (column.field == FIELD_STAR) {
-            for (int m = 0; m < table_count; m++) {
-                struct DB *db = tables[m];
-                for (int k = 0; k < db->field_count; k++) {
-                    fprintf(f, "%s", getFieldName(db, k));
+            if (column.table_id >= 0) {
+                struct DB *db = tables[column.table_id];
+                printAllHeaders(f, db, field_sep);
+            }
+            else {
+                for (int m = 0; m < table_count; m++) {
+                    struct DB *db = tables[m];
+                    printAllHeaders(f, db, field_sep);
 
-                    if (k < db->field_count - 1) {
+                    if (m < table_count - 1) {
                         fprintf(f, "%s", field_sep);
                     }
                 }
@@ -210,5 +214,33 @@ void printPostamble (FILE *f, __attribute__((unused)) struct DB *db, __attribute
     }
     else if (format == OUTPUT_FORMAT_JSON_ARRAY || format == OUTPUT_FORMAT_JSON) {
         fprintf(f, "]\n");
+    }
+}
+
+static void printAllColumns (FILE *f, struct DB *db, int rowid, int format, const char * field_sep) {
+    for (int k = 0; k < db->field_count; k++) {
+
+        if (format == OUTPUT_FORMAT_JSON) {
+            fprintf(f, "\"%s\": \"", getFieldName(db, k));
+        }
+
+        char value[VALUE_MAX_LENGTH];
+        if (getRecordValue(db, rowid, k, value, VALUE_MAX_LENGTH) > 0) {
+            fprintf(f, "%s", value);
+        }
+
+        if (k < db->field_count - 1) {
+            fprintf(f, "%s", field_sep);
+        }
+    }
+}
+
+static void printAllHeaders (FILE *f, struct DB *db, const char * field_sep) {
+    for (int k = 0; k < db->field_count; k++) {
+        fprintf(f, "%s", getFieldName(db, k));
+
+        if (k < db->field_count - 1) {
+            fprintf(f, "%s", field_sep);
+        }
     }
 }
