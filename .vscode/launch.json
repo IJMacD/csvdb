@@ -12,7 +12,8 @@
             "args": [
                 // "SELECT * FROM test"
                 // "FROM \\\"simple test\\\" ORDER BY name"
-                "FROM suits,ranks ORDER BY name"
+                // "FROM suits,ranks ORDER BY name"
+                "FROM suits,suits,suits"
                 // "--headers",
                 // "-f",
                 // "test.sql"

@@ -10,7 +10,7 @@
 static void printAllColumns (FILE *f, struct DB *db, int rowid, int format, const char * field_sep);
 static void printAllHeaders (FILE *f, struct DB *db, const char * field_sep);
 
-void printResultLine (FILE *f, struct DB *tables[], int db_count, struct ResultColumn columns[], int column_count, int result_index, struct RowList * row_list, int flags) {
+void printResultLine (FILE *f, struct DB *tables, int db_count, struct ResultColumn columns[], int column_count, int result_index, struct RowList * row_list, int flags) {
     const char * field_sep = "\t";
     const char * record_end = "\n";
     const char * record_sep = "";
@@ -56,13 +56,13 @@ void printResultLine (FILE *f, struct DB *tables[], int db_count, struct ResultC
         if (column.field == FIELD_STAR) {
             if (column.table_id >= 0) {
                 // e.g. table.*
-                struct DB *db = tables[column.table_id];
+                struct DB *db = &tables[column.table_id];
                 int rowid = getRowID(row_list, column.table_id, result_index);
                 printAllColumns(f, db, rowid, format, field_sep);
             } else {
                 // e.g. *
                 for (int m = 0; m < db_count; m++) {
-                    struct DB *db = tables[m];
+                    struct DB *db = &tables[m];
                     int rowid = getRowID(row_list, m, result_index);
                     printAllColumns(f, db, rowid, format, field_sep);
 
@@ -98,7 +98,7 @@ void printResultLine (FILE *f, struct DB *tables[], int db_count, struct ResultC
         else if (column.field >= 0) {
             // Evaluate plain columns as well as functions
             int rowid = getRowID(row_list, column.table_id, result_index);
-            struct DB *db = tables[column.table_id];
+            struct DB *db = &tables[column.table_id];
 
             int result = evaluateFunction(f, db, columns + j, rowid);
 
@@ -122,7 +122,7 @@ void printResultLine (FILE *f, struct DB *tables[], int db_count, struct ResultC
     }
 }
 
-void printHeaderLine (FILE *f, struct DB *tables[], int table_count, struct ResultColumn columns[], int column_count, int flags) {
+void printHeaderLine (FILE *f, struct DB *tables, int table_count, struct ResultColumn columns[], int column_count, int flags) {
     const char * field_sep = "\t";
     const char * line_end = "\n";
 
@@ -158,12 +158,12 @@ void printHeaderLine (FILE *f, struct DB *tables[], int table_count, struct Resu
 
         else if (column.field == FIELD_STAR) {
             if (column.table_id >= 0) {
-                struct DB *db = tables[column.table_id];
+                struct DB *db = &tables[column.table_id];
                 printAllHeaders(f, db, field_sep);
             }
             else {
                 for (int m = 0; m < table_count; m++) {
-                    struct DB *db = tables[m];
+                    struct DB *db = &tables[m];
                     printAllHeaders(f, db, field_sep);
 
                     if (m < table_count - 1) {

@@ -70,15 +70,21 @@ int csvMem_openDB (struct DB *db, const char *filename) {
 }
 
 void csvMem_closeDB (struct DB *db) {
-    free(db->line_indices);
-    db->line_indices = NULL;
+    if (db->line_indices != NULL) {
+        free(db->line_indices);
+        db->line_indices = NULL;
+    }
 
-    // db->data is in the same block as db->fields
-    free(db->fields);
-    db->fields = NULL;
+    if (db->fields != NULL) {
+        // db->data is in the same block as db->fields
+        free(db->fields);
+        db->fields = NULL;
+    }
 
-    fclose(db->file);
-    db->file = NULL;
+    if (db->file != NULL) {
+        fclose(db->file);
+        db->file = NULL;
+    }
 }
 
 static int countLines (struct DB *db) {

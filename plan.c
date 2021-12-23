@@ -168,8 +168,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
     /*******************
      * JOIN
      *******************/
-    // TESTING
-    if (q->table_count > 1) {
+    for (int i = 1; i < q->table_count; i++) {
         addStep(plan, PLAN_CROSS_JOIN);
     }
 

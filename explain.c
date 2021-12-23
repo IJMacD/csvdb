@@ -17,9 +17,9 @@ int explain_select_query (
     int output_flags
 ) {
     struct Table table = q->tables[0];
-    struct DB db = table.db;
+    struct DB * db = table.db;
 
-    if (openDB(&db, table.name) != 0) {
+    if (openDB(db, table.name) != 0) {
         fprintf(stderr, "File not found: '%s'\n", table.name);
         return -1;
     }
@@ -28,7 +28,7 @@ int explain_select_query (
         printf("ID\tOperation\t\tName\t\tRows\tCost\n");
     }
 
-    int row_estimate = db.record_count;
+    int row_estimate = db->record_count;
     int log_rows = log_10(row_estimate);
 
     long rows = 0;
@@ -161,7 +161,7 @@ int explain_select_query (
         printf("%d\t%-23s\t%-15s\t%ld\t%ld\n", i, operation, predicate, rows, cost);
     }
 
-    closeDB(&db);
+    closeDB(db);
     return 0;
 }
 

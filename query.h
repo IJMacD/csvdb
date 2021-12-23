@@ -58,7 +58,7 @@
 struct Table {
     char name[TABLE_MAX_LENGTH];
     char alias[FIELD_MAX_LENGTH];
-    struct DB db;
+    struct DB * db;
 };
 
 struct Query {

@@ -26,6 +26,8 @@ int basic_select_query (struct Query *q, struct Plan *plan, int output_flags);
 
 int information_query (const char *table);
 
+static int populateTables (struct Query *q, struct DB * dbs);
+
 static int populateColumns (struct Query *q);
 
 int query (const char *query, int output_flags) {
@@ -96,23 +98,16 @@ int basic_select_query (
      * Begin Query processing
      *************************/
 
-    // Handy array copy for giving to output functions
-    struct DB *dbs[TABLE_MAX_COUNT];
+    struct DB dbs[TABLE_MAX_COUNT];
 
     if (q->table_count == 0) {
         fprintf(stderr, "No tables\n");
         exit(-1);
     }
 
-    for (int i = 0; i < q->table_count; i++) {
-        struct Table *table = &q->tables[i];
-
-        if (openDB(&table->db, table->name) != 0) {
-            fprintf(stderr, "File not found: '%s'\n", table->name);
-            return -1;
-        }
-
-        dbs[i] = &table->db;
+    int result = populateTables(q, dbs);
+    if (result < 0) {
+        return result;
     }
 
     /*************************
@@ -133,7 +128,7 @@ int basic_select_query (
     results.row_lists = &row_list;
 
     // Provision enough result space for maximum of all rows in first table
-    row_list.row_ids = malloc(sizeof (int) * q->tables[0].db.record_count);
+    row_list.row_ids = malloc(sizeof (int) * q->tables[0].db->record_count);
 
     row_list.join_count = 1;
     row_list.row_count = 0;
@@ -143,11 +138,11 @@ int basic_select_query (
 
         // Handy reference to first table
         struct Table table = q->tables[0];
-        struct DB db = table.db;
+        struct DB * db = table.db;
 
         if (s.type == PLAN_PK_UNIQUE || s.type == PLAN_PK_RANGE) {
             struct Predicate p = s.predicates[0];
-            primaryKeyScan(&db, p.field, p.op, p.value, &row_list);
+            primaryKeyScan(db, p.field, p.op, p.value, &row_list);
         }
         else if (s.type == PLAN_INDEX_UNIQUE) {
             struct Predicate p = s.predicates[0];
@@ -159,16 +154,16 @@ int basic_select_query (
         }
         else if (s.type == PLAN_TABLE_ACCESS_FULL) {
             if (s.predicate_count > 0) {
-                fullTableScan(&db, &row_list, s.predicates, s.predicate_count, q->limit_value + q->offset_value);
+                fullTableScan(db, &row_list, s.predicates, s.predicate_count, q->limit_value + q->offset_value);
             }
             else {
-                fullTableAccess(&db, &row_list, q->limit_value + q->offset_value);
+                fullTableAccess(db, &row_list, q->limit_value + q->offset_value);
             }
         }
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
             for (int i = 0; i < s.predicate_count; i++) {
                 struct Predicate p = s.predicates[i];
-                filterRows(&db, &row_list, &p, &row_list);
+                filterRows(db, &row_list, &p, &row_list);
             }
         }
         else if (s.type == PLAN_CROSS_JOIN) {
@@ -177,24 +172,17 @@ int basic_select_query (
 
             struct RowList new_list;
 
-            if (row_list.join_count != 1 || q->table_count != 2) {
-                fprintf(stderr, "Unimplemented: Cannot do multiple joins\n");
-                exit(-1);
-            }
+            struct DB *next_db = q->tables[row_list.join_count].db;
 
-            struct DB *db2 = &q->tables[1].db;
+            int new_length = row_list.row_count * next_db->record_count;
 
-            new_list.join_count = 2;
+            new_list.join_count = row_list.join_count + 1;
             new_list.row_count = 0;
-            new_list.row_ids = malloc((sizeof (int *)) * row_list.row_count * db2->record_count);
+            new_list.row_ids = malloc((sizeof (int *)) * new_list.join_count * new_length);
 
             for (int i = 0; i < row_list.row_count; i++) {
-                for (int j = 0; j < db2->record_count; j++) {
-                    int rowid1 = getRowID(&row_list, 0, i);
-                    int rowid2 = j;
-                    appendRowID2(&new_list, rowid1, rowid2);
-                    // int n = new_list.row_count - 1;
-                    // printf("%d: (%d, %d)\n", n, getRowID(&new_list, 0, n), getRowID(&new_list, 1, n));
+                for (int j = 0; j < next_db->record_count; j++) {
+                    appendJoinedRowID(&new_list, &row_list, i, j);
                 }
             }
 
@@ -207,8 +195,8 @@ int basic_select_query (
             row_list.row_ids = new_list.row_ids;
         }
         else if (s.type == PLAN_SORT) {
-            int order_index = getFieldIndex(&db, s.predicates[0].field);
-            sortResultRows(&db, order_index, s.predicates[0].op, &row_list, &row_list);
+            int order_index = getFieldIndex(db, s.predicates[0].field);
+            sortResultRows(db, order_index, s.predicates[0].op, &row_list, &row_list);
         }
         else if (s.type == PLAN_REVERSE) {
             reverse_array(row_list.row_ids, row_list.row_count * row_list.join_count);
@@ -258,7 +246,7 @@ int basic_select_query (
     free(row_list.row_ids - q->offset_value);
 
     for (int i = 0; i < q->table_count; i++) {
-        closeDB(&q->tables[i].db);
+        closeDB(q->tables[i].db);
     }
 
     return 0;
@@ -326,7 +314,7 @@ static int populateColumns (struct Query * q) {
                             column->field = FIELD_ROW_INDEX;
                         }
                         else {
-                            struct DB *db = &q->tables[i].db;
+                            struct DB *db = q->tables[i].db;
 
                             column->field = getFieldIndex(db, column->text + dot_index + 1);
                         }
@@ -337,7 +325,7 @@ static int populateColumns (struct Query * q) {
             }
             else {
                 for (int i = 0; i < q->table_count; i++) {
-                    struct DB *db = &q->tables[i].db;
+                    struct DB *db = q->tables[i].db;
 
                     column->field = getFieldIndex(db, column->text);
 
@@ -354,6 +342,42 @@ static int populateColumns (struct Query * q) {
                 return -1;
             }
         }
+    }
+
+    return 0;
+}
+
+static int populateTables (struct Query *q, struct DB *dbs) {
+
+    for (int i = 0; i < q->table_count; i++) {
+        struct Table *table = &q->tables[i];
+
+        int found = 0;
+
+        // Try to reuse existing open table
+        for (int j = 0; j < i; j++) {
+            if (strcmp(q->tables[j].name, table->name) == 0) {
+                // Copy pointer
+                table->db = q->tables[j].db;
+
+                // Make actual copy of DB for output functions
+                memcpy(&dbs[i], &dbs[j], sizeof (dbs[i]));
+
+                found = 1;
+                break;
+            }
+        }
+
+        if (found == 1) {
+            continue;
+        }
+
+        if (openDB(&dbs[i], table->name) != 0) {
+            fprintf(stderr, "File not found: '%s'\n", table->name);
+            return -1;
+        }
+
+        table->db = &dbs[i];
     }
 
     return 0;

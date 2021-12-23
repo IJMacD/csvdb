@@ -73,14 +73,20 @@ int csv_openDB (struct DB *db, const char *filename) {
 }
 
 void csv_closeDB (struct DB *db) {
-    free(db->line_indices);
-    db->line_indices = NULL;
+    if (db->line_indices != NULL) {
+        free(db->line_indices);
+        db->line_indices = NULL;
+    }
 
-    free(db->fields);
-    db->fields = NULL;
+    if (db->fields != NULL) {
+        free(db->fields);
+        db->fields = NULL;
+    }
 
-    fclose(db->file);
-    db->file = NULL;
+    if (db->file != NULL) {
+        fclose(db->file);
+        db->file = NULL;
+    }
 }
 
 static int countLines (FILE *f) {
