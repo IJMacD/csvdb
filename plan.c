@@ -4,6 +4,7 @@
 #include "plan.h"
 #include "indices.h"
 #include "sort.h"
+#include "util.h"
 
 void addStep (struct Plan *plan, int type);
 
@@ -14,6 +15,8 @@ void addStepWithPredicate (struct Plan *plan, int type, struct Predicate *p);
 void addStepWithPredicates (struct Plan *plan, int type, struct Predicate *p, int predicate_count);
 
 void addStepWithParams (struct Plan *plan, int type, int param1, int param2);
+
+void addJoinStepsIfRequired (struct Plan *plan, struct Query *q);
 
 int makePlan (struct Query *q, struct Plan *plan) {
     plan->step_count = 0;
@@ -46,94 +49,142 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
         struct DB index_db;
 
+        // Limitation: Only predicates on first table in join are considered
+
+        int table_id = -1;
+        int field_id;
+        findColumn(q, p->field, &table_id, &field_id);
+
         struct Table table = q->tables[0];
 
-        /*******************
-         * UNIQUE INDEX SCAN
-         *******************/
-        // Try to find a unique index
-        if (p->op != OPERATOR_LIKE && findIndex(&index_db, table.name, p->field, INDEX_UNIQUE) == 0) {
-            closeDB(&index_db);
+        if (table_id == 0) {
 
-            int type;
-            if (p->op == OPERATOR_EQ) {
-                type = PLAN_INDEX_UNIQUE;
-            } else {
-                type = PLAN_INDEX_RANGE;
+            // Remove qualified name so indexes can be searched etc.
+            int dot_index = str_find_index(p->field, '.');
+            if (dot_index >= 0) {
+                char value[FIELD_MAX_LENGTH];
+                strcpy(value, p->field);
+                strcpy(p->field, value + dot_index + 1);
             }
 
-            addStepWithPredicate(plan, type, p);
+            /*******************
+             * UNIQUE INDEX SCAN
+             *******************/
+            // Try to find a unique index
+            if (p->op != OPERATOR_LIKE && findIndex(&index_db, table.name, p->field, INDEX_UNIQUE) == 0) {
+                closeDB(&index_db);
 
-            if (q->predicate_count > 1) {
-                addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + 1, q->predicate_count - 1);
+                int type;
+                if (p->op == OPERATOR_EQ) {
+                    type = PLAN_INDEX_UNIQUE;
+                } else {
+                    type = PLAN_INDEX_RANGE;
+                }
+
+                addStepWithPredicate(plan, type, p);
+
+                addJoinStepsIfRequired(plan, q);
+
+                if (q->predicate_count > 1) {
+                    addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + 1, q->predicate_count - 1);
+                }
+
+                // Sort is never required if the index is INDEX_UNIQUE
+                if (type == PLAN_INDEX_RANGE && (q->flags & FLAG_ORDER) && strcmp(p->field, q->order_field) == 0) {
+                    // We're sorting on the same column as we've just traversed in the index
+                    // so a sort is not necessary but we might need to reverse
+                    if (q->order_direction == ORDER_DESC && !(q->flags & FLAG_GROUP)) {
+                        addStep(plan, PLAN_REVERSE);
+                    }
+                } else {
+                    addOrderStepIfRequired(plan, q);
+                }
             }
+            /*******************
+             * INDEX RANGE SCAN
+             *******************/
+            else if (p->op != OPERATOR_LIKE && findIndex(&index_db, table.name, p->field, INDEX_ANY) == 0) {
+                closeDB(&index_db);
 
-            // Sort is never required if the index is INDEX_UNIQUE
-            if (type == PLAN_INDEX_RANGE && (q->flags & FLAG_ORDER) && strcmp(p->field, q->order_field) == 0) {
-                // We're sorting on the same column as we've just traversed in the index
-                // so a sort is not necessary but we might need to reverse
+                addStepWithPredicate(plan, PLAN_INDEX_RANGE, p);
+
+                addJoinStepsIfRequired(plan, q);
+
+                if (q->predicate_count > 1) {
+                    addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + 1, q->predicate_count - 1);
+                }
+
+                if ((q->flags & FLAG_ORDER) && strcmp(p->field, q->order_field) == 0) {
+                    // We're sorting on the same column as we've just traversed in the index
+                    // so a sort is not necessary but we might need to reverse
+                    if (q->order_direction == ORDER_DESC && !(q->flags & FLAG_GROUP)) {
+                        addStep(plan, PLAN_REVERSE);
+                    }
+                } else {
+                    addOrderStepIfRequired(plan, q);
+                }
+            }
+            // Before we do a full table scan... we have one more opportunity to use an index
+            // To save a sort later, see if we can use an index for ordering now
+            else if (
+                (q->flags & FLAG_ORDER) &&
+                // If we're selecting a lot of rows this optimisation is probably worth it.
+                // If we have an EQ operator then it's probably cheaper to filter first
+                (p->op != OPERATOR_EQ) &&
+                findIndex(&index_db, table.name, q->order_field, INDEX_ANY) == 0
+            ) {
+                closeDB(&index_db);
+
+                struct Predicate *order_p = malloc(sizeof(*order_p));
+                strcpy(order_p->field, q->order_field);
+                order_p->op = 0;
+                order_p->value[0] = '\0';
+
+                // Add step for Sorted index access
+                addStepWithPredicate(plan, PLAN_INDEX_RANGE, order_p);
+
+                addJoinStepsIfRequired(plan, q);
+
                 if (q->order_direction == ORDER_DESC && !(q->flags & FLAG_GROUP)) {
                     addStep(plan, PLAN_REVERSE);
                 }
-            } else {
-                addOrderStepIfRequired(plan, q);
+
+                // Add step for predicates filter
+                addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, p, q->predicate_count);
             }
-        }
-        /*******************
-         * INDEX RANGE SCAN
-         *******************/
-        else if (p->op != OPERATOR_LIKE && findIndex(&index_db, table.name, p->field, INDEX_ANY) == 0) {
-            closeDB(&index_db);
+            /********************
+             * TABLE ACCESS FULL
+             ********************/
+            else {
+                if (q->table_count > 1) {
+                    // First predicate is from first table
+                    addStepWithPredicate(plan, PLAN_TABLE_ACCESS_FULL, p);
 
-            addStepWithPredicate(plan, PLAN_INDEX_RANGE, p);
+                    // The join
+                    addJoinStepsIfRequired(plan, q);
 
-            if (q->predicate_count > 1) {
-                addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + 1, q->predicate_count - 1);
-            }
-
-            if ((q->flags & FLAG_ORDER) && strcmp(p->field, q->order_field) == 0) {
-                // We're sorting on the same column as we've just traversed in the index
-                // so a sort is not necessary but we might need to reverse
-                if (q->order_direction == ORDER_DESC && !(q->flags & FLAG_GROUP)) {
-                    addStep(plan, PLAN_REVERSE);
+                    if (q->predicate_count > 1) {
+                        // Add the rest of the predicates after the join
+                        addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + 1, q->predicate_count - 1);
+                    }
+                } else {
+                    // Only one table so add all predicates together
+                    addStepWithPredicates(plan, PLAN_TABLE_ACCESS_FULL, q->predicates, q->predicate_count);
                 }
-            } else {
+
+                // Do we need an explicit sort?
                 addOrderStepIfRequired(plan, q);
             }
-        }
-        // Before we do a full table scan... we have one more opportunity to use an index
-        // To save a sort later, see if we can use an index for ordering now
-        else if (
-            (q->flags & FLAG_ORDER) &&
-            // If we're selecting a lot of rows this optimisation is probably worth it.
-            // If we have an EQ operator then it's probably cheaper to filter first
-            (p->op != OPERATOR_EQ) &&
-            findIndex(&index_db, table.name, q->order_field, INDEX_ANY) == 0
-        ) {
-            closeDB(&index_db);
+        } else {
 
-            struct Predicate *order_p = malloc(sizeof(*order_p));
-            strcpy(order_p->field, q->order_field);
-            order_p->op = 0;
-            order_p->value[0] = '\0';
+            // Predicate isn't on the first table need to do full access
 
-            // Add step for Sorted index access
-            addStepWithPredicate(plan, PLAN_INDEX_RANGE, order_p);
+            addStep(plan, PLAN_TABLE_ACCESS_FULL);
 
-            if (q->order_direction == ORDER_DESC && !(q->flags & FLAG_GROUP)) {
-                addStep(plan, PLAN_REVERSE);
-            }
+            addJoinStepsIfRequired(plan, q);
 
-            // Add step for predicates filter
-            addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, p, q->predicate_count);
-        }
-        /********************
-         * TABLE ACCESS FULL
-         ********************/
-        else {
-            addStepWithPredicates(plan, PLAN_TABLE_ACCESS_FULL, q->predicates, q->predicate_count);
+            addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates, q->predicate_count);
 
-            // Do we need an explicit sort?
             addOrderStepIfRequired(plan, q);
         }
     }
@@ -159,17 +210,14 @@ int makePlan (struct Query *q, struct Plan *plan) {
         } else {
             addStep(plan, PLAN_TABLE_ACCESS_FULL);
 
+            addJoinStepsIfRequired(plan, q);
+
             addOrderStepIfRequired(plan, q);
         }
     } else {
         addStep(plan, PLAN_TABLE_ACCESS_FULL);
-    }
 
-    /*******************
-     * JOIN
-     *******************/
-    for (int i = 1; i < q->table_count; i++) {
-        addStep(plan, PLAN_CROSS_JOIN);
+        addJoinStepsIfRequired(plan, q);
     }
 
     /*******************
@@ -270,4 +318,13 @@ void addStepWithParams (struct Plan *plan, int type, int param1, int param2) {
     plan->steps[i].param2 = param2;
 
     plan->step_count++;
+}
+
+void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
+    /*******************
+     * JOIN
+     *******************/
+    for (int i = 1; i < q->table_count; i++) {
+        addStep(plan, PLAN_CROSS_JOIN);
+    }
 }

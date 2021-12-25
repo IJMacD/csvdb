@@ -71,6 +71,22 @@ int select_query (const char *query, int output_flags) {
         return result;
     }
 
+    /*************************
+     * Begin Query processing
+     *************************/
+
+    struct DB dbs[TABLE_MAX_COUNT];
+
+    if (q.table_count == 0) {
+        fprintf(stderr, "No tables\n");
+        exit(-1);
+    }
+
+    int result = populateTables(&q, dbs);
+    if (result < 0) {
+        return result;
+    }
+
     /**********************
      * Make Plan
      **********************/
@@ -84,7 +100,7 @@ int select_query (const char *query, int output_flags) {
         return result;
     }
 
-    int result = basic_select_query(&q, &plan, output_flags);
+    result = basic_select_query(&q, &plan, output_flags);
     destroyQuery(&q);
     return result;
 }
@@ -94,21 +110,9 @@ int basic_select_query (
     struct Plan *plan,
     int output_flags
 ) {
-    /*************************
-     * Begin Query processing
-     *************************/
-
-    struct DB dbs[TABLE_MAX_COUNT];
-
-    if (q->table_count == 0) {
-        fprintf(stderr, "No tables\n");
-        exit(-1);
-    }
-
-    int result = populateTables(q, dbs);
-    if (result < 0) {
-        return result;
-    }
+    // We know that the dbs storage is on the stack and starts at the db
+    // pointed to by the first table.
+    struct DB *dbs = q->tables[0].db;
 
     /*************************
      * Output headers
@@ -163,7 +167,7 @@ int basic_select_query (
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
             for (int i = 0; i < s.predicate_count; i++) {
                 struct Predicate p = s.predicates[i];
-                filterRows(db, &row_list, &p, &row_list);
+                filterRows(q, &row_list, &p, &row_list);
             }
         }
         else if (s.type == PLAN_CROSS_JOIN) {
@@ -293,49 +297,7 @@ static int populateColumns (struct Query * q) {
         struct ResultColumn *column = &(q->columns[i]);
 
         if (column->field == FIELD_UNKNOWN) {
-            int dot_index = str_find_index(column->text, '.');
-
-            if (dot_index >= 0) {
-                char value[FIELD_MAX_LENGTH];
-
-                strncpy(value, column->text, dot_index);
-                value[dot_index] = '\0';
-
-                for (int i = 0; i < q->table_count; i++) {
-                    if (strcmp(q->tables[i].name, value) == 0 ||
-                        strcmp(q->tables[i].alias, value) == 0)
-                    {
-                        column->table_id = i;
-
-                        if (column->text[dot_index + 1] == '*') {
-                            column->field = FIELD_STAR;
-                        }
-                        else if (strcmp(column->text + dot_index + 1, "rowid") == 0) {
-                            column->field = FIELD_ROW_INDEX;
-                        }
-                        else {
-                            struct DB *db = q->tables[i].db;
-
-                            column->field = getFieldIndex(db, column->text + dot_index + 1);
-                        }
-
-                        break;
-                    }
-                }
-            }
-            else {
-                for (int i = 0; i < q->table_count; i++) {
-                    struct DB *db = q->tables[i].db;
-
-                    column->field = getFieldIndex(db, column->text);
-
-                    if (column->field != FIELD_UNKNOWN) {
-                        column->table_id = i;
-
-                        break;
-                    }
-                }
-            }
+            findColumn(q, column->text, &column->table_id, &column->field);
 
             if (column->field == FIELD_UNKNOWN) {
                 fprintf(stderr, "Field %s not found\n", column->text);
@@ -381,4 +343,54 @@ static int populateTables (struct Query *q, struct DB *dbs) {
     }
 
     return 0;
+}
+
+void findColumn (struct Query *q, const char *text, int *table_id, int *column_id) {
+
+    int dot_index = str_find_index(text, '.');
+
+    if (dot_index >= 0) {
+        char value[FIELD_MAX_LENGTH];
+
+        strncpy(value, text, dot_index);
+        value[dot_index] = '\0';
+
+        for (int i = 0; i < q->table_count; i++) {
+            if (strcmp(q->tables[i].name, value) == 0 ||
+                strcmp(q->tables[i].alias, value) == 0)
+            {
+                *table_id = i;
+
+                if (text[dot_index + 1] == '*') {
+                    *column_id = FIELD_STAR;
+                }
+                else if (strcmp(text + dot_index + 1, "rowid") == 0) {
+                    *column_id = FIELD_ROW_INDEX;
+                }
+                else {
+                    struct DB *db = q->tables[i].db;
+
+                    *column_id = getFieldIndex(db, text + dot_index + 1);
+                }
+
+                return;
+            }
+        }
+    }
+    else {
+        for (int i = 0; i < q->table_count; i++) {
+            struct DB *db = q->tables[i].db;
+
+            *column_id = getFieldIndex(db, text);
+
+            if (*column_id != FIELD_UNKNOWN) {
+                *table_id = i;
+
+                return;
+            }
+        }
+    }
+
+    // Couldn't find column
+    *column_id = FIELD_UNKNOWN;
 }

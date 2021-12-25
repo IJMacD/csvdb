@@ -16,19 +16,11 @@ int explain_select_query (
     struct Plan *plan,
     int output_flags
 ) {
-    struct Table table = q->tables[0];
-    struct DB * db = table.db;
-
-    if (openDB(db, table.name) != 0) {
-        fprintf(stderr, "File not found: '%s'\n", table.name);
-        return -1;
-    }
-
     if (output_flags & OUTPUT_OPTION_HEADERS) {
         printf("ID\tOperation\t\tName\t\tRows\tCost\n");
     }
 
-    int row_estimate = db->record_count;
+    int row_estimate = q->tables[0].db->record_count;
     int log_rows = log_10(row_estimate);
 
     long rows = 0;
@@ -98,7 +90,7 @@ int explain_select_query (
             }
 
             if (s.predicate_count == 0) {
-                strcpy(predicate, table.name);
+                strcpy(predicate, q->tables[0].name);
             }
         }
         else if (s.type == PLAN_PK_UNIQUE) {
@@ -157,11 +149,24 @@ int explain_select_query (
         else if (s.type == PLAN_SELECT) {
             operation = "SELECT";
         }
+        else if (s.type == PLAN_CROSS_JOIN) {
+            operation = "CROSS JOIN";
+
+            struct Table *table = &q->tables[1];
+
+            strcpy(predicate, table->name);
+
+            // TODO: should be more than
+            rows *= table->db->record_count;
+            cost = rows;
+        } else {
+            operation = "Unknown OP code";
+            sprintf(predicate, "%d\n", s.type);
+        }
 
         printf("%d\t%-23s\t%-15s\t%ld\t%ld\n", i, operation, predicate, rows, cost);
     }
 
-    closeDB(db);
     return 0;
 }
 

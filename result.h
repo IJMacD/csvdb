@@ -33,3 +33,5 @@ void appendRowID2 (struct RowList * row_list, int value1, int value2);
 void appendRowID3 (struct RowList * row_list, int value1, int value2, int value3);
 
 void appendJoinedRowID (struct RowList * dest_list, struct RowList * src_list, int src_index, int value);
+
+void copyResultRow (struct RowList * dest_list, struct RowList * src_list, int src_index);
