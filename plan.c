@@ -43,19 +43,33 @@ int makePlan (struct Query *q, struct Plan *plan) {
     }
     else if (q->flags & FLAG_HAVE_PREDICATE) {
 
-        // Limitation: Only first predicate is considered for indexes
-
-        struct Predicate *p = q->predicates + 0;
-
-        struct DB index_db;
-
-        // Limitation: Only predicates on first table in join are considered
-
+        // Try to find a predicate on the first table
+        int chosen_predicate_index = -1;
         int table_id = -1;
         int field_id;
-        findColumn(q, p->field, &table_id, &field_id);
 
         struct Table table = q->tables[0];
+
+        for (int i = 0; i < q->predicate_count; i++) {
+            findColumn(q, q->predicates[i].field, &table_id, &field_id);
+
+            if (table_id == 0) {
+                chosen_predicate_index = i;
+                break;
+            }
+        }
+
+        // Swap predicates so first one is on first table
+        if (chosen_predicate_index > 0) {
+            struct Predicate tmp;
+            memcpy(&tmp, &q->predicates[0], sizeof(tmp));
+            memcpy(&q->predicates[0], &q->predicates[chosen_predicate_index], sizeof(tmp));
+            memcpy(&q->predicates[chosen_predicate_index], &tmp, sizeof(tmp));
+        }
+
+        struct Predicate *p = &q->predicates[0];
+
+        struct DB index_db;
 
         if (table_id == 0) {
 
