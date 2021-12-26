@@ -12,7 +12,7 @@ void writeRowID (struct RowList * row_list, int join_id, int index, int value) {
 
 void appendRowID (struct RowList * row_list, int value) {
     if (row_list->join_count != 1) {
-        fprintf(stderr, "Cannot append 1 row ID to list with %d join\n", row_list->join_count);
+        fprintf(stderr, "Cannot append 1 row ID to list with %d joins\n", row_list->join_count);
         exit(-1);
     }
     row_list->row_ids[row_list->row_count * row_list->join_count] = value;

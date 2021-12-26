@@ -19,6 +19,7 @@
 #include "util.h"
 #include "plan.h"
 #include "result.h"
+#include "debug.h"
 
 int select_query (const char *query, int output_flags);
 
@@ -199,11 +200,49 @@ int basic_select_query (
             row_list.row_ids = new_list.row_ids;
         }
         else if (s.type == PLAN_SORT) {
-            int order_index = getFieldIndex(db, s.predicates[0].field);
-            sortResultRows(db, order_index, s.predicates[0].op, &row_list, &row_list);
+
+            int table_id = -1;
+            int field_index;
+
+            findColumn(q, s.predicates[0].field, &table_id, &field_index);
+
+            if (field_index == FIELD_UNKNOWN) {
+                fprintf(stderr, "Sort column not found: %s\n", s.predicates[0].field);
+                exit(-1);
+            }
+
+            // debugRowList(&row_list);
+
+            struct DB *db = q->tables[table_id].db;
+
+            struct RowList tmp;
+
+            int size = row_list.join_count * row_list.row_count;
+
+            // fprintf(stderr, "RowList: (%d joins x %d rows)\n", row_list.join_count, row_list.row_count);
+
+            tmp.row_ids = malloc(sizeof(int) * size);
+
+            // fprintf(stderr, "malloc size: %lu\n", sizeof(int) * size);
+
+            tmp.join_count = row_list.join_count;
+            tmp.row_count = 0;
+
+            sortResultRows(db, table_id, field_index, s.predicates[0].op, &row_list, &tmp);
+
+            memcpy(row_list.row_ids, tmp.row_ids, sizeof(int) * size);
+
+            // debugRowList(&row_list);
+
+            free(tmp.row_ids);
         }
         else if (s.type == PLAN_REVERSE) {
-            reverse_array(row_list.row_ids, row_list.row_count * row_list.join_count);
+            if (row_list.join_count > 1) {
+                fprintf(stderr, "Not Implemented: Unable to reverse joined rows\n");
+                exit(-1);
+            }
+
+            reverse_array(row_list.row_ids, row_list.row_count);
         }
         else if (s.type == PLAN_SLICE) {
             row_list.row_ids += s.param1 * row_list.join_count;

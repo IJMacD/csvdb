@@ -96,7 +96,6 @@ int create_index (const char *index_name, const char *table_name, const char *in
         return -1;
     }
 
-
     int index_field_index = getFieldIndex(&db, index_field);
 
     if (index_field_index < 0) {
@@ -127,7 +126,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
     // Fill row list with every sequential rowid
     fullTableAccess(&db, &row_list, -1);
 
-    sortResultRows(&db, index_field_index, ORDER_ASC, &row_list, &row_list);
+    sortResultRows(&db, 0, index_field_index, ORDER_ASC, &row_list, &row_list);
 
     // Output functions assume array of DBs
     printHeaderLine(f, &db, 1, columns, 2, OUTPUT_FORMAT_COMMA);

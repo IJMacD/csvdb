@@ -1,4 +1,9 @@
+#pragma once
+
+#include "db.h"
+
 struct tree {
+    int index;
     int rowid;
     unsigned long value;
     struct tree *left;

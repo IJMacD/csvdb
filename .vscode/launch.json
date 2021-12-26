@@ -13,8 +13,9 @@
                 // "SELECT * FROM test"
                 // "FROM \\\"simple test\\\" ORDER BY name"
                 // "FROM suits,ranks WHERE ranks.name = 'Ace'"
-                "FROM suits, ranks SELECT suits.name, ranks.name WHERE suits.name = 'clubs' AND ranks.name = 'Ace'"
+                // "FROM suits, ranks SELECT suits.name, ranks.name WHERE suits.name = 'clubs' AND ranks.name = 'Ace'"
                 // "FROM suits,suits,suits"
+                "FROM suits, ranks WHERE ranks.value < 3 ORDER BY suits.name"
                 // "--headers",
                 // "-f",
                 // "test.sql"
