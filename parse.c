@@ -108,14 +108,19 @@ int parseQuery (struct Query *q, const char *query) {
                     q->tables = ptr;
                 }
 
-                getQuotedToken(query, &index, q->tables[q->table_count-1].name, TABLE_MAX_LENGTH);
+                struct Table *table = &q->tables[q->table_count - 1];
+
+                table->name[0] = '\0';
+                table->alias[0] = '\0';
+
+                getQuotedToken(query, &index, table->name, TABLE_MAX_LENGTH);
 
                 skipWhitespace(query, &index);
 
                 if (strncmp(query + index, "AS ", 3) == 0) {
                     index += 3;
 
-                    getQuotedToken(query, &index, q->tables[q->table_count-1].alias, FIELD_MAX_LENGTH);
+                    getQuotedToken(query, &index, table->alias, FIELD_MAX_LENGTH);
                 }
 
                 skipWhitespace(query, &index);
