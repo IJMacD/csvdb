@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include <unistd.h>
 
@@ -27,6 +28,8 @@ int main (int argc, char * argv[]) {
     int flags = 0;
 
     int arg = 1;
+
+    srand((unsigned) time(NULL) * getpid());
 
     if (argc > arg && (strcmp(argv[arg], "-h") == 0 || strcmp(argv[arg], "--help") == 0)) {
         printUsage(argv[0]);

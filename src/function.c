@@ -30,6 +30,22 @@ int evaluateFunction(FILE *f, struct DB *db, struct ResultColumn *column, int re
 
             fprintf(f, "%s", value);
         }
+        else if (column->function == FUNC_TO_HEX) {
+            int val = atoi(value);
+
+            if (val < 0) {
+                fprintf(f, "-0x%x", abs(val));
+            } else if (val < 0x100) {
+                fprintf(f, "0x%02x", val);
+            } else if (val < 0x10000) {
+                fprintf(f, "0x%04x", val);
+            } else {
+                fprintf(f, "0x%x", val);
+            }
+        }
+        else if (column->function == FUNC_RANDOM) {
+            fprintf(f, "%d", rand());
+        }
         else if ((column->function & MASK_FUNC_FAMILY) == FUNC_FAM_STRING) {
             if (column->function == FUNC_LENGTH) {
                 int len = strlen(value);

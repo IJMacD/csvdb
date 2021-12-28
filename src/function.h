@@ -16,6 +16,9 @@
 
 #define FUNC_UNITY                  0x00
 #define FUNC_CHR                    0x01
+#define FUNC_TO_HEX                 0x02
+
+#define FUNC_RANDOM                 0x10
 
 // Family 001x (0x20) String
 #define FUNC_FAM_STRING             0x20

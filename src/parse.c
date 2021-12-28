@@ -484,6 +484,15 @@ int parseColumn (const char * query, size_t * index, struct ResultColumn *column
 
         parseFunction(query, index, column, 3);
     }
+    else if (strcmp(column->text, "RANDOM()") == 0) {
+        column->function = FUNC_RANDOM;
+        column->field = FIELD_CONSTANT;
+    }
+    else if (strncmp(column->text, "TO_HEX(", 7) == 0) {
+        column->function = FUNC_TO_HEX;
+
+        parseFunction(query, index, column, 6);
+    }
     else if (strncmp(column->text, "LENGTH(", 7) == 0) {
         column->function = FUNC_LENGTH;
 
