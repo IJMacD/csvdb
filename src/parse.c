@@ -479,22 +479,15 @@ int parseColumn (const char * query, size_t * index, struct ResultColumn *column
         // default to first table
         column->table_id = 0;
     }
+    else if (strncmp(column->text, "CHR(", 4) == 0) {
+        column->function = FUNC_CHR;
+
+        parseFunction(query, index, column, 3);
+    }
     else if (strncmp(column->text, "LENGTH(", 7) == 0) {
         column->function = FUNC_LENGTH;
 
-        char field[FIELD_MAX_LENGTH - 7];
-        strcpy(field, column->text + 7);
-
-        int field_len = strlen(field);
-
-        if (field[field_len - 1] != ')') {
-            fprintf(stderr, "Expected ')', got '%c'\n", field[field_len - 1]);
-            exit(-1);
-        }
-
-        field[field_len - 1] = '\0';
-
-        strcpy(column->text, field);
+        parseFunction(query, index, column, 6);
     }
     else if (strncmp(column->text, "LEFT(", 5) == 0) {
         // LEFT(<field>, <count>)
@@ -683,6 +676,15 @@ int parseColumn (const char * query, size_t * index, struct ResultColumn *column
     return flags;
 }
 
+/**
+ * @brief Helper function to skip function name, then look for and skip closing bracket
+ *
+ * @param query Whole query string
+ * @param index Pointer to index value
+ * @param column Pointer to column struct
+ * @param name_length Length of function name (excluding opening bracket)
+ * @return int
+ */
 int parseFunction (const char * query, size_t * index, struct ResultColumn * column, int name_length) {
 
     char field[FIELD_MAX_LENGTH];
@@ -703,6 +705,25 @@ int parseFunction (const char * query, size_t * index, struct ResultColumn * col
         }
 
         (*index)++;
+    }
+
+    if (is_numeric(column->text)) {
+        // Detected numeric constant
+        column->field = FIELD_CONSTANT;
+    } else if (column->text[0] == '\'') {
+        // Detected string literal
+        column->field = FIELD_CONSTANT;
+
+        if (column->text[len - 2] != '\'') {
+            fprintf(stderr, "Bad query - expcted ',' got '%c'\n", column->text[len - 2]);
+            return -1;
+        }
+
+        char value[FIELD_MAX_LENGTH];
+        strncpy(value, column->text + 1, len - 3);
+        value[len - 3] = '\0';
+
+        strcpy(column->text, value);
     }
 
     return 0;

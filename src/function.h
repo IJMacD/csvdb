@@ -12,7 +12,10 @@
 // (00 function is usable in each family)
 
 // Family 000x (0x00) Basic
+#define FUNC_FAM_BASIC              0x00
+
 #define FUNC_UNITY                  0x00
+#define FUNC_CHR                    0x01
 
 // Family 001x (0x20) String
 #define FUNC_FAM_STRING             0x20

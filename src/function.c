@@ -2,15 +2,32 @@
 #include <string.h>
 #include <limits.h>
 
+#include "query.h"
 #include "function.h"
 #include "date.h"
+#include "util.h"
 
 int evaluateFunction(FILE *f, struct DB *db, struct ResultColumn *column, int record_index) {
     char value[VALUE_MAX_LENGTH] = {0};
+    int result;
 
-    if (getRecordValue(db, record_index, column->field, value, VALUE_MAX_LENGTH) > 0) {
+    if (column->field == FIELD_CONSTANT) {
+        strcpy(value, column->text);
+        result = 1;
+    }
+    else {
+        result = getRecordValue(db, record_index, column->field, value, VALUE_MAX_LENGTH) > 0;
+    }
+
+    if (result > 0) {
 
         if (column->function == FUNC_UNITY) {
+            fprintf(f, "%s", value);
+        }
+        else if (column->function == FUNC_CHR) {
+            int codepoint = atoi(value);
+            writeUTF8(value, codepoint);
+
             fprintf(f, "%s", value);
         }
         else if ((column->function & MASK_FUNC_FAMILY) == FUNC_FAM_STRING) {

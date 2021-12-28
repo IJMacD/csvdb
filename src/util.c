@@ -31,3 +31,40 @@ int str_find_index (const char * string, char chr) {
     }
     return -1;
 }
+
+int writeUTF8(char * output, int codepoint) {
+    if (codepoint < 0x80) {
+      output[0] = (codepoint >>0  & 0x7F) | 0x00;
+      output[1] = '\0';
+      return 1;
+    }
+
+    if (codepoint < 0x0800) {
+      output[0] = (codepoint >>6  & 0x1F) | 0xC0;
+      output[1] = (codepoint >>0  & 0x3F) | 0x80;
+      output[2] = '\0';
+
+      return 2;
+    }
+
+    if (codepoint < 0x010000) {
+      output[0] = (codepoint >>12 & 0x0F) | 0xE0;
+      output[1] = (codepoint >>6  & 0x3F) | 0x80;
+      output[2] = (codepoint >>0  & 0x3F) | 0x80;
+      output[3] = '\0';
+
+      return 3;
+    }
+
+    if (codepoint < 0x110000) {
+      output[0] = (codepoint >>18 & 0x07) | 0xF0;
+      output[1] = (codepoint >>12 & 0x3F) | 0x80;
+      output[2] = (codepoint >>6  & 0x3F) | 0x80;
+      output[3] = (codepoint >>0  & 0x3F) | 0x80;
+      output[4] = '\0';
+
+      return 4;
+    }
+
+    return 0;
+}
