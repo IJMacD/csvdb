@@ -1,16 +1,65 @@
 #include <stdlib.h>
+#include <string.h>
 #include <limits.h>
 
 #include "function.h"
 #include "date.h"
 
 int evaluateFunction(FILE *f, struct DB *db, struct ResultColumn *column, int record_index) {
-    char value[VALUE_MAX_LENGTH];
+    char value[VALUE_MAX_LENGTH] = {0};
 
     if (getRecordValue(db, record_index, column->field, value, VALUE_MAX_LENGTH) > 0) {
 
         if (column->function == FUNC_UNITY) {
             fprintf(f, "%s", value);
+        }
+        else if ((column->function & MASK_FUNC_FAMILY) == FUNC_FAM_STRING) {
+            if (column->function == FUNC_LENGTH) {
+                int len = strlen(value);
+                fprintf(f, "%d", len);
+            }
+            else if (column->function == FUNC_LEFT) {
+                // Both field name and length stroed in same array
+                // Layout:
+                // <field>\0 <count>)
+
+                int field_len = strlen(column->text);
+
+                if (field_len > FIELD_MAX_LENGTH) {
+                    fprintf(stderr, "Missing count from LEFT: %s\n", column->text);
+                    exit(-1);
+                }
+
+                int count = atoi(column->text + field_len + 1);
+                int len = strlen(value);
+
+                if (len > count) {
+                    fwrite(value, 1, count, f);
+                } else {
+                    fprintf(f, "%s", value);
+                }
+            }
+            else if (column->function == FUNC_RIGHT) {
+                // Both field name and length stroed in same array
+                // Layout:
+                // <field>\0 <count>)
+
+                int field_len = strlen(column->text);
+
+                if (field_len > FIELD_MAX_LENGTH) {
+                    fprintf(stderr, "Missing count from RIGHT: %s\n", column->text);
+                    exit(-1);
+                }
+
+                int count = atoi(column->text + field_len + 1);
+                int len = strlen(value);
+
+                if (len > count) {
+                    fprintf(f, "%s", value + len - count);
+                } else {
+                    fprintf(f, "%s", value);
+                }
+            }
         }
         else if ((column->function & MASK_FUNC_FAMILY) == FUNC_FAM_EXTRACT) {
             struct DateTime dt;

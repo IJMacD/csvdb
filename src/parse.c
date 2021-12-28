@@ -479,6 +479,80 @@ int parseColumn (const char * query, size_t * index, struct ResultColumn *column
         // default to first table
         column->table_id = 0;
     }
+    else if (strncmp(column->text, "LENGTH(", 7) == 0) {
+        column->function = FUNC_LENGTH;
+
+        char field[FIELD_MAX_LENGTH - 7];
+        strcpy(field, column->text + 7);
+
+        int field_len = strlen(field);
+
+        if (field[field_len - 1] != ')') {
+            fprintf(stderr, "Expected ')', got '%c'\n", field[field_len - 1]);
+            exit(-1);
+        }
+
+        field[field_len - 1] = '\0';
+
+        strcpy(column->text, field);
+    }
+    else if (strncmp(column->text, "LEFT(", 5) == 0) {
+        // LEFT(<field>, <count>)
+
+        column->function = FUNC_LEFT;
+
+        char field_name[FIELD_MAX_LENGTH - 5];
+        strcpy(field_name, column->text + 5);
+        strcpy(column->text, field_name);
+
+        // Store both field name and length in same array
+        // Transform to:
+        // <field>\0 <count>)
+
+        skipWhitespace(query, index);
+
+        if (query[*index] != ',') {
+            fprintf(stderr, "Expected ','; got %c\n", query[*index]);
+            exit(-1);
+        }
+
+        (*index)++;
+
+        skipWhitespace(query, index);
+
+        int len = strlen(column->text);
+
+        getToken(query, index, column->text + len + 1, FIELD_MAX_LENGTH - len);
+    }
+    else if (strncmp(column->text, "RIGHT(", 6) == 0) {
+        // RIGHT(<field>, <count>)
+
+        column->function = FUNC_RIGHT;
+
+        char field_name[FIELD_MAX_LENGTH - 6];
+        strcpy(field_name, column->text + 6);
+        strcpy(column->text, field_name);
+
+        // Store both field name and length in same array
+        // Transform to:
+        // <field>\0 <count>)
+
+        skipWhitespace(query, index);
+
+        if (query[*index] != ',') {
+            fprintf(stderr, "Expected ','; got %c\n", query[*index]);
+            exit(-1);
+        }
+
+        (*index)++;
+
+        skipWhitespace(query, index);
+
+        int len = strlen(column->text);
+
+        getToken(query, index, column->text + len + 1, FIELD_MAX_LENGTH - len);
+
+    }
     else if (strncmp(column->text, "EXTRACT(", 8) == 0) {
         char part[FIELD_MAX_LENGTH - 8];
         strcpy(part, column->text + 8);

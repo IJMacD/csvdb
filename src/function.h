@@ -8,22 +8,20 @@
 // xxx          = family (mask 0xD0)
 //    a aaaa    = function (mask 0x1F)
 
-// Family 000 (0x00)
-#define FUNC_UNITY                  0
+// This gives 8 families with 32 functions each
+// (00 function is usable in each family)
 
+// Family 000x (0x00) Basic
+#define FUNC_UNITY                  0x00
 
-// Family 010 (0x10) String
-#define FUNC_FAM_STRING             0x10
+// Family 001x (0x20) String
+#define FUNC_FAM_STRING             0x20
 
-// Family 001 (0x20) Agg
-#define FUNC_FAM_AGG                0x20
+#define FUNC_LENGTH                 0x21
+#define FUNC_LEFT                   0x22
+#define FUNC_RIGHT                  0x23
 
-#define FUNC_AGG_COUNT              0x21
-#define FUNC_AGG_MAX                0x22
-#define FUNC_AGG_MIN                0x23
-#define FUNC_AGG_AVG                0x24
-
-// Family 010 (0x40) Extract
+// Family 010x (0x40) Extract
 #define FUNC_FAM_EXTRACT            0x40
 
 #define FUNC_EXTRACT_YEAR           0x41
@@ -42,6 +40,27 @@
 #define FUNC_EXTRACT_DATE           0x5D
 #define FUNC_EXTRACT_TIME           0x5E
 #define FUNC_EXTRACT_DATETIME       0x5F
+
+// Family 011x (0x60) (Undefined)
+#define FUNC_FAM_UNDEF_60           0x60
+
+// Family 100x (0x80) (Undefined)
+#define FUNC_FAM_UNDEF_80           0x80
+
+// Family 101x (0xA0) Agg
+#define FUNC_FAM_AGG                0xA0
+
+#define FUNC_AGG_COUNT              0xA1
+#define FUNC_AGG_MAX                0xA2
+#define FUNC_AGG_MIN                0xA3
+#define FUNC_AGG_AVG                0xA4
+
+// Family 110x (0xC0) (Undefined)
+#define FUNC_FAM_UNDEF_C0           0xC0
+
+// Family 111x (0xC0) (Undefined)
+#define FUNC_FAM_UNDEF_E0           0xE0
+
 
 int evaluateFunction(FILE *f, struct DB *db, struct ResultColumn *column, int record_index);
 

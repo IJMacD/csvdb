@@ -3,11 +3,11 @@
 #include "limits.h"
 
 struct ResultColumn {
-    int field;
-    int function;
     char text[FIELD_MAX_LENGTH];
     char alias[FIELD_MAX_LENGTH];
     int table_id;
+    int field;
+    int function;
 };
 
 struct RowList {
