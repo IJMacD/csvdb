@@ -397,7 +397,7 @@ int getToken (const char *string, size_t *index, char *token, int token_max_leng
  * @param index
  * @param token
  * @param token_max_length
- * @return int 0 means no quotes, 1 means single quotes, 2 means double quotes
+ * @return int 0 means no quotes, ~~1 means single quotes~~, 2 means double quotes
  */
 int getQuotedToken (const char *string, size_t *index, char *token, int token_max_length) {
     skipWhitespace(string, index);
@@ -406,7 +406,7 @@ int getQuotedToken (const char *string, size_t *index, char *token, int token_ma
         return -1;
     }
 
-    int quoted_flag = string[*index] == '\'' ? 1 : (string[*index] == '"' ? 2 : 0);
+    int quoted_flag = (string[*index] == '"' ? 2 : 0);
 
     int start_index = *index;
 
