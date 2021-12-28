@@ -8,6 +8,7 @@ CFLAGS = -Wall -Werror -Wextra
 # Project files
 #
 SRCS = main.c db.c db-csv.c db-calendar.c db-csv-mem.c db-sequence.c query.c parse.c predicates.c filter.c sort.c tree.c output.c create.c util.c explain.c indices.c plan.c function.c date.c result.c debug.c
+SRCDIR = src
 OBJS = $(SRCS:.c=.o)
 EXE  = csvdb
 
@@ -40,7 +41,7 @@ debug: $(DBGEXE)
 $(DBGEXE): $(DBGOBJS)
 	$(CC) $(CFLAGS) $(DBGCFLAGS) -o $(DBGEXE) $^
 
-$(DBGDIR)/%.o: %.c
+$(DBGDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) -c $(CFLAGS) $(DBGCFLAGS) -o $@ $<
 
 #
@@ -51,7 +52,7 @@ release: $(RELEXE)
 $(RELEXE): $(RELOBJS)
 	$(CC) $(CFLAGS) $(RELCFLAGS) -o $(RELEXE) $^
 
-$(RELDIR)/%.o: %.c
+$(RELDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) -c $(CFLAGS) $(RELCFLAGS) -o $@ $<
 
 #
