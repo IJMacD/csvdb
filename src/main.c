@@ -8,6 +8,8 @@
 #include "query.h"
 #include "output.h"
 
+char **global_argv;
+
 void printUsage (const char* name) {
     printf(
         "Usage:\n"
@@ -24,6 +26,8 @@ void printUsage (const char* name) {
 }
 
 int main (int argc, char * argv[]) {
+    global_argv = argv;
+
     char buffer[1024];
     int flags = 0;
 

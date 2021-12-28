@@ -17,7 +17,8 @@
                 // "FROM suits,ranks WHERE ranks.name = 'Ace'"
                 // "FROM suits, ranks SELECT suits.name, ranks.name WHERE suits.name = 'clubs' AND ranks.name = 'Ace'"
                 // "FROM suits,suits,suits"
-                "FROM suits, ranks WHERE ranks.value < 3 ORDER BY suits.name"
+                // "FROM suits, ranks WHERE ranks.value < 3 ORDER BY suits.name"
+                "FROM dates.sql AS d"
                 // "-f",
                 // "test.sql"
             ],

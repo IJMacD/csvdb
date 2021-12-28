@@ -17,6 +17,8 @@ static int measureLine (FILE *f, size_t byte_offset);
 
 static void prepareHeaders (struct DB *db);
 
+extern char **global_argv;
+
 /**
  * Indices must point to enough memory to contain all the indices
  */
@@ -51,6 +53,7 @@ static int makeDB (struct DB *db, FILE *f) {
  */
 int csv_openDB (struct DB *db, const char *filename) {
     FILE *f;
+    char buffer[255];
 
     if (strcmp(filename, "stdin") == 0) {
         f = stdin;
@@ -59,13 +62,33 @@ int csv_openDB (struct DB *db, const char *filename) {
         f = fopen(filename, "r");
     }
 
-    if (!f) {
-        char buffer[255];
+    if (f) {
+        // We found a file with the explicit name but now check if it is a SQL
+        // file (or otherwise we'll assume csv)
+        int len = strlen(filename);
+        if (strcmp(filename + len - 4, ".sql") == 0) {
+            fclose(f);
+            sprintf(buffer, "%s -H -F csv -f %s", global_argv[0], filename);
+            f = popen(buffer, "r");
+        }
+    }
+    else {
         sprintf(buffer, "%s.csv", filename);
         f = fopen(buffer, "r");
 
         if (!f) {
-            return -1;
+            // Try sql file as "VIEW"
+            sprintf(buffer, "%s.sql", filename);
+            f = fopen(buffer, "r");
+
+            if (f) {
+                fclose(f);
+                sprintf(buffer, "%s -H -F csv -f %s.sql", global_argv[0], filename);
+                f = popen(buffer, "r");
+            }
+            else {
+                return -1;
+            }
         }
     }
 
