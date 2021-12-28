@@ -9,6 +9,7 @@
 #include "db.h"
 #include "parse.h"
 #include "predicates.h"
+#include "function.h"
 #include "indices.h"
 #include "filter.h"
 #include "sort.h"
@@ -344,7 +345,7 @@ static int populateColumns (struct Query * q) {
             findColumn(q, column->text, &column->table_id, &column->field);
 
             if (column->field == FIELD_UNKNOWN) {
-                fprintf(stderr, "Field %s not found\n", column->text);
+                fprintf(stderr, "Field '%s' not found\n", column->text);
                 return -1;
             }
         }

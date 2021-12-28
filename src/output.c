@@ -89,7 +89,7 @@ void printResultLine (FILE *f, struct DB *tables, int db_count, struct ResultCol
         else if (column.field == FIELD_CONSTANT) {
             fprintf(f, "%s", column.text);
         }
-        else if ((column.function & MASK_FUNC_FAMILY) == FUNC_AGG) {
+        else if ((column.function & MASK_FUNC_FAMILY) == FUNC_FAM_AGG) {
             int result = evaluateAggregateFunction(f, tables, db_count, columns + j, row_list);
             if (result < 0) {
                 fprintf(f, "BADFUNC");

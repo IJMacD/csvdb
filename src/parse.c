@@ -3,6 +3,7 @@
 
 #include "parse.h"
 #include "predicates.h"
+#include "function.h"
 #include "sort.h"
 #include "util.h"
 

@@ -73,6 +73,8 @@ int explain_select_query (
                     rows = rows / 2;
                 }
             }
+
+            strcpy(predicate, q->tables[0].name);
         }
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
             operation = "TABLE ACCESS BY ROWID";

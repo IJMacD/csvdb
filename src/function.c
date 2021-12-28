@@ -2,6 +2,7 @@
 #include <limits.h>
 
 #include "function.h"
+#include "date.h"
 
 int evaluateFunction(FILE *f, struct DB *db, struct ResultColumn *column, int record_index) {
     char value[VALUE_MAX_LENGTH];
@@ -11,7 +12,7 @@ int evaluateFunction(FILE *f, struct DB *db, struct ResultColumn *column, int re
         if (column->function == FUNC_UNITY) {
             fprintf(f, "%s", value);
         }
-        else if ((column->function & MASK_FUNC_FAMILY) == FUNC_EXTRACT) {
+        else if ((column->function & MASK_FUNC_FAMILY) == FUNC_FAM_EXTRACT) {
             struct DateTime dt;
 
             if (!parseDateTime(value, &dt)) {
@@ -78,7 +79,7 @@ int evaluateFunction(FILE *f, struct DB *db, struct ResultColumn *column, int re
 int evaluateAggregateFunction (FILE *f, struct DB *tables, __attribute__((unused)) int table_count, struct ResultColumn *column, struct RowList * row_list) {
     char value[VALUE_MAX_LENGTH];
 
-    if ((column->function & MASK_FUNC_FAMILY) != FUNC_AGG) {
+    if ((column->function & MASK_FUNC_FAMILY) != FUNC_FAM_AGG) {
         return -1;
     }
 
