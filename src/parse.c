@@ -36,7 +36,7 @@ int parseQuery (struct Query *q, const char *query) {
 
     skipWhitespace(query, &index);
 
-    if (strncmp(query + index, "EXPLAIN ", 8) == 0) {
+    if (strncmp(query + index, "EXPLAIN", 7) == 0 && isspace(query[index + 7])) {
         q->flags |= FLAG_EXPLAIN;
         index += 8;
     }

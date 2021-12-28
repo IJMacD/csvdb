@@ -47,6 +47,11 @@ int select_query (const char *query, int output_flags) {
         return -1;
     }
 
+    // Explain can be specified on the command line
+    if (output_flags & FLAG_EXPLAIN) {
+        q.flags |= FLAG_EXPLAIN;
+    }
+
     if (q.table_count == 0) {
         // No table was specified.
         // However, if stdin is something more than a tty (i.e pipe or redirected file)

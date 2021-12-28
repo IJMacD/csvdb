@@ -18,7 +18,7 @@ void printUsage (const char* name) {
         "\t%1$s -h|--help\n"
         "\n"
         "Options:\n"
-        "\t[-H|--headers] [(-F| --format=)(tsv|csv|html|json|json_array)]\n"
+        "\t[-E|--explain] [-H|--headers] [(-F| --format=)(tsv|csv|html|json|json_array)]\n"
     , name);
 }
 
@@ -31,6 +31,11 @@ int main (int argc, char * argv[]) {
     if (argc > arg && (strcmp(argv[arg], "-h") == 0 || strcmp(argv[arg], "--help") == 0)) {
         printUsage(argv[0]);
         return 0;
+    }
+
+    if (argc > arg && (strcmp(argv[arg], "-E") == 0 || strcmp(argv[arg], "--explain") == 0)) {
+        flags |= FLAG_EXPLAIN;
+        arg++;
     }
 
     if (argc > arg && (strcmp(argv[arg], "-H") == 0 || strcmp(argv[arg], "--headers") == 0)) {
