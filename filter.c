@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 #include "db.h"
 #include "limits.h"
 #include "query.h"
@@ -9,6 +11,11 @@ int filterRows (struct Query *query, struct RowList *source_list, struct Predica
     int column_id;
 
     findColumn(query, p->field, &table_id, &column_id);
+
+    if (column_id == FIELD_UNKNOWN) {
+        fprintf(stderr, "Predicate column not found: %s\n", p->field);
+        exit(-1);
+    }
 
     target_list->row_count = 0;
 
