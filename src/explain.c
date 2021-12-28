@@ -74,7 +74,9 @@ int explain_select_query (
                 }
             }
 
-            strcpy(predicate, q->tables[0].name);
+            if (q->predicate_count == 0) {
+                strcpy(predicate, q->tables[0].name);
+            }
         }
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
             operation = "TABLE ACCESS BY ROWID";

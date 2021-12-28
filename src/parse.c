@@ -693,6 +693,16 @@ int parseColumn (const char * query, size_t * index, struct ResultColumn *column
 
         sprintf(column->alias, "AVG(%s)", column->text);
     }
+    else if (strncmp(column->text, "LISTAGG(", 6) == 0) {
+        column->function = FUNC_AGG_LISTAGG;
+        flags |= FLAG_GROUP;
+
+        if (parseFunction(query, index, column, strlen("LISTAGG")) < 0) {
+            return -1;
+        }
+
+        sprintf(column->alias, "LISTAGG(%s)", column->text);
+    }
 
     return flags;
 }

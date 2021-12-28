@@ -244,5 +244,27 @@ int evaluateAggregateFunction (FILE *f, struct DB *tables, __attribute__((unused
         return 0;
     }
 
+    if (column->function == FUNC_AGG_LISTAGG) {
+
+        int have_prev = 0;
+
+        for (int i = 0; i < row_list->row_count; i++) {
+            int rowid = getRowID(row_list, column->table_id, i);
+
+            // Count up the non-NULL values
+            if (getRecordValue(&tables[column->table_id], rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
+                if (have_prev == 1) {
+                    fprintf(f, ",");
+                }
+
+                fprintf(f, "%s", value);
+
+                have_prev = 1;
+            }
+        }
+
+        return 0;
+    }
+
     return -1;
 }
