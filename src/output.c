@@ -87,14 +87,10 @@ void printResultLine (FILE *f, struct DB *tables, int db_count, struct ResultCol
             fprintf(f, "%d", rowid);
         }
         else if (column.field == FIELD_CONSTANT) {
-            if (column.function == 0) {
-                fprintf(f, "%s", column.text);
-            } else {
-                int result = evaluateFunction(f, NULL, &column, -1);
+            int result = evaluateFunction(f, NULL, &column, -1);
 
-                if (result < 0) {
-                    fprintf(f, "BADFUNC");
-                }
+            if (result < 0) {
+                fprintf(f, "BADFUNC");
             }
         }
         else if ((column.function & MASK_FUNC_FAMILY) == FUNC_FAM_AGG) {

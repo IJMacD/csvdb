@@ -5,11 +5,14 @@
 #include "predicates.h"
 #include "function.h"
 #include "sort.h"
+#include "date.h"
 #include "util.h"
 
 int parseColumn (const char * query, size_t * index, struct ResultColumn *column);
 
 int parseFunction (const char * query, size_t * index, struct ResultColumn * column, int name_length);
+
+static int checkConstantColumn(struct ResultColumn * column);
 
 int parseQuery (struct Query *q, const char *query) {
     /*********************
@@ -450,15 +453,12 @@ int parseColumn (const char * query, size_t * index, struct ResultColumn *column
 
     strcpy(column->alias, column->text);
 
-    if (quoted_flag == 1) {
-        column->field = FIELD_CONSTANT;
-    }
-    else if (quoted_flag == 2) {
+    if (quoted_flag == 2) {
         // Field is explicit
         // Nothing else to do
     }
-    else if (is_numeric(column->text)) {
-        column->field = FIELD_CONSTANT;
+    else if (checkConstantColumn(column) < 0) {
+        return -1;
     }
     else if (strcmp(column->text, "COUNT(*)") == 0) {
         column->field = FIELD_COUNT_STAR;
@@ -498,6 +498,10 @@ int parseColumn (const char * query, size_t * index, struct ResultColumn *column
         strcpy(field_name, column->text + 5);
         strcpy(column->text, field_name);
 
+        if (checkConstantColumn(column) < 0) {
+            return -1;
+        }
+
         // Store both field name and length in same array
         // Transform to:
         // <field>\0 <count>)
@@ -525,6 +529,10 @@ int parseColumn (const char * query, size_t * index, struct ResultColumn *column
         char field_name[FIELD_MAX_LENGTH - 6];
         strcpy(field_name, column->text + 6);
         strcpy(column->text, field_name);
+
+        if (checkConstantColumn(column) < 0) {
+            return -1;
+        }
 
         // Store both field name and length in same array
         // Transform to:
@@ -631,6 +639,10 @@ int parseColumn (const char * query, size_t * index, struct ResultColumn *column
         }
 
         sprintf(column->alias, "EXTRACT(%s FROM %s)", part, column->text);
+
+        if (checkConstantColumn(column) < 0) {
+            return -1;
+        }
     }
     else if (strncmp(column->text, "COUNT(", 6) == 0) {
         column->function = FUNC_AGG_COUNT;
@@ -707,6 +719,15 @@ int parseFunction (const char * query, size_t * index, struct ResultColumn * col
         (*index)++;
     }
 
+    if (checkConstantColumn(column) < 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int checkConstantColumn(struct ResultColumn * column) {
+
     if (is_numeric(column->text)) {
         // Detected numeric constant
         column->field = FIELD_CONSTANT;
@@ -714,16 +735,26 @@ int parseFunction (const char * query, size_t * index, struct ResultColumn * col
         // Detected string literal
         column->field = FIELD_CONSTANT;
 
-        if (column->text[len - 2] != '\'') {
-            fprintf(stderr, "Bad query - expcted ',' got '%c'\n", column->text[len - 2]);
+        int len = strlen(column->text);
+
+        if (column->text[len - 1] != '\'') {
+            fprintf(stderr, "Bad query - expected apostrophe got '%c'\n", column->text[len - 1]);
             return -1;
         }
 
         char value[FIELD_MAX_LENGTH];
-        strncpy(value, column->text + 1, len - 3);
-        value[len - 3] = '\0';
+        strncpy(value, column->text + 1, len - 2);
+        value[len - 2] = '\0';
 
         strcpy(column->text, value);
+    } else if (strcmp(column->text, "CURRENT_DATE") == 0
+        || strcmp(column->text, "TODAY") == 0)
+    {
+        column->field = FIELD_CONSTANT;
+
+        struct DateTime dt;
+        parseDateTime("CURRENT_DATE", &dt);
+        sprintf(column->text, "%4d-%2d-%2d", dt.year, dt.month, dt.day);
     }
 
     return 0;

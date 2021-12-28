@@ -41,6 +41,7 @@ int query (const char *query, int output_flags) {
 }
 
 int select_query (const char *query, int output_flags) {
+    int result;
     struct Query q = {0};
 
     if (parseQuery(&q, query) < 0) {
@@ -63,8 +64,31 @@ int select_query (const char *query, int output_flags) {
             strcpy(q.tables[0].name, "stdin");
         }
         else {
-            fprintf(stderr, "Table not specified\n");
-            return -1;
+            // We could have a constant query which will output a single row
+
+            int all_constant = 1;
+            for (int i = 0; i < q.column_count; i++) {
+                if (q.columns[i].field != FIELD_CONSTANT) {
+                    all_constant = 0;
+                    break;
+                }
+            }
+
+            if (all_constant) {
+                struct Plan plan;
+                plan.step_count = 1;
+
+                struct PlanStep * step = plan.steps;
+                step->type = PLAN_SELECT;
+                step->predicate_count = 0;
+
+                result = basic_select_query(&q, &plan, output_flags);
+                destroyQuery(&q);
+                return result;
+            } else {
+                fprintf(stderr, "Table not specified\n");
+                return -1;
+            }
         }
     }
 
@@ -73,7 +97,7 @@ int select_query (const char *query, int output_flags) {
             return -1;
         }
 
-        int result = information_query(q.predicates[0].value);
+        result = information_query(q.predicates[0].value);
         destroyQuery(&q);
         return result;
     }
@@ -89,7 +113,7 @@ int select_query (const char *query, int output_flags) {
         exit(-1);
     }
 
-    int result = populateTables(&q, dbs);
+    result = populateTables(&q, dbs);
     if (result < 0) {
         return result;
     }
@@ -102,7 +126,7 @@ int select_query (const char *query, int output_flags) {
     makePlan(&q, &plan);
 
     if (q.flags & FLAG_EXPLAIN) {
-        int result =  explain_select_query(&q, &plan, output_flags);
+        result =  explain_select_query(&q, &plan, output_flags);
         destroyQuery(&q);
         return result;
     }
@@ -117,9 +141,13 @@ int basic_select_query (
     struct Plan *plan,
     int output_flags
 ) {
+    struct DB *dbs = NULL;
+
     // We know that the dbs storage is on the stack and starts at the db
     // pointed to by the first table.
-    struct DB *dbs = q->tables[0].db;
+    if (q->table_count > 0) {
+        dbs = q->tables[0].db;
+    }
 
     /*************************
      * Output headers
@@ -138,37 +166,49 @@ int basic_select_query (
 
     results.row_lists = &row_list;
 
-    // Provision enough result space for maximum of all rows in first table
-    row_list.row_ids = malloc(sizeof (int) * q->tables[0].db->record_count);
+    if (q->table_count == 0) {
+        // Just a single output row
+        row_list.row_ids = malloc(sizeof (int));
 
-    row_list.join_count = 1;
-    row_list.row_count = 0;
+        row_list.join_count = 0;
+        row_list.row_count = 1;
+    } else {
+        // Provision enough result space for maximum of all rows in first table
+        row_list.row_ids = malloc(sizeof (int) * q->tables[0].db->record_count);
+
+        row_list.join_count = 1;
+        row_list.row_count = 0;
+    }
 
     for (int i = 0; i < plan->step_count; i++) {
         struct PlanStep s = plan->steps[i];
 
-        // Handy reference to first table
-        struct Table table = q->tables[0];
-        struct DB * db = table.db;
-
         if (s.type == PLAN_PK_UNIQUE || s.type == PLAN_PK_RANGE) {
+            // First table
+            struct Table * table = q->tables;
             struct Predicate p = s.predicates[0];
-            primaryKeyScan(db, p.field, p.op, p.value, &row_list);
+            primaryKeyScan(table->db, p.field, p.op, p.value, &row_list);
         }
         else if (s.type == PLAN_INDEX_UNIQUE) {
+            // First table
+            struct Table * table = q->tables;
             struct Predicate p = s.predicates[0];
-            indexUniqueScan(table.name, p.field, p.op, p.value, &row_list);
+            indexUniqueScan(table->name, p.field, p.op, p.value, &row_list);
         }
         else if (s.type == PLAN_INDEX_RANGE) {
+            // First table
+            struct Table * table = q->tables;
             struct Predicate p = s.predicates[0];
-            indexRangeScan(table.name, p.field, p.op, p.value, &row_list);
+            indexRangeScan(table->name, p.field, p.op, p.value, &row_list);
         }
         else if (s.type == PLAN_TABLE_ACCESS_FULL) {
+            // First table
+            struct Table * table = q->tables;
             if (s.predicate_count > 0) {
-                fullTableScan(db, &row_list, s.predicates, s.predicate_count, q->limit_value + q->offset_value);
+                fullTableScan(table->db, &row_list, s.predicates, s.predicate_count, q->limit_value + q->offset_value);
             }
             else {
-                fullTableAccess(db, &row_list, q->limit_value + q->offset_value);
+                fullTableAccess(table->db, &row_list, q->limit_value + q->offset_value);
             }
         }
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
