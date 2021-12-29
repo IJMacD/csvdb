@@ -27,6 +27,8 @@ int explain_select_query (
     long rows = 0;
     long cost = 0;
 
+    int join_count = 0;
+
     for (int i = 0; i < plan->step_count; i++) {
         struct PlanStep s = plan->steps[i];
 
@@ -157,13 +159,60 @@ int explain_select_query (
         else if (s.type == PLAN_CROSS_JOIN) {
             operation = "CROSS JOIN";
 
-            struct Table *table = &q->tables[1];
+            join_count++;
+
+            struct Table *table = &q->tables[join_count];
 
             strcpy(predicate, table->name);
 
-            // TODO: should be more than
             rows *= table->db->record_count;
-            cost = rows;
+            if (cost < rows) {
+                cost = rows;
+            }
+        }
+        else if (s.type == PLAN_CONSTANT_JOIN) {
+            operation = "CONSTANT JOIN";
+
+            join_count++;
+
+            struct Table *table = &q->tables[join_count];
+
+            if (s.predicate_count > 0) {
+                if (s.predicates[0].op == OPERATOR_EQ) {
+                    rows += table->db->record_count / 1000;
+                } else {
+                    rows += table->db->record_count / 10;
+                }
+            } else {
+                strcpy(predicate, table->name);
+                rows += table->db->record_count;
+            }
+
+            if (cost < rows) {
+                cost = rows;
+            }
+        }
+        else if (s.type == PLAN_INNER_JOIN) {
+            operation = "INNER JOIN";
+
+            join_count++;
+
+            struct Table *table = &q->tables[join_count];
+
+            if (s.predicate_count > 0) {
+                if (s.predicates[0].op == OPERATOR_EQ) {
+                    rows *= table->db->record_count / 1000;
+                } else {
+                    rows *= table->db->record_count / 10;
+                }
+            } else {
+                strcpy(predicate, table->name);
+                rows *= table->db->record_count;
+            }
+
+            if (cost < rows) {
+                cost = rows;
+            }
         } else {
             operation = "Unknown OP code";
             sprintf(predicate, "%d\n", s.type);

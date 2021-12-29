@@ -12,6 +12,8 @@
 #define PLAN_INDEX_RANGE            5
 
 #define PLAN_CROSS_JOIN             10
+#define PLAN_CONSTANT_JOIN          11
+#define PLAN_INNER_JOIN             12
 
 #define PLAN_SORT                   20
 #define PLAN_REVERSE                21

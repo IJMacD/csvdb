@@ -69,3 +69,16 @@ void copyResultRow (struct RowList * dest_list, struct RowList * src_list, int s
 
     dest_list->row_count++;
 }
+
+void makeRowList (struct RowList * list, int join_count, int max_rows) {
+    list->join_count = join_count;
+    list->row_count = 0;
+    list->row_ids = malloc((sizeof (int *)) * list->join_count * max_rows);
+}
+
+void destroyRowList (struct RowList * list) {
+    if (list->row_ids != NULL) {
+        free(list->row_ids);
+        list->row_ids = NULL;
+    }
+}

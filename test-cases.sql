@@ -19,3 +19,5 @@ SELECT COUNT(*) FROM test3 WHERE name = 'Walter KELLY'
 SELECT COUNT(*) FROM test3 WHERE birth_date = '2021-01-18'
 SELECT COUNT(*) FROM test3 WHERE score = 42
 FROM test3 WHERE name < 'Bob' AND score > 50 FETCH FIRST 5 ROWS ONLY
+FROM test3, CALENDAR ON date = birth_date WHERE name LIKE 'Walter K%' SELECT name, yearday
+FROM suits AS s1, suits AS s2 ON s1.name < s2.name ORDER BY name

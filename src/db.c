@@ -6,6 +6,7 @@
 #include "db-csv-mem.h"
 #include "db-sequence.h"
 #include "limits.h"
+#include "query.h"
 
 int openDB (struct DB *db, const char *filename) {
     if (strcmp(filename, "CALENDAR") == 0) {
@@ -127,7 +128,8 @@ int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *p
     // VFS-agnostic implementation
     int result_count = 0;
 
-    char value[VALUE_MAX_LENGTH] = {0};
+    char value_left[VALUE_MAX_LENGTH] = {0};
+    char value_right[VALUE_MAX_LENGTH] = {0};
 
     for (int i = 0; i < db->record_count; i++) {
         int matching = 1;
@@ -136,11 +138,23 @@ int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *p
         for (int j = 0; j < predicate_count && matching; j++) {
             struct Predicate *predicate = predicates + j;
 
-            // Note: Could factor out next line if there are performance issues
-            int predicate_field_index = getFieldIndex(db, predicate->left.text);
-            getRecordValue(db, i, predicate_field_index, value, VALUE_MAX_LENGTH);
+            // Either side could be constant
 
-            if (!evaluateExpression(predicate->op, value, predicate->right.text)) {
+            // (we're hoping at least one side on on this table!)
+
+            if (predicate->left.field == FIELD_CONSTANT) {
+                strcpy(value_left, predicate->left.text);
+            } else if (predicate->left.field >= 0) {
+                getRecordValue(db, i, predicate->left.field, value_left, VALUE_MAX_LENGTH);
+            }
+
+            if (predicate->right.field == FIELD_CONSTANT) {
+                strcpy(value_right, predicate->right.text);
+            } else if (predicate->right.field >= 0) {
+                getRecordValue(db, i, predicate->right.field, value_right, VALUE_MAX_LENGTH);
+            }
+
+            if (!evaluateExpression(predicate->op, value_left, value_right)) {
                 matching = 0;
                 break;
             }

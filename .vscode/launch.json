@@ -16,9 +16,11 @@
                 // "FROM \\\"simple test\\\" ORDER BY name"
                 // "FROM suits,ranks WHERE ranks.name = 'Ace'"
                 // "FROM suits, ranks SELECT suits.name, ranks.name WHERE suits.name = 'clubs' AND ranks.name = 'Ace'"
-                "FROM suits AS s1, suits AS s2 ON s1.name < s2.name"
+                // "FROM suits AS s1, suits AS s2 ON s1.name < s2.name"
                 // "FROM suits, ranks WHERE ranks.value < 3 ORDER BY suits.name"
                 // "FROM dates.sql AS d"
+                // "FROM test3, CALENDAR ON birth_date = date WHERE birth_date = TODAY"
+                "SELECT name, score FROM test3 WHERE score = 42 FETCH FIRST 5 ROWS ONLY"
                 // "-f",
                 // "test.sql"
             ],

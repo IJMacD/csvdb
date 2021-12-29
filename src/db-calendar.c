@@ -73,7 +73,7 @@ int calendar_openDB (struct DB *db, const char *filename) {
     }
 
     db->vfs = VFS_CALENDAR;
-    db->record_count = 100000;
+    db->record_count = 10000000;
     db->line_indices = NULL;
     db->field_count = sizeof(field_names) / sizeof(field_names[0]);
 

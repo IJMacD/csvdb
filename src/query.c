@@ -113,9 +113,16 @@ int select_query (const char *query, int output_flags, FILE * output) {
         exit(-1);
     }
 
+    // Populate tables
     result = populateTables(&q, dbs);
     if (result < 0) {
         return result;
+    }
+
+    // Populate predicate columns
+    for (int i = 0; i < q.predicate_count; i++) {
+        populateColumnNode(&q, &q.predicates[i].left);
+        populateColumnNode(&q, &q.predicates[i].right);
     }
 
     /**********************
@@ -251,6 +258,108 @@ int basic_select_query (
             row_list.join_count = new_list.join_count;
             row_list.row_count = new_list.row_count;
             row_list.row_ids = new_list.row_ids;
+        }
+        else if (s.type == PLAN_CONSTANT_JOIN) {
+            // Sanity check
+            struct Predicate *p = s.predicates + 0;
+            if (p->left.table_id != row_list.join_count &&
+                p->right.table_id != row_list.join_count)
+            {
+                fprintf(stderr, "Cannot perform constant join (Join Index: %d)\n", row_list.join_count);
+                exit(-1);
+            }
+
+            struct DB *next_db = q->tables[row_list.join_count].db;
+
+            struct RowList tmp_list;
+
+            makeRowList(&tmp_list, 1, next_db->record_count);
+
+            // This is a constant join so we'll just populate the table once
+            // Hopefully it won't be the whole table since we have a predicate
+            fullTableScan(next_db, &tmp_list, s.predicates, s.predicate_count, -1);
+
+            struct RowList new_list;
+
+            int new_length = row_list.row_count * tmp_list.row_count;
+
+            // Now we know how many rows are to be joined we can make the new row list
+            makeRowList(&new_list, row_list.join_count + 1, new_length);
+
+            // For each row in the original row list, join every row of the tmp row list
+            for (int i = 0; i < row_list.row_count; i++) {
+                for (int j = 0; j < tmp_list.row_count; j++) {
+                    int rowid = getRowID(&tmp_list, 0, j);
+                    appendJoinedRowID(&new_list, &row_list, i, rowid);
+                }
+            }
+
+            // Free the old row_ids list
+            destroyRowList(&row_list);
+
+            // Copy updated values back
+            row_list.join_count = new_list.join_count;
+            row_list.row_count = new_list.row_count;
+            row_list.row_ids = new_list.row_ids;
+
+            // Free row_ids on tmp list
+            destroyRowList(&tmp_list);
+        }
+        else if (s.type == PLAN_INNER_JOIN) {
+            struct DB *next_db = q->tables[row_list.join_count].db;
+
+            int new_length = row_list.row_count * next_db->record_count;
+
+            struct RowList new_list;
+
+            makeRowList(&new_list, row_list.join_count + 1, new_length);
+
+            struct RowList tmp_list;
+
+            // Prepare a temporary list that can hold every record in the table
+            makeRowList(&tmp_list, 1, next_db->record_count);
+
+            // Table ID being joined here
+            int table_id = row_list.join_count;
+
+            for (int i = 0; i < row_list.row_count; i++) {
+                // Make a local copy of predicate
+                struct Predicate p = s.predicates[0];
+
+                // Fill in value as constant from outer tables
+                if (p.left.table_id < table_id) {
+                    evaluateNode(q, &row_list, i, &p.left, p.left.text, FIELD_MAX_LENGTH);
+                    p.left.field = FIELD_CONSTANT;
+                }
+
+                // Fill in value as constant from outer tables
+                if (p.right.table_id < table_id) {
+                    evaluateNode(q, &row_list, i, &p.right, p.right.text, FIELD_MAX_LENGTH);
+                    p.right.field = FIELD_CONSTANT;
+                }
+
+                tmp_list.row_count = 0;
+
+                // Populate the temp list with all rows which match our special predicate
+                fullTableScan(next_db, &tmp_list, &p, 1, -1);
+
+                // Append each row we've just found to the main row_list
+                for (int j = 0; j < tmp_list.row_count; j++) {
+                    int rowid = getRowID(&tmp_list, 0, j);
+                    appendJoinedRowID(&new_list, &row_list, i, rowid);
+                }
+            }
+
+            // Free the old row_ids list
+            destroyRowList(&row_list);
+
+            // Copy updated values back
+            row_list.join_count = new_list.join_count;
+            row_list.row_count = new_list.row_count;
+            row_list.row_ids = new_list.row_ids;
+
+            // Free row_ids on tmp list
+            destroyRowList(&tmp_list);
         }
         else if (s.type == PLAN_SORT) {
 
