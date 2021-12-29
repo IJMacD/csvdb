@@ -189,7 +189,9 @@ int parseQuery (struct Query *q, const char *query) {
                     }
                 }
 
-                getQuotedToken(query, &index, p->right.text, VALUE_MAX_LENGTH);
+                getQuotedToken(query, &index, p->right.text, FIELD_MAX_LENGTH);
+
+                checkConstantColumn(&p->right);
 
                 skipWhitespace(query, &index);
 

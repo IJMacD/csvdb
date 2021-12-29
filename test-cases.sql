@@ -12,7 +12,7 @@ SELECT name, birth_date FROM test3 WHERE birth_date > '2021-01-18' FETCH FIRST 5
 SELECT name, birth_date FROM test3 WHERE birth_date > '2021-01-18' ORDER BY name FETCH FIRST 5 ROWS ONLY
 SELECT name, birth_date FROM test3 WHERE PK(id) = 769
 SELECT name, birth_date FROM test3 WHERE UNIQUE(bd) = '2021-01-18'
-SELECT name, birth_date FROM test3 WHERE INDEX(bbb) = 42 FETCH FIRST 5 ROWS ONLY
+SELECT name, score FROM test3 WHERE INDEX(bbb) = 42 FETCH FIRST 5 ROWS ONLY
 SELECT EXTRACT(YEAR FROM birth_date), EXTRACT(MONTH FROM birth_date), EXTRACT(DAY FROM birth_date), EXTRACT(YEARDAY FROM birth_date) FROM test3 FETCH FIRST ROW ONLY
 SELECT COUNT(*) FROM test3
 SELECT COUNT(*) FROM test3 WHERE name = 'Walter KELLY'

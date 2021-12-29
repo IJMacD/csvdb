@@ -51,7 +51,15 @@ int makePlan (struct Query *q, struct Plan *plan) {
         struct Table table = q->tables[0];
 
         for (int i = 0; i < q->predicate_count; i++) {
-            findColumn(q, q->predicates[i].left.text, &table_id, &field_id);
+            // First check if we've been given an explicit index
+            // If so, we'll have to assume that's on the first table
+            if (strncmp(q->predicates[i].left.text, "UNIQUE(", 7) == 0 ||
+                strncmp(q->predicates[i].left.text, "INDEX(", 6) == 0)
+            {
+                table_id = 0;
+            } else {
+                findColumn(q, q->predicates[i].left.text, &table_id, &field_id);
+            }
 
             if (table_id == 0) {
                 chosen_predicate_index = i;
