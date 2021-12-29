@@ -40,3 +40,5 @@ int compare (int numeric_mode, const char * valueA, long valueA_numeric, const c
 int evaluateExpression (int op, const char *left, const char *right);
 
 int compareValues (const char *left, const char *right);
+
+void normalisePredicate (struct Predicate *p);

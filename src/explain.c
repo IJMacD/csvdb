@@ -18,7 +18,7 @@ int explain_select_query (
     FILE * output
 ) {
     if (output_flags & OUTPUT_OPTION_HEADERS) {
-        fprintf(output, "ID\tOperation\t\tName\t\tRows\tCost\n");
+        fprintf(output, "ID\tOperation\tTable\tPredicate\tRows\tCost\n");
     }
 
     int row_estimate = q->tables[0].db->record_count;
@@ -33,7 +33,8 @@ int explain_select_query (
         struct PlanStep s = plan->steps[i];
 
         char *operation = "";
-        char predicate[FIELD_MAX_LENGTH];
+        char table[FIELD_MAX_LENGTH] = {0};
+        char predicate[FIELD_MAX_LENGTH] = {0};
 
         if (s.predicate_count == 0) {
             predicate[0] = '\0';
@@ -77,9 +78,7 @@ int explain_select_query (
                 }
             }
 
-            if (q->predicate_count == 0) {
-                strcpy(predicate, q->tables[0].name);
-            }
+            strcpy(table, q->tables[0].name);
         }
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
             operation = "TABLE ACCESS BY ROWID";
@@ -96,27 +95,29 @@ int explain_select_query (
                 }
             }
 
-            if (s.predicate_count == 0) {
-                strcpy(predicate, q->tables[0].name);
-            }
+            strcpy(table, q->tables[0].name);
         }
         else if (s.type == PLAN_PK_UNIQUE) {
             operation = "PRIMARY KEY UNIQUE";
+            strcpy(table, q->tables[0].name);
             rows = 1;
             cost = log_rows;
         }
         else if (s.type == PLAN_PK_RANGE) {
             operation = "PRIMARY KEY RANGE";
+            strcpy(table, q->tables[0].name);
             rows = row_estimate / 2;
             cost = rows;
         }
         else if (s.type == PLAN_INDEX_UNIQUE) {
             operation = "INDEX UNIQUE";
+            strcpy(table, q->tables[0].name);
             rows = 1;
             cost = log_rows;
         }
         else if (s.type == PLAN_INDEX_RANGE) {
             operation = "INDEX RANGE";
+            strcpy(table, q->tables[0].name);
             if (s.predicate_count > 0 && s.predicates[0].op == OPERATOR_EQ) {
                 rows = row_estimate / 1000;
                 cost = log_rows * 2;
@@ -161,11 +162,11 @@ int explain_select_query (
 
             join_count++;
 
-            struct Table *table = &q->tables[join_count];
+            struct Table *t = &q->tables[join_count];
 
-            strcpy(predicate, table->name);
+            strcpy(table, t->name);
 
-            rows *= table->db->record_count;
+            rows *= t->db->record_count;
             if (cost < rows) {
                 cost = rows;
             }
@@ -175,17 +176,23 @@ int explain_select_query (
 
             join_count++;
 
-            struct Table *table = &q->tables[join_count];
+            struct Table *t = &q->tables[join_count];
+
+            strcpy(table, t->name);
 
             if (s.predicate_count > 0) {
                 if (s.predicates[0].op == OPERATOR_EQ) {
-                    rows += table->db->record_count / 1000;
+                    rows += t->db->record_count / 1000;
                 } else {
-                    rows += table->db->record_count / 10;
+                    rows += t->db->record_count / 10;
+                }
+
+                // We might have been too hasty copying predicate name
+                if (s.predicates[0].left.table_id != join_count) {
+                    strcpy(predicate, s.predicates[0].right.text);
                 }
             } else {
-                strcpy(predicate, table->name);
-                rows += table->db->record_count;
+                rows += t->db->record_count;
             }
 
             if (cost < rows) {
@@ -197,17 +204,23 @@ int explain_select_query (
 
             join_count++;
 
-            struct Table *table = &q->tables[join_count];
+            struct Table *t = &q->tables[join_count];
+
+            strcpy(table, t->name);
 
             if (s.predicate_count > 0) {
                 if (s.predicates[0].op == OPERATOR_EQ) {
-                    rows *= table->db->record_count / 1000;
+                    rows *= t->db->record_count / 1000;
                 } else {
-                    rows *= table->db->record_count / 10;
+                    rows *= t->db->record_count / 10;
+                }
+
+                // We might have been too hasty copying predicate name
+                if (s.predicates[0].left.table_id != join_count) {
+                    strcpy(predicate, s.predicates[0].right.text);
                 }
             } else {
-                strcpy(predicate, table->name);
-                rows *= table->db->record_count;
+                rows *= t->db->record_count;
             }
 
             if (cost < rows) {
@@ -218,7 +231,7 @@ int explain_select_query (
             sprintf(predicate, "%d\n", s.type);
         }
 
-        fprintf(output, "%d\t%-23s\t%-15s\t%ld\t%ld\n", i, operation, predicate, rows, cost);
+        fprintf(output, "%d\t%-23s\t%-15s\t%-15s\t%ld\t%ld\n", i, operation, table, predicate, rows, cost);
     }
 
     return 0;

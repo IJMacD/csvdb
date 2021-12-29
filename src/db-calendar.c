@@ -8,6 +8,7 @@
 #include "date.h"
 #include "predicates.h"
 #include "result.h"
+#include "query.h"
 
 #define COL_JULIAN              0
 #define COL_DATE                1
@@ -63,9 +64,9 @@ char *field_names[] = {
 
 const int month_lengths[] = {31,28,31,30,31,30,31,31,30,31,30,31};
 
-void getJulianRange (struct Predicate *predicates, int predicate_count, int *julian_start, int *julian_end);
+static void getJulianRange (struct Predicate *predicates, int predicate_count, int *julian_start, int *julian_end);
 
-int printDate (char *value, int max_length, struct DateTime date);
+static int printDate (char *value, int max_length, struct DateTime date);
 
 int calendar_openDB (struct DB *db, const char *filename) {
     if (strcmp(filename, "CALENDAR") != 0) {
@@ -337,10 +338,13 @@ int calendar_fullTableScan (struct DB *db, struct RowList *row_list, struct Pred
     return count;
 }
 
-void getJulianRange (struct Predicate *predicates, int predicate_count, int *julian_start, int *julian_end) {
+static void getJulianRange (struct Predicate *predicates, int predicate_count, int *julian_start, int *julian_end) {
 
     for (int i = 0; i < predicate_count; i++) {
         struct Predicate *p = predicates + i;
+
+        // We need field on the left and constant on the right, swap if necessary
+        normalisePredicate(p);
 
         // An exact Julian
         if (strcmp(p->left.text, "julian") == 0 && p->op == OPERATOR_EQ) {
@@ -442,7 +446,7 @@ void getJulianRange (struct Predicate *predicates, int predicate_count, int *jul
 
 }
 
-int printDate (char *value, int max_length, struct DateTime date) {
+static int printDate (char *value, int max_length, struct DateTime date) {
     if (date.year >= 0 && date.year < 10000) {
         return snprintf(value, max_length, "%04d-%02d-%02d", date.year, date.month, date.day);
     } else {

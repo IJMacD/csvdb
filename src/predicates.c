@@ -132,3 +132,32 @@ int compare (int numeric_mode, const char * valueA, long valueA_numeric, const c
         return strcmp(valueA, valueB);
     }
 }
+
+/**
+ * @brief Will ensure field is on left and constant is on right
+ *
+ * @param p
+ */
+void normalisePredicate (struct Predicate *p) {
+    if (p->left.field == FIELD_CONSTANT && p->right.field >= 0) {
+        // We need to swap
+
+        // copy struct
+        struct ColumnNode tmp = p->left;
+
+        // swap
+        memcpy(&p->left, &p->right, sizeof(tmp));
+        memcpy(&p->right, &tmp, sizeof(tmp));
+
+        // flip operator as necessary
+        if (p->op == OPERATOR_LT) {
+            p->op = OPERATOR_GT;
+        } else if (p->op == OPERATOR_LE) {
+            p->op = OPERATOR_GE;
+        } else if (p->op == OPERATOR_GT) {
+            p->op = OPERATOR_LT;
+        } else if (p->op == OPERATOR_GE) {
+            p->op = OPERATOR_LE;
+        }
+    }
+}
