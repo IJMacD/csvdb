@@ -26,7 +26,7 @@ struct Table {
 struct Query {
     struct Table *tables;
     int table_count;
-    struct ResultColumn columns[FIELD_MAX_COUNT];
+    struct ColumnNode columns[FIELD_MAX_COUNT];
     int column_count;
     int flags;
     int offset_value;

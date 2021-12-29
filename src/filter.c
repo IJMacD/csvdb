@@ -10,10 +10,10 @@ int filterRows (struct Query *query, struct RowList *source_list, struct Predica
     int table_id;
     int column_id;
 
-    findColumn(query, p->field, &table_id, &column_id);
+    findColumn(query, p->left.text, &table_id, &column_id);
 
     if (column_id == FIELD_UNKNOWN) {
-        fprintf(stderr, "Predicate column not found: %s\n", p->field);
+        fprintf(stderr, "Predicate column not found: %s\n", p->left.text);
         exit(-1);
     }
 
@@ -24,7 +24,7 @@ int filterRows (struct Query *query, struct RowList *source_list, struct Predica
         int row_id = getRowID(source_list, table_id, i);
         getRecordValue(query->tables[table_id].db, row_id, column_id, value, VALUE_MAX_LENGTH);
 
-        if (evaluateExpression(p->op, value, p->value)) {
+        if (evaluateExpression(p->op, value, p->right.text)) {
             // Add to result set
             copyResultRow(target_list, source_list, i);
         }

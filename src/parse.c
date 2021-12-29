@@ -8,11 +8,11 @@
 #include "date.h"
 #include "util.h"
 
-int parseColumn (const char * query, size_t * index, struct ResultColumn *column);
+int parseColumn (const char * query, size_t * index, struct ColumnNode *column);
 
-int parseFunction (const char * query, size_t * index, struct ResultColumn * column, int name_length);
+int parseFunction (const char * query, size_t * index, struct ColumnNode * column, int name_length);
 
-static int checkConstantColumn(struct ResultColumn * column);
+static int checkConstantColumn(struct ColumnNode * column);
 
 int parseQuery (struct Query *q, const char *query) {
     /*********************
@@ -61,7 +61,7 @@ int parseQuery (struct Query *q, const char *query) {
 
             int curr_index = 0;
             while (index < query_length) {
-                struct ResultColumn *column = &(q->columns[curr_index++]);
+                struct ColumnNode *column = &(q->columns[curr_index++]);
 
                 if (curr_index >= FIELD_MAX_COUNT + 1) {
                     fprintf(stderr, "Too many columns\n");
@@ -157,16 +157,16 @@ int parseQuery (struct Query *q, const char *query) {
 
                 struct Predicate *p = &(q->predicates[q->predicate_count++]);
 
-                getToken(query, &index, p->field, FIELD_MAX_LENGTH);
+                getToken(query, &index, p->left.text, FIELD_MAX_LENGTH);
 
-                if (strncmp(p->field, "PK(", 3) == 0) {
+                if (strncmp(p->left.text, "PK(", 3) == 0) {
                     q->flags |= FLAG_PRIMARY_KEY_SEARCH;
-                    size_t len = strlen(p->field);
+                    size_t len = strlen(p->left.text);
                     // remove trailing ')'
                     for (size_t i = 0; i < len - 4; i++) {
-                        p->field[i] = p->field[i+3];
+                        p->left.text[i] = p->left.text[i+3];
                     }
-                    p->field[len - 4] = '\0';
+                    p->left.text[len - 4] = '\0';
                 }
 
                 // printf("Predicate field: %s\n", predicate_field);
@@ -189,7 +189,7 @@ int parseQuery (struct Query *q, const char *query) {
                     }
                 }
 
-                getQuotedToken(query, &index, p->value, VALUE_MAX_LENGTH);
+                getQuotedToken(query, &index, p->right.text, VALUE_MAX_LENGTH);
 
                 skipWhitespace(query, &index);
 
@@ -443,7 +443,7 @@ int getNumericToken (const char *string, size_t *index) {
     return atol(val);
 }
 
-int parseColumn (const char * query, size_t * index, struct ResultColumn *column) {
+int parseColumn (const char * query, size_t * index, struct ColumnNode *column) {
     int flags = 0;
 
     column->field = FIELD_UNKNOWN;
@@ -716,7 +716,7 @@ int parseColumn (const char * query, size_t * index, struct ResultColumn *column
  * @param name_length Length of function name (excluding opening bracket)
  * @return int
  */
-int parseFunction (const char * query, size_t * index, struct ResultColumn * column, int name_length) {
+int parseFunction (const char * query, size_t * index, struct ColumnNode * column, int name_length) {
 
     char field[FIELD_MAX_LENGTH];
     strcpy(field, column->text + name_length + 1);
@@ -745,7 +745,7 @@ int parseFunction (const char * query, size_t * index, struct ResultColumn * col
     return 0;
 }
 
-static int checkConstantColumn(struct ResultColumn * column) {
+static int checkConstantColumn(struct ColumnNode * column) {
 
     if (is_numeric(column->text)) {
         // Detected numeric constant

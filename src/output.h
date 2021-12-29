@@ -17,10 +17,10 @@
 #define OUTPUT_FORMAT_HTML      (4 << 1)
 #define OUTPUT_FORMAT_JSON_ARRAY      (5 << 1)
 
-void printHeaderLine (FILE *f, struct DB *tables, int table_count, struct ResultColumn columns[], int column_count, int flags);
+void printHeaderLine (FILE *f, struct DB *tables, int table_count, struct ColumnNode columns[], int column_count, int flags);
 
-void printResultLine (FILE *f, struct DB *tables, int table_count, struct ResultColumn columns[], int column_count, int result_index, struct RowList * row_list, int flags);
+void printResultLine (FILE *f, struct DB *tables, int table_count, struct ColumnNode columns[], int column_count, int result_index, struct RowList * row_list, int flags);
 
-void printPreamble (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int flags);
+void printPreamble (FILE *f, struct DB *db, struct ColumnNode columns[], int column_count, int flags);
 
-void printPostamble (FILE *f, struct DB *db, struct ResultColumn columns[], int column_count, int result_count, int flags);
+void printPostamble (FILE *f, struct DB *db, struct ColumnNode columns[], int column_count, int result_count, int flags);

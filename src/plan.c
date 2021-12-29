@@ -51,7 +51,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
         struct Table table = q->tables[0];
 
         for (int i = 0; i < q->predicate_count; i++) {
-            findColumn(q, q->predicates[i].field, &table_id, &field_id);
+            findColumn(q, q->predicates[i].left.text, &table_id, &field_id);
 
             if (table_id == 0) {
                 chosen_predicate_index = i;
@@ -74,18 +74,18 @@ int makePlan (struct Query *q, struct Plan *plan) {
         if (table_id == 0) {
 
             // Remove qualified name so indexes can be searched etc.
-            int dot_index = str_find_index(p->field, '.');
+            int dot_index = str_find_index(p->left.text, '.');
             if (dot_index >= 0) {
                 char value[FIELD_MAX_LENGTH];
-                strcpy(value, p->field);
-                strcpy(p->field, value + dot_index + 1);
+                strcpy(value, p->left.text);
+                strcpy(p->left.text, value + dot_index + 1);
             }
 
             /*******************
              * UNIQUE INDEX SCAN
              *******************/
             // Try to find a unique index
-            if (p->op != OPERATOR_LIKE && findIndex(&index_db, table.name, p->field, INDEX_UNIQUE) == 0) {
+            if (p->op != OPERATOR_LIKE && findIndex(&index_db, table.name, p->left.text, INDEX_UNIQUE) == 0) {
                 closeDB(&index_db);
 
                 int type;
@@ -104,7 +104,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 }
 
                 // Sort is never required if the index is INDEX_UNIQUE
-                if (type == PLAN_INDEX_RANGE && (q->flags & FLAG_ORDER) && strcmp(p->field, q->order_field) == 0) {
+                if (type == PLAN_INDEX_RANGE && (q->flags & FLAG_ORDER) && strcmp(p->left.text, q->order_field) == 0) {
                     // We're sorting on the same column as we've just traversed in the index
                     // so a sort is not necessary but we might need to reverse
                     if (q->order_direction == ORDER_DESC && !(q->flags & FLAG_GROUP)) {
@@ -117,7 +117,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
             /*******************
              * INDEX RANGE SCAN
              *******************/
-            else if (p->op != OPERATOR_LIKE && findIndex(&index_db, table.name, p->field, INDEX_ANY) == 0) {
+            else if (p->op != OPERATOR_LIKE && findIndex(&index_db, table.name, p->left.text, INDEX_ANY) == 0) {
                 closeDB(&index_db);
 
                 addStepWithPredicate(plan, PLAN_INDEX_RANGE, p);
@@ -128,7 +128,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
                     addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + 1, q->predicate_count - 1);
                 }
 
-                if ((q->flags & FLAG_ORDER) && strcmp(p->field, q->order_field) == 0) {
+                if ((q->flags & FLAG_ORDER) && strcmp(p->left.text, q->order_field) == 0) {
                     // We're sorting on the same column as we've just traversed in the index
                     // so a sort is not necessary but we might need to reverse
                     if (q->order_direction == ORDER_DESC && !(q->flags & FLAG_GROUP)) {
@@ -150,9 +150,9 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 closeDB(&index_db);
 
                 struct Predicate *order_p = malloc(sizeof(*order_p));
-                strcpy(order_p->field, q->order_field);
+                strcpy(order_p->left.text, q->order_field);
                 order_p->op = 0;
-                order_p->value[0] = '\0';
+                order_p->right.text[0] = '\0';
 
                 // Add step for Sorted index access
                 addStepWithPredicate(plan, PLAN_INDEX_RANGE, order_p);
@@ -211,9 +211,9 @@ int makePlan (struct Query *q, struct Plan *plan) {
             closeDB(&index_db);
 
             struct Predicate *order_p = malloc(sizeof(*order_p));
-            strcpy(order_p->field, q->order_field);
+            strcpy(order_p->left.text, q->order_field);
             order_p->op = 0;
-            order_p->value[0] = '\0';
+            order_p->right.text[0] = '\0';
 
             addStepWithPredicate(plan, PLAN_INDEX_RANGE, order_p);
 
@@ -258,7 +258,7 @@ void destroyPlan (struct Plan *plan) {
     for (int i = 0; i < plan->step_count; i++) {
         // don't double free
         // Most predicates will be free'd in destroyQuery
-        if (plan->steps[i].predicate_count > 0 && plan->steps[i].predicates[0].value[0] == '\0') free(plan->steps[i].predicates);
+        if (plan->steps[i].predicate_count > 0 && plan->steps[i].predicates[0].right.text[0] == '\0') free(plan->steps[i].predicates);
     }
 }
 
@@ -292,15 +292,15 @@ void addOrderStepIfRequired (struct Plan *plan, struct Query *q) {
 
     // Don't need to sort if the order field has an equality predicate on it
     for (int j = 0; j < q->predicate_count; j++) {
-        if (strcmp(q->predicates[j].field, q->order_field) == 0 && q->predicates[j].op == OPERATOR_EQ) {
+        if (strcmp(q->predicates[j].left.text, q->order_field) == 0 && q->predicates[j].op == OPERATOR_EQ) {
             return;
         }
     }
 
     struct Predicate *order_p = malloc(sizeof(*order_p));
-    strcpy(order_p->field, q->order_field);
+    strcpy(order_p->left.text, q->order_field);
     order_p->op = q->order_direction;
-    order_p->value[0] = '\0';
+    order_p->right.text[0] = '\0';
 
     plan->steps[i].predicate_count = 1;
     plan->steps[i].predicates = order_p;

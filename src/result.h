@@ -2,7 +2,7 @@
 
 #include "limits.h"
 
-struct ResultColumn {
+struct ColumnNode {
     char text[FIELD_MAX_LENGTH];
     char alias[FIELD_MAX_LENGTH];
     int table_id;

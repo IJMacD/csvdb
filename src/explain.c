@@ -37,12 +37,12 @@ int explain_select_query (
             predicate[0] = '\0';
         }
         else if (s.predicate_count == 1) {
-            strcpy(predicate, s.predicates[0].field);
+            strcpy(predicate, s.predicates[0].left.text);
         }
         else {
             char *ptr = predicate;
             for (int i = 0; i < s.predicate_count; i++) {
-                size_t l = strlen(s.predicates[i].field);
+                size_t l = strlen(s.predicates[i].left.text);
 
                 if (ptr + l > predicate + FIELD_MAX_LENGTH) break;
 
@@ -50,7 +50,7 @@ int explain_select_query (
                     *(ptr++) = ',';
                 }
 
-                strcpy(ptr, s.predicates[i].field);
+                strcpy(ptr, s.predicates[i].left.text);
 
                 ptr += l;
 

@@ -97,7 +97,7 @@ int select_query (const char *query, int output_flags, FILE * output) {
             return -1;
         }
 
-        result = information_query(q.predicates[0].value, output);
+        result = information_query(q.predicates[0].right.text, output);
         destroyQuery(&q);
         return result;
     }
@@ -188,19 +188,19 @@ int basic_select_query (
             // First table
             struct Table * table = q->tables;
             struct Predicate p = s.predicates[0];
-            primaryKeyScan(table->db, p.field, p.op, p.value, &row_list);
+            primaryKeyScan(table->db, p.left.text, p.op, p.right.text, &row_list);
         }
         else if (s.type == PLAN_INDEX_UNIQUE) {
             // First table
             struct Table * table = q->tables;
             struct Predicate p = s.predicates[0];
-            indexUniqueScan(table->name, p.field, p.op, p.value, &row_list);
+            indexUniqueScan(table->name, p.left.text, p.op, p.right.text, &row_list);
         }
         else if (s.type == PLAN_INDEX_RANGE) {
             // First table
             struct Table * table = q->tables;
             struct Predicate p = s.predicates[0];
-            indexRangeScan(table->name, p.field, p.op, p.value, &row_list);
+            indexRangeScan(table->name, p.left.text, p.op, p.right.text, &row_list);
         }
         else if (s.type == PLAN_TABLE_ACCESS_FULL) {
             // First table
@@ -260,10 +260,10 @@ int basic_select_query (
             int table_id = -1;
             int field_index;
 
-            findColumn(q, s.predicates[0].field, &table_id, &field_index);
+            findColumn(q, s.predicates[0].left.text, &table_id, &field_index);
 
             if (field_index == FIELD_UNKNOWN) {
-                fprintf(stderr, "Sort column not found: %s\n", s.predicates[0].field);
+                fprintf(stderr, "Sort column not found: %s\n", s.predicates[0].left.text);
                 exit(-1);
             }
 
@@ -389,7 +389,7 @@ int information_query (const char *table, FILE * output) {
 static int populateColumns (struct Query * q) {
     // Fill in selected table id and column indexes
     for (int i = 0; i < q->column_count; i++) {
-        struct ResultColumn *column = &(q->columns[i]);
+        struct ColumnNode *column = &(q->columns[i]);
 
         if (column->field == FIELD_UNKNOWN) {
             findColumn(q, column->text, &column->table_id, &column->field);

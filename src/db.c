@@ -137,10 +137,10 @@ int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *p
             struct Predicate *predicate = predicates + j;
 
             // Note: Could factor out next line if there are performance issues
-            int predicate_field_index = getFieldIndex(db, predicate->field);
+            int predicate_field_index = getFieldIndex(db, predicate->left.text);
             getRecordValue(db, i, predicate_field_index, value, VALUE_MAX_LENGTH);
 
-            if (!evaluateExpression(predicate->op, value, predicate->value)) {
+            if (!evaluateExpression(predicate->op, value, predicate->right.text)) {
                 matching = 0;
                 break;
             }

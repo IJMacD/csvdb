@@ -113,7 +113,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
         return -1;
     }
 
-    struct ResultColumn columns[2];
+    struct ColumnNode columns[2];
 
     columns[0].field = index_field_index;
     strcpy(columns[0].text, index_field);

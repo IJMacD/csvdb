@@ -10,7 +10,7 @@
 static void printAllColumns (FILE *f, struct DB *db, int rowid, int format, const char * field_sep);
 static void printAllHeaders (FILE *f, struct DB *db, const char * field_sep);
 
-void printResultLine (FILE *f, struct DB *tables, int db_count, struct ResultColumn columns[], int column_count, int result_index, struct RowList * row_list, int flags) {
+void printResultLine (FILE *f, struct DB *tables, int db_count, struct ColumnNode columns[], int column_count, int result_index, struct RowList * row_list, int flags) {
     const char * field_sep = "\t";
     const char * record_end = "\n";
     const char * record_sep = "";
@@ -47,7 +47,7 @@ void printResultLine (FILE *f, struct DB *tables, int db_count, struct ResultCol
     }
 
     for (int j = 0; j < column_count; j++) {
-        struct ResultColumn column = columns[j];
+        struct ColumnNode column = columns[j];
 
         if (format == OUTPUT_FORMAT_JSON && column.field != FIELD_STAR) {
             fprintf(f, "\"%s\": \"", column.alias);
@@ -124,7 +124,7 @@ void printResultLine (FILE *f, struct DB *tables, int db_count, struct ResultCol
     }
 }
 
-void printHeaderLine (FILE *f, struct DB *tables, int table_count, struct ResultColumn columns[], int column_count, int flags) {
+void printHeaderLine (FILE *f, struct DB *tables, int table_count, struct ColumnNode columns[], int column_count, int flags) {
     const char * field_sep = "\t";
     const char * line_end = "\n";
 
@@ -152,7 +152,7 @@ void printHeaderLine (FILE *f, struct DB *tables, int table_count, struct Result
     }
 
     for (int j = 0; j < column_count; j++) {
-        struct ResultColumn column = columns[j];
+        struct ColumnNode column = columns[j];
 
         if (column.field != FIELD_STAR && column.alias[0] != '\0') {
             fprintf(f, "%s", column.alias);
@@ -196,7 +196,7 @@ void printHeaderLine (FILE *f, struct DB *tables, int table_count, struct Result
     fprintf(f, "%s", line_end);
 }
 
-void printPreamble (FILE *f, __attribute__((unused)) struct DB *db, __attribute__((unused)) struct ResultColumn columns[], __attribute__((unused)) int column_count, int flags) {
+void printPreamble (FILE *f, __attribute__((unused)) struct DB *db, __attribute__((unused)) struct ColumnNode columns[], __attribute__((unused)) int column_count, int flags) {
     int format = flags & OUTPUT_MASK_FORMAT;
 
     if (format == OUTPUT_FORMAT_HTML) {
@@ -207,7 +207,7 @@ void printPreamble (FILE *f, __attribute__((unused)) struct DB *db, __attribute_
     }
 }
 
-void printPostamble (FILE *f, __attribute__((unused)) struct DB *db, __attribute__((unused)) struct ResultColumn columns[], __attribute__((unused)) int column_count, __attribute__((unused)) int result_count, int flags) {
+void printPostamble (FILE *f, __attribute__((unused)) struct DB *db, __attribute__((unused)) struct ColumnNode columns[], __attribute__((unused)) int column_count, __attribute__((unused)) int result_count, int flags) {
 
     int format = flags & OUTPUT_MASK_FORMAT;
 
