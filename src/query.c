@@ -22,25 +22,25 @@
 #include "result.h"
 #include "debug.h"
 
-int select_query (const char *query, int output_flags);
+int select_query (const char *query, int output_flags, FILE * output);
 
-int basic_select_query (struct Query *q, struct Plan *plan, int output_flags);
+int basic_select_query (struct Query *q, struct Plan *plan, int output_flags, FILE * output);
 
-int information_query (const char *table);
+int information_query (const char *table, FILE * output);
 
 static int populateTables (struct Query *q, struct DB * dbs);
 
 static int populateColumns (struct Query *q);
 
-int query (const char *query, int output_flags) {
+int query (const char *query, int output_flags, FILE * output) {
     if (strncmp(query, "CREATE ", 7) == 0) {
         return create_query(query);
     }
 
-    return select_query(query, output_flags);
+    return select_query(query, output_flags, output);
 }
 
-int select_query (const char *query, int output_flags) {
+int select_query (const char *query, int output_flags, FILE * output) {
     int result;
     struct Query q = {0};
 
@@ -82,7 +82,7 @@ int select_query (const char *query, int output_flags) {
                 step->type = PLAN_SELECT;
                 step->predicate_count = 0;
 
-                result = basic_select_query(&q, &plan, output_flags);
+                result = basic_select_query(&q, &plan, output_flags, output);
                 destroyQuery(&q);
                 return result;
             } else {
@@ -97,7 +97,7 @@ int select_query (const char *query, int output_flags) {
             return -1;
         }
 
-        result = information_query(q.predicates[0].value);
+        result = information_query(q.predicates[0].value, output);
         destroyQuery(&q);
         return result;
     }
@@ -126,12 +126,12 @@ int select_query (const char *query, int output_flags) {
     makePlan(&q, &plan);
 
     if (q.flags & FLAG_EXPLAIN) {
-        result =  explain_select_query(&q, &plan, output_flags);
+        result =  explain_select_query(&q, &plan, output_flags, output);
         destroyQuery(&q);
         return result;
     }
 
-    result = basic_select_query(&q, &plan, output_flags);
+    result = basic_select_query(&q, &plan, output_flags, output);
     destroyQuery(&q);
     return result;
 }
@@ -139,7 +139,8 @@ int select_query (const char *query, int output_flags) {
 int basic_select_query (
     struct Query *q,
     struct Plan *plan,
-    int output_flags
+    int output_flags,
+    FILE * output
 ) {
     struct DB *dbs = NULL;
 
@@ -152,10 +153,10 @@ int basic_select_query (
     /*************************
      * Output headers
      ************************/
-    printPreamble(stdout, NULL, q->columns, q->column_count, output_flags);
+    printPreamble(output, NULL, q->columns, q->column_count, output_flags);
 
     if (output_flags & OUTPUT_OPTION_HEADERS) {
-        printHeaderLine(stdout, dbs, q->table_count, q->columns, q->column_count, output_flags);
+        printHeaderLine(output, dbs, q->table_count, q->columns, q->column_count, output_flags);
     }
 
     struct ResultSet results;
@@ -325,10 +326,10 @@ int basic_select_query (
 
             // Aggregate functions will print just one row
             if (q->flags & FLAG_GROUP) {
-                printResultLine(stdout, dbs, q->table_count, q->columns, q->column_count, row_list.row_count > 0 ? q->offset_value : RESULT_NO_ROWS, &row_list, output_flags);
+                printResultLine(output, dbs, q->table_count, q->columns, q->column_count, row_list.row_count > 0 ? q->offset_value : RESULT_NO_ROWS, &row_list, output_flags);
             }
             else for (int i = q->offset_value; i < row_list.row_count; i++) {
-                printResultLine(stdout, dbs, q->table_count, q->columns, q->column_count, i, &row_list, output_flags);
+                printResultLine(output, dbs, q->table_count, q->columns, q->column_count, i, &row_list, output_flags);
             }
         }
         else {
@@ -337,7 +338,7 @@ int basic_select_query (
         }
     }
 
-    printPostamble(stdout, NULL, q->columns, q->column_count, row_list.row_count, output_flags);
+    printPostamble(output, NULL, q->columns, q->column_count, row_list.row_count, output_flags);
 
     destroyPlan(plan);
 
@@ -350,7 +351,7 @@ int basic_select_query (
     return 0;
 }
 
-int information_query (const char *table) {
+int information_query (const char *table, FILE * output) {
     struct DB db;
 
     if (openDB(&db, table) != 0) {
@@ -358,14 +359,14 @@ int information_query (const char *table) {
         return -1;
     }
 
-    printf("Table:\t%s\n", table);
-    printf("Fields:\t%d\n", db.field_count);
-    printf("Records:\t%d\n", db.record_count);
+    fprintf(output, "Table:\t%s\n", table);
+    fprintf(output, "Fields:\t%d\n", db.field_count);
+    fprintf(output, "Records:\t%d\n", db.record_count);
 
-    printf("\n");
+    fprintf(output, "\n");
 
-    printf("field\tindex\n");
-    printf("-----\t-----\n");
+    fprintf(output, "field\tindex\n");
+    fprintf(output, "-----\t-----\n");
 
     struct DB index_db;
 
@@ -377,7 +378,7 @@ int information_query (const char *table) {
             closeDB(&index_db);
         }
 
-        printf("%s\t%c\n", getFieldName(&db, i), have_index ? 'Y' : 'N');
+        fprintf(output, "%s\t%c\n", getFieldName(&db, i), have_index ? 'Y' : 'N');
     }
 
     closeDB(&db);

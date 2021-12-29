@@ -37,6 +37,6 @@ struct Query {
     int order_direction;
 };
 
-int query (const char *query, int output_flags);
+int query (const char *query, int output_flags, FILE * output);
 
 void findColumn (struct Query *q, const char *text, int *table_id, int *column_id);

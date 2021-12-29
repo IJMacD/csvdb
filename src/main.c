@@ -21,7 +21,10 @@ void printUsage (const char* name) {
         "\t%1$s -h|--help\n"
         "\n"
         "Options:\n"
-        "\t[-E|--explain] [-H|--headers] [(-F| --format=)(tsv|csv|html|json|json_array)]\n"
+        "\t[-E|--explain]\n"
+        "\t[-H|--headers]\n"
+        "\t[(-F| --format=)(tsv|csv|html|json|json_array)]\n"
+        "\t[(-o| --output=)<filename>]\n"
     , name);
 }
 
@@ -32,6 +35,8 @@ int main (int argc, char * argv[]) {
     int flags = 0;
 
     int arg = 1;
+
+    FILE * output = stdout;
 
     srand((unsigned) time(NULL) * getpid());
 
@@ -82,6 +87,36 @@ int main (int argc, char * argv[]) {
         }
     }
 
+    char * output_name = NULL;
+
+    if (argc > arg && strcmp(argv[arg], "-o") == 0) {
+        arg++;
+
+        if (argc > arg) {
+            output_name = argv[arg];
+            arg++;
+        }
+    }
+    else if (argc > arg && strncmp(argv[arg], "--output=", 9) == 0) {
+        output_name = argv[arg] + 9;
+        arg++;
+    }
+
+    if (output_name != NULL) {
+
+        if(strcmp(output_name, "-") == 0) {
+            output = stdout;
+        }
+        else {
+            output = fopen(output_name, "w");
+
+            if (!output) {
+                fprintf(stderr, "Couldn't open file '%s' for writing\n", output_name);
+                return -1;
+            }
+        }
+    }
+
     if (argc > arg && strcmp(argv[arg], "-f") == 0) {
         if (argc > arg + 1) {
             FILE *f;
@@ -102,7 +137,7 @@ int main (int argc, char * argv[]) {
 
             if (count > 0) {
                 buffer[count] = '\0';
-                return query(buffer, flags);
+                return query(buffer, flags, output);
             }
 
             fprintf(stderr, "File '%s' was empty\n", argv[2]);
@@ -121,14 +156,14 @@ int main (int argc, char * argv[]) {
             return -1;
         }
 
-        return query(argv[arg], flags);
+        return query(argv[arg], flags, output);
     }
 
     // If we're here it means we don't yet have a query.
     // If stdin is something more than a tty (i.e pipe or redirected file)
     // then we will assume the following query:
     if (!isatty(fileno(stdin))) {
-        query("SELECT * FROM stdin", flags);
+        query("SELECT * FROM stdin", flags, output);
         return 0;
     }
 

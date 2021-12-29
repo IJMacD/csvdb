@@ -14,10 +14,11 @@ long log_10 (long value);
 int explain_select_query (
     struct Query *q,
     struct Plan *plan,
-    int output_flags
+    int output_flags,
+    FILE * output
 ) {
     if (output_flags & OUTPUT_OPTION_HEADERS) {
-        printf("ID\tOperation\t\tName\t\tRows\tCost\n");
+        fprintf(output, "ID\tOperation\t\tName\t\tRows\tCost\n");
     }
 
     int row_estimate = q->tables[0].db->record_count;
@@ -168,7 +169,7 @@ int explain_select_query (
             sprintf(predicate, "%d\n", s.type);
         }
 
-        printf("%d\t%-23s\t%-15s\t%ld\t%ld\n", i, operation, predicate, rows, cost);
+        fprintf(output, "%d\t%-23s\t%-15s\t%ld\t%ld\n", i, operation, predicate, rows, cost);
     }
 
     return 0;
