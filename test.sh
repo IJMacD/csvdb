@@ -5,17 +5,17 @@ NC='\033[0m' # No Color
 
 readarray -t lines < ./test-cases.sql
 
-for a in "${lines[@]}"; do
-    printf 'SQL: %s\n' "$a";
+OUTFILE=/tmp/test.out
 
-    # valgrind ./debug/csvdb "$a"; #> /dev/null;
-    ./release/csvdb -o test.out "$a"; #> /dev/null;
+for sql in "${lines[@]}"; do
+    printf 'SQL: %s\n' "$sql";
 
-    if [ $? -eq 0 ]
-    then
-        if [ -s test.out ]; then
+    ./release/csvdb -o $OUTFILE "$sql";
+
+    if [ $? -eq 0 ]; then
+        if [ -s $OUTFILE ]; then
             printf "${GREEN}OK${NC} (Check output):\n";
-            cat test.out
+            cat $OUTFILE
         else
             printf "${ORANGE}NO OUTPUT${NC}\n";
         fi
@@ -25,4 +25,4 @@ for a in "${lines[@]}"; do
 
 done
 
-rm test.out
+rm -f $OUTFILE
