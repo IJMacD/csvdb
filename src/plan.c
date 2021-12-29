@@ -277,7 +277,6 @@ void addStep (struct Plan *plan, int type) {
     plan->steps[i].type = type;
 
     plan->step_count++;
-
 }
 
 /**
@@ -347,6 +346,12 @@ void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
      * JOIN
      *******************/
     for (int i = 1; i < q->table_count; i++) {
+        struct Table * table = q->tables + i;
+
         addStep(plan, PLAN_CROSS_JOIN);
+
+        if (table->join.op != OPERATOR_ALWAYS) {
+            addStepWithPredicate(plan, PLAN_TABLE_ACCESS_ROWID, &table->join);
+        }
     }
 }

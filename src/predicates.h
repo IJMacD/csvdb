@@ -24,6 +24,9 @@
 #define OPERATOR_NE         6
 #define OPERATOR_LIKE       128
 
+#define OPERATOR_NEVER      0
+#define OPERATOR_ALWAYS     7
+
 struct Predicate {
     int op;
     struct ColumnNode left;

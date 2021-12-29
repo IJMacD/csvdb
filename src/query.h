@@ -21,6 +21,7 @@ struct Table {
     char name[TABLE_MAX_LENGTH];
     char alias[FIELD_MAX_LENGTH];
     struct DB * db;
+    struct Predicate join;
 };
 
 struct Query {
@@ -40,3 +41,5 @@ struct Query {
 int query (const char *query, int output_flags, FILE * output);
 
 void findColumn (struct Query *q, const char *text, int *table_id, int *column_id);
+
+void populateColumnNode (struct Query * query, struct ColumnNode * column);

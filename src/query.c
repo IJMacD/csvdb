@@ -228,9 +228,6 @@ int basic_select_query (
             }
         }
         else if (s.type == PLAN_CROSS_JOIN) {
-            // Actually we're just doing CROSS-SELF JOIN here
-            // TODO: implement more of proper join
-
             struct RowList new_list;
 
             struct DB *next_db = q->tables[row_list.join_count].db;
@@ -333,7 +330,7 @@ int basic_select_query (
             }
         }
         else {
-            fprintf(stderr, "Whoops. Unimplemented OP code: %d\n", s.type);
+            fprintf(stderr, "Unimplemented OP code: %d\n", s.type);
             return -1;
         }
     }
@@ -488,4 +485,10 @@ void findColumn (struct Query *q, const char *text, int *table_id, int *column_i
 
     // Couldn't find column
     *column_id = FIELD_UNKNOWN;
+}
+
+void populateColumnNode (struct Query * query, struct ColumnNode * column) {
+    if (column->field == FIELD_UNKNOWN) {
+        findColumn(query, column->text, &column->table_id, &column->field);
+    }
 }

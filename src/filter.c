@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 
 #include "db.h"
 #include "limits.h"
@@ -7,24 +8,46 @@
 int filterRows (struct Query *query, struct RowList *source_list, struct Predicate *p, struct RowList *target_list) {
     int source_count = source_list->row_count;
 
-    int table_id;
-    int column_id;
+    populateColumnNode(query, &p->left);
+    populateColumnNode(query, &p->right);
 
-    findColumn(query, p->left.text, &table_id, &column_id);
-
-    if (column_id == FIELD_UNKNOWN) {
+    if (p->left.field == FIELD_UNKNOWN || p->left.table_id < 0) {
         fprintf(stderr, "Predicate column not found: %s\n", p->left.text);
+        exit(-1);
+    }
+
+    if (p->right.field == FIELD_UNKNOWN || p->right.table_id < 0) {
+        fprintf(stderr, "Predicate column not found: %s\n", p->right.text);
         exit(-1);
     }
 
     target_list->row_count = 0;
 
     for (int i = 0; i < source_count; i++) {
-        char value[VALUE_MAX_LENGTH] = {0};
-        int row_id = getRowID(source_list, table_id, i);
-        getRecordValue(query->tables[table_id].db, row_id, column_id, value, VALUE_MAX_LENGTH);
+        char value_left[VALUE_MAX_LENGTH] = {0};
+        char value_right[VALUE_MAX_LENGTH] = {0};
 
-        if (evaluateExpression(p->op, value, p->right.text)) {
+        if (p->left.field == FIELD_CONSTANT) {
+            strcpy(value_left, p->left.text);
+        } else if (p->left.field >= 0) {
+            int row_id_left = getRowID(source_list, p->left.table_id, i);
+            getRecordValue(query->tables[p->left.table_id].db, row_id_left, p->left.field, value_left, VALUE_MAX_LENGTH);
+        } else {
+            fprintf(stderr, "Cannot evaluate predicate column: %s\n", p->left.text);
+            exit(-1);
+        }
+
+        if (p->right.field == FIELD_CONSTANT) {
+            strcpy(value_right, p->right.text);
+        } else if (p->right.field >= 0) {
+            int row_id_right = getRowID(source_list, p->right.table_id, i);
+            getRecordValue(query->tables[p->right.table_id].db, row_id_right, p->right.field, value_right, VALUE_MAX_LENGTH);
+        } else {
+            fprintf(stderr, "Cannot evaluate predicate column: %s\n", p->right.text);
+            exit(-1);
+        }
+
+        if (evaluateExpression(p->op, value_left, value_right)) {
             // Add to result set
             copyResultRow(target_list, source_list, i);
         }

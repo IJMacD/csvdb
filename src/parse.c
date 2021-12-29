@@ -129,6 +129,44 @@ int parseQuery (struct Query *q, const char *query) {
 
                 skipWhitespace(query, &index);
 
+                // Parse JOIN predicate
+                if (strncmp(query + index, "ON ", 3) == 0) {
+                    index += 3;
+                    skipWhitespace(query, &index);
+
+                    struct Predicate * p = &table->join;
+
+                    getQuotedToken(query, &index, p->left.text, FIELD_MAX_LENGTH);
+
+                    checkConstantColumn(&p->left);
+
+                    char op[5];
+                    getToken(query, &index, op, 5);
+
+                    p->op = parseOperator(op);
+                    if (p->op == OPERATOR_UN) {
+                        fprintf(stderr, "Bad query - expected =|!=|<|<=|>|>=\n");
+                        return -1;
+                    }
+
+                    // Check for IS NOT
+                    if (strcmp(op, "IS") == 0) {
+                        skipWhitespace(query, &index);
+                        if (strncmp(query + index, "NOT ", 4) == 0) {
+                            p->op = OPERATOR_NE;
+                            index += 4;
+                        }
+                    }
+
+                    getQuotedToken(query, &index, p->right.text, FIELD_MAX_LENGTH);
+
+                    checkConstantColumn(&p->right);
+
+                    skipWhitespace(query, &index);
+                } else {
+                    table->join.op = OPERATOR_ALWAYS;
+                }
+
                 if (query[index] != ',') {
                     break;
                 }
@@ -158,6 +196,8 @@ int parseQuery (struct Query *q, const char *query) {
                 struct Predicate *p = &(q->predicates[q->predicate_count++]);
 
                 getToken(query, &index, p->left.text, FIELD_MAX_LENGTH);
+
+                checkConstantColumn(&p->left);
 
                 if (strncmp(p->left.text, "PK(", 3) == 0) {
                     q->flags |= FLAG_PRIMARY_KEY_SEARCH;
@@ -776,6 +816,9 @@ static int checkConstantColumn(struct ColumnNode * column) {
         struct DateTime dt;
         parseDateTime("CURRENT_DATE", &dt);
         sprintf(column->text, "%4d-%2d-%2d", dt.year, dt.month, dt.day);
+    }
+    else {
+        column->field = FIELD_UNKNOWN;
     }
 
     return 0;
