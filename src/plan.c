@@ -165,14 +165,33 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 // Add step for Sorted index access
                 addStepWithPredicate(plan, PLAN_INDEX_RANGE, order_p);
 
+                // Optimisation: filter before join
+                int skip_predicates = 0;
+                for (int i = 0; i < q->predicate_count; i++) {
+                    // If left and right are either constant or table 0 then we can filter
+                    if (q->predicates[i].left.table_id <= 0 &&
+                        q->predicates[i].right.table_id <= 0)
+                    {
+                        skip_predicates++;
+                    } else {
+                        break;
+                    }
+                }
+
+                if (skip_predicates > 0) {
+                    addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates, skip_predicates);
+                }
+
                 addJoinStepsIfRequired(plan, q);
 
                 if (q->order_direction == ORDER_DESC && !(q->flags & FLAG_GROUP)) {
                     addStep(plan, PLAN_REVERSE);
                 }
 
-                // Add step for predicates filter
-                addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, p, q->predicate_count);
+                // Add step for remaining predicates filter
+                if (q->predicate_count > skip_predicates) {
+                    addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + skip_predicates, q->predicate_count - skip_predicates);
+                }
             }
             /********************
              * TABLE ACCESS FULL
