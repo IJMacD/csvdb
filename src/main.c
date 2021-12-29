@@ -14,17 +14,21 @@ void printUsage (const char* name) {
     printf(
         "Usage:\n"
         "\t%1$s <options> \"SELECT <fields, ...> FROM <file> [WHERE] [ORDER BY] [OFFSET FETCH FIRST]\"\n"
-        "\t%1$s <options> \"SELECT <fields, ...> FROM stdin [WHERE] [ORDER BY] [OFFSET FETCH FIRST]\"\n"
         "\t%1$s <options> -f file.sql\n"
         "\t%1$s <options> -f - (expects SQL on stdin)\n"
         "\t%1$s \"CREATE [UNIQUE] INDEX [<index_file>] ON <file> (<field>)\"\n"
         "\t%1$s -h|--help\n"
         "\n"
+        "\t<file> can be a CSV file which behaves as a table, or an SQL file which will behave as a view.\n"
+        "\tIf <file> is the string 'stdin' then an attempt will be made to read the table from stdin.\n"
+        "\tIf an exact filename match cannot be found, %1$s will try to append '.csv' and then '.sql'\n"
+        "\tand attempt to open the file as either a table or a view respectively.\n"
+        "\n"
         "Options:\n"
         "\t[-E|--explain]\n"
         "\t[-H|--headers]\n"
-        "\t[(-F| --format=)(tsv|csv|html|json|json_array)]\n"
-        "\t[(-o| --output=)<filename>]\n"
+        "\t[(-F |--format=)(tsv|csv|html|json|json_array)]\n"
+        "\t[(-o |--output=)<filename>]\n"
     , name);
 }
 
