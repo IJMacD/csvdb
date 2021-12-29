@@ -61,7 +61,7 @@ int explain_select_query (
             operation = "TABLE ACCESS FULL";
             rows = row_estimate;
             int l = q->limit_value + q->offset_value;
-            if (l >= 0 && l < rows) {
+            if (l >= 0 && l < rows && !(q->flags & FLAG_ORDER)) {
                 rows = l;
             }
             cost = rows;

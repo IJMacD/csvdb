@@ -76,10 +76,8 @@ void printResultLine (FILE *f, struct DB *tables, int db_count, struct ResultCol
             fprintf(f, "%d", row_list->row_count);
         }
         else if (column.field == FIELD_ROW_NUMBER) {
-            /**
-             * @todo Bug: Should add q->offset_value
-             */
-            fprintf(f, "%d", result_index);
+            // ROW_NUMBER() is 1-indexed
+            fprintf(f, "%d", result_index + 1);
         }
         else if (column.field == FIELD_ROW_INDEX) {
             // FIELD_ROW_INDEX is the input line (0 indexed)

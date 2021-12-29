@@ -162,7 +162,9 @@ int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *p
 
 /**
  * A sort of dummy access function to just populate the result_rowids
- * array with all rowids in ascending numerical order
+ * array with all rowids in ascending numerical order.
+ *
+ * Equivalent to FULL TABLE SCAN with no predicates
  */
 int fullTableAccess (struct DB *db, struct RowList * row_list, int limit_value) {
     if (db->vfs == VFS_CALENDAR) {

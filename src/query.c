@@ -204,11 +204,20 @@ int basic_select_query (
         else if (s.type == PLAN_TABLE_ACCESS_FULL) {
             // First table
             struct Table * table = q->tables;
+
+            // Optmisation: If we have a limit and no sorting just stop
+            // fetching rows after we reach the limit.
+            // Should this be done in the plan?
+            int limit = -1;
+            if (!(q->flags & FLAG_ORDER)) {
+                limit = q->limit_value + q->offset_value;
+            }
+
             if (s.predicate_count > 0) {
-                fullTableScan(table->db, &row_list, s.predicates, s.predicate_count, q->limit_value + q->offset_value);
+                fullTableScan(table->db, &row_list, s.predicates, s.predicate_count, limit);
             }
             else {
-                fullTableAccess(table->db, &row_list, q->limit_value + q->offset_value);
+                fullTableAccess(table->db, &row_list, limit);
             }
         }
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
@@ -291,11 +300,14 @@ int basic_select_query (
             reverse_array(row_list.row_ids, row_list.row_count);
         }
         else if (s.type == PLAN_SLICE) {
-            row_list.row_ids += s.param1 * row_list.join_count;
-            row_list.row_count -= s.param1;
+            // s.param1 is offset
+            // s.param2 is limit
 
+            // Offset is taken care of in PLAN_SELECT
+
+            // Apply limit (including offset rows - which will be omitted later)
             if (s.param2 >= 0 && s.param2 < row_list.row_count) {
-                row_list.row_count = s.param2;
+                row_list.row_count = s.param1 + s.param2;
             }
         }
         else if (s.type == PLAN_GROUP) {
@@ -313,12 +325,9 @@ int basic_select_query (
 
             // Aggregate functions will print just one row
             if (q->flags & FLAG_GROUP) {
-                // printf("Aggregate result:\n");
                 printResultLine(stdout, dbs, q->table_count, q->columns, q->column_count, row_list.row_count > 0 ? q->offset_value : RESULT_NO_ROWS, &row_list, output_flags);
             }
-            else for (int i = 0; i < row_list.row_count; i++) {
-
-                // ROW_NUMBER is offset by OFFSET from result index and is 1-index based
+            else for (int i = q->offset_value; i < row_list.row_count; i++) {
                 printResultLine(stdout, dbs, q->table_count, q->columns, q->column_count, i, &row_list, output_flags);
             }
         }
@@ -332,7 +341,7 @@ int basic_select_query (
 
     destroyPlan(plan);
 
-    free(row_list.row_ids - q->offset_value);
+    free(row_list.row_ids);
 
     for (int i = 0; i < q->table_count; i++) {
         closeDB(q->tables[i].db);
