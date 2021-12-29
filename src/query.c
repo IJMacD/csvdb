@@ -492,3 +492,17 @@ void populateColumnNode (struct Query * query, struct ColumnNode * column) {
         findColumn(query, column->text, &column->table_id, &column->field);
     }
 }
+
+int evaluateNode (struct Query * query, struct RowList *rowlist, int index, struct ColumnNode * column, char * value, int max_length) {
+    if (column->field == FIELD_CONSTANT) {
+        strcpy(value, column->text);
+    } else if (column->field >= 0) {
+        int row_id_left = getRowID(rowlist, column->table_id, index);
+        getRecordValue(query->tables[column->table_id].db, row_id_left, column->field, value, max_length);
+    } else {
+        fprintf(stderr, "Cannot evaluate predicate column: %s\n", column->text);
+        exit(-1);
+    }
+
+    return 0;
+}

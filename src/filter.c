@@ -27,25 +27,8 @@ int filterRows (struct Query *query, struct RowList *source_list, struct Predica
         char value_left[VALUE_MAX_LENGTH] = {0};
         char value_right[VALUE_MAX_LENGTH] = {0};
 
-        if (p->left.field == FIELD_CONSTANT) {
-            strcpy(value_left, p->left.text);
-        } else if (p->left.field >= 0) {
-            int row_id_left = getRowID(source_list, p->left.table_id, i);
-            getRecordValue(query->tables[p->left.table_id].db, row_id_left, p->left.field, value_left, VALUE_MAX_LENGTH);
-        } else {
-            fprintf(stderr, "Cannot evaluate predicate column: %s\n", p->left.text);
-            exit(-1);
-        }
-
-        if (p->right.field == FIELD_CONSTANT) {
-            strcpy(value_right, p->right.text);
-        } else if (p->right.field >= 0) {
-            int row_id_right = getRowID(source_list, p->right.table_id, i);
-            getRecordValue(query->tables[p->right.table_id].db, row_id_right, p->right.field, value_right, VALUE_MAX_LENGTH);
-        } else {
-            fprintf(stderr, "Cannot evaluate predicate column: %s\n", p->right.text);
-            exit(-1);
-        }
+        evaluateNode(query, source_list, i, &p->left, value_left, VALUE_MAX_LENGTH);
+        evaluateNode(query, source_list, i, &p->right, value_right, VALUE_MAX_LENGTH);
 
         if (evaluateExpression(p->op, value_left, value_right)) {
             // Add to result set

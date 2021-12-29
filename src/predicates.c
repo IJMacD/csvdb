@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+
 #include "predicates.h"
 #include "query.h"
 #include "limits.h"
