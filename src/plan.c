@@ -367,21 +367,20 @@ void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
     for (int i = 1; i < q->table_count; i++) {
         struct Table * table = q->tables + i;
 
-        if (table->join.op != OPERATOR_ALWAYS) {
+        if (table->join.op == OPERATOR_ALWAYS) {
+            addStep(plan, PLAN_CROSS_JOIN);
+        } else {
             populateColumnNode(q, &table->join.left);
             populateColumnNode(q, &table->join.right);
-        }
 
-        if (table->join.left.field == FIELD_CONSTANT ||
-            table->join.right.field == FIELD_CONSTANT)
-        {
-            addStepWithPredicate(plan, PLAN_CONSTANT_JOIN, &table->join);
-        }
-        else if (table->join.op != OPERATOR_ALWAYS) {
-            addStepWithPredicate(plan, PLAN_INNER_JOIN, &table->join);
-        }
-        else {
-            addStep(plan, PLAN_CROSS_JOIN);
+            if (table->join.left.field == FIELD_CONSTANT ||
+                table->join.right.field == FIELD_CONSTANT)
+            {
+                addStepWithPredicate(plan, PLAN_CONSTANT_JOIN, &table->join);
+            }
+            else {
+                addStepWithPredicate(plan, PLAN_INNER_JOIN, &table->join);
+            }
         }
     }
 }

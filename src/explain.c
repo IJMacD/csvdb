@@ -18,7 +18,7 @@ int explain_select_query (
     FILE * output
 ) {
     if (output_flags & OUTPUT_OPTION_HEADERS) {
-        fprintf(output, "ID\tOperation\tTable\tPredicate\tRows\tCost\n");
+        fprintf(output, "ID\tOperation           \tTable       \tPredicate\tRows\tCost\n");
     }
 
     int row_estimate = q->tables[0].db->record_count;

@@ -11,12 +11,12 @@ int filterRows (struct Query *query, struct RowList *source_list, struct Predica
     populateColumnNode(query, &p->left);
     populateColumnNode(query, &p->right);
 
-    if (p->left.field == FIELD_UNKNOWN || p->left.table_id < 0) {
+    if (p->left.field == FIELD_UNKNOWN) {
         fprintf(stderr, "Predicate column not found: %s\n", p->left.text);
         exit(-1);
     }
 
-    if (p->right.field == FIELD_UNKNOWN || p->right.table_id < 0) {
+    if (p->right.field == FIELD_UNKNOWN) {
         fprintf(stderr, "Predicate column not found: %s\n", p->right.text);
         exit(-1);
     }

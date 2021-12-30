@@ -529,6 +529,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
     else if (strcmp(column->text, "RANDOM()") == 0) {
         column->function = FUNC_RANDOM;
         column->field = FIELD_CONSTANT;
+        column->table_id = -1;
     }
     else if (strncmp(column->text, "TO_HEX(", 7) == 0) {
         column->function = FUNC_TO_HEX;
@@ -792,9 +793,11 @@ static int checkConstantColumn(struct ColumnNode * column) {
     if (is_numeric(column->text)) {
         // Detected numeric constant
         column->field = FIELD_CONSTANT;
+        column->table_id = -1;
     } else if (column->text[0] == '\'') {
         // Detected string literal
         column->field = FIELD_CONSTANT;
+        column->table_id = -1;
 
         int len = strlen(column->text);
 
@@ -812,6 +815,7 @@ static int checkConstantColumn(struct ColumnNode * column) {
         || strcmp(column->text, "TODAY") == 0)
     {
         column->field = FIELD_CONSTANT;
+        column->table_id = -1;
 
         struct DateTime dt;
         parseDateTime("CURRENT_DATE", &dt);
@@ -819,6 +823,7 @@ static int checkConstantColumn(struct ColumnNode * column) {
     }
     else {
         column->field = FIELD_UNKNOWN;
+        column->table_id = -1;
     }
 
     return 0;
