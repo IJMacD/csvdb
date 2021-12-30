@@ -73,7 +73,19 @@ void copyResultRow (struct RowList * dest_list, struct RowList * src_list, int s
 void makeRowList (struct RowList * list, int join_count, int max_rows) {
     list->join_count = join_count;
     list->row_count = 0;
-    list->row_ids = malloc((sizeof (int *)) * list->join_count * max_rows);
+    int size = (sizeof (int *)) * list->join_count * max_rows;
+
+    if (size < 0) {
+        fprintf(stderr, "Not trying to allocate space for %d rows\n", max_rows);
+        exit(-1);
+    }
+
+    list->row_ids = malloc(size);
+
+    if (list->row_ids == NULL) {
+        fprintf(stderr, "Cannot allocate space for %d rows\n", max_rows);
+        exit(-1);
+    }
 }
 
 void destroyRowList (struct RowList * list) {

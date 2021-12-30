@@ -239,7 +239,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
             struct Predicate *order_p = malloc(sizeof(*order_p));
             strcpy(order_p->left.text, q->order_field);
-            order_p->op = 0;
+            order_p->op = OPERATOR_UN;
             order_p->right.text[0] = '\0';
 
             addStepWithPredicate(plan, PLAN_INDEX_RANGE, order_p);

@@ -21,13 +21,14 @@ int explain_select_query (
         fprintf(output, "ID\tOperation           \tTable       \tPredicate\tRows\tCost\n");
     }
 
-    int row_estimate = q->tables[0].db->record_count;
-    int log_rows = log_10(row_estimate);
-
     long rows = 0;
     long cost = 0;
 
     int join_count = 0;
+
+    int row_estimate = q->tables[join_count].db->record_count;
+    int log_rows = log_10(row_estimate);
+
 
     for (int i = 0; i < plan->step_count; i++) {
         struct PlanStep s = plan->steps[i];
@@ -78,7 +79,7 @@ int explain_select_query (
                 }
             }
 
-            strcpy(table, q->tables[0].name);
+            strcpy(table, q->tables[join_count].name);
         }
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
             operation = "TABLE ACCESS BY ROWID";
@@ -95,34 +96,42 @@ int explain_select_query (
                 }
             }
 
-            strcpy(table, q->tables[0].name);
+            strcpy(table, q->tables[join_count].name);
         }
         else if (s.type == PLAN_PK_UNIQUE) {
             operation = "PRIMARY KEY UNIQUE";
-            strcpy(table, q->tables[0].name);
+            strcpy(table, q->tables[join_count].name);
             rows = 1;
             cost = log_rows;
         }
         else if (s.type == PLAN_PK_RANGE) {
             operation = "PRIMARY KEY RANGE";
-            strcpy(table, q->tables[0].name);
+            strcpy(table, q->tables[join_count].name);
             rows = row_estimate / 2;
             cost = rows;
         }
         else if (s.type == PLAN_INDEX_UNIQUE) {
             operation = "INDEX UNIQUE";
-            strcpy(table, q->tables[0].name);
+            strcpy(table, q->tables[join_count].name);
             rows = 1;
             cost = log_rows;
         }
         else if (s.type == PLAN_INDEX_RANGE) {
             operation = "INDEX RANGE";
-            strcpy(table, q->tables[0].name);
-            if (s.predicate_count > 0 && s.predicates[0].op == OPERATOR_EQ) {
-                rows = row_estimate / 1000;
-                cost = log_rows * 2;
+            strcpy(table, q->tables[join_count].name);
+            if (s.predicate_count > 0) {
+                if (s.predicates[0].op == OPERATOR_EQ) {
+                    rows = row_estimate / 1000;
+                    cost = log_rows * 2;
+                } else if (s.predicates[0].op == OPERATOR_UN) {
+                    rows = row_estimate;
+                    cost = rows;
+                } else {
+                    rows = row_estimate / 2;
+                    cost = rows;
+                }
             } else {
-                rows = row_estimate / 2;
+                rows = row_estimate;
                 cost = rows;
             }
         }
