@@ -176,16 +176,10 @@ int basic_select_query (
 
     if (q->table_count == 0) {
         // Just a single output row
-        row_list.row_ids = malloc(sizeof (int));
-
-        row_list.join_count = 0;
-        row_list.row_count = 1;
+        makeRowList(&row_list, 0, 1);
     } else {
         // Provision enough result space for maximum of all rows in first table
-        row_list.row_ids = malloc(sizeof (int) * q->tables[0].db->record_count);
-
-        row_list.join_count = 1;
-        row_list.row_count = 0;
+        makeRowList(&row_list, 1, q->tables[0].db->record_count);
     }
 
     for (int i = 0; i < plan->step_count; i++) {
@@ -241,9 +235,7 @@ int basic_select_query (
 
             int new_length = row_list.row_count * next_db->record_count;
 
-            new_list.join_count = row_list.join_count + 1;
-            new_list.row_count = 0;
-            new_list.row_ids = malloc((sizeof (int *)) * new_list.join_count * new_length);
+            makeRowList(&new_list, row_list.join_count + 1, new_length);
 
             for (int i = 0; i < row_list.row_count; i++) {
                 for (int j = 0; j < next_db->record_count; j++) {
@@ -251,13 +243,7 @@ int basic_select_query (
                 }
             }
 
-            // Free the old list
-            free(row_list.row_ids);
-
-            // Copy updated values back
-            row_list.join_count = new_list.join_count;
-            row_list.row_count = new_list.row_count;
-            row_list.row_ids = new_list.row_ids;
+            copyRowList(&row_list, &new_list);
         }
         else if (s.type == PLAN_CONSTANT_JOIN) {
             // Sanity check
@@ -294,15 +280,8 @@ int basic_select_query (
                 }
             }
 
-            // Free the old row_ids list
-            destroyRowList(&row_list);
+            copyRowList(&row_list, &new_list);
 
-            // Copy updated values back
-            row_list.join_count = new_list.join_count;
-            row_list.row_count = new_list.row_count;
-            row_list.row_ids = new_list.row_ids;
-
-            // Free row_ids on tmp list
             destroyRowList(&tmp_list);
         }
         else if (s.type == PLAN_INNER_JOIN) {
@@ -350,15 +329,8 @@ int basic_select_query (
                 }
             }
 
-            // Free the old row_ids list
-            destroyRowList(&row_list);
+            copyRowList(&row_list, &new_list);
 
-            // Copy updated values back
-            row_list.join_count = new_list.join_count;
-            row_list.row_count = new_list.row_count;
-            row_list.row_ids = new_list.row_ids;
-
-            // Free row_ids on tmp list
             destroyRowList(&tmp_list);
         }
         else if (s.type == PLAN_SORT) {
@@ -379,24 +351,13 @@ int basic_select_query (
 
             struct RowList tmp;
 
-            int size = row_list.join_count * row_list.row_count;
-
-            // fprintf(stderr, "RowList: (%d joins x %d rows)\n", row_list.join_count, row_list.row_count);
-
-            tmp.row_ids = malloc(sizeof(int) * size);
-
-            // fprintf(stderr, "malloc size: %lu\n", sizeof(int) * size);
-
-            tmp.join_count = row_list.join_count;
-            tmp.row_count = 0;
+            makeRowList(&tmp, row_list.join_count, row_list.row_count);
 
             sortResultRows(db, table_id, field_index, s.predicates[0].op, &row_list, &tmp);
 
-            memcpy(row_list.row_ids, tmp.row_ids, sizeof(int) * size);
+            copyRowList(&row_list, &tmp);
 
             // debugRowList(&row_list);
-
-            free(tmp.row_ids);
         }
         else if (s.type == PLAN_REVERSE) {
             if (row_list.join_count > 1) {
@@ -448,7 +409,7 @@ int basic_select_query (
 
     destroyPlan(plan);
 
-    free(row_list.row_ids);
+    destroyRowList(&row_list);
 
     for (int i = 0; i < q->table_count; i++) {
         closeDB(q->tables[i].db);
@@ -579,6 +540,14 @@ void findColumn (struct Query *q, const char *text, int *table_id, int *column_i
         }
     }
     else {
+        if (strcmp(text, "rowid") == 0) {
+            // Default to first table
+            *table_id = 0;
+            *column_id = FIELD_ROW_INDEX;
+
+            return;
+        }
+
         for (int i = 0; i < q->table_count; i++) {
             struct DB *db = q->tables[i].db;
 
@@ -603,7 +572,9 @@ void populateColumnNode (struct Query * query, struct ColumnNode * column) {
 }
 
 int evaluateNode (struct Query * query, struct RowList *rowlist, int index, struct ColumnNode * column, char * value, int max_length) {
-    if (column->field == FIELD_CONSTANT) {
+    if (column->field == FIELD_ROW_INDEX) {
+        sprintf(value, "%d", index);
+    } else if (column->field == FIELD_CONSTANT) {
         strcpy(value, column->text);
     } else if (column->field >= 0) {
         int row_id_left = getRowID(rowlist, column->table_id, index);

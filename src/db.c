@@ -85,6 +85,11 @@ char *getFieldName (struct DB *db, int field_index) {
  * Returns the number of bytes read, or -1 on error
  */
 int getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
+    // This is the only field we can handle generically
+    if (field_index == FIELD_ROW_INDEX) {
+        return sprintf(value, "%d", record_index);
+    }
+
     if (db->vfs == VFS_CSV) {
         return csv_getRecordValue(db, record_index, field_index, value, value_max_length);
     }
@@ -144,13 +149,13 @@ int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *p
 
             if (predicate->left.field == FIELD_CONSTANT) {
                 strcpy(value_left, predicate->left.text);
-            } else if (predicate->left.field >= 0) {
+            } else {
                 getRecordValue(db, i, predicate->left.field, value_left, VALUE_MAX_LENGTH);
             }
 
             if (predicate->right.field == FIELD_CONSTANT) {
                 strcpy(value_right, predicate->right.text);
-            } else if (predicate->right.field >= 0) {
+            } else {
                 getRecordValue(db, i, predicate->right.field, value_right, VALUE_MAX_LENGTH);
             }
 

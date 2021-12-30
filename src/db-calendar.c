@@ -84,6 +84,10 @@ int calendar_openDB (struct DB *db, const char *filename) {
 void calendar_closeDB (__attribute__((unused)) struct DB *db) {}
 
 int calendar_getFieldIndex (__attribute__((unused)) struct DB *db, const char *field) {
+    if (strcmp(field, "julian") == 0 || strcmp(field, "rowid") == 0) {
+        return FIELD_ROW_INDEX;
+    }
+
     int l = sizeof(field_names) / sizeof(field_names[0]);
 
     for (int i = 0; i < l; i++) {
@@ -100,8 +104,8 @@ char *calendar_getFieldName (__attribute__((unused)) struct DB *db, int field_in
 }
 
 int calendar_getRecordValue (__attribute__((unused)) struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
-    // julian
-    if (field_index == COL_JULIAN) {
+    // julian/rowid
+    if (field_index == COL_JULIAN || field_index == FIELD_ROW_INDEX) {
         return snprintf(value, value_max_length, "%d", record_index);
     }
 
@@ -314,9 +318,7 @@ int calendar_fullTableScan (struct DB *db, struct RowList *row_list, struct Pred
         for (int j = 0; j < predicate_count && matching; j++) {
             struct Predicate *predicate = predicates + j;
 
-            // Note: Could factor out next line if there are performance issues
-            int predicate_field_index = calendar_getFieldIndex(db, predicate->left.text);
-            calendar_getRecordValue(db, julian, predicate_field_index, value, VALUE_MAX_LENGTH);
+            calendar_getRecordValue(db, julian, predicate->left.field, value, VALUE_MAX_LENGTH);
 
             if (!evaluateExpression(predicate->op, value, predicate->right.text)) {
                 matching = 0;
@@ -346,8 +348,13 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
         // We need field on the left and constant on the right, swap if necessary
         normalisePredicate(p);
 
+        // This should already have been taken care of
+        if (strcmp(p->left.text, "julian") == 0) {
+            p->left.field = FIELD_ROW_INDEX;
+        }
+
         // An exact Julian
-        if (strcmp(p->left.text, "julian") == 0 && p->op == OPERATOR_EQ) {
+        if (p->left.field == FIELD_ROW_INDEX && p->op == OPERATOR_EQ) {
             *julian_start = atoi(p->right.text);
             *julian_end = *julian_start + 1;
             return;
@@ -363,7 +370,7 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
         }
 
         // Dates after a specific Julian
-        if (strcmp(p->left.text, "julian") == 0 && (p->op & OPERATOR_GT)) {
+        if (p->left.field == FIELD_ROW_INDEX && (p->op & OPERATOR_GT)) {
             *julian_start = atoi(p->right.text);
 
             if (!(p->op & OPERATOR_EQ)) {
@@ -372,7 +379,7 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
         }
 
         // Dates before a specific Julian
-        if (strcmp(p->left.text, "julian") == 0 && (p->op & OPERATOR_LT)) {
+        if (p->left.field == FIELD_ROW_INDEX && (p->op & OPERATOR_LT)) {
             *julian_end = atoi(p->right.text);
 
             // End is exclusive

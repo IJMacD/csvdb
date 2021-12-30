@@ -73,7 +73,14 @@ void copyResultRow (struct RowList * dest_list, struct RowList * src_list, int s
 void makeRowList (struct RowList * list, int join_count, int max_rows) {
     list->join_count = join_count;
     list->row_count = 0;
-    int size = (sizeof (int *)) * list->join_count * max_rows;
+
+    if (join_count == 0) {
+        // Special case for constant-only table-less query
+        join_count = 1;
+        // OK it wasn't that special...
+    }
+
+    int size = (sizeof (int *)) * join_count * max_rows;
 
     if (size < 0) {
         fprintf(stderr, "Not trying to allocate space for %d rows\n", max_rows);
@@ -93,4 +100,20 @@ void destroyRowList (struct RowList * list) {
         free(list->row_ids);
         list->row_ids = NULL;
     }
+}
+
+/**
+ * @brief Copy contents of one row list to another
+ *
+ * Will destroy destination list first
+ *
+ * @param dest
+ * @param src
+ */
+void copyRowList (struct RowList * dest, struct RowList * src) {
+    destroyRowList(dest);
+
+    dest->join_count = src->join_count;
+    dest->row_count = src->row_count;
+    dest->row_ids = src->row_ids;
 }

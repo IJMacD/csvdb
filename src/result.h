@@ -39,3 +39,5 @@ void copyResultRow (struct RowList * dest_list, struct RowList * src_list, int s
 void makeRowList (struct RowList * list, int join_count, int max_rows);
 
 void destroyRowList (struct RowList * list);
+
+void copyRowList (struct RowList * dest, struct RowList * src);
