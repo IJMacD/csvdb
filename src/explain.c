@@ -96,7 +96,11 @@ int explain_select_query (
                 }
             }
 
-            strcpy(table, q->tables[join_count].name);
+            if (s.predicate_count > 0) {
+                int table_id = s.predicates->left.table_id;
+
+                strcpy(table, q->tables[table_id].name);
+            }
         }
         else if (s.type == PLAN_PK_UNIQUE) {
             operation = "PRIMARY KEY UNIQUE";
