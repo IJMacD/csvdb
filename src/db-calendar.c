@@ -34,6 +34,10 @@
 #define COL_IS_LEAP_YEAR        21
 #define COL_WEEKDAY_IN_MONTH    22
 #define COL_IS_WEEKEND          23
+#define COL_MONTH_STRING        24
+#define COL_YEARDAY_STRING      25
+#define COL_WEEK_STRING         26
+#define COL_WEEKDAY_STRING      27
 
 char *field_names[] = {
     "julian",
@@ -60,6 +64,10 @@ char *field_names[] = {
     "isLeapYear",
     "weekdayInMonth",
     "isWeekend",
+    "monthString",
+    "yeardayString",
+    "weekString",
+    "weekdayString"
 };
 
 const int month_lengths[] = {31,28,31,30,31,30,31,31,30,31,30,31};
@@ -67,6 +75,8 @@ const int month_lengths[] = {31,28,31,30,31,30,31,31,30,31,30,31};
 static void getJulianRange (struct Predicate *predicates, int predicate_count, int *julian_start, int *julian_end);
 
 static int printDate (char *value, int max_length, struct DateTime date);
+
+static int calendar_evaluateNode(struct DB *db, struct ColumnNode *column, int rowid, char *value, int max_length);
 
 int calendar_openDB (struct DB *db, const char *filename) {
     if (strcmp(filename, "CALENDAR") != 0) {
@@ -261,6 +271,26 @@ int calendar_getRecordValue (__attribute__((unused)) struct DB *db, int record_i
         return snprintf(value, value_max_length, "%d", datetimeGetWeekDay(&dt) >= 6 ? 1 : 0);
     }
 
+    // month string
+    if (field_index == COL_MONTH_STRING) {
+        return snprintf(value, value_max_length, "%04d-%02d", dt.year, dt.month);
+    }
+
+    // yearday string
+    if (field_index == COL_YEARDAY_STRING) {
+        return snprintf(value, value_max_length, "%04d-%03d", dt.year, datetimeGetYearDay(&dt));
+    }
+
+    // week string
+    if (field_index == COL_WEEK_STRING) {
+        return snprintf(value, value_max_length, "%04d-W%02d", datetimeGetWeekYear(&dt), datetimeGetWeek(&dt));
+    }
+
+    // month string
+    if (field_index == COL_WEEKDAY_STRING) {
+        return snprintf(value, value_max_length, "%04d-W%02d-%d", datetimeGetWeekYear(&dt), datetimeGetWeek(&dt), datetimeGetWeekDay(&dt));
+    }
+
     return 0;
 }
 
@@ -275,32 +305,15 @@ int calendar_fullTableScan (struct DB *db, struct RowList *row_list, struct Pred
     // Try to get range from predicates
     getJulianRange(predicates, predicate_count, &julian, &max_julian);
 
-    // Fallback to current date
-    if (julian < 0 && max_julian < 0) {
-        time_t t = time(NULL);
-        struct tm *local = localtime(&t);
-
-        struct DateTime dt = {0};
-        dt.year = local->tm_year + 1900;
-        dt.month = local->tm_mon + 1;
-        dt.day = local->tm_mday;
-
-        // printf("%04d-%02d-%02d\n", dt.year, dt.month, dt.day);
-
-        julian = datetimeGetJulian(&dt);
+    // Default to min and max
+    // There could still be a predicate which limits the output further - we
+    // just can't do it as efficiently
+    if (julian < 0) {
+        julian = 0;
     }
-
-    // Maxiumums
-    // Start: YES; End: NO
-    if (julian >= 0 && max_julian < 0) {
-        max_julian = julian + db->record_count;
+    if (max_julian < 0) {
+        max_julian = db->record_count;
     }
-    // Start: NO; End: YES
-    else if (julian < 0 && max_julian >= 0) {
-        julian = max_julian - db->record_count;
-    }
-
-    // printf("%d\n", julian);
 
     // No limit means we'll use the limit defined for the VFS
     // (hopefully there are enough predicates that we won't have that many results though)
@@ -309,7 +322,8 @@ int calendar_fullTableScan (struct DB *db, struct RowList *row_list, struct Pred
     }
 
     int count = 0;
-    char value[VALUE_MAX_LENGTH];
+    char value_left[VALUE_MAX_LENGTH];
+    char value_right[VALUE_MAX_LENGTH];
 
     for (; julian < max_julian; julian++) {
         int matching = 1;
@@ -318,9 +332,10 @@ int calendar_fullTableScan (struct DB *db, struct RowList *row_list, struct Pred
         for (int j = 0; j < predicate_count && matching; j++) {
             struct Predicate *predicate = predicates + j;
 
-            calendar_getRecordValue(db, julian, predicate->left.field, value, VALUE_MAX_LENGTH);
+            calendar_evaluateNode(db, &predicate->left, julian, value_left, VALUE_MAX_LENGTH);
+            calendar_evaluateNode(db, &predicate->right, julian, value_right, VALUE_MAX_LENGTH);
 
-            if (!evaluateExpression(predicate->op, value, predicate->right.text)) {
+            if (!evaluateExpression(predicate->op, value_left, value_right)) {
                 matching = 0;
                 break;
             }
@@ -345,109 +360,143 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
     for (int i = 0; i < predicate_count; i++) {
         struct Predicate *p = predicates + i;
 
-        // We need field on the left and constant on the right, swap if necessary
+        // Prep: We need field on the left and constant on the right, swap if necessary
         normalisePredicate(p);
 
-        // This should already have been taken care of
+        // Prep: We're only looking for constants
+        if (p->right.field != FIELD_CONSTANT) {
+            continue;
+        }
+
+        // Prep: This should already have been taken care of
         if (strcmp(p->left.text, "julian") == 0) {
             p->left.field = FIELD_ROW_INDEX;
         }
 
-        // An exact Julian
-        if (p->left.field == FIELD_ROW_INDEX && p->op == OPERATOR_EQ) {
-            *julian_start = atoi(p->right.text);
-            *julian_end = *julian_start + 1;
-            return;
-        }
+        // Check what kind of predicate we have
+        if (p->left.field == FIELD_ROW_INDEX) {
+            // An exact Julian
+            if( p->op == OPERATOR_EQ) {
+                *julian_start = atoi(p->right.text);
+                *julian_end = *julian_start + 1;
+            }
 
-        // An exact date
-        if (strcmp(p->left.text, "date") == 0 && p->op == OPERATOR_EQ) {
-            struct DateTime dt;
-            parseDateTime(p->right.text, &dt);
-            *julian_start = datetimeGetJulian(&dt);
-            *julian_end = *julian_start + 1;
-            return;
-        }
+            // Dates after a specific Julian
+            else if (p->op & OPERATOR_GT) {
+                *julian_start = atoi(p->right.text);
 
-        // Dates after a specific Julian
-        if (p->left.field == FIELD_ROW_INDEX && (p->op & OPERATOR_GT)) {
-            *julian_start = atoi(p->right.text);
+                if (!(p->op & OPERATOR_EQ)) {
+                    (*julian_start)++;
+                }
+            }
 
-            if (!(p->op & OPERATOR_EQ)) {
-                (*julian_start)++;
+            // Dates before a specific Julian
+            else if (p->op & OPERATOR_LT) {
+                *julian_end = atoi(p->right.text);
+
+                // End is exclusive
+                if (p->op & OPERATOR_EQ) {
+                    (*julian_end)++;
+                }
             }
         }
 
-        // Dates before a specific Julian
-        if (p->left.field == FIELD_ROW_INDEX && (p->op & OPERATOR_LT)) {
-            *julian_end = atoi(p->right.text);
+        else if (p->left.field == COL_DATE) {
 
-            // End is exclusive
-            if (p->op & OPERATOR_EQ) {
-                (*julian_end)++;
+            // An exact date
+            if (p->op == OPERATOR_EQ) {
+                struct DateTime dt;
+                parseDateTime(p->right.text, &dt);
+                *julian_start = datetimeGetJulian(&dt);
+                *julian_end = *julian_start + 1;
+            }
+
+            // Dates after a specific date
+            else if (p->op & OPERATOR_GT) {
+                struct DateTime dt;
+                parseDateTime(p->right.text, &dt);
+                *julian_start = datetimeGetJulian(&dt);
+
+                if (!(p->op & OPERATOR_EQ)) {
+                    (*julian_start)++;
+                }
+            }
+
+            // Dates before a specific date
+            if (p->op & OPERATOR_LT) {
+                struct DateTime dt;
+                parseDateTime(p->right.text, &dt);
+                *julian_end = datetimeGetJulian(&dt);
+
+                // End is exclusive
+                if (p->op & OPERATOR_EQ) {
+                    (*julian_end)++;
+                }
             }
         }
+        else if (p->left.field == COL_YEAR) {
 
-        // Dates after a specific date
-        if (strcmp(p->left.text, "date") == 0 && (p->op & OPERATOR_GT)) {
-            struct DateTime dt;
-            parseDateTime(p->right.text, &dt);
-            *julian_start = datetimeGetJulian(&dt);
+            // All dates in the given year
+            if (p->op == OPERATOR_EQ) {
+                struct DateTime dt;
 
-            if (!(p->op & OPERATOR_EQ)) {
-                (*julian_start)++;
+                dt.year = atoi(p->right.text);
+                dt.month = 1;
+                dt.day = 1;
+
+                *julian_start = datetimeGetJulian(&dt);
+
+                // End is exclusive
+                dt.year++;
+
+                *julian_end = datetimeGetJulian(&dt);
             }
-        }
 
-        // Dates before a specific date
-        if (strcmp(p->left.text, "date") == 0 && (p->op & OPERATOR_LT)) {
-            struct DateTime dt;
-            parseDateTime(p->right.text, &dt);
-            *julian_end = datetimeGetJulian(&dt);
+            // All dates up to (but not including) the given year
+            else if (p->op == OPERATOR_LT) {
+                struct DateTime dt;
 
-            // End is exclusive
-            if (p->op & OPERATOR_EQ) {
-                (*julian_end)++;
+                // End is exclusive
+                dt.year = atoi(p->right.text);
+                dt.month = 1;
+                dt.day = 1;
+
+                *julian_end = datetimeGetJulian(&dt);
             }
-        }
 
-        // All dates in the given year
-        if (strcmp(p->left.text, "year") == 0 && p->op == OPERATOR_EQ) {
-            struct DateTime dt;
+            // All dates up to and including the given year
+            else if (p->op == OPERATOR_LE) {
+                struct DateTime dt;
 
-            dt.year = atoi(p->right.text);
-            dt.month = 1;
-            dt.day = 1;
+                // End is exclusive
+                dt.year = atoi(p->right.text) + 1;
+                dt.month = 1;
+                dt.day = 1;
 
-            *julian_start = datetimeGetJulian(&dt);
+                *julian_end = datetimeGetJulian(&dt);
+            }
 
-            // End is exclusive
-            dt.year++;
+            // All dates starting from the beginning of next year
+            else if (p->op == OPERATOR_GT) {
+                struct DateTime dt;
 
-            *julian_end = datetimeGetJulian(&dt);
-        }
+                dt.year = atoi(p->right.text) + 1;
+                dt.month = 1;
+                dt.day = 1;
 
-        // All dates up to and including the given year
-        if (strcmp(p->left.text, "year") == 0 && p->op == OPERATOR_LE) {
-            struct DateTime dt;
+                *julian_start = datetimeGetJulian(&dt);
+            }
 
-            // End is exclusive
-            dt.year = atoi(p->right.text) + 1;
-            dt.month = 1;
-            dt.day = 1;
+            // All dates starting from the beginning of the given year
+            else if (p->op == OPERATOR_GE) {
+                struct DateTime dt;
 
-            *julian_end = datetimeGetJulian(&dt);
-        }
+                dt.year = atoi(p->right.text);
+                dt.month = 1;
+                dt.day = 1;
 
-        // All dates starting from the beginning of the given year
-        if (strcmp(p->left.text, "year") == 0 && p->op == OPERATOR_GE) {
-            struct DateTime dt;
-
-            dt.year = atoi(p->right.text);
-            dt.month = 1;
-            dt.day = 1;
-
-            *julian_start = datetimeGetJulian(&dt);
+                *julian_start = datetimeGetJulian(&dt);
+            }
         }
     }
 
@@ -459,4 +508,23 @@ static int printDate (char *value, int max_length, struct DateTime date) {
     } else {
         return snprintf(value, max_length, "%+06d-%02d-%02d", date.year, date.month, date.day);
     }
+}
+
+
+static int calendar_evaluateNode(struct DB *db, struct ColumnNode *column, int rowid, char *value, int max_length) {
+    if (column->field == FIELD_CONSTANT) {
+        strcpy(value, column->text);
+        return 0;
+    }
+
+    if (column->field == FIELD_ROW_INDEX) {
+        return sprintf(value, "%d", rowid);
+    }
+
+    if (column->field >= 0) {
+        return calendar_getRecordValue(db, rowid, column->field, value, max_length);
+    }
+
+    fprintf(stderr, "CALENDAR Cannot evaluate column '%s'\n", column->text);
+    exit(-1);
 }
