@@ -1,8 +1,8 @@
 #
 # Compiler flags
 #
-CC     = clang
-CFLAGS = -Wall -Werror -Wextra
+CC     = gcc
+CFLAGS = -Wall -Werror -Wextra -Wno-format-overflow
 
 #
 # Project files
@@ -28,7 +28,16 @@ RELEXE = $(RELDIR)/$(EXE)
 RELOBJS = $(addprefix $(RELDIR)/, $(OBJS))
 RELCFLAGS = -O3 -DNDEBUG
 
-.PHONY: all clean debug prep release remake
+#
+# CGI build settings
+#
+CGIDIR = release
+CGIEXE = $(CGIDIR)/$(EXE).cgi
+CGISRCS = $(filter-out main.c, $(SRCS)) main-cgi.c
+CGIOBJS = $(addprefix $(CGIDIR)/, $(CGISRCS:.c=.o))
+CGICFLAGS = -O3 -DNDEBUG
+
+.PHONY: all clean debug prep release remake cgi
 
 # Default build
 all: prep release
@@ -56,6 +65,17 @@ $(RELDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) -c $(CFLAGS) $(RELCFLAGS) -o $@ $<
 
 #
+# CGI rules
+#
+cgi: prep $(CGIEXE)
+
+$(CGIEXE): $(CGIOBJS)
+	$(CC) $(CFLAGS) $(CGICFLAGS) -o $(CGIEXE) $^
+
+$(CGIDIR)/%.o: $(SRCDIR)/%.c
+	$(CC) -c $(CFLAGS) $(CGICFLAGS) -o $@ $<
+
+#
 # Other rules
 #
 prep:
@@ -64,4 +84,4 @@ prep:
 remake: clean all
 
 clean:
-	rm -f $(RELEXE) $(RELOBJS) $(DBGEXE) $(DBGOBJS)
+	rm -f $(RELEXE) $(RELOBJS) $(DBGEXE) $(DBGOBJS) $(CGIEXE) ${CGIOBJS}

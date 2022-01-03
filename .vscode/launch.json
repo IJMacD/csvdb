@@ -20,7 +20,9 @@
                 // "FROM suits, ranks WHERE ranks.value < 3 ORDER BY suits.name"
                 // "FROM dates.sql AS d"
                 // "FROM test3, CALENDAR ON birth_date = date WHERE birth_date = TODAY"
-                "SELECT name, score FROM test3 WHERE score = 42 FETCH FIRST 5 ROWS ONLY"
+                // "SELECT name, score FROM test3 WHERE score = 42 FETCH FIRST 5 ROWS ONLY"
+                // "FROM CALENDAR WHERE year = 2022 AND date = lastOfMonth"
+                "FROM CALENDAR WHERE year = EXTRACT(YEAR FROM TODAY()) FETCH FIRST ROW ONLY"
                 // "-f",
                 // "test.sql"
             ],
