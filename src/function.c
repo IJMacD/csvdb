@@ -147,6 +147,15 @@ int evaluateFunction(char * output, struct DB *db, struct ColumnNode *column, in
             else if (column->function == FUNC_EXTRACT_DATETIME) {
                 sprintf(output, "%04d-%02d-%02dT%02d:%02d:%02d", dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second);
             }
+            else if (column->function == FUNC_EXTRACT_MONTH_STRING) {
+                sprintf(output, "%04d-%02d", dt.year, dt.month);
+            }
+            else if (column->function == FUNC_EXTRACT_WEEK_STRING) {
+                sprintf(output, "%04d-W%02d", datetimeGetWeekYear(&dt), datetimeGetWeek(&dt));
+            }
+            else if (column->function == FUNC_EXTRACT_YEARDAY_STRING) {
+                sprintf(output, "%04d-%03d", dt.year, datetimeGetYearDay(&dt));
+            }
             else {
                 sprintf(output, "BADEXTRACT");
             }

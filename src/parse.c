@@ -657,6 +657,15 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
         else if (strcmp(part, "JULIAN") == 0) {
             column->function = FUNC_EXTRACT_JULIAN;
         }
+        else if (strcmp(part, "MONTH_STRING") == 0) {
+            column->function = FUNC_EXTRACT_MONTH_STRING;
+        }
+        else if (strcmp(part, "WEEK_STRING") == 0) {
+            column->function = FUNC_EXTRACT_WEEK_STRING;
+        }
+        else if (strcmp(part, "YEARDAY_STRING") == 0) {
+            column->function = FUNC_EXTRACT_YEARDAY_STRING;
+        }
         else {
             fprintf(stderr, "Bad query - expected valid extract part - got %s\n", part);
             return -1;
