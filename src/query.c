@@ -21,6 +21,7 @@
 #include "plan.h"
 #include "result.h"
 #include "debug.h"
+#include "date.h"
 
 int select_query (const char *query, int output_flags, FILE * output);
 
@@ -31,6 +32,8 @@ int information_query (const char *table, FILE * output);
 static int populateTables (struct Query *q, struct DB * dbs);
 
 static int populateColumns (struct Query *q);
+
+static int evaluateConstantNode (struct ColumnNode * column, char * value, __attribute__((unused)) int max_length);
 
 int query (const char *query, int output_flags, FILE * output) {
     if (strncmp(query, "CREATE ", 7) == 0) {
@@ -166,13 +169,13 @@ int basic_select_query (
         printHeaderLine(output, dbs, q->table_count, q->columns, q->column_count, output_flags);
     }
 
-    struct ResultSet results;
+    // struct ResultSet results;
 
-    results.list_count = 1;
+    // results.list_count = 1;
 
     struct RowList row_list;
 
-    results.row_lists = &row_list;
+    // results.row_lists = &row_list;
 
     if (q->table_count == 0) {
         // Just a single output row
@@ -568,6 +571,10 @@ void findColumn (struct Query *q, const char *text, int *table_id, int *column_i
 void populateColumnNode (struct Query * query, struct ColumnNode * column) {
     if (column->field == FIELD_UNKNOWN) {
         findColumn(query, column->text, &column->table_id, &column->field);
+    } else if (column->field == FIELD_CONSTANT) {
+        // Fill in constant values such as CURRENT_DATE and run through any
+        // functions on the column, replacing the original value
+        evaluateConstantNode(column, column->text, FIELD_MAX_LENGTH);
     }
 }
 
@@ -585,4 +592,21 @@ int evaluateNode (struct Query * query, struct RowList *rowlist, int index, stru
     }
 
     return 0;
+}
+
+static int evaluateConstantNode (struct ColumnNode * column, char * value, __attribute__((unused)) int max_length) {
+    if (column->field != FIELD_CONSTANT) {
+        fprintf(stderr, "Tried to evaluate non-contant value as constant: %s\n", column->text);
+        exit(-1);
+    }
+
+    if (strcmp(column->text, "CURRENT_DATE") == 0
+        || strcmp(column->text, "TODAY()") == 0)
+    {
+        struct DateTime dt;
+        parseDateTime("CURRENT_DATE", &dt);
+        sprintf(value, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
+    }
+
+    return evaluateFunction(value, NULL, column, -1);
 }

@@ -119,7 +119,7 @@ int calendar_getRecordValue (__attribute__((unused)) struct DB *db, int record_i
         return snprintf(value, value_max_length, "%d", record_index);
     }
 
-    struct DateTime dt;
+    struct DateTime dt = {0};
     datetimeFromJulian(&dt, record_index);
 
     struct DateTime dt2 = {0};
@@ -328,6 +328,8 @@ int calendar_fullTableScan (struct DB *db, struct RowList *row_list, struct Pred
     for (; julian < max_julian; julian++) {
         int matching = 1;
 
+        // printf("Julian: %d\n", julian);
+
         // Perform filtering if necessary
         for (int j = 0; j < predicate_count && matching; j++) {
             struct Predicate *predicate = predicates + j;
@@ -405,7 +407,7 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
 
             // An exact date
             if (p->op == OPERATOR_EQ) {
-                struct DateTime dt;
+                struct DateTime dt = {0};
                 parseDateTime(p->right.text, &dt);
                 *julian_start = datetimeGetJulian(&dt);
                 *julian_end = *julian_start + 1;
@@ -413,7 +415,7 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
 
             // Dates after a specific date
             else if (p->op & OPERATOR_GT) {
-                struct DateTime dt;
+                struct DateTime dt = {0};
                 parseDateTime(p->right.text, &dt);
                 *julian_start = datetimeGetJulian(&dt);
 
@@ -424,7 +426,7 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
 
             // Dates before a specific date
             if (p->op & OPERATOR_LT) {
-                struct DateTime dt;
+                struct DateTime dt = {0};
                 parseDateTime(p->right.text, &dt);
                 *julian_end = datetimeGetJulian(&dt);
 
@@ -438,7 +440,7 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
 
             // All dates in the given year
             if (p->op == OPERATOR_EQ) {
-                struct DateTime dt;
+                struct DateTime dt = {0};
 
                 dt.year = atoi(p->right.text);
                 dt.month = 1;
@@ -454,7 +456,7 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
 
             // All dates up to (but not including) the given year
             else if (p->op == OPERATOR_LT) {
-                struct DateTime dt;
+                struct DateTime dt = {0};
 
                 // End is exclusive
                 dt.year = atoi(p->right.text);
@@ -466,7 +468,7 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
 
             // All dates up to and including the given year
             else if (p->op == OPERATOR_LE) {
-                struct DateTime dt;
+                struct DateTime dt = {0};
 
                 // End is exclusive
                 dt.year = atoi(p->right.text) + 1;
@@ -478,7 +480,7 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
 
             // All dates starting from the beginning of next year
             else if (p->op == OPERATOR_GT) {
-                struct DateTime dt;
+                struct DateTime dt = {0};
 
                 dt.year = atoi(p->right.text) + 1;
                 dt.month = 1;
@@ -489,7 +491,7 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
 
             // All dates starting from the beginning of the given year
             else if (p->op == OPERATOR_GE) {
-                struct DateTime dt;
+                struct DateTime dt = {0};
 
                 dt.year = atoi(p->right.text);
                 dt.month = 1;

@@ -85,28 +85,38 @@ void printResultLine (FILE *f, struct DB *tables, int db_count, struct ColumnNod
             fprintf(f, "%d", rowid);
         }
         else if (column.field == FIELD_CONSTANT) {
-            int result = evaluateFunction(f, NULL, &column, -1);
+            char output[VALUE_MAX_LENGTH];
+            int result = evaluateFunction(output, NULL, &column, -1);
 
             if (result < 0) {
                 fprintf(f, "BADFUNC");
             }
+
+            fprintf(f, "%s", output);
         }
         else if ((column.function & MASK_FUNC_FAMILY) == FUNC_FAM_AGG) {
-            int result = evaluateAggregateFunction(f, tables, db_count, columns + j, row_list);
+            char output[VALUE_MAX_LENGTH];
+            int result = evaluateAggregateFunction(output, tables, db_count, columns + j, row_list);
+
             if (result < 0) {
                 fprintf(f, "BADFUNC");
             }
+
+            fprintf(f, "%s", output);
         }
         else if (column.field >= 0) {
             // Evaluate plain columns as well as functions
             int rowid = getRowID(row_list, column.table_id, result_index);
             struct DB *db = &tables[column.table_id];
+            char output[VALUE_MAX_LENGTH];
 
-            int result = evaluateFunction(f, db, columns + j, rowid);
+            int result = evaluateFunction(output, db, columns + j, rowid);
 
             if (result < 0) {
                 fprintf(f, "BADFUNC");
             }
+
+            fprintf(f, "%s", output);
         }
         else {
             fprintf(f, "UNKNOWN");
