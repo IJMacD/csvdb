@@ -18,6 +18,8 @@ void addStepWithParams (struct Plan *plan, int type, int param1, int param2);
 
 void addJoinStepsIfRequired (struct Plan *plan, struct Query *q);
 
+static int optimisePredicates (struct Query *q, struct Predicate * predicates, int count);
+
 int makePlan (struct Query *q, struct Plan *plan) {
     plan->step_count = 0;
 
@@ -44,42 +46,15 @@ int makePlan (struct Query *q, struct Plan *plan) {
     else if (q->flags & FLAG_HAVE_PREDICATE) {
 
         // Try to find a predicate on the first table
-        int chosen_predicate_index = -1;
-        int table_id = -1;
-        int field_id;
+        int predicatesOnFirstTable = optimisePredicates(q, q->predicates, q->predicate_count);
 
         struct Table table = q->tables[0];
-
-        for (int i = 0; i < q->predicate_count; i++) {
-            // First check if we've been given an explicit index
-            // If so, we'll have to assume that's on the first table
-            if (strncmp(q->predicates[i].left.text, "UNIQUE(", 7) == 0 ||
-                strncmp(q->predicates[i].left.text, "INDEX(", 6) == 0)
-            {
-                table_id = 0;
-            } else {
-                findColumn(q, q->predicates[i].left.text, &table_id, &field_id);
-            }
-
-            if (table_id == 0) {
-                chosen_predicate_index = i;
-                break;
-            }
-        }
-
-        // Swap predicates so first one is on first table
-        if (chosen_predicate_index > 0) {
-            struct Predicate tmp;
-            memcpy(&tmp, &q->predicates[0], sizeof(tmp));
-            memcpy(&q->predicates[0], &q->predicates[chosen_predicate_index], sizeof(tmp));
-            memcpy(&q->predicates[chosen_predicate_index], &tmp, sizeof(tmp));
-        }
 
         struct Predicate *p = &q->predicates[0];
 
         struct DB index_db;
 
-        if (table_id == 0) {
+        if (predicatesOnFirstTable > 0) {
 
             // Remove qualified name so indexes can be searched etc.
             int dot_index = str_find_index(p->left.text, '.');
@@ -198,15 +173,15 @@ int makePlan (struct Query *q, struct Plan *plan) {
              ********************/
             else {
                 if (q->table_count > 1) {
-                    // First predicate is from first table
-                    addStepWithPredicate(plan, PLAN_TABLE_ACCESS_FULL, p);
+                    // First predicates are from first table
+                    addStepWithPredicates(plan, PLAN_TABLE_ACCESS_FULL, q->predicates, predicatesOnFirstTable);
 
                     // The join
                     addJoinStepsIfRequired(plan, q);
 
-                    if (q->predicate_count > 1) {
+                    if (q->predicate_count > predicatesOnFirstTable) {
                         // Add the rest of the predicates after the join
-                        addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + 1, q->predicate_count - 1);
+                        addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + predicatesOnFirstTable, q->predicate_count - predicatesOnFirstTable);
                     }
                 } else {
                     // Only one table so add all predicates together
@@ -383,4 +358,51 @@ void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
             }
         }
     }
+}
+
+/**
+ * @brief Re-order predicates so first N predicates only include first table and constants
+ *
+ * NOTE: Current implementation can actually only cope with N = 1
+ *
+ * @param q
+ * @param predicates
+ * @param count
+ * @return int N, number of predicates on first table
+ */
+static int optimisePredicates (struct Query *q, struct Predicate * predicates, int count) {
+    int table_id = -1;
+    int field_id;
+
+    int chosen_predicate_index = -1;
+
+    for (int i = 0; i < count; i++) {
+        // First check if we've been given an explicit index
+        // If so, we'll have to assume that's on the first table
+        if (strncmp(predicates[i].left.text, "UNIQUE(", 7) == 0 ||
+            strncmp(predicates[i].left.text, "INDEX(", 6) == 0)
+        {
+            table_id = 0;
+        } else {
+            findColumn(q, predicates[i].left.text, &table_id, &field_id);
+        }
+
+        if (table_id == 0) {
+            chosen_predicate_index = i;
+            break;
+        }
+    }
+
+    // Swap predicates so first one is on first table
+    if (chosen_predicate_index > 0) {
+        struct Predicate tmp;
+        memcpy(&tmp, &predicates[0], sizeof(tmp));
+        memcpy(&predicates[0], &predicates[chosen_predicate_index], sizeof(tmp));
+        memcpy(&predicates[chosen_predicate_index], &tmp, sizeof(tmp));
+    }
+
+    if (chosen_predicate_index >= 0)
+        return 1;
+
+    return 0;
 }

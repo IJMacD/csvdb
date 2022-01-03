@@ -812,14 +812,14 @@ static int checkConstantColumn(struct ColumnNode * column) {
 
         strcpy(column->text, value);
     } else if (strcmp(column->text, "CURRENT_DATE") == 0
-        || strcmp(column->text, "TODAY") == 0)
+        || strcmp(column->text, "TODAY()") == 0)
     {
         column->field = FIELD_CONSTANT;
         column->table_id = -1;
 
         struct DateTime dt;
         parseDateTime("CURRENT_DATE", &dt);
-        sprintf(column->text, "%4d-%2d-%2d", dt.year, dt.month, dt.day);
+        sprintf(column->text, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
     }
     else {
         column->field = FIELD_UNKNOWN;
