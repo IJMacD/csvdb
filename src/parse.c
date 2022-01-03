@@ -195,9 +195,10 @@ int parseQuery (struct Query *q, const char *query) {
 
                 struct Predicate *p = &(q->predicates[q->predicate_count++]);
 
-                getToken(query, &index, p->left.text, FIELD_MAX_LENGTH);
-
-                checkConstantColumn(&p->left);
+                int result = parseColumn(query, &index, &p->left);
+                if (result < 0) {
+                    return result;
+                }
 
                 if (strncmp(p->left.text, "PK(", 3) == 0) {
                     q->flags |= FLAG_PRIMARY_KEY_SEARCH;
@@ -229,9 +230,10 @@ int parseQuery (struct Query *q, const char *query) {
                     }
                 }
 
-                getQuotedToken(query, &index, p->right.text, FIELD_MAX_LENGTH);
-
-                checkConstantColumn(&p->right);
+                result = parseColumn(query, &index, &p->right);
+                if (result < 0) {
+                    return result;
+                }
 
                 skipWhitespace(query, &index);
 
@@ -690,7 +692,8 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
             (*index)++;
         }
 
-        sprintf(column->alias, "EXTRACT(%s FROM %s)", part, column->text);
+        if (strlen(part) + strlen(column->text) + 15 < FIELD_MAX_LENGTH)
+            sprintf(column->alias, "EXTRACT(%s FROM %s)", part, column->text);
 
         if (checkConstantColumn(column) < 0) {
             return -1;
@@ -704,7 +707,8 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
             return -1;
         }
 
-        sprintf(column->alias, "COUNT(%s)", column->text);
+        if (strlen(column->text) + 7 < FIELD_MAX_LENGTH)
+            sprintf(column->alias, "COUNT(%s)", column->text);
     }
     else if (strncmp(column->text, "MAX(", 4) == 0) {
         column->function = FUNC_AGG_MAX;
@@ -714,7 +718,8 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
             return -1;
         }
 
-        sprintf(column->alias, "MAX(%s)", column->text);
+        if (strlen(column->text) + 5 < FIELD_MAX_LENGTH)
+            sprintf(column->alias, "MAX(%s)", column->text);
     }
     else if (strncmp(column->text, "MIN(", 4) == 0) {
         column->function = FUNC_AGG_MIN;
@@ -724,7 +729,8 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
             return -1;
         }
 
-        sprintf(column->alias, "MIN(%s)", column->text);
+        if (strlen(column->text) + 5 < FIELD_MAX_LENGTH)
+            sprintf(column->alias, "MIN(%s)", column->text);
     }
     else if (strncmp(column->text, "AVG(", 4) == 0) {
         column->function = FUNC_AGG_AVG;
@@ -734,7 +740,8 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
             return -1;
         }
 
-        sprintf(column->alias, "AVG(%s)", column->text);
+        if (strlen(column->text) + 5 < FIELD_MAX_LENGTH)
+            sprintf(column->alias, "AVG(%s)", column->text);
     }
     else if (strncmp(column->text, "LISTAGG(", 6) == 0) {
         column->function = FUNC_AGG_LISTAGG;
@@ -744,7 +751,8 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
             return -1;
         }
 
-        sprintf(column->alias, "LISTAGG(%s)", column->text);
+        if (strlen(column->text) + 9 < FIELD_MAX_LENGTH)
+            sprintf(column->alias, "LISTAGG(%s)", column->text);
     }
 
     return flags;
