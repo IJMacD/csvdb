@@ -133,13 +133,17 @@ int findIndex(struct DB *db, const char *table_name, const char *index_name, int
  * @return number of matched rows
  */
 int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value) {
+    if (db->vfs == 0) {
+        fprintf(stderr, "Trying to scan unititialised DB\n");
+        exit(-1);
+    }
+
     // Special implementation for calendar
     if (db->vfs == VFS_CALENDAR) {
         return calendar_fullTableScan(db, row_list, predicates, predicate_count, limit_value);
     }
 
     // VFS-agnostic implementation
-    int result_count = 0;
 
     char value_left[VALUE_MAX_LENGTH] = {0};
     char value_right[VALUE_MAX_LENGTH] = {0};
@@ -179,12 +183,12 @@ int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *p
         }
 
         // Implement early exit FETCH FIRST/LIMIT for cases with no ORDER clause
-        if (limit_value >= 0 && result_count >= limit_value) {
+        if (limit_value >= 0 && row_list->row_count >= limit_value) {
             break;
         }
     }
 
-    return result_count;
+    return row_list->row_count;
 }
 
 /**
@@ -194,6 +198,11 @@ int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *p
  * Equivalent to FULL TABLE SCAN with no predicates
  */
 int fullTableAccess (struct DB *db, struct RowList * row_list, int limit_value) {
+    if (db->vfs == 0) {
+        fprintf(stderr, "Trying to access unititialised DB\n");
+        exit(-1);
+    }
+
     if (db->vfs == VFS_CALENDAR) {
         return calendar_fullTableScan(db, row_list, NULL, 0, limit_value);
     }
@@ -217,6 +226,11 @@ int fullTableAccess (struct DB *db, struct RowList * row_list, int limit_value) 
  * @returns 0.. rowid of match; -1 if not found; -3 if below minimum; -4 if above maximum
  */
 int pkSearch(struct DB *db, const char * predicate_field, const char *value) {
+    if (db->vfs == 0) {
+        fprintf(stderr, "Trying to PK search unititialised DB\n");
+        exit(-1);
+    }
+
     if (db->vfs == VFS_CALENDAR) {
         return calendar_pkSearch(db, predicate_field, value);
     }

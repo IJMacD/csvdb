@@ -2,18 +2,20 @@
 
 #include "debug.h"
 
-void debugRowList (struct RowList * list) {
+void debugRowList (struct RowList * list, int verbosity) {
     fprintf(stderr, "RowList (%d joins x %d rows)\n", list->join_count, list->row_count);
 
-    for (int i = 0; i < list->row_count; i++) {
-        fprintf(stderr, "Index %3d, Rowids: (", i);
-        for (int j = 0; j < list->join_count; j++) {
-            if (j > 0) {
-                fprintf(stderr, ", ");
+    if (verbosity > 1) {
+        for (int i = 0; i < list->row_count; i++) {
+            fprintf(stderr, "Index %3d, Rowids: (", i);
+            for (int j = 0; j < list->join_count; j++) {
+                if (j > 0) {
+                    fprintf(stderr, ", ");
+                }
+                fprintf(stderr, "%d", getRowID(list, j, i));
             }
-            fprintf(stderr, "%d", getRowID(list, j, i));
+            fprintf(stderr, ")\n");
         }
-        fprintf(stderr, ")\n");
     }
 }
 

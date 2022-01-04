@@ -83,9 +83,8 @@ test: prep release $(GENEXE)
 	./${GENEXE} 10000 test.csv
 	./test.sh
 
-$(GENEXE): ./src/gen.c
-	$(CC) $(CFLAGS) $(RELCFLAGS) -o $@ $^
-
+$(GENEXE): ./src/gen.c ./src/date.c
+	$(CC) $(CFLAGS) $(DBGCFLAGS) -o $@ $^
 
 #
 # Other rules

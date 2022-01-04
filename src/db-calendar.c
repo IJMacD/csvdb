@@ -296,12 +296,16 @@ int calendar_getRecordValue (__attribute__((unused)) struct DB *db, int record_i
 }
 
 // All queries go through fullTableScan but it's useful to indicate to the planner that julian and date are unique
-int calendar_findIndex(__attribute__((unused)) struct DB *db, __attribute__((unused)) const char *table_name, const char *index_name, __attribute__((unused)) int index_type_flags) {
+int calendar_findIndex(struct DB *db, __attribute__((unused)) const char *table_name, const char *index_name, __attribute__((unused)) int index_type_flags) {
     if (strcmp(index_name, "julian") == 0) {
+        if (db != NULL) calendar_openDB(db, "CALENDAR");
+
         return INDEX_UNIQUE;
     }
 
     if (strcmp(index_name, "date") == 0) {
+        if (db != NULL) calendar_openDB(db, "CALENDAR");
+
         return INDEX_UNIQUE;
     }
 
@@ -544,11 +548,11 @@ static int calendar_evaluateNode(struct DB *db, struct ColumnNode *column, int r
  * Calendar can do super efficient PK searches
  */
 int calendar_pkSearch(__attribute__((unused)) struct DB *db, const char * predicate_field, const char *value) {
-    if (strcmp(predicate_field, "julian")) {
+    if (strcmp(predicate_field, "julian") == 0) {
         return atol(value);
     }
 
-    if (strcmp(predicate_field, "date")) {
+    if (strcmp(predicate_field, "date") == 0) {
         struct DateTime dt;
 
         parseDateTime(value, &dt);

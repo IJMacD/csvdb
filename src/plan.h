@@ -29,8 +29,7 @@
 
 struct PlanStep {
     int type;
-    int param1;
-    int param2;
+    int limit;
     int predicate_count;
     struct Predicate *predicates;
 };

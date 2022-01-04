@@ -192,41 +192,39 @@ int basic_select_query (
             // First table
             struct Table * table = q->tables;
             struct Predicate p = s.predicates[0];
-            primaryKeyScan(table->db, p.left.text, p.op, p.right.text, &row_list);
+            primaryKeyScan(table->db, p.left.text, p.op, p.right.text, &row_list, s.limit);
         }
         else if (s.type == PLAN_INDEX_UNIQUE) {
             // First table
             struct Table * table = q->tables;
             struct Predicate p = s.predicates[0];
             struct DB index_db;
-            findIndex(&index_db, table->name, p.left.text, INDEX_UNIQUE);
-            indexUniqueScan(&index_db, p.left.text, p.op, p.right.text, &row_list);
+            if (findIndex(&index_db, table->name, p.left.text, INDEX_UNIQUE) == 0) {
+                fprintf(stderr, "Unable to find unique index on column '%s' on table '%s'\n", p.left.text, table->name);
+                exit(-1);
+            }
+            indexUniqueScan(&index_db, p.left.text, p.op, p.right.text, &row_list, s.limit);
         }
         else if (s.type == PLAN_INDEX_RANGE) {
             // First table
             struct Table * table = q->tables;
             struct Predicate p = s.predicates[0];
             struct DB index_db;
-            findIndex(&index_db, table->name, p.left.text, INDEX_ANY);
-            indexRangeScan(&index_db, p.left.text, p.op, p.right.text, &row_list);
+            if (findIndex(&index_db, table->name, p.left.text, INDEX_ANY) == 0) {
+                fprintf(stderr, "Unable to find index on column '%s' on table '%s'\n", p.left.text, table->name);
+                exit(-1);
+            }
+            indexRangeScan(&index_db, p.left.text, p.op, p.right.text, &row_list, s.limit);
         }
         else if (s.type == PLAN_TABLE_ACCESS_FULL) {
             // First table
             struct Table * table = q->tables;
 
-            // Optmisation: If we have a limit and no sorting just stop
-            // fetching rows after we reach the limit.
-            // Should this be done in the plan?
-            int limit = -1;
-            if (!(q->flags & FLAG_ORDER)) {
-                limit = q->limit_value + q->offset_value;
-            }
-
             if (s.predicate_count > 0) {
-                fullTableScan(table->db, &row_list, s.predicates, s.predicate_count, limit);
+                fullTableScan(table->db, &row_list, s.predicates, s.predicate_count, s.limit);
             }
             else {
-                fullTableAccess(table->db, &row_list, limit);
+                fullTableAccess(table->db, &row_list, s.limit);
             }
         }
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
@@ -352,45 +350,45 @@ int basic_select_query (
 
             makeRowList(&tmp_list, 1, 1);
 
-            struct DB index_db;
-            findIndex(&index_db, q->tables[table_id].name, s.predicates[0].left.text, INDEX_UNIQUE);
+            struct Predicate * p = &s.predicates[0];
+
+            struct ColumnNode * outer;
+            struct ColumnNode * inner;
+
+            if (p->left.table_id == table_id) {
+                outer = &p->right;
+                inner = &p->left;
+            } else if (p->right.table_id == table_id) {
+                outer = &p->left;
+                inner = &p->right;
+            } else {
+                fprintf(stderr, "Unable to perform UNIQUE JOIN\n");
+                exit(-1);
+            }
+
+            if (outer->table_id >= table_id) {
+                fprintf(stderr, "Unable to perform UNIQUE JOIN\n");
+                exit(-1);
+            }
+
+            struct DB index_db = {0};
+            if (findIndex(&index_db, q->tables[table_id].name, inner->text, INDEX_UNIQUE) == 0) {
+                fprintf(stderr, "Couldn't find unique index on '%s(%s)'\n", q->tables[table_id].name, inner->text);
+                exit(-1);
+            }
 
             for (int i = 0; i < row_list.row_count; i++) {
-                // Make a local copy of predicate
-                struct Predicate p = s.predicates[0];
+                char value[VALUE_MAX_LENGTH];
 
                 // Fill in value as constant from outer tables
-                if (p.left.table_id < table_id) {
-                    evaluateNode(q, &row_list, i, &p.left, p.left.text, FIELD_MAX_LENGTH);
-                    p.left.field = FIELD_CONSTANT;
-                }
+                evaluateNode(q, &row_list, i, outer, value, FIELD_MAX_LENGTH);
 
-                // Fill in value as constant from outer tables
-                if (p.right.table_id < table_id) {
-                    evaluateNode(q, &row_list, i, &p.right, p.right.text, FIELD_MAX_LENGTH);
-                    p.right.field = FIELD_CONSTANT;
-                }
+                char * field = inner->text;
 
-                tmp_list.row_count = 0;
+                int rowid = pkSearch(&index_db, field, value);
 
-                char * field;
-                char * value;
-                if (p.left.table_id == table_id) {
-                    field = p.left.text;
-                    value = p.right.text;
-                } else if (p.right.table_id == table_id) {
-                    field = p.right.text;
-                    value = p.left.text;
-                } else {
-                    fprintf(stderr, "Unable to perform UNIQUE JOIN\n");
-                    exit(-1);
-                }
-
-                indexUniqueScan(&index_db, field, p.op, value, &tmp_list);
-
-                // If we found one then append the row we've just found to the main row_list
-                if (tmp_list.row_count == 1){
-                    int rowid = getRowID(&tmp_list, 0, 0);
+                if (rowid != RESULT_NO_ROWS) {
+                    tmp_list.row_count = 0;
                     appendJoinedRowID(&new_list, &row_list, i, rowid);
                 }
             }
@@ -434,14 +432,11 @@ int basic_select_query (
             reverse_array(row_list.row_ids, row_list.row_count);
         }
         else if (s.type == PLAN_SLICE) {
-            // s.param1 is offset
-            // s.param2 is limit
-
             // Offset is taken care of in PLAN_SELECT
 
             // Apply limit (including offset rows - which will be omitted later)
-            if (s.param2 >= 0 && s.param2 < row_list.row_count) {
-                row_list.row_count = s.param1 + s.param2;
+            if (s.limit >= 0 && s.limit < row_list.row_count) {
+                row_list.row_count = s.limit;
             }
         }
         else if (s.type == PLAN_GROUP) {
@@ -469,6 +464,10 @@ int basic_select_query (
             fprintf(stderr, "Unimplemented OP code: %d\n", s.type);
             return -1;
         }
+
+        #ifdef DEBUG
+            debugRowList(&row_list, 1);
+        #endif
     }
 
     printPostamble(output, NULL, q->columns, q->column_count, row_list.row_count, output_flags);

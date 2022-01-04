@@ -124,7 +124,11 @@ int explain_select_query (
             operation = "INDEX RANGE";
             strcpy(table, q->tables[join_count].name);
             if (s.predicate_count > 0) {
-                if (s.predicates[0].op == OPERATOR_EQ) {
+                if (s.limit >= 0) {
+                    rows = (s.limit < row_estimate) ? s.limit : row_estimate;
+                    cost = rows;
+                }
+                else if (s.predicates[0].op == OPERATOR_EQ) {
                     rows = row_estimate / 1000;
                     cost = log_rows * 2;
                 } else if (s.predicates[0].op == OPERATOR_UN) {
@@ -154,8 +158,8 @@ int explain_select_query (
         }
         else if (s.type == PLAN_SLICE) {
             operation = "SLICE";
-            if (s.param2 < rows) {
-                rows = s.param2;
+            if (s.limit < rows) {
+                rows = s.limit;
             }
         }
         else if (s.type == PLAN_GROUP) {
@@ -169,6 +173,8 @@ int explain_select_query (
         }
         else if (s.type == PLAN_SELECT) {
             operation = "SELECT";
+
+            rows -= q->offset_value;
         }
         else if (s.type == PLAN_CROSS_JOIN) {
             operation = "CROSS JOIN";

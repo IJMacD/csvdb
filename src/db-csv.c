@@ -418,28 +418,49 @@ int csv_findIndex(struct DB *db, const char *table_name, const char *index_name,
     char index_filename[TABLE_MAX_LENGTH + FIELD_MAX_LENGTH + 12];
     size_t len = strlen(index_name);
 
-    int result = 0;
+    // Try UNIQUE indexes first
 
     if (strncmp(index_name, "UNIQUE(", 7) == 0) {
         size_t index_name_len = len - 8;
         strncpy(index_filename, index_name + 7, index_name_len);
         strcpy(index_filename + index_name_len, ".unique.csv");
-        result = INDEX_UNIQUE;
     }
-    else if (strncmp(index_name, "INDEX(", 6) == 0) {
+    else {
+        sprintf(index_filename, "%s__%s.unique.csv", table_name, index_name);
+    }
+
+    // If db is NULL our caller doesn't care about using the file, they just
+    // want to know if the index exists.
+    if (db == NULL) {
+        FILE * f = fopen(index_filename, "r");
+
+        if (f != NULL) {
+            fclose(f);
+
+            return INDEX_UNIQUE;
+        }
+
+    }
+    else if (openDB(db, index_filename) == 0) {
+        return INDEX_UNIQUE;
+    }
+
+    if (index_type_flags == INDEX_UNIQUE) {
+        // We have failed - we were only looking for UNIQUE indexes
+        return 0;
+    }
+
+    // Now try a regular  index
+
+    if (strncmp(index_name, "INDEX(", 6) == 0) {
         if (index_type_flags != INDEX_ANY) return -1;
 
         size_t index_name_len = len - 7;
         strncpy(index_filename, index_name + 6, index_name_len);
         strcpy(index_filename + index_name_len, ".index.csv");
-        result = INDEX_REGULAR;
     }
-    else if (index_type_flags == INDEX_UNIQUE) {
-        sprintf(index_filename, "%s__%s.unique.csv", table_name, index_name);
-        result = INDEX_UNIQUE;
-    } else {
+     else {
         sprintf(index_filename, "%s__%s.index.csv", table_name, index_name);
-        result = INDEX_REGULAR;
     }
 
     // If db is NULL our caller doesn't care about using the file, they just
@@ -453,11 +474,11 @@ int csv_findIndex(struct DB *db, const char *table_name, const char *index_name,
 
         fclose(f);
 
-        return result;
+        return INDEX_REGULAR;
     }
 
     if (openDB(db, index_filename) == 0) {
-        return result;
+        return INDEX_REGULAR;
     }
 
     return 0;

@@ -14,11 +14,13 @@ void addStepWithPredicate (struct Plan *plan, int type, struct Predicate *p);
 
 void addStepWithPredicates (struct Plan *plan, int type, struct Predicate *p, int predicate_count);
 
-void addStepWithParams (struct Plan *plan, int type, int param1, int param2);
+void addStepWithLimit (struct Plan *plan, int type, int limit);
 
 void addJoinStepsIfRequired (struct Plan *plan, struct Query *q);
 
 static int optimisePredicates (struct Query *q, struct Predicate * predicates, int count);
+
+void applyLimitOptimisation (struct Plan *plan, struct Query *query);
 
 int makePlan (struct Query *q, struct Plan *plan) {
     plan->step_count = 0;
@@ -93,6 +95,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 } else {
                     addOrderStepIfRequired(plan, q);
                 }
+
+                applyLimitOptimisation(plan, q);
             }
             /*******************
              * INDEX RANGE SCAN
@@ -115,6 +119,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 } else {
                     addOrderStepIfRequired(plan, q);
                 }
+
+                applyLimitOptimisation(plan, q);
             }
             // Before we do a full table scan... we have one more opportunity to use an index
             // To save a sort later, see if we can use an index for ordering now
@@ -161,6 +167,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 if (q->predicate_count > skip_predicates) {
                     addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + skip_predicates, q->predicate_count - skip_predicates);
                 }
+
+                applyLimitOptimisation(plan, q);
             }
             /********************
              * TABLE ACCESS FULL
@@ -180,10 +188,12 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 } else {
                     // Only one table so add all predicates together
                     addStepWithPredicates(plan, PLAN_TABLE_ACCESS_FULL, q->predicates, q->predicate_count);
+
                 }
 
-                // Do we need an explicit sort?
                 addOrderStepIfRequired(plan, q);
+
+                applyLimitOptimisation(plan, q);
             }
         } else {
 
@@ -196,6 +206,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
             addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates, q->predicate_count);
 
             addOrderStepIfRequired(plan, q);
+
+            applyLimitOptimisation(plan, q);
         }
     }
     else if ((q->flags & FLAG_ORDER) && !(q->flags & FLAG_GROUP)) {
@@ -214,6 +226,13 @@ int makePlan (struct Query *q, struct Plan *plan) {
             if (q->order_direction == ORDER_DESC) {
                 addStep(plan, PLAN_REVERSE);
             }
+            else if (q->limit_value >= 0 && q->table_count <= 1) {
+                // Usually this can't be done with ORDER BY but in this case we
+                // can since there are no predicates
+                plan->steps[plan->step_count - 1].limit = q->offset_value + q->limit_value;
+            }
+
+            addJoinStepsIfRequired(plan, q);
 
         } else {
             addStep(plan, PLAN_TABLE_ACCESS_FULL);
@@ -221,6 +240,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
             addJoinStepsIfRequired(plan, q);
 
             addOrderStepIfRequired(plan, q);
+
+            applyLimitOptimisation(plan, q);
         }
     } else {
         addStep(plan, PLAN_TABLE_ACCESS_FULL);
@@ -239,8 +260,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
      * OFFSET/FETCH FIRST
      ********************/
 
-    if (q->offset_value > 0 || q->limit_value >= 0) {
-        addStepWithParams(plan, PLAN_SLICE, q->offset_value, q->limit_value);
+    if (q->limit_value >= 0) {
+        addStepWithLimit(plan, PLAN_SLICE, q->offset_value + q->limit_value);
     }
 
     addStep(plan, PLAN_SELECT);
@@ -261,6 +282,7 @@ void addStep (struct Plan *plan, int type) {
 
     plan->steps[i].predicate_count = 0;
     plan->steps[i].type = type;
+    plan->steps[i].limit = -1;
 
     plan->step_count++;
 }
@@ -298,6 +320,7 @@ void addOrderStepIfRequired (struct Plan *plan, struct Query *q) {
     plan->steps[i].predicate_count = 1;
     plan->steps[i].predicates = order_p;
     plan->steps[i].type = PLAN_SORT;
+    plan->steps[i].limit = -1;
 
     plan->step_count++;
 }
@@ -312,17 +335,17 @@ void addStepWithPredicates (struct Plan *plan, int type, struct Predicate *p, in
     plan->steps[i].predicate_count = predicate_count;
     plan->steps[i].predicates = p;
     plan->steps[i].type = type;
+    plan->steps[i].limit = -1;
 
     plan->step_count++;
 }
 
-void addStepWithParams (struct Plan *plan, int type, int param1, int param2) {
+void addStepWithLimit (struct Plan *plan, int type, int limit) {
     int i = plan->step_count;
 
     plan->steps[i].predicate_count = 0;
     plan->steps[i].type = type;
-    plan->steps[i].param1 = param1;
-    plan->steps[i].param2 = param2;
+    plan->steps[i].limit = limit;
 
     plan->step_count++;
 }
@@ -404,4 +427,11 @@ static int optimisePredicates (struct Query *q, struct Predicate * predicates, i
         return 1;
 
     return 0;
+}
+
+// Optimisation: Apply limit early to latest step added
+void applyLimitOptimisation (struct Plan *plan, struct Query *query) {
+    if (query->limit_value >= 0 && query->table_count <= 1 && !(query->flags & FLAG_ORDER)) {
+        plan->steps[plan->step_count - 1].limit = query->offset_value + query->limit_value;
+    }
 }

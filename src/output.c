@@ -164,11 +164,7 @@ void printHeaderLine (FILE *f, struct DB *tables, int table_count, struct Column
     for (int j = 0; j < column_count; j++) {
         struct ColumnNode column = columns[j];
 
-        if (column.field != FIELD_STAR && column.alias[0] != '\0') {
-            fprintf(f, "%s", column.alias);
-        }
-
-        else if (column.field == FIELD_STAR) {
+        if (column.field == FIELD_STAR) {
             if (column.table_id >= 0) {
                 struct DB *db = &tables[column.table_id];
                 printAllHeaders(f, db, field_sep);
@@ -183,6 +179,9 @@ void printHeaderLine (FILE *f, struct DB *tables, int table_count, struct Column
                     }
                 }
             }
+        }
+        else if (column.alias[0] != '\0') {
+            fprintf(f, "%s", column.alias);
         }
         else if (column.field == FIELD_COUNT_STAR) {
             fprintf(f, "COUNT(*)");
