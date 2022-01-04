@@ -27,5 +27,8 @@ FROM test WHERE name < 'Bob' AND score > 50 FETCH FIRST 5 ROWS ONLY
 EXPLAIN FROM test, CALENDAR ON date = birth_date WHERE name LIKE 'Walter M%' SELECT name, yearday
 FROM test, CALENDAR ON date = birth_date WHERE name LIKE 'Walter M%' SELECT name, birth_date, yearday
 FROM test, CALENDAR ON birth_date = date WHERE name < 'Aaron Z' SELECT name, date, yearday ORDER BY yearday FETCH FIRST 5 ROWS ONLY
+FROM test WHERE birth_date < '1901-01-01' AND EXTRACT(WEEKDAY FROM birth_date) = 5 FETCH FIRST 5 ROWS ONLY
+FROM view FETCH FIRST 5 ROWS ONLY
+FROM dates
 FROM suits AS s1, suits AS s2 ON s1.name < s2.name ORDER BY name
 FROM suits, ranks WHERE value > 10 ORDER BY name SELECT ranks.name, 'of', suits.name

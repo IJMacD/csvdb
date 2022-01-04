@@ -179,7 +179,8 @@ int basic_select_query (
 
     if (q->table_count == 0) {
         // Just a single output row
-        makeRowList(&row_list, 0, 1);
+        makeRowList(&row_list, 0, 0);
+        row_list.row_count = 1;
     } else {
         // Provision enough result space for maximum of all rows in first table
         makeRowList(&row_list, 1, q->tables[0].db->record_count);
@@ -520,13 +521,11 @@ static int populateColumns (struct Query * q) {
     for (int i = 0; i < q->column_count; i++) {
         struct ColumnNode *column = &(q->columns[i]);
 
-        if (column->field == FIELD_UNKNOWN) {
-            findColumn(q, column->text, &column->table_id, &column->field);
+        populateColumnNode(q, column);
 
-            if (column->field == FIELD_UNKNOWN) {
-                fprintf(stderr, "Field '%s' not found\n", column->text);
-                return -1;
-            }
+        if (column->field == FIELD_UNKNOWN) {
+            fprintf(stderr, "Field '%s' not found\n", column->text);
+            return -1;
         }
     }
 
@@ -631,8 +630,8 @@ void populateColumnNode (struct Query * query, struct ColumnNode * column) {
     if (column->field == FIELD_UNKNOWN) {
         findColumn(query, column->text, &column->table_id, &column->field);
     } else if (column->field == FIELD_CONSTANT) {
-        // Fill in constant values such as CURRENT_DATE and run through any
-        // functions on the column, replacing the original value
+        // Fill in constant values such as CURRENT_DATE
+        // Don't evaluate any functions on the column
         evaluateConstantNode(column, column->text, FIELD_MAX_LENGTH);
     }
 }
@@ -640,17 +639,22 @@ void populateColumnNode (struct Query * query, struct ColumnNode * column) {
 int evaluateNode (struct Query * query, struct RowList *rowlist, int index, struct ColumnNode * column, char * value, int max_length) {
     if (column->field == FIELD_ROW_INDEX) {
         sprintf(value, "%d", index);
-    } else if (column->field == FIELD_CONSTANT) {
-        strcpy(value, column->text);
-    } else if (column->field >= 0) {
-        int row_id_left = getRowID(rowlist, column->table_id, index);
-        getRecordValue(query->tables[column->table_id].db, row_id_left, column->field, value, max_length);
-    } else {
-        fprintf(stderr, "Cannot evaluate predicate column: %s\n", column->text);
-        exit(-1);
+        return 0;
     }
 
-    return 0;
+    if (column->field == FIELD_CONSTANT) {
+        evaluateConstantNode(column, value, max_length);
+        return evaluateFunction(value, NULL, column, -1);
+    }
+
+    if (column->field >= 0) {
+        int row_id = getRowID(rowlist, column->table_id, index);
+        struct DB * db = query->tables[column->table_id].db;
+        return evaluateFunction(value, db, column, row_id);
+    }
+
+    fprintf(stderr, "Cannot evaluate predicate column: %s\n", column->text);
+    exit(-1);
 }
 
 static int evaluateConstantNode (struct ColumnNode * column, char * value, __attribute__((unused)) int max_length) {
@@ -667,5 +671,5 @@ static int evaluateConstantNode (struct ColumnNode * column, char * value, __att
         sprintf(value, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
     }
 
-    return evaluateFunction(value, NULL, column, -1);
+    return 0;
 }
