@@ -113,20 +113,27 @@ int create_index (const char *index_name, const char *table_name, const char *in
         return -1;
     }
 
-    struct ColumnNode columns[2];
-
+    struct ColumnNode columns[2] = {0};
+    columns[0].table_id = 0;
     columns[0].field = index_field_index;
     strcpy(columns[0].text, index_field);
+    columns[1].table_id = 0;
     columns[1].field = FIELD_ROW_INDEX;
 
     struct RowList row_list;
 
-    row_list.row_ids = malloc(sizeof (int) * db.record_count);
+    makeRowList(&row_list, 1, db.record_count);
 
     // Fill row list with every sequential rowid
     fullTableAccess(&db, &row_list, -1);
 
-    sortResultRows(&db, 0, index_field_index, ORDER_ASC, &row_list, &row_list);
+    struct RowList tmp;
+
+    makeRowList(&tmp, row_list.join_count, row_list.row_count);
+
+    sortResultRows(&db, 0, index_field_index, ORDER_ASC, &row_list, &tmp);
+
+    copyRowList(&row_list, &tmp);
 
     // Output functions assume array of DBs
     printHeaderLine(f, &db, 1, columns, 2, OUTPUT_FORMAT_COMMA);

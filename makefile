@@ -11,6 +11,7 @@ SRCS = main.c db.c db-csv.c db-calendar.c db-csv-mem.c db-sequence.c query.c par
 SRCDIR = src
 OBJS = $(SRCS:.c=.o)
 EXE  = csvdb
+GENEXE = gen
 
 #
 # Debug build settings
@@ -37,7 +38,7 @@ CGISRCS = $(filter-out main.c, $(SRCS)) main-cgi.c
 CGIOBJS = $(addprefix $(CGIDIR)/, $(CGISRCS:.c=.o))
 CGICFLAGS = -O3 -DNDEBUG
 
-.PHONY: all clean debug prep release remake cgi
+.PHONY: all clean debug prep release remake cgi test
 
 # Default build
 all: prep release
@@ -74,6 +75,17 @@ $(CGIEXE): $(CGIOBJS)
 
 $(CGIDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) -c $(CFLAGS) $(CGICFLAGS) -o $@ $<
+
+#
+# Test rules
+#
+test: prep release $(GENEXE)
+	./${GENEXE} 10000 test.csv
+	./test.sh
+
+$(GENEXE): ./src/gen.c
+	$(CC) $(CFLAGS) $(RELCFLAGS) -o $@ $^
+
 
 #
 # Other rules

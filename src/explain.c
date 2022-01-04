@@ -239,7 +239,26 @@ int explain_select_query (
             if (cost < rows) {
                 cost = rows;
             }
-        } else {
+        }
+        else if (s.type == PLAN_UNIQUE_JOIN) {
+            operation = "UNIQUE JOIN";
+
+            join_count++;
+
+            struct Table *t = &q->tables[join_count];
+
+            strcpy(table, t->name);
+
+            // We might have been too hasty copying predicate name
+            if (s.predicates[0].left.table_id != join_count) {
+                strcpy(predicate, s.predicates[0].right.text);
+            }
+
+            if (cost < rows) {
+                cost = rows;
+            }
+        }
+        else {
             operation = "Unknown OP code";
             sprintf(predicate, "%d\n", s.type);
         }

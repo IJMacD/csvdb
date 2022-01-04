@@ -7,6 +7,7 @@
 #include "db-calendar.h"
 #include "date.h"
 #include "predicates.h"
+#include "indices.h"
 #include "result.h"
 #include "query.h"
 
@@ -294,9 +295,17 @@ int calendar_getRecordValue (__attribute__((unused)) struct DB *db, int record_i
     return 0;
 }
 
-// No Indexes on CALENDAR table - all queries go through fullTableScan
-int calendar_findIndex(__attribute__((unused)) struct DB *db, __attribute__((unused)) const char *table_name, __attribute__((unused)) const char *index_name, __attribute__((unused)) int index_type_flags) {
-    return -1;
+// All queries go through fullTableScan but it's useful to indicate to the planner that julian and date are unique
+int calendar_findIndex(__attribute__((unused)) struct DB *db, __attribute__((unused)) const char *table_name, const char *index_name, __attribute__((unused)) int index_type_flags) {
+    if (strcmp(index_name, "julian") == 0) {
+        return INDEX_UNIQUE;
+    }
+
+    if (strcmp(index_name, "date") == 0) {
+        return INDEX_UNIQUE;
+    }
+
+    return 0;
 }
 
 int calendar_fullTableScan (struct DB *db, struct RowList *row_list, struct Predicate *predicates, int predicate_count, int limit_value) {
@@ -529,4 +538,23 @@ static int calendar_evaluateNode(struct DB *db, struct ColumnNode *column, int r
 
     fprintf(stderr, "CALENDAR Cannot evaluate column '%s'\n", column->text);
     exit(-1);
+}
+
+/**
+ * Calendar can do super efficient PK searches
+ */
+int calendar_pkSearch(__attribute__((unused)) struct DB *db, const char * predicate_field, const char *value) {
+    if (strcmp(predicate_field, "julian")) {
+        return atol(value);
+    }
+
+    if (strcmp(predicate_field, "date")) {
+        struct DateTime dt;
+
+        parseDateTime(value, &dt);
+
+        return datetimeGetJulian(&dt);
+    }
+
+    return -1;
 }

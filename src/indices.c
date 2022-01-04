@@ -12,8 +12,7 @@ int indexWalkForValue (struct DB *db, int rowid_column, int value_column, int op
 
 int primaryKeyScan (struct DB *db, const char *predicate_field, int predicate_op, const char *predicate_value, struct RowList *row_list) {
     // If we have a primary key predicate then we can binary search
-    int predicate_field_index = getFieldIndex(db, predicate_field);
-    int pk_index = pk_search(db, predicate_field_index, predicate_value, FIELD_ROW_INDEX);
+    int pk_index = pkSearch(db, predicate_field, predicate_value);
 
     if (predicate_op == OPERATOR_EQ) {
         if (pk_index == RESULT_NO_ROWS) {
@@ -39,6 +38,7 @@ int primaryKeyScan (struct DB *db, const char *predicate_field, int predicate_op
                 // We'll walk the entire index looking for the value
                 // It'll take a long time but the caller might be relying on an ordered output
 
+                int predicate_field_index = getFieldIndex(db, predicate_field);
                 row_list->row_count = indexWalkForValue(db, -1, predicate_field_index, predicate_op, predicate_value, row_list);
                 return row_list->row_count;
             }
@@ -63,201 +63,92 @@ int primaryKeyScan (struct DB *db, const char *predicate_field, int predicate_op
 /**
  * @return matched row count; RESULT_NO_ROWS if row not found; RESULT_NO_INDEX if index does not exist
  */
-int indexUniqueScan (const char *table, const char *predicate_field, int predicate_op, const char *predicate_value, struct RowList *row_list) {
+int indexUniqueScan (struct DB *db, const char *predicate_field, int predicate_op, const char *predicate_value, struct RowList *row_list) {
     // We can't handle LIKE with this index (yet)
     if (predicate_op == OPERATOR_LIKE) {
         return RESULT_NO_INDEX;
     }
 
-    int result = RESULT_NO_INDEX;
-
     // If we have a unique index predicate then we can binary search
-    struct DB index_db;
 
-    if (findIndex(&index_db, table, predicate_field, INDEX_UNIQUE) == 0) {
-        int pk_search_result = pk_search(&index_db, 0, predicate_value, FIELD_ROW_INDEX);
+    int pk_search_result = pkSearch(db, predicate_field, predicate_value);
 
-        if (pk_search_result != RESULT_NO_ROWS) {
-            result = rangeScan(&index_db, predicate_op, pk_search_result, pk_search_result + 1, 1, row_list);
-        }
-
-        closeDB(&index_db);
+    if (pk_search_result == RESULT_NO_ROWS) {
+        return 0;
     }
 
-    row_list->row_count = result;
-    return result;
+    return rangeScan(db, predicate_op, pk_search_result, pk_search_result + 1, 1, row_list);
 }
 
 /**
  * @param predicate_value If set to NULL then the whole index will be walked in the ascending order
  * @return number of matched rows; RESULT_NO_INDEX if index does not exist
  */
-int indexRangeScan (const char *table, const char *predicate_field, int predicate_op, const char *predicate_value, struct RowList * row_list) {
+int indexRangeScan (struct DB *index_db, const char *predicate_field, int predicate_op, const char *predicate_value, struct RowList * row_list) {
     // We can't handle LIKE with this index (yet)
     if (predicate_op == OPERATOR_LIKE) {
         return RESULT_NO_INDEX;
     }
 
-    int result = RESULT_NO_INDEX;
-
-    // If we have a (non-unique) index predicate then we can binary search and scan
-    struct DB index_db;
-
     char value[VALUE_MAX_LENGTH] = {0};
 
-    if (findIndex(&index_db, table, predicate_field, INDEX_ANY) == 0) {
-
-        // If the value is NULL then we're being asked to walk the entire index
-        if (strlen(predicate_value) == 0) {
-            int result = indexWalk(&index_db, 1, 0, index_db.record_count, row_list);
-            closeDB(&index_db);
-            return result;
-        }
-
-        int record_index = pk_search(&index_db, 0, predicate_value, FIELD_ROW_INDEX);
-
-        int lower_index = record_index;
-        int upper_index = record_index;
-
-        if (record_index < 0) {
-            if (predicate_op == OPERATOR_EQ) {
-                closeDB(&index_db);
-                return RESULT_NO_ROWS;
-            }
-
-            if (predicate_op == OPERATOR_NE) {
-                lower_index = 0;
-                upper_index = index_db.record_count;
-            }
-            else if (record_index == RESULT_BELOW_MIN) {
-                lower_index = 0;
-                upper_index = 0;
-            }
-            else if (record_index == RESULT_ABOVE_MAX) {
-                lower_index = index_db.record_count;
-                upper_index = index_db.record_count;
-            }
-            else if (record_index == RESULT_NO_ROWS) {
-                // Slow implementation limitation
-
-                // We'll walk the entire index looking for the value
-                // It'll take a long time but the caller might be relying on an ordered output
-
-                int result_count = indexWalkForValue(&index_db, 1, 0, predicate_op, predicate_value, row_list);
-                closeDB(&index_db);
-                return result_count;
-            }
-        }
-
-        // Backtrack until we find the first value
-        while (lower_index >= 0) {
-            getRecordValue(&index_db, --lower_index, 0, value, VALUE_MAX_LENGTH);
-
-            if (strcmp(value, predicate_value) != 0) {
-                break;
-            }
-        }
-        lower_index++;
-
-        // Forward-track until we find the last value
-        while (upper_index < index_db.record_count) {
-            getRecordValue(&index_db, ++upper_index, 0, value, VALUE_MAX_LENGTH);
-
-            if (strcmp(value, predicate_value) != 0) {
-                break;
-            }
-        }
-
-        result = rangeScan(&index_db, predicate_op, lower_index, upper_index, 1, row_list);
-
-        closeDB(&index_db);
+    // If the value is NULL then we're being asked to walk the entire index
+    if (strlen(predicate_value) == 0) {
+        return indexWalk(index_db, 1, 0, index_db->record_count, row_list);
     }
 
-    return result;
-}
+    int record_index = pkSearch(index_db, predicate_field, predicate_value);
 
-/**
- * @returns 0.. rowid of match; -1 if not found; -3 if below minimum; -4 if above maximum
- */
-int pk_search(struct DB *db, int pk_index, const char *value, int result_index) {
-    int index_a = 0;
-    int index_b = db->record_count - 1;
-    int index_match = -1;
-    int numeric_mode = is_numeric(value);
+    int lower_index = record_index;
+    int upper_index = record_index;
 
-    long search_value = atol(value);
-
-    char val[VALUE_MAX_LENGTH] = {0};
-
-    // Check boundary cases before commencing search
-
-    // Check lower boundary
-    getRecordValue(db, index_a, pk_index, val, VALUE_MAX_LENGTH);
-    int res = compare(numeric_mode, value, search_value, val);
-
-    // Search value is below minimum
-    if (res < 0) {
-        return -3;
-    }
-
-    // Found a match at lower boundary
-    if (res == 0)
-        index_match = index_a;
-
-    else {
-        // Check upper boundary
-        getRecordValue(db, index_b, pk_index, val, VALUE_MAX_LENGTH);
-        res = compare(numeric_mode, value, search_value, val);
-
-        // Search value is above maximum
-        if (res > 0) {
-            return -4;
+    if (record_index < 0) {
+        if (predicate_op == OPERATOR_EQ) {
+            return RESULT_NO_ROWS;
         }
 
-        // Found a match at upper boundary
-        if (res == 0)
-            index_match = index_b;
+        if (predicate_op == OPERATOR_NE) {
+            lower_index = 0;
+            upper_index = index_db->record_count;
+        }
+        else if (record_index == RESULT_BELOW_MIN) {
+            lower_index = 0;
+            upper_index = 0;
+        }
+        else if (record_index == RESULT_ABOVE_MAX) {
+            lower_index = index_db->record_count;
+            upper_index = index_db->record_count;
+        }
+        else if (record_index == RESULT_NO_ROWS) {
+            // Slow implementation limitation
 
-        // Iterate as a binary search
-        else while (index_a < index_b - 1) {
-            int index_curr = (index_a + index_b) / 2;
+            // We'll walk the entire index looking for the value
+            // It'll take a long time but the caller might be relying on an ordered output
 
-            getRecordValue(db, index_curr, pk_index, val, VALUE_MAX_LENGTH);
-            res = compare(numeric_mode, value, search_value, val);
-
-            if (res == 0) {
-                // printf("pk_search [%d   <%d>   %d]: %s\n", index_a, index_curr, index_b, val);
-                index_match = index_curr;
-                break;
-            }
-
-            if (res > 0) {
-                // printf("pk_search [%d   (%d) x %d]: %s\n", index_a, index_curr, index_b, val);
-                index_a = index_curr;
-
-            } else {
-                // printf("pk_search [%d x (%d)   %d]: %s\n", index_a, index_curr, index_b, val);
-                index_b = index_curr;
-            }
+            return indexWalkForValue(index_db, 1, 0, predicate_op, predicate_value, row_list);
         }
     }
 
-    if (index_match < 0) {
-        return -1;
+    // Backtrack until we find the first value
+    while (lower_index >= 0) {
+        getRecordValue(index_db, --lower_index, 0, value, VALUE_MAX_LENGTH);
+
+        if (strcmp(value, predicate_value) != 0) {
+            break;
+        }
+    }
+    lower_index++;
+
+    // Forward-track until we find the last value
+    while (upper_index < index_db->record_count) {
+        getRecordValue(index_db, ++upper_index, 0, value, VALUE_MAX_LENGTH);
+
+        if (strcmp(value, predicate_value) != 0) {
+            break;
+        }
     }
 
-    // If the requested result column was this special value
-    // we return the row index as the result
-    if (result_index == FIELD_ROW_INDEX) {
-        return index_match;
-    }
-
-    // Otherwise fetch the value for the requested column and convert to an int
-    if (getRecordValue(db, index_match, result_index, val, VALUE_MAX_LENGTH) > 0) {
-        return atoi(val);
-    }
-
-    return -1;
+    return rangeScan(index_db, predicate_op, lower_index, upper_index, 1, row_list);
 }
 
 int rangeScan (struct DB *db, int predicate_op, int lower_index, int upper_index, int rowid_column, struct RowList * row_list) {

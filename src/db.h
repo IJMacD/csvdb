@@ -37,6 +37,8 @@ int getRecordValue (struct DB *db, int record_index, int field_index, char *valu
 
 int findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);
 
+int pkSearch(struct DB *db, const char * predicate_field, const char *value);
+
 int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value);
 
 int fullTableAccess (struct DB *db, struct RowList * row_list, int limit);

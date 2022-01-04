@@ -43,5 +43,5 @@ int sequence_getRecordValue (__attribute__((unused)) struct DB *db, int record_i
 
 // All queries go through fullTableScan
 int sequence_findIndex(__attribute__((unused)) struct DB *db, __attribute__((unused)) const char *table_name, __attribute__((unused)) const char *index_name, __attribute__((unused)) int index_type_flags) {
-    return -1;
+    return 0;
 }

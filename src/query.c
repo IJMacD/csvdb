@@ -198,13 +198,17 @@ int basic_select_query (
             // First table
             struct Table * table = q->tables;
             struct Predicate p = s.predicates[0];
-            indexUniqueScan(table->name, p.left.text, p.op, p.right.text, &row_list);
+            struct DB index_db;
+            findIndex(&index_db, table->name, p.left.text, INDEX_UNIQUE);
+            indexUniqueScan(&index_db, p.left.text, p.op, p.right.text, &row_list);
         }
         else if (s.type == PLAN_INDEX_RANGE) {
             // First table
             struct Table * table = q->tables;
             struct Predicate p = s.predicates[0];
-            indexRangeScan(table->name, p.left.text, p.op, p.right.text, &row_list);
+            struct DB index_db;
+            findIndex(&index_db, table->name, p.left.text, INDEX_ANY);
+            indexRangeScan(&index_db, p.left.text, p.op, p.right.text, &row_list);
         }
         else if (s.type == PLAN_TABLE_ACCESS_FULL) {
             // First table
@@ -336,6 +340,65 @@ int basic_select_query (
 
             destroyRowList(&tmp_list);
         }
+        else if (s.type == PLAN_UNIQUE_JOIN) {
+            // Table ID being joined here
+            int table_id = row_list.join_count;
+
+            struct RowList new_list;
+
+            makeRowList(&new_list, row_list.join_count + 1, row_list.row_count);
+
+            struct RowList tmp_list;
+
+            makeRowList(&tmp_list, 1, 1);
+
+            struct DB index_db;
+            findIndex(&index_db, q->tables[table_id].name, s.predicates[0].left.text, INDEX_UNIQUE);
+
+            for (int i = 0; i < row_list.row_count; i++) {
+                // Make a local copy of predicate
+                struct Predicate p = s.predicates[0];
+
+                // Fill in value as constant from outer tables
+                if (p.left.table_id < table_id) {
+                    evaluateNode(q, &row_list, i, &p.left, p.left.text, FIELD_MAX_LENGTH);
+                    p.left.field = FIELD_CONSTANT;
+                }
+
+                // Fill in value as constant from outer tables
+                if (p.right.table_id < table_id) {
+                    evaluateNode(q, &row_list, i, &p.right, p.right.text, FIELD_MAX_LENGTH);
+                    p.right.field = FIELD_CONSTANT;
+                }
+
+                tmp_list.row_count = 0;
+
+                char * field;
+                char * value;
+                if (p.left.table_id == table_id) {
+                    field = p.left.text;
+                    value = p.right.text;
+                } else if (p.right.table_id == table_id) {
+                    field = p.right.text;
+                    value = p.left.text;
+                } else {
+                    fprintf(stderr, "Unable to perform UNIQUE JOIN\n");
+                    exit(-1);
+                }
+
+                indexUniqueScan(&index_db, field, p.op, value, &tmp_list);
+
+                // If we found one then append the row we've just found to the main row_list
+                if (tmp_list.row_count == 1){
+                    int rowid = getRowID(&tmp_list, 0, 0);
+                    appendJoinedRowID(&new_list, &row_list, i, rowid);
+                }
+            }
+
+            copyRowList(&row_list, &new_list);
+
+            destroyRowList(&tmp_list);
+        }
         else if (s.type == PLAN_SORT) {
 
             int table_id = -1;
@@ -438,14 +501,11 @@ int information_query (const char *table, FILE * output) {
     fprintf(output, "field\tindex\n");
     fprintf(output, "-----\t-----\n");
 
-    struct DB index_db;
-
     for (int i = 0; i < db.field_count; i++) {
         int have_index = 0;
 
-        if (findIndex(&index_db, table, getFieldName(&db, i), INDEX_ANY) == 0) {
+        if (findIndex(NULL, table, getFieldName(&db, i), INDEX_ANY)) {
             have_index = 1;
-            closeDB(&index_db);
         }
 
         fprintf(output, "%s\t%c\n", getFieldName(&db, i), have_index ? 'Y' : 'N');

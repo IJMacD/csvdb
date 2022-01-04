@@ -52,8 +52,6 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
         struct Predicate *p = &q->predicates[0];
 
-        struct DB index_db;
-
         if (predicatesOnFirstTable > 0) {
 
             // Remove qualified name so indexes can be searched etc.
@@ -68,8 +66,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
              * UNIQUE INDEX SCAN
              *******************/
             // Try to find a unique index
-            if (p->op != OPERATOR_LIKE && findIndex(&index_db, table.name, p->left.text, INDEX_UNIQUE) == 0) {
-                closeDB(&index_db);
+            if (p->op != OPERATOR_LIKE && findIndex(NULL, table.name, p->left.text, INDEX_UNIQUE) == INDEX_UNIQUE) {
 
                 int type;
                 if (p->op == OPERATOR_EQ) {
@@ -100,9 +97,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
             /*******************
              * INDEX RANGE SCAN
              *******************/
-            else if (p->op != OPERATOR_LIKE && findIndex(&index_db, table.name, p->left.text, INDEX_ANY) == 0) {
-                closeDB(&index_db);
-
+            else if (p->op != OPERATOR_LIKE && findIndex(NULL, table.name, p->left.text, INDEX_ANY)) {
                 addStepWithPredicate(plan, PLAN_INDEX_RANGE, p);
 
                 addJoinStepsIfRequired(plan, q);
@@ -128,9 +123,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 // If we're selecting a lot of rows this optimisation is probably worth it.
                 // If we have an EQ operator then it's probably cheaper to filter first
                 (p->op != OPERATOR_EQ) &&
-                findIndex(&index_db, table.name, q->order_field, INDEX_ANY) == 0
+                findIndex(NULL, table.name, q->order_field, INDEX_ANY)
             ) {
-                closeDB(&index_db);
 
                 struct Predicate *order_p = malloc(sizeof(*order_p));
                 strcpy(order_p->left.text, q->order_field);
@@ -207,10 +201,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
     else if ((q->flags & FLAG_ORDER) && !(q->flags & FLAG_GROUP)) {
         // Before we do a full table scan... we have one more opportunity to use an index
         // To save a sort later, see if we can use an index for ordering now
-        struct DB index_db;
         struct Table table = q->tables[0];
-        if (findIndex(&index_db, table.name, q->order_field, INDEX_ANY) == 0) {
-            closeDB(&index_db);
+        if (findIndex(NULL, table.name, q->order_field, INDEX_ANY)) {
 
             struct Predicate *order_p = malloc(sizeof(*order_p));
             strcpy(order_p->left.text, q->order_field);
@@ -341,20 +333,27 @@ void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
      *******************/
     for (int i = 1; i < q->table_count; i++) {
         struct Table * table = q->tables + i;
+        struct Predicate * join = &table->join;
 
-        if (table->join.op == OPERATOR_ALWAYS) {
+        if (join->op == OPERATOR_ALWAYS) {
             addStep(plan, PLAN_CROSS_JOIN);
         } else {
-            populateColumnNode(q, &table->join.left);
-            populateColumnNode(q, &table->join.right);
+            populateColumnNode(q, &join->left);
+            populateColumnNode(q, &join->right);
 
-            if (table->join.left.field == FIELD_CONSTANT ||
-                table->join.right.field == FIELD_CONSTANT)
+            if (join->left.field == FIELD_CONSTANT ||
+                join->right.field == FIELD_CONSTANT)
             {
-                addStepWithPredicate(plan, PLAN_CONSTANT_JOIN, &table->join);
+                addStepWithPredicate(plan, PLAN_CONSTANT_JOIN, join);
+            }
+            else if (join->op == OPERATOR_EQ && (
+                findIndex(NULL, table->name, join->left.text, INDEX_UNIQUE) == INDEX_UNIQUE ||
+                findIndex(NULL, table->name, join->right.text, INDEX_UNIQUE) == INDEX_UNIQUE)
+            ) {
+                addStepWithPredicate(plan, PLAN_UNIQUE_JOIN, join);
             }
             else {
-                addStepWithPredicate(plan, PLAN_INNER_JOIN, &table->join);
+                addStepWithPredicate(plan, PLAN_INNER_JOIN, join);
             }
         }
     }
