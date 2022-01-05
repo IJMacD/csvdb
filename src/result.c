@@ -57,6 +57,9 @@ void appendJoinedRowID (struct RowList * dest_list, struct RowList * src_list, i
     dest_list->row_count++;
 }
 
+/**
+ * src and dest can be same RowList
+ */
 void copyResultRow (struct RowList * dest_list, struct RowList * src_list, int src_index) {
     if (dest_list->join_count != src_list->join_count) {
         fprintf(stderr, "Cannot copy source result row to destination with differnce size (%d vs %d)\n", src_list->join_count, dest_list->join_count);

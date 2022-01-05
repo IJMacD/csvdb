@@ -25,6 +25,18 @@ void applyLimitOptimisation (struct Plan *plan, struct Query *query);
 int makePlan (struct Query *q, struct Plan *plan) {
     plan->step_count = 0;
 
+    // If there's no table specified then it must be a
+    // single-row-all-constant query
+    if (q->table_count == 0) {
+        plan->step_count = 1;
+
+        struct PlanStep * step = plan->steps;
+        step->type = PLAN_SELECT;
+        step->predicate_count = 0;
+
+        return plan->step_count;
+    }
+
     if (q->flags & FLAG_PRIMARY_KEY_SEARCH) {
         /******************
          * PRIMARY KEY
@@ -361,9 +373,6 @@ void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
         if (join->op == OPERATOR_ALWAYS) {
             addStep(plan, PLAN_CROSS_JOIN);
         } else {
-            populateColumnNode(q, &join->left);
-            populateColumnNode(q, &join->right);
-
             if (join->left.field == FIELD_CONSTANT ||
                 join->right.field == FIELD_CONSTANT)
             {
@@ -392,24 +401,23 @@ void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
  * @param count
  * @return int N, number of predicates on first table
  */
-static int optimisePredicates (struct Query *q, struct Predicate * predicates, int count) {
-    int table_id = -1;
-    int field_id;
-
+static int optimisePredicates (__attribute__((unused)) struct Query *q, struct Predicate * predicates, int count) {
     int chosen_predicate_index = -1;
+
+    // Comment: Only checking left?
 
     for (int i = 0; i < count; i++) {
         // First check if we've been given an explicit index
         // If so, we'll have to assume that's on the first table
+        //
+        // Comment: Coult/should this have been filled in earlier?
         if (strncmp(predicates[i].left.text, "UNIQUE(", 7) == 0 ||
             strncmp(predicates[i].left.text, "INDEX(", 6) == 0)
         {
-            table_id = 0;
-        } else {
-            findColumn(q, predicates[i].left.text, &table_id, &field_id);
+            predicates[i].left.table_id = 0;
         }
 
-        if (table_id == 0) {
+        if (predicates[i].left.table_id == 0) {
             chosen_predicate_index = i;
             break;
         }

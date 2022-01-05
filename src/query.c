@@ -11,7 +11,7 @@
 #include "predicates.h"
 #include "function.h"
 #include "indices.h"
-#include "filter.h"
+#include "evaluate.h"
 #include "sort.h"
 #include "output.h"
 #include "limits.h"
@@ -29,9 +29,9 @@ int information_query (const char *table, FILE * output);
 
 static int populateTables (struct Query *q, struct DB * dbs);
 
-static int populateColumns (struct Query *q);
+static void populateColumnNode (struct Query * query, struct ColumnNode * column);
 
-static int evaluateConstantNode (struct ColumnNode * column, char * value, __attribute__((unused)) int max_length);
+static int findColumn (struct Query *q, const char *text, int *table_id, int *column_id);
 
 int query (const char *query, int output_flags, FILE * output) {
     if (strncmp(query, "CREATE ", 7) == 0) {
@@ -70,34 +70,17 @@ int select_query (const char *query, int output_flags, FILE * output) {
         }
         else {
             // We could have a constant query which will output a single row
+            // Check if any of the fields are non-constant and abort
 
-            int all_constant = 1;
             for (int i = 0; i < q.column_count; i++) {
                 if (q.columns[i].field != FIELD_CONSTANT) {
-                    all_constant = 0;
-                    break;
+                    fprintf(stderr, "No Tables specified\n");
+                    return -1;
                 }
-            }
-
-            if (all_constant) {
-                struct Plan plan;
-                plan.step_count = 1;
-
-                struct PlanStep * step = plan.steps;
-                step->type = PLAN_SELECT;
-                step->predicate_count = 0;
-
-                result = basic_select_query(&q, &plan, output_flags, output);
-                destroyQuery(&q);
-                return result;
-            } else {
-                fprintf(stderr, "Table not specified\n");
-                return -1;
             }
         }
     }
-
-    if (strcmp(q.tables[0].name, "INFORMATION") == 0) {
+    else if (strcmp(q.tables[0].name, "INFORMATION") == 0) {
         if (q.predicate_count < 1) {
             return -1;
         }
@@ -115,18 +98,19 @@ int select_query (const char *query, int output_flags, FILE * output) {
 
     struct DB dbs[TABLE_MAX_COUNT];
 
-    if (q.table_count == 0) {
-        fprintf(stderr, "No tables\n");
-        exit(-1);
-    }
-
-    // Populate tables
+    // Populate Tables
+    // (including JOIN predicate columns)
     result = populateTables(&q, dbs);
     if (result < 0) {
         return result;
     }
 
-    // Populate predicate columns
+    // Populate SELECT Columns
+    for (int i = 0; i < q.column_count; i++) {
+        populateColumnNode(&q, &q.columns[i]);
+    }
+
+    // Populate WHERE columns
     for (int i = 0; i < q.predicate_count; i++) {
         populateColumnNode(&q, &q.predicates[i].left);
         populateColumnNode(&q, &q.predicates[i].right);
@@ -233,9 +217,32 @@ int basic_select_query (
             }
         }
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
-            for (int i = 0; i < s.predicate_count; i++) {
-                struct Predicate p = s.predicates[i];
-                filterRows(q, &row_list, &p, &row_list);
+            int source_count = row_list.row_count;
+
+            row_list.row_count = 0;
+
+            for (int i = 0; i < source_count; i++) {
+                int match = 1;
+
+                for (int j = 0; j < s.predicate_count; j++) {
+                    struct Predicate * p = s.predicates + j;
+
+                    char value_left[VALUE_MAX_LENGTH] = {0};
+                    char value_right[VALUE_MAX_LENGTH] = {0};
+
+                    evaluateNode(q, &row_list, i, &p->left, value_left, VALUE_MAX_LENGTH);
+                    evaluateNode(q, &row_list, i, &p->right, value_right, VALUE_MAX_LENGTH);
+
+                    if (!evaluateExpression(p->op, value_left, value_right)) {
+                        match = 0;
+                        break;
+                    }
+                }
+
+                if (match) {
+                    // Add to result set
+                    copyResultRow(&row_list, &row_list, i);
+                }
             }
         }
         else if (s.type == PLAN_CROSS_JOIN) {
@@ -407,14 +414,12 @@ int basic_select_query (
             int table_id = -1;
             int field_index;
 
-            findColumn(q, s.predicates[0].left.text, &table_id, &field_index);
-
-            if (field_index == FIELD_UNKNOWN) {
+            if (!findColumn(q, s.predicates[0].left.text, &table_id, &field_index)) {
                 fprintf(stderr, "Sort column not found: %s\n", s.predicates[0].left.text);
                 exit(-1);
             }
 
-            // debugRowList(&row_list);
+            // debugRowList(&row_list, 2);
 
             struct DB *db = q->tables[table_id].db;
 
@@ -426,7 +431,7 @@ int basic_select_query (
 
             copyRowList(&row_list, &tmp);
 
-            // debugRowList(&row_list);
+            // debugRowList(&row_list, 2);
         }
         else if (s.type == PLAN_REVERSE) {
             if (row_list.join_count > 1) {
@@ -451,11 +456,6 @@ int basic_select_query (
             /*******************
              * Output result set
              *******************/
-
-            int result = populateColumns(q);
-            if (result < 0) {
-                return result;
-            }
 
             // Aggregate functions will print just one row
             if (q->flags & FLAG_GROUP) {
@@ -520,22 +520,6 @@ int information_query (const char *table, FILE * output) {
     return 0;
 }
 
-static int populateColumns (struct Query * q) {
-    // Fill in selected table id and column indexes
-    for (int i = 0; i < q->column_count; i++) {
-        struct ColumnNode *column = &(q->columns[i]);
-
-        populateColumnNode(q, column);
-
-        if (column->field == FIELD_UNKNOWN) {
-            fprintf(stderr, "Field '%s' not found\n", column->text);
-            return -1;
-        }
-    }
-
-    return 0;
-}
-
 static int populateTables (struct Query *q, struct DB *dbs) {
 
     for (int i = 0; i < q->table_count; i++) {
@@ -557,22 +541,25 @@ static int populateTables (struct Query *q, struct DB *dbs) {
             }
         }
 
-        if (found == 1) {
-            continue;
+        if (found == 0) {
+            if (openDB(&dbs[i], table->name) != 0) {
+                fprintf(stderr, "File not found: '%s'\n", table->name);
+                return -1;
+            }
+
+            table->db = &dbs[i];
         }
 
-        if (openDB(&dbs[i], table->name) != 0) {
-            fprintf(stderr, "File not found: '%s'\n", table->name);
-            return -1;
+        if (table->join.op != OPERATOR_ALWAYS) {
+            populateColumnNode(q, &table->join.left);
+            populateColumnNode(q, &table->join.right);
         }
-
-        table->db = &dbs[i];
     }
 
     return 0;
 }
 
-void findColumn (struct Query *q, const char *text, int *table_id, int *column_id) {
+static int findColumn (struct Query *q, const char *text, int *table_id, int *column_id) {
 
     int dot_index = str_find_index(text, '.');
 
@@ -600,7 +587,7 @@ void findColumn (struct Query *q, const char *text, int *table_id, int *column_i
                     *column_id = getFieldIndex(db, text + dot_index + 1);
                 }
 
-                return;
+                return 1;
             }
         }
     }
@@ -610,7 +597,7 @@ void findColumn (struct Query *q, const char *text, int *table_id, int *column_i
             *table_id = 0;
             *column_id = FIELD_ROW_INDEX;
 
-            return;
+            return 1;
         }
 
         for (int i = 0; i < q->table_count; i++) {
@@ -621,61 +608,42 @@ void findColumn (struct Query *q, const char *text, int *table_id, int *column_i
             if (*column_id != FIELD_UNKNOWN) {
                 *table_id = i;
 
-                return;
+                return 1;
             }
         }
     }
 
     // Couldn't find column
     *column_id = FIELD_UNKNOWN;
+
+    return 0;
 }
 
-void populateColumnNode (struct Query * query, struct ColumnNode * column) {
+/**
+ * Flesh out column nodes in SELECT clause and WHERE clause
+ *
+ * Will resolve a column name to a table_id and column_id
+ *
+ * Will also pre-fill constant values so they can be used in comparisons later
+ */
+static void populateColumnNode (struct Query * query, struct ColumnNode * column) {
     if (column->field == FIELD_UNKNOWN) {
-        findColumn(query, column->text, &column->table_id, &column->field);
-    } else if (column->field == FIELD_CONSTANT) {
+        if (!findColumn(query, column->text, &column->table_id, &column->field)) {
+            fprintf(stderr, "Unable to find column '%s'\n", column->text);
+        }
+    }
+
+    else if (column->field == FIELD_CONSTANT) {
         // Fill in constant values such as CURRENT_DATE
         // Then evaluate any functions on the column
+
+        // RANDOM() is non-pure so cannot be evaluated early
+        if (column->function == FUNC_RANDOM) {
+            return;
+        }
+
         evaluateConstantNode(column, column->text, FIELD_MAX_LENGTH);
         evaluateFunction(column->text, NULL, column, -1);
         column->function = FUNC_UNITY;
     }
-}
-
-int evaluateNode (struct Query * query, struct RowList *rowlist, int index, struct ColumnNode * column, char * value, int max_length) {
-    if (column->field == FIELD_ROW_INDEX) {
-        sprintf(value, "%d", index);
-        return 0;
-    }
-
-    if (column->field == FIELD_CONSTANT) {
-        evaluateConstantNode(column, value, max_length);
-        return evaluateFunction(value, NULL, column, -1);
-    }
-
-    if (column->field >= 0) {
-        int row_id = getRowID(rowlist, column->table_id, index);
-        struct DB * db = query->tables[column->table_id].db;
-        return evaluateFunction(value, db, column, row_id);
-    }
-
-    fprintf(stderr, "Cannot evaluate predicate column: %s\n", column->text);
-    exit(-1);
-}
-
-static int evaluateConstantNode (struct ColumnNode * column, char * value, __attribute__((unused)) int max_length) {
-    if (column->field != FIELD_CONSTANT) {
-        fprintf(stderr, "Tried to evaluate non-contant value as constant: %s\n", column->text);
-        exit(-1);
-    }
-
-    if (strcmp(column->text, "CURRENT_DATE") == 0
-        || strcmp(column->text, "TODAY()") == 0)
-    {
-        struct DateTime dt;
-        parseDateTime("CURRENT_DATE", &dt);
-        sprintf(value, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
-    }
-
-    return 0;
 }

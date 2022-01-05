@@ -336,4 +336,8 @@ int insert_query (const char * query) {
     int flags = OUTPUT_FORMAT_COMMA;
 
     return select_query(query + index, flags, f);
+
+    /**
+     * TODO: Optionally rebuild any indexes found on the table
+     */
 }

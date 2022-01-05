@@ -41,9 +41,3 @@ struct Query {
 int query (const char *query, int output_flags, FILE * output);
 
 int select_query (const char *query, int output_flags, FILE * output);
-
-void findColumn (struct Query *q, const char *text, int *table_id, int *column_id);
-
-void populateColumnNode (struct Query * query, struct ColumnNode * column);
-
-int evaluateNode (struct Query * query, struct RowList *rowlist, int index, struct ColumnNode * column, char * value, int max_length);
