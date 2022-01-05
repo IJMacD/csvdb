@@ -6,10 +6,57 @@
 #include "db-calendar.h"
 #include "db-csv-mem.h"
 #include "db-sequence.h"
+#include "db-sample.h"
 #include "limits.h"
 #include "function.h"
 #include "query.h"
 #include "util.h"
+
+struct VFS VFS_Table[10] = {
+    {
+        0
+    },
+    {
+        .openDB = &csv_openDB,
+        .closeDB = &csv_closeDB,
+        .getFieldIndex = &csv_getFieldIndex,
+        .getFieldName = &csv_getFieldName,
+        .getRecordValue = &csv_getRecordValue,
+        .findIndex = &csv_findIndex,
+    },
+    {
+        0
+    },
+    {
+        .openDB = &calendar_openDB,
+        .closeDB = &calendar_closeDB,
+        .getFieldIndex = &calendar_getFieldIndex,
+        .getFieldName = &calendar_getFieldName,
+        .getRecordValue = &calendar_getRecordValue,
+        .findIndex = &calendar_findIndex,
+        .fullTableScan = &calendar_fullTableScan,
+        .pkSearch = &calendar_pkSearch,
+    },
+    {
+        .openDB = &csvMem_openDB,
+        .closeDB = &csvMem_closeDB,
+        .getFieldIndex = &csvMem_getFieldIndex,
+        .getFieldName = &csvMem_getFieldName,
+        .getRecordValue = &csvMem_getRecordValue,
+    },
+    {
+        .openDB = &sequence_openDB,
+        .getFieldIndex = &sequence_getFieldIndex,
+        .getFieldName = &sequence_getFieldName,
+        .getRecordValue = &sequence_getRecordValue,
+    },
+    {
+        .openDB = &sample_openDB,
+        .getFieldIndex = &sample_getFieldIndex,
+        .getFieldName = &sample_getFieldName,
+        .getRecordValue = &sample_getRecordValue,
+    },
+};
 
 /**
  * @brief Try to open a database by filename
@@ -29,6 +76,10 @@ int openDB (struct DB *db, const char *filename) {
         return csvMem_openDB(db, filename + 7);
     }
 
+    if (strcmp(filename, "SAMPLE") == 0) {
+        return sample_openDB(db, filename);
+    }
+
     return csv_openDB(db, filename);
 }
 
@@ -37,55 +88,28 @@ void closeDB (struct DB *db) {
         return;
     }
 
-    if (db->vfs == VFS_CSV) {
-        csv_closeDB(db);
-    }
-    else if (db->vfs == VFS_CSV_MEM) {
-        csvMem_closeDB(db);
-    }
-    else if (db->vfs == VFS_CALENDAR) {
-        calendar_closeDB(db);
-    }
-    else if (db->vfs == VFS_SEQUENCE) {
-        sequence_closeDB(db);
+    void (*vfs_closeDB) (struct DB *) = VFS_Table[db->vfs].closeDB;
+
+    if (vfs_closeDB != NULL) {
+        vfs_closeDB(db);
     }
 }
 
 int getFieldIndex (struct DB *db, const char *field) {
-    if (db->vfs == VFS_CSV) {
-        return csv_getFieldIndex(db, field);
-    }
+    int (*vfs_getFieldIndex) (struct DB *, const char *) = VFS_Table[db->vfs].getFieldIndex;
 
-    if (db->vfs == VFS_CSV_MEM) {
-        return csvMem_getFieldIndex(db, field);
-    }
-
-    if (db->vfs == VFS_CALENDAR) {
-        return calendar_getFieldIndex(db, field);
-    }
-
-    if (db->vfs == VFS_SEQUENCE) {
-        return sequence_getFieldIndex(db, field);
+    if (vfs_getFieldIndex != NULL) {
+        return vfs_getFieldIndex(db, field);
     }
 
     return -1;
 }
 
 char *getFieldName (struct DB *db, int field_index) {
-    if (db->vfs == VFS_CSV) {
-        return csv_getFieldName(db, field_index);
-    }
+    char * (*vfs_getFieldName) (struct DB *, int) = VFS_Table[db->vfs].getFieldName;
 
-    if (db->vfs == VFS_CSV_MEM) {
-        return csvMem_getFieldName(db, field_index);
-    }
-
-    if (db->vfs == VFS_CALENDAR) {
-        return calendar_getFieldName(db, field_index);
-    }
-
-    if (db->vfs == VFS_SEQUENCE) {
-        return sequence_getFieldName(db, field_index);
+    if (vfs_getFieldName != NULL) {
+        return vfs_getFieldName(db, field_index);
     }
 
     return NULL;
@@ -100,20 +124,10 @@ int getRecordValue (struct DB *db, int record_index, int field_index, char *valu
         return sprintf(value, "%d", record_index);
     }
 
-    if (db->vfs == VFS_CSV) {
-        return csv_getRecordValue(db, record_index, field_index, value, value_max_length);
-    }
+    int (*vfs_getRecordValue) (struct DB *, int, int, char *, size_t) = VFS_Table[db->vfs].getRecordValue;
 
-    if (db->vfs == VFS_CSV_MEM) {
-        return csvMem_getRecordValue(db, record_index, field_index, value, value_max_length);
-    }
-
-    if (db->vfs == VFS_CALENDAR) {
-        return calendar_getRecordValue(db, record_index, field_index, value, value_max_length);
-    }
-
-    if (db->vfs == VFS_SEQUENCE) {
-        return sequence_getRecordValue(db, record_index, field_index, value, value_max_length);
+    if (vfs_getRecordValue != NULL) {
+        return vfs_getRecordValue(db, record_index, field_index, value, value_max_length);
     }
 
     return -1;
@@ -147,9 +161,10 @@ int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *p
         exit(-1);
     }
 
-    // Special implementation for calendar
-    if (db->vfs == VFS_CALENDAR) {
-        return calendar_fullTableScan(db, row_list, predicates, predicate_count, limit_value);
+    int (*vfs_fullTableScan) (struct DB *, struct RowList *, struct Predicate *, int, int) = VFS_Table[db->vfs].fullTableScan;
+
+    if (vfs_fullTableScan != NULL) {
+        return vfs_fullTableScan(db, row_list, predicates, predicate_count, limit_value);
     }
 
     // VFS-agnostic implementation
@@ -199,10 +214,6 @@ int fullTableAccess (struct DB *db, struct RowList * row_list, int limit_value) 
         exit(-1);
     }
 
-    if (db->vfs == VFS_CALENDAR) {
-        return calendar_fullTableScan(db, row_list, NULL, 0, limit_value);
-    }
-
     // VFS-agnostic implementation
 
     int l = db->record_count;
@@ -227,9 +238,13 @@ int pkSearch(struct DB *db, const char * predicate_field, const char *value) {
         exit(-1);
     }
 
-    if (db->vfs == VFS_CALENDAR) {
-        return calendar_pkSearch(db, predicate_field, value);
+    int (*vfs_pkSearch) (struct DB *, const char *, const char *) = VFS_Table[db->vfs].pkSearch;
+
+    if (vfs_pkSearch != NULL) {
+        return vfs_pkSearch(db, predicate_field, value);
     }
+
+    // VFS-Agnostic implementation
 
     int pk_index = getFieldIndex(db, predicate_field);
 

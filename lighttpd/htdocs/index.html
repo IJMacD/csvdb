@@ -2,8 +2,18 @@
 <html>
     <head>
         <meta charset="utf8"/>
+        <style>
+            body {
+                margin: 0;
+                padding: 8px;
+                display: flex;
+                flex-direction: column;
+                min-height: 100vh;
+                box-sizing: border-box;
+            }
+        </style>
     </head>
-    <body style="margin: 0 8px; display: flex; flex-direction: column; min-height: 100vh">
+    <body>
         <form action="/cgi-bin/csvdb" method="post" target="output">
             <textarea name="query" style="display: block; min-height: 150px; width: 100%"></textarea>
             <button>Run</button>

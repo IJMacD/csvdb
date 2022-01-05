@@ -11,6 +11,7 @@
 #define VFS_CALENDAR    3
 #define VFS_CSV_MEM     4
 #define VFS_SEQUENCE    5
+#define VFS_SAMPLE      6
 
 struct DB {
     int vfs;
@@ -20,6 +21,18 @@ struct DB {
     long *line_indices;
     int record_count;
     char * data;
+};
+
+struct VFS {
+    int (* openDB)(struct DB *db, const char *filename);
+    void (* closeDB)(struct DB *db);
+    int (* getFieldIndex)(struct DB *db, const char *field);
+    char *(* getFieldName)(struct DB *db, int field_index);
+    int (* getRecordValue)(struct DB *db, int record_index, int field_index, char *value, size_t value_max_length);
+    int (* findIndex)(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);
+    int (* fullTableScan)(struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value);
+    int (* fullTableAccess)(struct DB *db, struct RowList * row_list, int limit_value);
+    int (* pkSearch)(struct DB *db, const char * predicate_field, const char *value);
 };
 
 int openDB (struct DB *db, const char *filename);

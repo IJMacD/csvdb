@@ -4,7 +4,6 @@
 #include <time.h>
 
 #include "db.h"
-#include "db-calendar.h"
 #include "date.h"
 #include "predicates.h"
 #include "indices.h"
@@ -40,7 +39,7 @@
 #define COL_WEEK_STRING         26
 #define COL_WEEKDAY_STRING      27
 
-char *field_names[] = {
+static char *field_names[] = {
     "julian",
     "date",
     "year",

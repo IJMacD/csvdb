@@ -17,6 +17,20 @@
 #define FLAG_ORDER                  8
 #define FLAG_EXPLAIN                4096
 
+// xxxx aaa h
+//          h - headers
+//      aaa   - format
+
+#define OUTPUT_OPTION_HEADERS   1
+
+#define OUTPUT_MASK_FORMAT      0x0E
+
+#define OUTPUT_FORMAT_TAB       (1 << 1)
+#define OUTPUT_FORMAT_COMMA     (2 << 1)
+#define OUTPUT_FORMAT_JSON      (3 << 1)
+#define OUTPUT_FORMAT_HTML      (4 << 1)
+#define OUTPUT_FORMAT_JSON_ARRAY      (5 << 1)
+
 struct Table {
     char name[TABLE_MAX_LENGTH];
     char alias[FIELD_MAX_LENGTH];

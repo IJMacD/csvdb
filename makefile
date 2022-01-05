@@ -7,7 +7,7 @@ CFLAGS = -Wall -Werror -Wextra -Wno-format-overflow
 #
 # Project files
 #
-SRCS = main.c db.c db-csv.c db-calendar.c db-csv-mem.c db-sequence.c query.c token.c parse.c predicates.c evaluate.c sort.c tree.c output.c create.c util.c explain.c indices.c plan.c function.c date.c result.c debug.c
+SRCS = main.c db.c db-csv.c db-calendar.c db-csv-mem.c db-sequence.c db-sample.c query.c token.c parse.c predicates.c evaluate.c sort.c tree.c output.c create.c util.c explain.c indices.c plan.c function.c date.c result.c debug.c
 SRCDIR = src
 OBJS = $(SRCS:.c=.o)
 EXE  = csvdb
@@ -37,6 +37,15 @@ CGIEXE = $(CGIDIR)/$(EXE).cgi
 CGISRCS = $(filter-out main.c, $(SRCS)) main-cgi.c
 CGIOBJS = $(addprefix $(CGIDIR)/, $(CGISRCS:.c=.o))
 CGICFLAGS = -O3 -DNDEBUG
+
+#
+# GEN build settings
+#
+GENDIR = release
+GENEXE = $(GENDIR)/gen
+GENSRCS = $(filter-out main.c, $(SRCS)) gen.c
+GENOBJS = $(addprefix $(GENDIR)/, $(GENSRCS:.c=.o))
+GENCFLAGS = -O3 -DNDEBUG
 
 .PHONY: all clean debug prep release remake cgi test
 
@@ -83,10 +92,10 @@ test: prep release test.csv
 	./test.sh
 
 test.csv: $(GENEXE)
-	./${GENEXE} 100000 test.csv
+	${GENEXE} 100000 test.csv
 
-$(GENEXE): ./src/gen.c ./src/date.c
-	$(CC) $(CFLAGS) $(DBGCFLAGS) -o $@ $^
+$(GENEXE): $(GENOBJS)
+	$(CC) $(CFLAGS) $(GENCFLAGS) -o $@ $^
 
 #
 # Other rules
