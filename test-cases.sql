@@ -15,8 +15,8 @@ EXPLAIN SELECT name, birth_date FROM test WHERE birth_date = '2050-01-01'
 SELECT name, birth_date FROM test WHERE birth_date = '2050-01-01'
 EXPLAIN SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' FETCH FIRST 5 ROWS ONLY
 SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' FETCH FIRST 5 ROWS ONLY
-EXPLAIN SELECT name, birth_date FROM test WHERE birth_date > '2070-01-01' AND score > 95 ORDER BY name FETCH FIRST 5 ROWS ONLY
-SELECT name, birth_date, score FROM test WHERE birth_date > '2070-01-01' AND score > 95 ORDER BY name FETCH FIRST 5 ROWS ONLY
+EXPLAIN SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' AND score > 95 ORDER BY name FETCH FIRST 5 ROWS ONLY
+SELECT name, birth_date, score FROM test WHERE birth_date > '2050-01-01' AND score > 95 ORDER BY name FETCH FIRST 5 ROWS ONLY
 SELECT name, birth_date FROM test WHERE PK(id) = 769
 SELECT EXTRACT(YEAR FROM birth_date), EXTRACT(MONTH FROM birth_date), EXTRACT(DAY FROM birth_date), EXTRACT(YEARDAY FROM birth_date) FROM test FETCH FIRST ROW ONLY
 SELECT COUNT(*) FROM test
@@ -27,6 +27,7 @@ FROM test WHERE name < 'Bob' AND score > 50 FETCH FIRST 5 ROWS ONLY
 EXPLAIN FROM test, CALENDAR ON date = birth_date WHERE name LIKE 'Walter M%' SELECT name, yearday FETCH FIRST 5 ROWS ONLY
 FROM test, CALENDAR ON date = birth_date WHERE name LIKE 'Walter M%' SELECT name, birth_date, yearday FETCH FIRST 5 ROWS ONLY
 FROM test, CALENDAR ON birth_date = date WHERE name < 'Aaron Z' SELECT name, date, yearday ORDER BY yearday FETCH FIRST 5 ROWS ONLY
+EXPLAIN FROM test WHERE birth_date < '1901-01-01' AND EXTRACT(WEEKDAY FROM birth_date) = 5 FETCH FIRST 5 ROWS ONLY
 FROM test WHERE birth_date < '1901-01-01' AND EXTRACT(WEEKDAY FROM birth_date) = 5 FETCH FIRST 5 ROWS ONLY
 FROM view FETCH FIRST 5 ROWS ONLY
 FROM dates
