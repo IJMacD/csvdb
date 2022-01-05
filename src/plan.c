@@ -3,6 +3,7 @@
 
 #include "plan.h"
 #include "indices.h"
+#include "function.h"
 #include "sort.h"
 #include "util.h"
 
@@ -80,7 +81,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
              * UNIQUE INDEX SCAN
              *******************/
             // Try to find a unique index
-            if (p->op != OPERATOR_LIKE && findIndex(NULL, table.name, p->left.text, INDEX_UNIQUE) == INDEX_UNIQUE) {
+            if (p->op != OPERATOR_LIKE && p->left.function == FUNC_UNITY && findIndex(NULL, table.name, p->left.text, INDEX_UNIQUE) == INDEX_UNIQUE) {
 
                 int type;
                 if (p->op == OPERATOR_EQ) {
@@ -113,7 +114,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
             /*******************
              * INDEX RANGE SCAN
              *******************/
-            else if (p->op != OPERATOR_LIKE && findIndex(NULL, table.name, p->left.text, INDEX_ANY)) {
+            else if (p->op != OPERATOR_LIKE && p->left.function == FUNC_UNITY && findIndex(NULL, table.name, p->left.text, INDEX_ANY)) {
                 addStepWithPredicate(plan, PLAN_INDEX_RANGE, p);
 
                 addJoinStepsIfRequired(plan, q);
@@ -318,8 +319,11 @@ void addOrderStepIfRequired (struct Plan *plan, struct Query *q) {
     }
 
     // Don't need to sort if the order field has an equality predicate on it
+    // Comment: This assumes we folled a specific path above
+    //
+    // Comment: should properly check both sides for functions/constants etc.
     for (int j = 0; j < q->predicate_count; j++) {
-        if (strcmp(q->predicates[j].left.text, q->order_field) == 0 && q->predicates[j].op == OPERATOR_EQ) {
+        if (strcmp(q->predicates[j].left.text, q->order_field) == 0 && q->predicates[j].op == OPERATOR_EQ && q->predicates[j].left.function == FUNC_UNITY) {
             return;
         }
     }

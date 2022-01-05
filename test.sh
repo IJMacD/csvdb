@@ -10,19 +10,19 @@ readarray -t lines < ./test-cases.sql
 OUTFILE=/tmp/test.out
 
 for sql in "${lines[@]}"; do
-    printf 'SQL: %s\n' "$sql";
+    printf ' -- SQL: %s --\n' "$sql";
 
     ./release/csvdb -o $OUTFILE "$sql";
 
     if [ $? -eq 0 ]; then
         if [ -s $OUTFILE ]; then
-            printf "${GREEN}OK${NC} (Check output):\n";
             cat $OUTFILE
+            printf " -- ${GREEN}OK${NC} (Check output above) --\n\n";
         else
-            printf "${ORANGE}NO OUTPUT${NC}\n";
+            printf " -- ${ORANGE}NO OUTPUT${NC} --\n\n";
         fi
     else
-        printf "${RED}ERROR${NC}\n";
+        printf " -- ${RED}ERROR${NC} --\n\n";
     fi
 
 done

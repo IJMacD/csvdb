@@ -7,6 +7,7 @@
 #include "db-csv-mem.h"
 #include "db-sequence.h"
 #include "limits.h"
+#include "function.h"
 #include "query.h"
 #include "util.h"
 
@@ -163,21 +164,8 @@ int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *p
         for (int j = 0; j < predicate_count && matching; j++) {
             struct Predicate *predicate = predicates + j;
 
-            // Either side could be constant
-
-            // (we're hoping at least one side on on this table!)
-
-            if (predicate->left.field == FIELD_CONSTANT) {
-                strcpy(value_left, predicate->left.text);
-            } else {
-                getRecordValue(db, i, predicate->left.field, value_left, VALUE_MAX_LENGTH);
-            }
-
-            if (predicate->right.field == FIELD_CONSTANT) {
-                strcpy(value_right, predicate->right.text);
-            } else {
-                getRecordValue(db, i, predicate->right.field, value_right, VALUE_MAX_LENGTH);
-            }
+            evaluateFunction(value_left, db, &predicate->left, i);
+            evaluateFunction(value_right, db, &predicate->right, i);
 
             if (!evaluateExpression(predicate->op, value_left, value_right)) {
                 matching = 0;
