@@ -297,3 +297,43 @@ int create_view_query (const char * query) {
 
     return 0;
 }
+
+int insert_query (const char * query) {
+    size_t index = 0;
+
+    char keyword[FIELD_MAX_LENGTH] = {0};
+
+    char table_name[TABLE_MAX_LENGTH] = {0};
+
+    if (strncmp(query, "INSERT INTO", 11) != 0) {
+        fprintf(stderr, "Expected INSERT INTO got '%s'\n", keyword);
+        return -1;
+    }
+
+    index += 11;
+
+    skipWhitespace(query, &index);
+
+    getQuotedToken(query, &index, table_name, TABLE_MAX_LENGTH);
+
+    skipWhitespace(query, &index);
+
+    if (strncmp(query + index, "VALUES", 6) == 0) {
+        fprintf(stderr, "Unimplemented: VALUES keyword\n");
+        return -1;
+    }
+
+    char file_name[TABLE_MAX_LENGTH + 4];
+    sprintf(file_name, "%s.csv", table_name);
+
+    FILE *f = fopen(file_name, "a");
+
+    if (!f) {
+        fprintf(stderr, "Unable to open file for insertion: '%s'\n", file_name);
+        return -1;
+    }
+
+    int flags = OUTPUT_FORMAT_COMMA;
+
+    return select_query(query + index, flags, f);
+}

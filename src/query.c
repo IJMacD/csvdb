@@ -38,6 +38,10 @@ int query (const char *query, int output_flags, FILE * output) {
         return create_query(query);
     }
 
+    if (strncmp(query, "INSERT ", 7) == 0) {
+        return insert_query(query);
+    }
+
     return select_query(query, output_flags, output);
 }
 
