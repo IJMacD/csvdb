@@ -1,27 +1,27 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
 #include "create.h"
 #include "db.h"
 #include "query.h"
+#include "token.h"
 #include "parse.h"
 #include "sort.h"
 #include "output.h"
 #include "limits.h"
 #include "result.h"
 
+int create_table_query (const char * query);
+
+int create_view_query (const char * query);
+
+int create_index_query (const char * query);
+
 int create_index (const char *index_name, const char *table_name, const char *index_field, int unique_flag);
 
 int create_query (const char *query) {
-    int unique_flag = 0;
-    int auto_name = 0;
-
     size_t index = 0;
-
-    char index_name[TABLE_MAX_LENGTH + FIELD_MAX_LENGTH + 2] = {0};
-    char table_name[TABLE_MAX_LENGTH] = {0};
-
-    char index_field[FIELD_MAX_LENGTH] = {0};
 
     char keyword[FIELD_MAX_LENGTH] = {0};
 
@@ -33,6 +33,39 @@ int create_query (const char *query) {
     }
 
     getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+    if (strcmp(keyword, "TABLE") == 0) {
+        return create_table_query(query);
+    }
+
+    if (strcmp(keyword, "VIEW") == 0) {
+        return create_view_query(query);
+    }
+
+    return create_index_query(query);
+}
+
+int create_index_query (const char * query) {
+    int unique_flag = 0;
+    int auto_name = 0;
+
+    size_t index = 0;
+
+    char keyword[FIELD_MAX_LENGTH] = {0};
+
+    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+    if (strcmp(keyword, "CREATE") != 0) {
+        fprintf(stderr, "Expected CREATE got '%s'\n", keyword);
+        return -1;
+    }
+
+    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+    char index_name[TABLE_MAX_LENGTH + FIELD_MAX_LENGTH + 2] = {0};
+    char table_name[TABLE_MAX_LENGTH] = {0};
+
+    char index_field[FIELD_MAX_LENGTH] = {0};
 
     if (strcmp(keyword, "UNIQUE") == 0) {
         unique_flag = 1;
@@ -47,7 +80,7 @@ int create_query (const char *query) {
 
     skipWhitespace(query, &index);
 
-    if (strncmp(query + index, "ON ", 3) == 0) {
+    if (strncmp(&query[index], "ON ", 3) == 0) {
         // Auto generated index name
         auto_name = 1;
     } else {
@@ -158,6 +191,109 @@ int create_index (const char *index_name, const char *table_name, const char *in
     }
 
     free(row_list.row_ids);
+
+    return 0;
+}
+
+int create_table_query (const char * query) {
+
+    size_t index = 0;
+
+    char keyword[FIELD_MAX_LENGTH] = {0};
+
+    char table_name[TABLE_MAX_LENGTH] = {0};
+
+    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+    if (strcmp(keyword, "CREATE") != 0) {
+        fprintf(stderr, "Expected CREATE got '%s'\n", keyword);
+        return -1;
+    }
+
+    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+    if (strcmp(keyword, "TABLE") != 0) {
+        fprintf(stderr, "Expected TABLE got '%s'\n", keyword);
+        return -1;
+    }
+
+    skipWhitespace(query, &index);
+
+    getQuotedToken(query, &index, table_name, TABLE_MAX_LENGTH);
+
+    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+    if (strcmp(keyword, "AS") != 0) {
+        fprintf(stderr, "Expected AS got '%s'\n", keyword);
+        return -1;
+    }
+
+    skipWhitespace(query, &index);
+
+    char file_name[TABLE_MAX_LENGTH + 4];
+    sprintf(file_name, "%s.csv", table_name);
+
+    FILE *f = fopen(file_name, "w");
+
+    if (!f) {
+        fprintf(stderr, "Unable to create file for table: '%s'\n", file_name);
+        return -1;
+    }
+
+    int flags = OUTPUT_FORMAT_COMMA | OUTPUT_OPTION_HEADERS;
+
+    return select_query(query + index, flags, f);
+}
+
+int create_view_query (const char * query) {
+    size_t index = 0;
+
+    char keyword[FIELD_MAX_LENGTH] = {0};
+
+    char view_name[TABLE_MAX_LENGTH] = {0};
+
+    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+    if (strcmp(keyword, "CREATE") != 0) {
+        fprintf(stderr, "Expected CREATE got '%s'\n", keyword);
+        return -1;
+    }
+
+    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+    if (strcmp(keyword, "VIEW") != 0) {
+        fprintf(stderr, "Expected VIEW got '%s'\n", keyword);
+        return -1;
+    }
+
+    skipWhitespace(query, &index);
+
+    getQuotedToken(query, &index, view_name, TABLE_MAX_LENGTH);
+
+    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+    if (strcmp(keyword, "AS") != 0) {
+        fprintf(stderr, "Expected AS got '%s'\n", keyword);
+        return -1;
+    }
+
+    skipWhitespace(query, &index);
+
+    char file_name[TABLE_MAX_LENGTH + 4];
+    sprintf(file_name, "%s.sql", view_name);
+
+    FILE *f = fopen(file_name, "w");
+
+    if (!f) {
+        fprintf(stderr, "Unable to create file for view: '%s'\n", file_name);
+        return -1;
+    }
+
+    fputs(query + index, f);
+
+    fputc('\n', f);
+
+    fclose(f);
 
     return 0;
 }

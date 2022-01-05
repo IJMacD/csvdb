@@ -23,8 +23,6 @@
 #include "debug.h"
 #include "date.h"
 
-int select_query (const char *query, int output_flags, FILE * output);
-
 int basic_select_query (struct Query *q, struct Plan *plan, int output_flags, FILE * output);
 
 int information_query (const char *table, FILE * output);
