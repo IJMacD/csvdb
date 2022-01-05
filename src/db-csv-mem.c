@@ -57,7 +57,7 @@ int csvMem_openDB (struct DB *db, const char *filename) {
     }
 
     if (!f) {
-        char buffer[255];
+        char buffer[FILENAME_MAX];
         sprintf(buffer, "%s.csv", filename);
         f = fopen(buffer, "r");
 

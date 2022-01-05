@@ -53,7 +53,7 @@ static int makeDB (struct DB *db, FILE *f) {
  */
 int csv_openDB (struct DB *db, const char *filename) {
     FILE *f;
-    char buffer[255];
+    char buffer[FILENAME_MAX];
 
     if (strcmp(filename, "stdin") == 0) {
         f = stdin;
@@ -77,7 +77,7 @@ int csv_openDB (struct DB *db, const char *filename) {
         f = fopen(buffer, "r");
 
         if (!f) {
-            // Try sql file as "VIEW"
+            // Try sql file as a "VIEW"
             sprintf(buffer, "%s.sql", filename);
             f = fopen(buffer, "r");
 

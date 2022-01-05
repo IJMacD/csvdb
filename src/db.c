@@ -24,6 +24,10 @@ int openDB (struct DB *db, const char *filename) {
         return sequence_openDB(db, filename);
     }
 
+    if (strncmp(filename, "memory:", 7) == 0) {
+        return csvMem_openDB(db, filename + 7);
+    }
+
     return csv_openDB(db, filename);
 }
 
