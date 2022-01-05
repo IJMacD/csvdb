@@ -62,7 +62,7 @@ int select_query (const char *query, int output_flags, FILE * output) {
         // However, if stdin is something more than a tty (i.e pipe or redirected file)
         // then we can default to it.
         if (!isatty(fileno(stdin))) {
-            q.tables = malloc(sizeof (struct Table));
+            q.tables = calloc(1, sizeof (struct Table));
             q.table_count = 1;
             strcpy(q.tables[0].name, "stdin");
         }
@@ -99,6 +99,8 @@ int select_query (const char *query, int output_flags, FILE * output) {
         if (q.predicate_count < 1) {
             return -1;
         }
+
+        q.tables[0].db = NULL;
 
         result = information_query(q.predicates[0].right.text, output);
         destroyQuery(&q);

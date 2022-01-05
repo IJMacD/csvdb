@@ -100,7 +100,7 @@ int parseQuery (struct Query *q, const char *query) {
                 q->table_count++;
 
                 if (q->table_count == 1) {
-                    q->tables = malloc(sizeof (struct Table) * q->table_count);
+                    q->tables = calloc(q->table_count, sizeof (struct Table));
                 } else {
                     void * ptr = realloc(q->tables, sizeof (struct Table) * q->table_count);
 
@@ -110,12 +110,12 @@ int parseQuery (struct Query *q, const char *query) {
                     }
 
                     q->tables = ptr;
+
+                    // Zero out realloc'd space
+                    memset(q->tables + (q->table_count - 1), 0, sizeof (struct Table));
                 }
 
                 struct Table *table = &q->tables[q->table_count - 1];
-
-                table->name[0] = '\0';
-                table->alias[0] = '\0';
 
                 getQuotedToken(query, &index, table->name, TABLE_MAX_LENGTH);
 

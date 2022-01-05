@@ -32,6 +32,10 @@ int openDB (struct DB *db, const char *filename) {
 }
 
 void closeDB (struct DB *db) {
+    if (db == NULL) {
+        return;
+    }
+
     if (db->vfs == VFS_CSV) {
         csv_closeDB(db);
     }
