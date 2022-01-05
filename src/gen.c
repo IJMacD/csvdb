@@ -6,9 +6,9 @@
 
 #define LCG_A   15961   // Chosen by fair dice roll - must be odd (if M is power of 2)
 #define LCG_C   13281   // Chosen by fair dice roll - must be 4K + 1
-#define LCG_M   (1<<16)   // will give range of 65536 days (approx 180 years)
+#define LCG_M   (1<<17)   // will give range of (2 * 65536) days (approx 360 years)
 
-#define BASE_DATE   2415020 // 1900-01-01
+#define BASE_DATE   2341972 // 1700-01-01
 
 void printUsage (const char* name) {
     printf("Usage:\n\t%s n [out.csv]\n\tGenerate n records and store in out.csv or write to stdout\n", name);

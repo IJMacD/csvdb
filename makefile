@@ -79,9 +79,11 @@ $(CGIDIR)/%.o: $(SRCDIR)/%.c
 #
 # Test rules
 #
-test: prep release $(GENEXE)
-	./${GENEXE} 10000 test.csv
+test: prep release test.csv
 	./test.sh
+
+test.csv: $(GENEXE)
+	./${GENEXE} 100000 test.csv
 
 $(GENEXE): ./src/gen.c ./src/date.c
 	$(CC) $(CFLAGS) $(DBGCFLAGS) -o $@ $^

@@ -633,8 +633,10 @@ void populateColumnNode (struct Query * query, struct ColumnNode * column) {
         findColumn(query, column->text, &column->table_id, &column->field);
     } else if (column->field == FIELD_CONSTANT) {
         // Fill in constant values such as CURRENT_DATE
-        // Don't evaluate any functions on the column
+        // Then evaluate any functions on the column
         evaluateConstantNode(column, column->text, FIELD_MAX_LENGTH);
+        evaluateFunction(column->text, NULL, column, -1);
+        column->function = FUNC_UNITY;
     }
 }
 

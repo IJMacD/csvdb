@@ -74,6 +74,8 @@ int primaryKeyScan (struct DB *db, const char *predicate_field, int predicate_op
 }
 
 /**
+ *
+ *
  * @return matched row count; RESULT_NO_ROWS if row not found; RESULT_NO_INDEX if index does not exist
  */
 int indexUniqueScan (struct DB *db, const char *predicate_field, int predicate_op, const char *predicate_value, struct RowList *row_list, int limit) {
@@ -90,14 +92,23 @@ int indexUniqueScan (struct DB *db, const char *predicate_field, int predicate_o
 
     int pk_search_result = pkSearch(db, predicate_field, predicate_value);
 
+    /**************************************************************************
+     * BIG TODO: This function and rangeScan need rewriting and checking for
+     * correctness and redundancy
+     *
+     **************************************************************************/
+
     if (pk_search_result == RESULT_NO_ROWS) {
         // TODO: Need to check (below min|above max|between rows)
         return 0;
     }
 
     if (predicate_op == OPERATOR_EQ) {
-        return pk_search_result;
+        appendRowID(row_list, pk_search_result);
+        return 1;
     }
+
+    // Isn't all this below duplicated in rangeScan?
 
     int lower_index = pk_search_result;
     int upper_index = pk_search_result + 1;
