@@ -27,86 +27,14 @@ void urldecode2(char *dst, const char *src);
 int main () {
 
     char buffer[1024];
-    int flags = 0;
+    int flags = OUTPUT_OPTION_HEADERS | OUTPUT_FORMAT_HTML;
 
     FILE * output = stdout;
 
     srand((unsigned) time(NULL) * getpid());
 
-    // if (argc > arg && (strcmp(argv[arg], "-E") == 0 || strcmp(argv[arg], "--explain") == 0)) {
-    //     flags |= FLAG_EXPLAIN;
-    //     arg++;
-    // }
-
-    // if (argc > arg && (strcmp(argv[arg], "-H") == 0 || strcmp(argv[arg], "--headers") == 0)) {
-        flags |= OUTPUT_OPTION_HEADERS;
-    //     arg++;
-    // }
-
-    // char * format_val = NULL;
-
-    // if (argc > arg && strcmp(argv[arg], "-F") == 0) {
-    //     arg++;
-
-    //     if (argc > arg) {
-    //         format_val = argv[arg];
-    //         arg++;
-    //     }
-    // }
-    // else if (argc > arg && strncmp(argv[arg], "--format=", 9) == 0) {
-    //     format_val = argv[arg] + 9;
-    //     arg++;
-    // }
-
-    // if (format_val != NULL) {
-    //     if(strcmp(format_val, "tsv") == 0) {
-    //         flags |= OUTPUT_FORMAT_TAB;
-    //     } else if (strcmp(format_val, "csv") == 0) {
-    //         flags |= OUTPUT_FORMAT_COMMA;
-    //     } else if (strcmp(format_val, "html") == 0) {
-    //         flags |= OUTPUT_FORMAT_HTML;
-    //     } else if (strcmp(format_val, "json_array") == 0) {
-    //         flags |= OUTPUT_FORMAT_JSON_ARRAY;
-    //     } else if (strcmp(format_val, "json") == 0) {
-    //         flags |= OUTPUT_FORMAT_JSON;
-    //     } else {
-    //         fprintf(stderr, "Unrecognised format: %s\n", format_val);
-    //         return -1;
-    //     }
-    // }
-    flags |= OUTPUT_FORMAT_HTML;
-
-    // char * output_name = NULL;
-
-    // if (argc > arg && strcmp(argv[arg], "-o") == 0) {
-    //     arg++;
-
-    //     if (argc > arg) {
-    //         output_name = argv[arg];
-    //         arg++;
-    //     }
-    // }
-    // else if (argc > arg && strncmp(argv[arg], "--output=", 9) == 0) {
-    //     output_name = argv[arg] + 9;
-    //     arg++;
-    // }
-
-    // if (output_name != NULL) {
-
-    //     if(strcmp(output_name, "-") == 0) {
-    //         output = stdout;
-    //     }
-    //     else {
-    //         output = fopen(output_name, "w");
-
-    //         if (!output) {
-    //             fprintf(stderr, "Couldn't open file '%s' for writing\n", output_name);
-    //             return -1;
-    //         }
-    //     }
-    // }
-
-    dup2(STDOUT_FILENO, STDERR_FILENO);
+    // is this working?
+    // dup2(STDOUT_FILENO, STDERR_FILENO);
 
     size_t count = fread(buffer, 1, 1024, stdin);
 
@@ -123,7 +51,12 @@ int main () {
 
         urldecode2(buffer, buffer + offset);
 
-        printf("Content-Type: text/html\n\n");
+        // Explain query still only outputs "unformatted"
+        if (strncmp(buffer, "EXPLAIN", 7) == 0) {
+            printf("Content-Type: text/plain\n\n");
+        } else {
+            printf("Content-Type: text/html\n\n");
+        }
 
         return query(buffer, flags, output);
     }
