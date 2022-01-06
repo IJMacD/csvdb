@@ -7,7 +7,6 @@
 #include <unistd.h>
 
 #include "query.h"
-#include "output.h"
 
 /*
  * CGI Spec:
@@ -27,7 +26,7 @@ void urldecode2(char *dst, const char *src);
 int main () {
 
     char buffer[1024];
-    int flags = OUTPUT_OPTION_HEADERS | OUTPUT_FORMAT_HTML;
+    int flags = OUTPUT_OPTION_HEADERS;
 
     FILE * output = stdout;
 
@@ -35,6 +34,27 @@ int main () {
 
     // is this working?
     // dup2(STDOUT_FILENO, STDERR_FILENO);
+
+    char *query_string = getenv("QUERY_STRING");
+
+    if (query_string != NULL && strncmp(query_string, "format=", 7) == 0) {
+        char * format = query_string + 7;
+
+        if (strcmp(format, "csv") == 0) {
+            flags |= OUTPUT_FORMAT_COMMA;
+        } else if (strcmp(format, "tsv") == 0) {
+            flags |= OUTPUT_FORMAT_TAB;
+        } else if (strcmp(format, "html") == 0) {
+            flags |= OUTPUT_FORMAT_HTML;
+        } else if (strcmp(format, "json") == 0) {
+            flags |= OUTPUT_FORMAT_JSON;
+        } else {
+            flags |= OUTPUT_FORMAT_HTML;
+        }
+
+    } else {
+        flags |= OUTPUT_FORMAT_HTML;
+    }
 
     size_t count = fread(buffer, 1, 1024, stdin);
 
@@ -54,8 +74,15 @@ int main () {
         // Explain query still only outputs "unformatted"
         if (strncmp(buffer, "EXPLAIN", 7) == 0) {
             printf("Content-Type: text/plain\n\n");
-        } else {
+        }
+        else if ((flags & OUTPUT_MASK_FORMAT) == OUTPUT_FORMAT_HTML) {
             printf("Content-Type: text/html\n\n");
+        }
+        else if ((flags & OUTPUT_MASK_FORMAT) == OUTPUT_FORMAT_JSON) {
+            printf("Content-Type: application/json\n\n");
+        }
+        else {
+            printf("Content-Type: text/plain\n\n");
         }
 
         return query(buffer, flags, output);
