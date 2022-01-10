@@ -27,7 +27,7 @@ void printUsage (const char* name) {
         "Options:\n"
         "\t[-E|--explain]\n"
         "\t[-H|--headers]\n"
-        "\t[(-F |--format=)(tsv|csv|html|json|json_array)]\n"
+        "\t[(-F |--format=)(tsv|csv|html|json|json_array|sql)]\n"
         "\t[(-o |--output=)<filename>]\n"
     , name);
 }
@@ -85,6 +85,8 @@ int main (int argc, char * argv[]) {
             flags |= OUTPUT_FORMAT_JSON_ARRAY;
         } else if (strcmp(format_val, "json") == 0) {
             flags |= OUTPUT_FORMAT_JSON;
+        } else if (strcmp(format_val, "sql") == 0) {
+            flags |= OUTPUT_FORMAT_SQL_INSERT;
         } else {
             fprintf(stderr, "Unrecognised format: %s\n", format_val);
             return -1;

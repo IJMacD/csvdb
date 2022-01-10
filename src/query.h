@@ -23,13 +23,14 @@
 
 #define OUTPUT_OPTION_HEADERS   1
 
-#define OUTPUT_MASK_FORMAT      0x0E
+#define OUTPUT_MASK_FORMAT          0x0E
 
-#define OUTPUT_FORMAT_TAB       (1 << 1)
-#define OUTPUT_FORMAT_COMMA     (2 << 1)
-#define OUTPUT_FORMAT_JSON      (3 << 1)
-#define OUTPUT_FORMAT_HTML      (4 << 1)
-#define OUTPUT_FORMAT_JSON_ARRAY      (5 << 1)
+#define OUTPUT_FORMAT_TAB           (1 << 1)
+#define OUTPUT_FORMAT_COMMA         (2 << 1)
+#define OUTPUT_FORMAT_JSON          (3 << 1)
+#define OUTPUT_FORMAT_HTML          (4 << 1)
+#define OUTPUT_FORMAT_JSON_ARRAY    (5 << 1)
+#define OUTPUT_FORMAT_SQL_INSERT    (6 << 1)
 
 struct Table {
     char name[TABLE_MAX_LENGTH];

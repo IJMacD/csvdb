@@ -45,6 +45,15 @@ void printResultLine (FILE *f, struct DB *tables, int db_count, struct ColumnNod
 
         record_sep = ",";
     }
+    else if (format == OUTPUT_FORMAT_SQL_INSERT) {
+        fprintf(f, "('");
+
+        field_sep = "','";
+
+        record_end = "')";
+
+        record_sep = ",\n";
+    }
 
     for (int j = 0; j < column_count; j++) {
         struct ColumnNode column = columns[j];
@@ -160,6 +169,14 @@ void printHeaderLine (FILE *f, struct DB *tables, int table_count, struct Column
     else if (format == OUTPUT_FORMAT_JSON) {
         return;
     }
+    else if (format == OUTPUT_FORMAT_SQL_INSERT) {
+        fprintf(f, "INSERT INTO \"table\" (\"");
+
+        field_sep = "\",\"";
+
+        line_end = "\") VALUES\n";
+    }
+
 
     for (int j = 0; j < column_count; j++) {
         struct ColumnNode column = columns[j];
@@ -190,7 +207,6 @@ void printHeaderLine (FILE *f, struct DB *tables, int table_count, struct Column
             fprintf(f, "ROW_NUMBER()");
         }
         else if (column.field == FIELD_ROW_INDEX) {
-            // FIELD_ROW_INDEX is the input line (0 indexed)
             fprintf(f, "rowid");
         }
         else {
@@ -209,7 +225,7 @@ void printPreamble (FILE *f, __attribute__((unused)) struct DB *db, __attribute_
     int format = flags & OUTPUT_MASK_FORMAT;
 
     if (format == OUTPUT_FORMAT_HTML) {
-        fputs("<STYLE>.csvdb{font-family:sans-serif;width:100%;border-collapse:collapse}.csvdb th{text-transform:capitalize}.csvdb th{border-bottom:1px solid #333}.csvdb td{padding:.5em 0}.csvdb tr:hover td{background-color:#f8f8f8}</STYLE>\n<TABLE CLASS=\"csvdb\">\n", f);
+        fputs("<META CHARSET=\"UTF8\" /><STYLE>.csvdb{font-family:sans-serif;width:100%;border-collapse:collapse}.csvdb th{text-transform:capitalize}.csvdb th{border-bottom:1px solid #333}.csvdb td{padding:.5em 0}.csvdb tr:hover td{background-color:#f8f8f8}</STYLE>\n<TABLE CLASS=\"csvdb\">\n", f);
     }
     else if (format == OUTPUT_FORMAT_JSON_ARRAY || format == OUTPUT_FORMAT_JSON) {
         fprintf(f, "[");
@@ -226,20 +242,26 @@ void printPostamble (FILE *f, __attribute__((unused)) struct DB *db, __attribute
     else if (format == OUTPUT_FORMAT_JSON_ARRAY || format == OUTPUT_FORMAT_JSON) {
         fprintf(f, "]\n");
     }
+    else if (format == OUTPUT_FORMAT_SQL_INSERT) {
+        fprintf(f, "\n");
+    }
 }
 
 static void printAllColumns (FILE *f, struct DB *db, int rowid, int format, const char * field_sep) {
     for (int k = 0; k < db->field_count; k++) {
 
+        // Prefix
         if (format == OUTPUT_FORMAT_JSON) {
             fprintf(f, "\"%s\": \"", getFieldName(db, k));
         }
 
+        // Value
         char value[VALUE_MAX_LENGTH];
         if (getRecordValue(db, rowid, k, value, VALUE_MAX_LENGTH) > 0) {
             fprintf(f, "%s", value);
         }
 
+        // Seperator
         if (k < db->field_count - 1) {
             fprintf(f, "%s", field_sep);
         }
