@@ -234,6 +234,23 @@ int evaluateAggregateFunction (char * output, struct DB *tables, __attribute__((
         return 0;
     }
 
+    if (column->function == FUNC_AGG_SUM) {
+        int sum = 0;
+
+        for (int i = 0; i < row_list->row_count; i++) {
+            int rowid = getRowID(row_list, column->table_id, i);
+
+            // Count up the non-NULL values
+            if (getRecordValue(&tables[column->table_id], rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
+                sum += atoi(value);
+            }
+        }
+
+        sprintf(output, "%d", sum);
+
+        return 0;
+    }
+
     if (column->function == FUNC_AGG_AVG) {
         int count = 0;
         int sum = 0;

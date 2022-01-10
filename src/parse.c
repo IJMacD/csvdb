@@ -601,6 +601,17 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
         if (strlen(column->text) + 5 < FIELD_MAX_LENGTH)
             sprintf(column->alias, "MIN(%s)", column->text);
     }
+    else if (strncmp(column->text, "SUM(", 4) == 0) {
+        column->function = FUNC_AGG_SUM;
+        flags |= FLAG_GROUP;
+
+        if (parseFunction(query, index, column, strlen("SUM")) < 0) {
+            return -1;
+        }
+
+        if (strlen(column->text) + 5 < FIELD_MAX_LENGTH)
+            sprintf(column->alias, "SUM(%s)", column->text);
+    }
     else if (strncmp(column->text, "AVG(", 4) == 0) {
         column->function = FUNC_AGG_AVG;
         flags |= FLAG_GROUP;

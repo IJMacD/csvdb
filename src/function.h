@@ -62,10 +62,11 @@
 #define FUNC_FAM_AGG                0xA0
 
 #define FUNC_AGG_COUNT              0xA1
-#define FUNC_AGG_MAX                0xA2
-#define FUNC_AGG_MIN                0xA3
-#define FUNC_AGG_AVG                0xA4
-#define FUNC_AGG_LISTAGG            0xA5
+#define FUNC_AGG_MIN                0xA2
+#define FUNC_AGG_MAX                0xA3
+#define FUNC_AGG_SUM                0xA4
+#define FUNC_AGG_AVG                0xA5
+#define FUNC_AGG_LISTAGG            0xA6
 
 // Family 110x (0xC0) (Undefined)
 #define FUNC_FAM_UNDEF_C0           0xC0
