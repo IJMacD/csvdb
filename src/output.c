@@ -104,14 +104,11 @@ void printResultLine (FILE *f, struct DB *tables, int db_count, struct ColumnNod
             fprintf(f, "%s", output);
         }
         else if ((column.function & MASK_FUNC_FAMILY) == FUNC_FAM_AGG) {
-            char output[VALUE_MAX_LENGTH];
-            int result = evaluateAggregateFunction(output, tables, db_count, columns + j, row_list);
+            int result = evaluateAggregateFunction(f, tables, db_count, columns + j, row_list);
 
             if (result < 0) {
                 fprintf(f, "BADFUNC");
             }
-
-            fprintf(f, "%s", output);
         }
         else if (column.field >= 0) {
             // Evaluate plain columns as well as functions

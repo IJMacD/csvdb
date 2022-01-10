@@ -77,4 +77,4 @@
 
 int evaluateFunction(char * output, struct DB *db, struct ColumnNode *column, int record_index);
 
-int evaluateAggregateFunction (char * output, struct DB *db, int table_count, struct ColumnNode *column, struct RowList * row_list);
+int evaluateAggregateFunction (FILE * output, struct DB *db, int table_count, struct ColumnNode *column, struct RowList * row_list);

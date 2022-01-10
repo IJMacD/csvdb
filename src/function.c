@@ -168,7 +168,7 @@ int evaluateFunction(char * output, struct DB *db, struct ColumnNode *column, in
     return 0;
 }
 
-int evaluateAggregateFunction (char * output, struct DB *tables, __attribute__((unused)) int table_count, struct ColumnNode *column, struct RowList * row_list) {
+int evaluateAggregateFunction (FILE * output, struct DB *tables, __attribute__((unused)) int table_count, struct ColumnNode *column, struct RowList * row_list) {
     char value[VALUE_MAX_LENGTH];
 
     if ((column->function & MASK_FUNC_FAMILY) != FUNC_FAM_AGG) {
@@ -187,7 +187,7 @@ int evaluateAggregateFunction (char * output, struct DB *tables, __attribute__((
             }
         }
 
-        sprintf(output, "%d", count);
+        fprintf(output, "%d", count);
 
         return 0;
     }
@@ -207,7 +207,7 @@ int evaluateAggregateFunction (char * output, struct DB *tables, __attribute__((
         }
 
         if (min < INT_MAX) {
-            sprintf(output, "%d", min);
+            fprintf(output, "%d", min);
         }
 
         return 0;
@@ -228,7 +228,7 @@ int evaluateAggregateFunction (char * output, struct DB *tables, __attribute__((
         }
 
         if (max > INT_MIN) {
-            sprintf(output, "%d", max);
+            fprintf(output, "%d", max);
         }
 
         return 0;
@@ -246,7 +246,7 @@ int evaluateAggregateFunction (char * output, struct DB *tables, __attribute__((
             }
         }
 
-        sprintf(output, "%d", sum);
+        fprintf(output, "%d", sum);
 
         return 0;
     }
@@ -266,7 +266,7 @@ int evaluateAggregateFunction (char * output, struct DB *tables, __attribute__((
             }
         }
 
-        sprintf(output, "%d", sum / count);
+        fprintf(output, "%d", sum / count);
 
         return 0;
     }
@@ -281,10 +281,10 @@ int evaluateAggregateFunction (char * output, struct DB *tables, __attribute__((
             // Count up the non-NULL values
             if (getRecordValue(&tables[column->table_id], rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
                 if (have_prev == 1) {
-                    sprintf(output, ",");
+                    fprintf(output, ",");
                 }
 
-                sprintf(output, "%s", value);
+                fprintf(output, "%s", value);
 
                 have_prev = 1;
             }
