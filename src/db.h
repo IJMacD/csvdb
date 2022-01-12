@@ -32,7 +32,7 @@ struct VFS {
     int (* findIndex)(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);
     int (* fullTableScan)(struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value);
     int (* fullTableAccess)(struct DB *db, struct RowList * row_list, int limit_value);
-    int (* pkSearch)(struct DB *db, const char * predicate_field, const char *value);
+    int (* indexSearch)(struct DB *db, const char *value, int rowid_field, int mode, int * output_flag);
 };
 
 int openDB (struct DB *db, const char *filename);
@@ -50,7 +50,11 @@ int getRecordValue (struct DB *db, int record_index, int field_index, char *valu
 
 int findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);
 
-int pkSearch(struct DB *db, const char * predicate_field, const char *value);
+int pkSearch(struct DB *db, const char *value);
+
+int indexSearch(struct DB *db, const char *value, int rowid_field, int mode, int * output_flag);
+
+int uniqueIndexSearch(struct DB *db, const char *value, int rowid_field, int * output_flag);
 
 int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value);
 

@@ -87,11 +87,16 @@ int calendar_openDB (struct DB *db, const char *filename) {
     db->record_count = 10000000;
     db->line_indices = NULL;
     db->field_count = sizeof(field_names) / sizeof(field_names[0]);
+    db->data = NULL;
 
     return 0;
 }
 
-void calendar_closeDB (__attribute__((unused)) struct DB *db) {}
+void calendar_closeDB (struct DB *db) {
+    if (db->data != NULL) {
+        free(db->data);
+    }
+}
 
 int calendar_getFieldIndex (__attribute__((unused)) struct DB *db, const char *field) {
     if (strcmp(field, "julian") == 0 || strcmp(field, "rowid") == 0) {
@@ -113,7 +118,13 @@ char *calendar_getFieldName (__attribute__((unused)) struct DB *db, int field_in
     return field_names[field_index];
 }
 
-int calendar_getRecordValue (__attribute__((unused)) struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
+int calendar_getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
+    // Special case for an "index"
+    if (db->field_count == 2 && field_index == 1) {
+        // indexRangeScan() thinks it's dealing with an index DB, just return the rowid
+        return snprintf(value, value_max_length, "%d", record_index);
+    }
+
     // julian/rowid
     if (field_index == COL_JULIAN || field_index == FIELD_ROW_INDEX) {
         return snprintf(value, value_max_length, "%d", record_index);
@@ -297,18 +308,32 @@ int calendar_getRecordValue (__attribute__((unused)) struct DB *db, int record_i
 // All queries go through fullTableScan but it's useful to indicate to the planner that julian and date are unique
 int calendar_findIndex(struct DB *db, __attribute__((unused)) const char *table_name, const char *index_name, __attribute__((unused)) int index_type_flags) {
     if (strcmp(index_name, "julian") == 0) {
-        if (db != NULL) calendar_openDB(db, "CALENDAR");
+        if (db != NULL) {
+            calendar_openDB(db, "CALENDAR");
+            db->field_count = 2;
 
-        return INDEX_UNIQUE;
+            // Store index type in unused data field
+            db->data = malloc(1);
+            db->data[0] = COL_JULIAN;
+        }
+
+        return INDEX_PRIMARY;
     }
 
     if (strcmp(index_name, "date") == 0) {
-        if (db != NULL) calendar_openDB(db, "CALENDAR");
+        if (db != NULL) {
+            calendar_openDB(db, "CALENDAR");
+            db->field_count = 2;
+
+            // Store index type in unused data field
+            db->data = malloc(1);
+            db->data[0] = COL_DATE;
+        }
 
         return INDEX_UNIQUE;
     }
 
-    return 0;
+    return INDEX_NONE;
 }
 
 int calendar_fullTableScan (struct DB *db, struct RowList *row_list, struct Predicate *predicates, int predicate_count, int limit_value) {
@@ -544,20 +569,34 @@ static int calendar_evaluateNode(struct DB *db, struct ColumnNode *column, int r
 }
 
 /**
- * Calendar can do super efficient PK searches
+ * Calendar can do super efficient index searches
  */
-int calendar_pkSearch(__attribute__((unused)) struct DB *db, const char * predicate_field, const char *value) {
-    if (strcmp(predicate_field, "julian") == 0) {
+int calendar_indexSearch(struct DB *db, const char *value,  int rowid_field,  __attribute__((unused)) int mode, int * output_flag){
+    if (db->field_count == 2) {
+        // Dealing with an "index"
+
+        if (db->data[0] == COL_JULIAN) {
+            *output_flag = RESULT_FOUND;
+            return atol(value);
+        }
+
+        if (db->data[0] == COL_DATE) {
+            struct DateTime dt;
+
+            parseDateTime(value, &dt);
+
+            *output_flag = RESULT_FOUND;
+            return datetimeGetJulian(&dt);
+        }
+
+        return RESULT_NO_ROWS;
+    }
+
+    if (rowid_field == -1){
+        // A "Primary key" search with a julian value
+        *output_flag = RESULT_FOUND;
         return atol(value);
     }
 
-    if (strcmp(predicate_field, "date") == 0) {
-        struct DateTime dt;
-
-        parseDateTime(value, &dt);
-
-        return datetimeGetJulian(&dt);
-    }
-
-    return -1;
+    return RESULT_NO_INDEX;
 }

@@ -102,7 +102,7 @@ int explain_select_query (
                 strcpy(table, q->tables[table_id].name);
             }
         }
-        else if (s.type == PLAN_PK_UNIQUE) {
+        else if (s.type == PLAN_PK) {
             operation = "PRIMARY KEY UNIQUE";
             strcpy(table, q->tables[join_count].name);
             rows = 1;
@@ -114,11 +114,34 @@ int explain_select_query (
             rows = row_estimate / 2;
             cost = rows;
         }
-        else if (s.type == PLAN_INDEX_UNIQUE) {
+        else if (s.type == PLAN_UNIQUE) {
             operation = "INDEX UNIQUE";
             strcpy(table, q->tables[join_count].name);
             rows = 1;
             cost = log_rows;
+        }
+        else if (s.type == PLAN_UNIQUE_RANGE) {
+            operation = "INDEX UNIQUE RANGE";
+            strcpy(table, q->tables[join_count].name);
+            if (s.predicate_count > 0) {
+                if (s.limit >= 0) {
+                    rows = (s.limit < row_estimate) ? s.limit : row_estimate;
+                    cost = rows;
+                }
+                else if (s.predicates[0].op == OPERATOR_EQ) {
+                    rows = row_estimate / 1000;
+                    cost = log_rows * 2;
+                } else if (s.predicates[0].op == OPERATOR_UN) {
+                    rows = row_estimate;
+                    cost = rows;
+                } else {
+                    rows = row_estimate / 2;
+                    cost = rows;
+                }
+            } else {
+                rows = row_estimate;
+                cost = rows;
+            }
         }
         else if (s.type == PLAN_INDEX_RANGE) {
             operation = "INDEX RANGE";

@@ -8,6 +8,7 @@
 #include "db-sequence.h"
 #include "db-sample.h"
 #include "limits.h"
+#include "indices.h"
 #include "function.h"
 #include "query.h"
 #include "util.h"
@@ -35,7 +36,7 @@ struct VFS VFS_Table[10] = {
         .getRecordValue = &calendar_getRecordValue,
         .findIndex = &calendar_findIndex,
         .fullTableScan = &calendar_fullTableScan,
-        .pkSearch = &calendar_pkSearch,
+        .indexSearch = &calendar_indexSearch,
     },
     {
         .openDB = &csvMem_openDB,
@@ -228,69 +229,100 @@ int fullTableAccess (struct DB *db, struct RowList * row_list, int limit_value) 
     return l;
 }
 
+/**
+ * @brief Special case of uniqueIndexSearch where:
+ *      index rowid = table rowid
+ *
+ * @return rowid, or RESULT_NO_ROWS (-1) if not found
+ */
+int pkSearch (struct DB *db, const char * value) {
+    int output_flag;
+
+    int rowid = uniqueIndexSearch(db, value, -1, &output_flag);
+
+    if (output_flag) {
+        return RESULT_NO_ROWS;
+    }
+
+    return rowid;
+}
 
 /**
- * @returns 0.. rowid of match; -1 if not found; -3 if below minimum; -4 if above maximum
+ * @brief (Binary) Search a sorted table for a value and return associated rowid
+ *
+ * TODO: Just ignores rowid_field at the moment and assumes -1
+ *
+ * @param db must be an index with sorted column 0
+ * @param value value to search for in cilumn 0 of db
+ * @param rowid_field which column contains the rowid? (-1 means index rowid is returned)
+ * @param mode 0: index is unique; 1: return first matching rowid; 2: return last matching rowid
+ * @param output_flag 0: value found; RESULT_BETWEEN: value not found but would appear just before returned rowid; RESULT_BELOW_MIN: value below minimum; RESULT_ABOVE_MAX: value above maximum
+ *
+ * @returns rowid of match (or closest match); or RESULT_NO_ROWS (-1) if out of bounds;
  */
-int pkSearch(struct DB *db, const char * predicate_field, const char *value) {
+int indexSearch (struct DB *db, const char *value, int rowid_field, int mode, int * output_flag) {
     if (db->vfs == 0) {
-        fprintf(stderr, "Trying to PK search unititialised DB\n");
+        fprintf(stderr, "Trying to perform index search on unititialised DB\n");
         exit(-1);
     }
 
-    int (*vfs_pkSearch) (struct DB *, const char *, const char *) = VFS_Table[db->vfs].pkSearch;
+    int (*vfs_indexSearch) (struct DB *, const char *, int, int, int *) = VFS_Table[db->vfs].indexSearch;
 
-    if (vfs_pkSearch != NULL) {
-        return vfs_pkSearch(db, predicate_field, value);
+    if (vfs_indexSearch != NULL) {
+        return vfs_indexSearch(db, value, rowid_field, mode, output_flag);
     }
 
     // VFS-Agnostic implementation
 
-    int pk_index = getFieldIndex(db, predicate_field);
+    // By definition
+    int index_column = 0;
 
     int index_a = 0;
     int index_b = db->record_count - 1;
     int index_match = -1;
     int numeric_mode = is_numeric(value);
 
+    // Just in case we're in numeric mode
     long search_value = atol(value);
 
     char val[VALUE_MAX_LENGTH] = {0};
 
     // Check boundary cases before commencing search
 
-    // Check lower boundary
-    getRecordValue(db, index_a, pk_index, val, VALUE_MAX_LENGTH);
+    // Check lower boundary (index_a = 0)
+    getRecordValue(db, index_a, index_column, val, VALUE_MAX_LENGTH);
     int res = compare(numeric_mode, value, search_value, val);
 
     // Search value is below minimum
     if (res < 0) {
-        return -3;
+        *output_flag = RESULT_BELOW_MIN;
+        return RESULT_NO_ROWS;
     }
 
     // Found a match at lower boundary
-    if (res == 0)
-        index_match = index_a;
-
+    if (res == 0) {
+        index_match = 0;
+    }
     else {
-        // Check upper boundary
-        getRecordValue(db, index_b, pk_index, val, VALUE_MAX_LENGTH);
+        // Check upper boundary (index_b = record_count - 1)
+        getRecordValue(db, index_b, index_column, val, VALUE_MAX_LENGTH);
         res = compare(numeric_mode, value, search_value, val);
 
         // Search value is above maximum
         if (res > 0) {
-            return -4;
+            *output_flag = RESULT_ABOVE_MAX;
+            return RESULT_NO_ROWS;
         }
 
         // Found a match at upper boundary
-        if (res == 0)
+        if (res == 0) {
             index_match = index_b;
-
-        // Iterate as a binary search
+        }
+        // Perform binary search
         else while (index_a < index_b - 1) {
             int index_curr = (index_a + index_b) / 2;
 
-            getRecordValue(db, index_curr, pk_index, val, VALUE_MAX_LENGTH);
+            getRecordValue(db, index_curr, index_column, val, VALUE_MAX_LENGTH);
             res = compare(numeric_mode, value, search_value, val);
 
             if (res == 0) {
@@ -308,11 +340,66 @@ int pkSearch(struct DB *db, const char * predicate_field, const char *value) {
                 index_b = index_curr;
             }
         }
+
+        // We didn't find the value but it should be inbetween index_a and index_b
+        if (index_match < 0) {
+            *output_flag = RESULT_BETWEEN;
+            return index_b;
+        }
     }
 
-    if (index_match < 0) {
-        return -1;
+    // If we're down here we must have found the value in the index
+
+    // We've been told index is unique so we're done
+    if (mode == 0) {
+        *output_flag = RESULT_FOUND;
+        return index_match;
     }
 
-    return index_match;
+    // Should we walk backwards to first instance of value?
+    if (mode == 1) {
+        // Backtrack until we find the first value
+        while (index_match >= 0) {
+            getRecordValue(db, --index_match, 0, val, VALUE_MAX_LENGTH);
+
+            if (strcmp(val, value) != 0) {
+                break;
+            }
+        }
+
+        *output_flag = RESULT_FOUND;
+        return index_match + 1;
+    }
+
+    // Should we walk forwards to last instance of value?
+    if (mode == 2) {
+        // Forward-track until we find the last value
+        while (index_match < db->record_count) {
+            getRecordValue(db, ++index_match, 0, val, VALUE_MAX_LENGTH);
+
+            if (strcmp(val, value) != 0) {
+                break;
+            }
+        }
+
+        *output_flag = RESULT_FOUND;
+        return index_match - 1;
+    }
+
+    fprintf(stderr, "Errr, I don't think we should be here\n");
+    return -1;
+}
+
+
+/**
+ * @brief Search a sorted table for a value and return associated rowid
+ *
+ * @param db must be an index with sorted column 0
+ * @param value value to search for in column 0 of db
+ * @param rowid_field which column contains the rowid? (-1 means index rowid is returned)
+ * @param output_flag 0: value found; 1: value not found but just before returned rowid; 2: value below minimum; 3: value above maximum
+ * @returns 0.. rowid of match; -1 if not found;
+ */
+int uniqueIndexSearch (struct DB *db, const char * value, int rowid_field, int * output_flag) {
+    return indexSearch(db, value, rowid_field, 0, output_flag);
 }

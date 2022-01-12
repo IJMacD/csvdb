@@ -177,13 +177,13 @@ int basic_select_query (
     for (int i = 0; i < plan->step_count; i++) {
         struct PlanStep s = plan->steps[i];
 
-        if (s.type == PLAN_PK_UNIQUE || s.type == PLAN_PK_RANGE) {
+        if (s.type == PLAN_PK || s.type == PLAN_PK_RANGE) {
             // First table
             struct Table * table = q->tables;
             struct Predicate p = s.predicates[0];
-            primaryKeyScan(table->db, p.left.text, p.op, p.right.text, &row_list, s.limit);
+            indexPrimaryScan(table->db, p.op, p.right.text, &row_list, s.limit);
         }
-        else if (s.type == PLAN_INDEX_UNIQUE) {
+        else if (s.type == PLAN_UNIQUE || s.type == PLAN_UNIQUE_RANGE) {
             // First table
             struct Table * table = q->tables;
             struct Predicate p = s.predicates[0];
@@ -192,7 +192,7 @@ int basic_select_query (
                 fprintf(stderr, "Unable to find unique index on column '%s' on table '%s'\n", p.left.text, table->name);
                 exit(-1);
             }
-            indexUniqueScan(&index_db, p.left.text, p.op, p.right.text, &row_list, s.limit);
+            indexUniqueScan(&index_db, /* rowid_col */ 1, p.op, p.right.text, &row_list, s.limit);
         }
         else if (s.type == PLAN_INDEX_RANGE) {
             // First table
@@ -203,7 +203,7 @@ int basic_select_query (
                 fprintf(stderr, "Unable to find index on column '%s' on table '%s'\n", p.left.text, table->name);
                 exit(-1);
             }
-            indexRangeScan(&index_db, p.left.text, p.op, p.right.text, &row_list, s.limit);
+            indexScan(&index_db, /* rowid_col */ 1, p.op, p.right.text, &row_list, s.limit);
         }
         else if (s.type == PLAN_TABLE_ACCESS_FULL) {
             // First table
@@ -395,9 +395,8 @@ int basic_select_query (
                 // Fill in value as constant from outer tables
                 evaluateNode(q, &row_list, i, outer, value, FIELD_MAX_LENGTH);
 
-                char * field = inner->text;
-
-                int rowid = pkSearch(&index_db, field, value);
+                // Hang on... won't this only work for calendar?
+                int rowid = pkSearch(&index_db, value);
 
                 if (rowid != RESULT_NO_ROWS) {
                     tmp_list.row_count = 0;

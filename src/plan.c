@@ -46,7 +46,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
         int type;
         // WARNING: Assumes PK is first predicate
         if (q->predicates[0].op == OPERATOR_EQ) {
-            type = PLAN_PK_UNIQUE;
+            type = PLAN_PK;
         } else {
             type = PLAN_PK_RANGE;
         }
@@ -78,14 +78,28 @@ int makePlan (struct Query *q, struct Plan *plan) {
             }
 
             /*******************
-             * UNIQUE INDEX SCAN
+             * INDEX SCAN
              *******************/
-            // Try to find a unique index
-            if (p->op != OPERATOR_LIKE && p->left.function == FUNC_UNITY && findIndex(NULL, table.name, p->left.text, INDEX_UNIQUE) == INDEX_UNIQUE) {
+
+            // Try to find any index
+            int find_result = findIndex(NULL, table.name, p->left.text, INDEX_ANY);
+
+            if (p->op != OPERATOR_LIKE && p->left.function == FUNC_UNITY && find_result > 0) {
 
                 int type;
-                if (p->op == OPERATOR_EQ) {
-                    type = PLAN_INDEX_UNIQUE;
+
+                if (find_result == INDEX_PRIMARY) {
+                    if (p->op == OPERATOR_EQ) {
+                        type = PLAN_PK;
+                    } else {
+                        type = PLAN_PK_RANGE;
+                    }
+                } else if (find_result == INDEX_UNIQUE) {
+                    if (p->op == OPERATOR_EQ) {
+                        type = PLAN_UNIQUE;
+                    } else {
+                        type = PLAN_UNIQUE_RANGE;
+                    }
                 } else {
                     type = PLAN_INDEX_RANGE;
                 }
@@ -98,35 +112,16 @@ int makePlan (struct Query *q, struct Plan *plan) {
                     addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + 1, q->predicate_count - 1);
                 }
 
-                // Sort is never required if the index is INDEX_UNIQUE
-                if (type == PLAN_INDEX_RANGE && (q->flags & FLAG_ORDER) && strcmp(p->left.text, q->order_field) == 0) {
-                    // We're sorting on the same column as we've just traversed in the index
-                    // so a sort is not necessary but we might need to reverse
-                    if (q->order_direction == ORDER_DESC && !(q->flags & FLAG_GROUP)) {
-                        addStep(plan, PLAN_REVERSE);
-                    }
-                } else {
-                    addOrderStepIfRequired(plan, q);
-                }
-
-                applyLimitOptimisation(plan, q);
-            }
-            /*******************
-             * INDEX RANGE SCAN
-             *******************/
-            else if (p->op != OPERATOR_LIKE && p->left.function == FUNC_UNITY && findIndex(NULL, table.name, p->left.text, INDEX_ANY)) {
-                addStepWithPredicate(plan, PLAN_INDEX_RANGE, p);
-
-                addJoinStepsIfRequired(plan, q);
-
-                if (q->predicate_count > 1) {
-                    addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + 1, q->predicate_count - 1);
-                }
-
+                // Follow our own logic to add an order step
+                // We can avoid it if we're just going to sort on the same column we've just scanned
                 if ((q->flags & FLAG_ORDER) && strcmp(p->left.text, q->order_field) == 0) {
-                    // We're sorting on the same column as we've just traversed in the index
-                    // so a sort is not necessary but we might need to reverse
-                    if (q->order_direction == ORDER_DESC && !(q->flags & FLAG_GROUP)) {
+                    // So a sort is not necessary but we might need to reverse
+
+                    if (type == PLAN_PK || type == PLAN_UNIQUE) {
+                        // Reverse is never required if the plan is PLAN_PK or PLAN_UNIQUE
+                    } else if (q->flags & FLAG_GROUP){
+                        // Reverse is not required if we're grouping
+                    } else if (q->order_direction == ORDER_DESC) {
                         addStep(plan, PLAN_REVERSE);
                     }
                 } else {
@@ -147,7 +142,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
                 struct Predicate *order_p = malloc(sizeof(*order_p));
                 strcpy(order_p->left.text, q->order_field);
-                order_p->op = 0;
+                // OPERATOR_ALWAYS on index range means the entire range;
+                order_p->op = OPERATOR_ALWAYS;
                 order_p->right.text[0] = '\0';
 
                 // Add step for Sorted index access
@@ -231,7 +227,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
             struct Predicate *order_p = malloc(sizeof(*order_p));
             strcpy(order_p->left.text, q->order_field);
-            order_p->op = OPERATOR_UN;
+            // OPERATOR_ALWAYS means scan full index
+            order_p->op = OPERATOR_ALWAYS;
             order_p->right.text[0] = '\0';
 
             addStepWithPredicate(plan, PLAN_INDEX_RANGE, order_p);
@@ -382,14 +379,25 @@ void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
             {
                 addStepWithPredicate(plan, PLAN_CONSTANT_JOIN, join);
             }
-            else if (join->op == OPERATOR_EQ && (
-                findIndex(NULL, table->name, join->left.text, INDEX_UNIQUE) == INDEX_UNIQUE ||
-                findIndex(NULL, table->name, join->right.text, INDEX_UNIQUE) == INDEX_UNIQUE)
-            ) {
-                addStepWithPredicate(plan, PLAN_UNIQUE_JOIN, join);
-            }
             else {
-                addStepWithPredicate(plan, PLAN_INNER_JOIN, join);
+
+                if (join->op == OPERATOR_EQ) {
+                    int join_result_left = findIndex(NULL, table->name, join->left.text, INDEX_UNIQUE);
+                    int join_result_right = findIndex(NULL, table->name, join->right.text, INDEX_UNIQUE);
+
+                    if (
+                        join_result_left == INDEX_UNIQUE || join_result_left == INDEX_PRIMARY ||
+                        join_result_right == INDEX_UNIQUE || join_result_right == INDEX_PRIMARY
+                    ) {
+                        addStepWithPredicate(plan, PLAN_UNIQUE_JOIN, join);
+                    }
+                    else {
+                        addStepWithPredicate(plan, PLAN_INNER_JOIN, join);
+                    }
+                }
+                else {
+                    addStepWithPredicate(plan, PLAN_INNER_JOIN, join);
+                }
             }
         }
     }

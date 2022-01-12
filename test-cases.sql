@@ -38,3 +38,4 @@ FROM suits AS s1, suits AS s2 ON s1.name < s2.name ORDER BY name
 FROM suits, ranks WHERE value > 10 ORDER BY name SELECT ranks.name, 'of', suits.name
 SELECT TODAY(), EXTRACT(YEARDAY FROM TODAY())
 FROM CALENDAR WHERE date = CURRENT_DATE SELECT julian, date, yeardayString, weekdayString
+FROM suits SELECT LISTAGG(name)

@@ -6,10 +6,11 @@
 
 #define PLAN_TABLE_ACCESS_FULL      0
 #define PLAN_TABLE_ACCESS_ROWID     1
-#define PLAN_PK_UNIQUE              2
+#define PLAN_PK                     2
 #define PLAN_PK_RANGE               3
-#define PLAN_INDEX_UNIQUE           4
-#define PLAN_INDEX_RANGE            5
+#define PLAN_UNIQUE                 4
+#define PLAN_UNIQUE_RANGE           5
+#define PLAN_INDEX_RANGE            6
 
 #define PLAN_CROSS_JOIN             10
 #define PLAN_CONSTANT_JOIN          11

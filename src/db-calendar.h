@@ -20,4 +20,4 @@ int calendar_findIndex(struct DB *db, const char *table_name, const char *index_
 
 int calendar_fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value);
 
-int calendar_pkSearch(struct DB *db, const char * predicate_field, const char *value);
+int calendar_indexSearch(struct DB *db, const char *value, int rowid_field, int mode, int * output_flag);
