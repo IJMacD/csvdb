@@ -123,6 +123,9 @@ int create_index_query (const char * query) {
 
 int create_index (const char *index_name, const char *table_name, const char *index_field, int unique_flag) {
     struct DB db;
+    struct Table table;
+    table.db = &db;
+    strcpy(table.name, table_name);
 
     if (openDB(&db, table_name) != 0) {
         fprintf(stderr, "File not found: '%s'\n", table_name);
@@ -169,7 +172,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
     copyRowList(&row_list, &tmp);
 
     // Output functions assume array of DBs
-    printHeaderLine(f, &db, 1, columns, 2, OUTPUT_FORMAT_COMMA);
+    printHeaderLine(f, &table, 1, columns, 2, OUTPUT_FORMAT_COMMA);
 
     char values[2][VALUE_MAX_LENGTH];
 
@@ -187,7 +190,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
             }
         }
 
-        printResultLine(f, &db, 1, columns, 2, i, &row_list, OUTPUT_FORMAT_COMMA);
+        printResultLine(f, &table, 1, columns, 2, i, &row_list, OUTPUT_FORMAT_COMMA);
     }
 
     free(row_list.row_ids);

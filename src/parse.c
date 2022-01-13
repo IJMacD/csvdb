@@ -127,6 +127,8 @@ int parseQuery (struct Query *q, const char *query) {
                     index += 3;
 
                     getQuotedToken(query, &index, table->alias, FIELD_MAX_LENGTH);
+                } else {
+                    strcpy(table->alias, table->name);
                 }
 
                 skipWhitespace(query, &index);

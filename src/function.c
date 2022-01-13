@@ -168,7 +168,7 @@ int evaluateFunction(char * output, struct DB *db, struct ColumnNode *column, in
     return 0;
 }
 
-int evaluateAggregateFunction (FILE * output, struct DB *tables, __attribute__((unused)) int table_count, struct ColumnNode *column, struct RowList * row_list) {
+int evaluateAggregateFunction (FILE * output, struct Table *tables, __attribute__((unused)) int table_count, struct ColumnNode *column, struct RowList * row_list) {
     char value[VALUE_MAX_LENGTH];
 
     if ((column->function & MASK_FUNC_FAMILY) != FUNC_FAM_AGG) {
@@ -182,7 +182,7 @@ int evaluateAggregateFunction (FILE * output, struct DB *tables, __attribute__((
             int rowid = getRowID(row_list, column->table_id, i);
 
             // Count up the non-NULL values
-            if (getRecordValue(&tables[column->table_id], rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
+            if (getRecordValue(tables[column->table_id].db, rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
                 count++;
             }
         }
@@ -199,7 +199,7 @@ int evaluateAggregateFunction (FILE * output, struct DB *tables, __attribute__((
             int rowid = getRowID(row_list, column->table_id, i);
 
             // Only consider the non-NULL values
-            if (getRecordValue(&tables[column->table_id], rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
+            if (getRecordValue(tables[column->table_id].db, rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
                 int v = atoi(value);
 
                 if (v < min) min = v;
@@ -220,7 +220,7 @@ int evaluateAggregateFunction (FILE * output, struct DB *tables, __attribute__((
             int rowid = getRowID(row_list, column->table_id, i);
 
             // Only consider the non-NULL values
-            if (getRecordValue(&tables[column->table_id], rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
+            if (getRecordValue(tables[column->table_id].db, rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
                 int v = atoi(value);
 
                 if (v > max) max = v;
@@ -241,7 +241,7 @@ int evaluateAggregateFunction (FILE * output, struct DB *tables, __attribute__((
             int rowid = getRowID(row_list, column->table_id, i);
 
             // Count up the non-NULL values
-            if (getRecordValue(&tables[column->table_id], rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
+            if (getRecordValue(tables[column->table_id].db, rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
                 sum += atoi(value);
             }
         }
@@ -259,7 +259,7 @@ int evaluateAggregateFunction (FILE * output, struct DB *tables, __attribute__((
             int rowid = getRowID(row_list, column->table_id, i);
 
             // Count up the non-NULL values
-            if (getRecordValue(&tables[column->table_id], rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
+            if (getRecordValue(tables[column->table_id].db, rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
                 count++;
 
                 sum += atoi(value);
@@ -279,7 +279,7 @@ int evaluateAggregateFunction (FILE * output, struct DB *tables, __attribute__((
             int rowid = getRowID(row_list, column->table_id, i);
 
             // Count up the non-NULL values
-            if (getRecordValue(&tables[column->table_id], rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
+            if (getRecordValue(tables[column->table_id].db, rowid, column->field, value, VALUE_MAX_LENGTH) > 0) {
                 if (have_prev == 1) {
                     fprintf(output, ",");
                 }

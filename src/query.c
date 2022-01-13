@@ -96,6 +96,7 @@ int select_query (const char *query, int output_flags, FILE * output) {
      * Begin Query processing
      *************************/
 
+    // Create array on stack to hold DB structs
     struct DB dbs[TABLE_MAX_COUNT];
 
     // Populate Tables
@@ -140,21 +141,13 @@ int basic_select_query (
     int output_flags,
     FILE * output
 ) {
-    struct DB *dbs = NULL;
-
-    // We know that the dbs storage is on the stack and starts at the db
-    // pointed to by the first table.
-    if (q->table_count > 0) {
-        dbs = q->tables[0].db;
-    }
-
     /*************************
      * Output headers
      ************************/
     printPreamble(output, NULL, q->columns, q->column_count, output_flags);
 
     if (output_flags & OUTPUT_OPTION_HEADERS) {
-        printHeaderLine(output, dbs, q->table_count, q->columns, q->column_count, output_flags);
+        printHeaderLine(output, q->tables, q->table_count, q->columns, q->column_count, output_flags);
     }
 
     // struct ResultSet results;
@@ -458,10 +451,10 @@ int basic_select_query (
 
             // Aggregate functions will print just one row
             if (q->flags & FLAG_GROUP) {
-                printResultLine(output, dbs, q->table_count, q->columns, q->column_count, row_list.row_count > 0 ? q->offset_value : RESULT_NO_ROWS, &row_list, output_flags);
+                printResultLine(output, q->tables, q->table_count, q->columns, q->column_count, row_list.row_count > 0 ? q->offset_value : RESULT_NO_ROWS, &row_list, output_flags);
             }
             else for (int i = q->offset_value; i < row_list.row_count; i++) {
-                printResultLine(output, dbs, q->table_count, q->columns, q->column_count, i, &row_list, output_flags);
+                printResultLine(output, q->tables, q->table_count, q->columns, q->column_count, i, &row_list, output_flags);
             }
         }
         else {
