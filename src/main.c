@@ -35,43 +35,94 @@ void printUsage (const char* name) {
 int main (int argc, char * argv[]) {
     global_argv = argv;
 
-    char buffer[1024];
-    int flags = 0;
-
-    int arg = 1;
-
-    FILE * output = stdout;
-
     srand((unsigned) time(NULL) * getpid());
 
-    if (argc > arg && (strcmp(argv[arg], "-h") == 0 || strcmp(argv[arg], "--help") == 0)) {
-        printUsage(argv[0]);
-        return 0;
-    }
+    int flags = 0;
 
-    if (argc > arg && (strcmp(argv[arg], "-E") == 0 || strcmp(argv[arg], "--explain") == 0)) {
-        flags |= FLAG_EXPLAIN;
-        arg++;
-    }
+    FILE * output = stdout;
+    const char * format_val = NULL;
+    const char * output_name = NULL;
+    char buffer[1024] = {0};
 
-    if (argc > arg && (strcmp(argv[arg], "-H") == 0 || strcmp(argv[arg], "--headers") == 0)) {
-        flags |= OUTPUT_OPTION_HEADERS;
-        arg++;
-    }
+    int argi = 1;
 
-    char * format_val = NULL;
+    while (argi < argc && argv[argi][0] == '-') {
+        const char *arg = argv[argi];
 
-    if (argc > arg && strcmp(argv[arg], "-F") == 0) {
-        arg++;
-
-        if (argc > arg) {
-            format_val = argv[arg];
-            arg++;
+        if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
+            printUsage(argv[0]);
+            return 0;
         }
-    }
-    else if (argc > arg && strncmp(argv[arg], "--format=", 9) == 0) {
-        format_val = argv[arg] + 9;
-        arg++;
+
+        if (strcmp(arg, "-E") == 0 || strcmp(arg, "--explain") == 0) {
+            flags |= FLAG_EXPLAIN;
+        }
+        else if ((strcmp(arg, "-H") == 0 || strcmp(arg, "--headers") == 0)) {
+            flags |= OUTPUT_OPTION_HEADERS;
+        }
+        else if (strcmp(arg, "-F") == 0) {
+            if (argi + 1 >= argc) {
+                fprintf(stderr, "Expected format to be specified after -F\n");
+                printUsage(argv[0]);
+                exit(-1);
+            }
+
+            format_val = argv[++argi];
+        }
+        else if (strncmp(arg, "--format=", 9) == 0) {
+            format_val = arg + 9;
+        }
+        else if (strcmp(arg, "-o") == 0) {
+            if (argi + 1 >= argc) {
+                fprintf(stderr, "Expected output name to be specified after -o\n");
+                printUsage(argv[0]);
+                exit(-1);
+            }
+
+            output_name = argv[++argi];
+        }
+        else if (strncmp(arg, "--output=", 9) == 0) {
+            output_name = arg + 9;
+        }
+        else if (strcmp(arg, "-f") == 0) {
+            if (argi + 1 >= argc) {
+                fprintf(stderr, "Expected file to be specified after -f\n");
+                printUsage(argv[0]);
+                exit(-1);
+            }
+
+            const char *filename = argv[++argi];
+
+            FILE *f;
+
+            if(strcmp(filename, "-") == 0) {
+                f = stdin;
+            }
+            else {
+                f = fopen(filename, "r");
+
+                if (!f) {
+                    fprintf(stderr, "Couldn't open file '%s'\n", filename);
+                    return -1;
+                }
+            }
+
+            size_t count = fread(buffer, 1, 1024, f);
+
+            if (count == 0) {
+                fprintf(stderr, "File '%s' was empty\n", filename);
+                return -1;
+            }
+
+            buffer[count] = '\0';
+        }
+        else {
+            fprintf(stderr, "Unknown option %s\n", arg);
+            printUsage(argv[0]);
+            return -1;
+        }
+
+        argi++;
     }
 
     if (format_val != NULL) {
@@ -93,23 +144,7 @@ int main (int argc, char * argv[]) {
         }
     }
 
-    char * output_name = NULL;
-
-    if (argc > arg && strcmp(argv[arg], "-o") == 0) {
-        arg++;
-
-        if (argc > arg) {
-            output_name = argv[arg];
-            arg++;
-        }
-    }
-    else if (argc > arg && strncmp(argv[arg], "--output=", 9) == 0) {
-        output_name = argv[arg] + 9;
-        arg++;
-    }
-
     if (output_name != NULL) {
-
         if(strcmp(output_name, "-") == 0) {
             output = stdout;
         }
@@ -123,54 +158,19 @@ int main (int argc, char * argv[]) {
         }
     }
 
-    if (argc > arg && strcmp(argv[arg], "-f") == 0) {
-        if (argc > arg + 1) {
-            FILE *f;
-
-            if(strcmp(argv[arg + 1], "-") == 0) {
-                f = stdin;
-            }
-            else {
-                f = fopen(argv[arg + 1], "r");
-
-                if (!f) {
-                    fprintf(stderr, "Couldn't open file '%s'\n", argv[arg + 1]);
-                    return -1;
-                }
-            }
-
-            size_t count = fread(buffer, 1, 1024, f);
-
-            if (count > 0) {
-                buffer[count] = '\0';
-                return query(buffer, flags, output);
-            }
-
-            fprintf(stderr, "File '%s' was empty\n", argv[2]);
-            return -1;
-        }
-
-        fprintf(stderr, "Expecting file to be specified\n");
-        printUsage(argv[0]);
-        return -1;
+    if (buffer[0] != '\0') {
+        return query(buffer, flags, output);
     }
 
-    if (argc > arg) {
-        if (argv[arg][0] == '-') {
-            fprintf(stderr, "Unknown option %s\n", argv[arg]);
-            printUsage(argv[0]);
-            return -1;
-        }
-
-        return query(argv[arg], flags, output);
+    if (argi < argc) {
+        return query(argv[argi], flags, output);
     }
 
     // If we're here it means we don't yet have a query.
     // If stdin is something more than a tty (i.e pipe or redirected file)
     // then we will assume the following query:
     if (!isatty(fileno(stdin))) {
-        query("SELECT * FROM stdin", flags, output);
-        return 0;
+        return query("SELECT * FROM stdin", flags, output);
     }
 
     printUsage(argv[0]);
