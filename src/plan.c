@@ -38,79 +38,70 @@ int makePlan (struct Query *q, struct Plan *plan) {
         return plan->step_count;
     }
 
-    if (q->flags & FLAG_PRIMARY_KEY_SEARCH) {
-        /******************
-         * PRIMARY KEY
-         *****************/
-
-        int type;
-        // WARNING: Assumes PK is first predicate
-        if (q->predicates[0].op == OPERATOR_EQ) {
-            type = PLAN_PK;
-        } else {
-            type = PLAN_PK_RANGE;
-        }
-
-        addStepWithPredicate(plan, type, q->predicates + 0);
-
-        addJoinStepsIfRequired(plan, q);
-
-        if (q->predicate_count > 1) {
-            addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + 1, q->predicate_count - 1);
-        }
-
-        // Sort is never required if the index is PK_UNIQUE
-        if (type == PLAN_PK_RANGE) {
-            addOrderStepIfRequired(plan, q);
-        }
-    }
-    else if (q->flags & FLAG_HAVE_PREDICATE) {
+    if (q->predicate_count > 0) {
 
         // Try to find a predicate on the first table
         int predicatesOnFirstTable = optimisePredicates(q, q->predicates, q->predicate_count);
 
+        // First table
         struct Table table = q->tables[0];
 
+        // First predicate
         struct Predicate *p = &q->predicates[0];
 
-        if (predicatesOnFirstTable > 0) {
+        if (predicatesOnFirstTable > 0 && p->op != OPERATOR_LIKE) {
 
-            // Remove qualified name so indexes can be searched etc.
-            int dot_index = str_find_index(p->left.text, '.');
-            if (dot_index >= 0) {
-                char value[FIELD_MAX_LENGTH];
-                strcpy(value, p->left.text);
-                strcpy(p->left.text, value + dot_index + 1);
-            }
+            int step_type = 0;
 
-            /*******************
-             * INDEX SCAN
-             *******************/
+            if (p->left.function == FUNC_PK) {
 
-            // Try to find any index
-            int find_result = findIndex(NULL, table.name, p->left.text, INDEX_ANY);
-
-            if (p->op != OPERATOR_LIKE && p->left.function == FUNC_UNITY && find_result > 0) {
-
-                int type;
-
-                if (find_result == INDEX_PRIMARY) {
-                    if (p->op == OPERATOR_EQ) {
-                        type = PLAN_PK;
-                    } else {
-                        type = PLAN_PK_RANGE;
-                    }
-                } else if (find_result == INDEX_UNIQUE) {
-                    if (p->op == OPERATOR_EQ) {
-                        type = PLAN_UNIQUE;
-                    } else {
-                        type = PLAN_UNIQUE_RANGE;
-                    }
+                if (p->op == OPERATOR_EQ) {
+                    step_type = PLAN_PK;
                 } else {
-                    type = PLAN_INDEX_RANGE;
+                    step_type = PLAN_PK_RANGE;
                 }
 
-                addStepWithPredicate(plan, type, p);
+            } else if (p->left.function == FUNC_UNITY) {
+
+                // Remove qualified name so indexes can be searched etc.
+                int dot_index = str_find_index(p->left.text, '.');
+                if (dot_index >= 0) {
+                    char value[FIELD_MAX_LENGTH];
+                    strcpy(value, p->left.text);
+                    strcpy(p->left.text, value + dot_index + 1);
+                }
+
+                /*******************
+                 * INDEX SCAN
+                 *******************/
+
+                // Try to find any index
+                int find_result = findIndex(NULL, table.name, p->left.text, INDEX_ANY);
+
+                if (find_result) {
+
+                    if (find_result == INDEX_PRIMARY) {
+                        if (p->op == OPERATOR_EQ) {
+                            step_type = PLAN_PK;
+                        } else {
+                            step_type = PLAN_PK_RANGE;
+                        }
+                    } else if (find_result == INDEX_UNIQUE) {
+                        if (p->op == OPERATOR_EQ) {
+                            step_type = PLAN_UNIQUE;
+                        } else {
+                            step_type = PLAN_UNIQUE_RANGE;
+                        }
+                    } else {
+                        step_type = PLAN_INDEX_RANGE;
+                    }
+                }
+            }
+
+            // If plan_type is set, that means we have an index
+            if (step_type) {
+
+                addStepWithPredicate(plan, step_type, p);
 
                 addJoinStepsIfRequired(plan, q);
 
@@ -121,9 +112,10 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 // Follow our own logic to add an order step
                 // We can avoid it if we're just going to sort on the same column we've just scanned
                 if ((q->flags & FLAG_ORDER) && strcmp(p->left.text, q->order_field) == 0) {
-                    // So a sort is not necessary but we might need to reverse
 
-                    if (type == PLAN_PK || type == PLAN_UNIQUE) {
+                    // So a sort is not necessary but we might still need to reverse
+
+                    if (step_type == PLAN_PK || step_type == PLAN_UNIQUE) {
                         // Reverse is never required if the plan is PLAN_PK or PLAN_UNIQUE
                     } else if (q->flags & FLAG_GROUP){
                         // Reverse is not required if we're grouping
@@ -422,26 +414,31 @@ void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
 static int optimisePredicates (__attribute__((unused)) struct Query *q, struct Predicate * predicates, int count) {
     int chosen_predicate_index = -1;
 
-    // Comment: Only checking left?
-
+    // First Step: We really want a PRIMARY KEY
     for (int i = 0; i < count; i++) {
-        // First check if we've been given an explicit index
-        // If so, we'll have to assume that's on the first table
-        //
-        // Comment: Coult/should this have been filled in earlier?
-        if (strncmp(predicates[i].left.text, "UNIQUE(", 7) == 0 ||
-            strncmp(predicates[i].left.text, "INDEX(", 6) == 0)
-        {
-            predicates[i].left.table_id = 0;
-        }
+        // Swap left and right if necessary
+        normalisePredicate(predicates + i);
 
-        if (predicates[i].left.table_id == 0) {
+        if (predicates[i].left.function == FUNC_PK && predicates[i].left.table_id == 0) {
             chosen_predicate_index = i;
             break;
         }
     }
 
-    // Swap predicates so first one is on first table
+    // If we didn't find a primary key, then move on to the next optimisation step
+    if (chosen_predicate_index < 0) {
+
+        for (int i = 0; i < count; i++) {
+            // Any predicate on the first table is fine
+            // Comment: Only checking left?
+            if (predicates[i].left.table_id == 0) {
+                chosen_predicate_index = i;
+                break;
+            }
+        }
+    }
+
+    // Swap predicates so first predicate is on first table
     if (chosen_predicate_index > 0) {
         struct Predicate tmp;
         memcpy(&tmp, &predicates[0], sizeof(tmp));
@@ -449,6 +446,7 @@ static int optimisePredicates (__attribute__((unused)) struct Query *q, struct P
         memcpy(&predicates[chosen_predicate_index], &tmp, sizeof(tmp));
     }
 
+    // Indicate how many predicates we guarantee are on the first table
     if (chosen_predicate_index >= 0)
         return 1;
 

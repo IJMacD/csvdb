@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "query.h"
 
@@ -28,6 +29,13 @@ int main (int argc, char * argv[]) {
             fprintf(stderr, "Couldn't open '%s'\n", argv[2]);
         }
     }
+
+    #ifdef DETERMINISTIC
+    srand(42);
+    #else
+    srand(time(NULL));
+    #endif
+
 
     char query[64];
     sprintf(query, "FROM SAMPLE LIMIT %d", record_count);

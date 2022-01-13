@@ -202,16 +202,6 @@ int parseQuery (struct Query *q, const char *query) {
                     return result;
                 }
 
-                if (strncmp(p->left.text, "PK(", 3) == 0) {
-                    q->flags |= FLAG_PRIMARY_KEY_SEARCH;
-                    size_t len = strlen(p->left.text);
-                    // remove trailing ')'
-                    for (size_t i = 0; i < len - 4; i++) {
-                        p->left.text[i] = p->left.text[i+3];
-                    }
-                    p->left.text[len - 4] = '\0';
-                }
-
                 // printf("Predicate field: %s\n", predicate_field);
 
                 char op[5];
@@ -383,27 +373,50 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
         // default to first table
         column->table_id = 0;
     }
-    else if (strncmp(column->text, "CHR(", 4) == 0) {
+    else if (strncmp(column->text, "PK(", strlen("PK(")) == 0) {
+        column->function = FUNC_PK;
+
+        parseFunction(query, index, column, strlen("PK"));
+    }
+    else if (strncmp(column->text, "UNIQUE(", strlen("UNIQUE(")) == 0) {
+        column->function = FUNC_UNIQUE;
+
+        // If we've been given an explicit index we're going to assume that
+        // it's on the first table.
+        column->table_id = 0;
+
+        parseFunction(query, index, column, strlen("UNIQUE"));
+    }
+    else if (strncmp(column->text, "INDEX(", strlen("INDEX(")) == 0) {
+        column->function = FUNC_INDEX;
+
+        // If we've been given an explicit index we're going to assume that
+        // it's on the first table.
+        column->table_id = 0;
+
+        parseFunction(query, index, column, strlen("INDEX"));
+    }
+    else if (strncmp(column->text, "CHR(", strlen("CHR(")) == 0) {
         column->function = FUNC_CHR;
 
-        parseFunction(query, index, column, 3);
+        parseFunction(query, index, column, strlen("CHR"));
     }
     else if (strcmp(column->text, "RANDOM()") == 0) {
         column->function = FUNC_RANDOM;
         column->field = FIELD_CONSTANT;
         column->table_id = -1;
     }
-    else if (strncmp(column->text, "TO_HEX(", 7) == 0) {
+    else if (strncmp(column->text, "TO_HEX(", strlen("TO_HEX(")) == 0) {
         column->function = FUNC_TO_HEX;
 
-        parseFunction(query, index, column, 6);
+        parseFunction(query, index, column, strlen("TO_HEX"));
     }
-    else if (strncmp(column->text, "LENGTH(", 7) == 0) {
+    else if (strncmp(column->text, "LENGTH(", strlen("LENGTH(")) == 0) {
         column->function = FUNC_LENGTH;
 
-        parseFunction(query, index, column, 6);
+        parseFunction(query, index, column, strlen("LENGTH"));
     }
-    else if (strncmp(column->text, "LEFT(", 5) == 0) {
+    else if (strncmp(column->text, "LEFT(", strlen("LEFT(")) == 0) {
         // LEFT(<field>, <count>)
 
         column->function = FUNC_LEFT;
@@ -435,7 +448,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
 
         getToken(query, index, column->text + len + 1, FIELD_MAX_LENGTH - len);
     }
-    else if (strncmp(column->text, "RIGHT(", 6) == 0) {
+    else if (strncmp(column->text, "RIGHT(", strlen("RIGHT(")) == 0) {
         // RIGHT(<field>, <count>)
 
         column->function = FUNC_RIGHT;
@@ -468,7 +481,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
         getToken(query, index, column->text + len + 1, FIELD_MAX_LENGTH - len);
 
     }
-    else if (strncmp(column->text, "EXTRACT(", 8) == 0) {
+    else if (strncmp(column->text, "EXTRACT(", strlen("EXTRACT(")) == 0) {
         char part[FIELD_MAX_LENGTH - 8];
         strcpy(part, column->text + 8);
 
@@ -568,7 +581,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
             return -1;
         }
     }
-    else if (strncmp(column->text, "COUNT(", 6) == 0) {
+    else if (strncmp(column->text, "COUNT(", strlen("COUNT(")) == 0) {
         column->function = FUNC_AGG_COUNT;
         flags |= FLAG_GROUP;
 
@@ -579,7 +592,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
         if (strlen(column->text) + 7 < FIELD_MAX_LENGTH)
             sprintf(column->alias, "COUNT(%s)", column->text);
     }
-    else if (strncmp(column->text, "MAX(", 4) == 0) {
+    else if (strncmp(column->text, "MAX(", strlen("MAX(")) == 0) {
         column->function = FUNC_AGG_MAX;
         flags |= FLAG_GROUP;
 
@@ -590,7 +603,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
         if (strlen(column->text) + 5 < FIELD_MAX_LENGTH)
             sprintf(column->alias, "MAX(%s)", column->text);
     }
-    else if (strncmp(column->text, "MIN(", 4) == 0) {
+    else if (strncmp(column->text, "MIN(", strlen("MIN(")) == 0) {
         column->function = FUNC_AGG_MIN;
         flags |= FLAG_GROUP;
 
@@ -601,7 +614,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
         if (strlen(column->text) + 5 < FIELD_MAX_LENGTH)
             sprintf(column->alias, "MIN(%s)", column->text);
     }
-    else if (strncmp(column->text, "SUM(", 4) == 0) {
+    else if (strncmp(column->text, "SUM(", strlen("SUM(")) == 0) {
         column->function = FUNC_AGG_SUM;
         flags |= FLAG_GROUP;
 
@@ -612,7 +625,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
         if (strlen(column->text) + 5 < FIELD_MAX_LENGTH)
             sprintf(column->alias, "SUM(%s)", column->text);
     }
-    else if (strncmp(column->text, "AVG(", 4) == 0) {
+    else if (strncmp(column->text, "AVG(", strlen("AVG(")) == 0) {
         column->function = FUNC_AGG_AVG;
         flags |= FLAG_GROUP;
 
@@ -623,7 +636,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
         if (strlen(column->text) + 5 < FIELD_MAX_LENGTH)
             sprintf(column->alias, "AVG(%s)", column->text);
     }
-    else if (strncmp(column->text, "LISTAGG(", 6) == 0) {
+    else if (strncmp(column->text, "LISTAGG(", strlen("LISTAGG(")) == 0) {
         column->function = FUNC_AGG_LISTAGG;
         flags |= FLAG_GROUP;
 

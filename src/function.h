@@ -71,8 +71,12 @@
 // Family 110x (0xC0) (Undefined)
 #define FUNC_FAM_UNDEF_C0           0xC0
 
-// Family 111x (0xC0) (Undefined)
-#define FUNC_FAM_UNDEF_E0           0xE0
+// Family 111x (0xE0) (Dummy)
+#define FUNC_FAM_DUMMY              0xE0
+
+#define FUNC_PK                     0xE1
+#define FUNC_UNIQUE                 0xE2
+#define FUNC_INDEX                  0xE3
 
 
 int evaluateFunction(char * output, struct DB *db, struct ColumnNode *column, int record_index);

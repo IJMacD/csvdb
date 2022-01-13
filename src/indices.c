@@ -53,7 +53,7 @@ int indexUniqueScan (struct DB *index_db, int rowid_column, int predicate_op, co
         lower_bound = 0;
         upper_bound = index_rowid;
 
-        if (predicate_op == OPERATOR_LE) {
+        if (predicate_op == OPERATOR_LE && search_status == RESULT_FOUND) {
             upper_bound++;
         }
     }
@@ -61,7 +61,7 @@ int indexUniqueScan (struct DB *index_db, int rowid_column, int predicate_op, co
         lower_bound = index_rowid;
         upper_bound = index_db->record_count;
 
-        if (predicate_op == OPERATOR_GT) {
+        if (predicate_op == OPERATOR_GT && search_status == RESULT_FOUND) {
             lower_bound++;
         }
     }
@@ -118,17 +118,18 @@ int indexScan (struct DB *index_db, int rowid_column, int predicate_op, const ch
         // (maybe we don't need both but it's quite cheap)
 
         // Output Flag: 0: value found; 1: value not found but just before returned rowid; 2: value below minimum; 3: value above maximum
-        int search_status;
+        int search_status1;
+        int search_status2;
 
-        int lower_index_rowid = indexSearch(index_db, predicate_value, /* rowid_col */ -1, /* LOWER_BOUND */ 1, &search_status);
+        int lower_index_rowid = indexSearch(index_db, predicate_value, /* rowid_col */ -1, /* LOWER_BOUND */ 1, &search_status1);
 
-        if (predicate_op == OPERATOR_EQ && search_status) {
+        if (predicate_op == OPERATOR_EQ && search_status1) {
             // We want an exact match but value is not in index
             // Just bail out now
             return RESULT_NO_ROWS;
         }
 
-        int upper_index_rowid = indexSearch(index_db, predicate_value, /* rowid_col */ -1, /* UPPER_BOUND */ 2, &search_status);
+        int upper_index_rowid = indexSearch(index_db, predicate_value, /* rowid_col */ -1, /* UPPER_BOUND */ 2, &search_status2);
 
         if (predicate_op == OPERATOR_EQ) {
             lower_bound = lower_index_rowid;
@@ -141,9 +142,18 @@ int indexScan (struct DB *index_db, int rowid_column, int predicate_op, const ch
         else if (predicate_op == OPERATOR_LE) {
             lower_bound = 0;
             upper_bound = upper_index_rowid;
+
+            if (search_status2 == RESULT_FOUND) {
+                upper_bound++;
+            }
         }
         else if (predicate_op == OPERATOR_GT) {
-            lower_bound = upper_index_rowid + 1;
+            lower_bound = upper_index_rowid;
+
+            if (search_status1 == RESULT_FOUND) {
+                lower_bound++;
+            }
+
             upper_bound = index_db->record_count;
         }
         else if (predicate_op == OPERATOR_GE) {

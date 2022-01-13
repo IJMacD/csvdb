@@ -13,11 +13,16 @@ SELECT name, birth_date FROM test WHERE name > 'Walter KELLY' FETCH FIRST 5 ROWS
 SELECT name, birth_date FROM test WHERE name LIKE 'Walter M%' FETCH FIRST 5 ROWS ONLY
 EXPLAIN SELECT name, birth_date FROM test WHERE birth_date = '2050-01-01'
 SELECT name, birth_date FROM test WHERE birth_date = '2050-01-01'
+SELECT name, birth_date FROM test WHERE birth_date = '2050-01-02'
 EXPLAIN SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' FETCH FIRST 5 ROWS ONLY
 SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' FETCH FIRST 5 ROWS ONLY
+EXPLAIN SELECT name, birth_date FROM test WHERE '2050-01-01' < birth_date  FETCH FIRST 5 ROWS ONLY
+SELECT name, birth_date FROM test WHERE '2050-01-01' < birth_date  FETCH FIRST 5 ROWS ONLY
 EXPLAIN SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' AND score > 95 ORDER BY name FETCH FIRST 5 ROWS ONLY
 SELECT name, birth_date, score FROM test WHERE birth_date > '2050-01-01' AND score > 95 ORDER BY name FETCH FIRST 5 ROWS ONLY
 SELECT name, birth_date FROM test WHERE PK(id) = 769
+SELECT id, name, birth_date FROM test WHERE PK(id) < 51
+SELECT id, name, birth_date FROM test WHERE 51 >= PK(id)
 SELECT EXTRACT(YEAR FROM birth_date), EXTRACT(MONTH FROM birth_date), EXTRACT(DAY FROM birth_date), EXTRACT(YEARDAY FROM birth_date) FROM test FETCH FIRST ROW ONLY
 SELECT COUNT(*) FROM test
 SELECT COUNT(*) FROM test WHERE name = 'Walter KELLY'

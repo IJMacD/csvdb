@@ -4,6 +4,7 @@
 #include "predicates.h"
 #include "query.h"
 #include "limits.h"
+#include "function.h"
 #include "util.h"
 #include "date.h"
 
@@ -139,9 +140,15 @@ int compare (int numeric_mode, const char * valueA, long valueA_numeric, const c
  * @param p
  */
 void normalisePredicate (struct Predicate *p) {
-    if (p->left.field == FIELD_CONSTANT && p->right.field >= 0) {
-        // We need to swap
+    int required = 0;
 
+    if (p->left.field == FIELD_CONSTANT && p->right.field >= 0) {
+        required = 1;
+    } else if (p->left.function != FUNC_PK && p->right.function == FUNC_PK) {
+        required = 1;
+    }
+
+    if (required) {
         // copy struct
         struct ColumnNode tmp = p->left;
 
