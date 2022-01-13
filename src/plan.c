@@ -53,6 +53,12 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
         addStepWithPredicate(plan, type, q->predicates + 0);
 
+        addJoinStepsIfRequired(plan, q);
+
+        if (q->predicate_count > 1) {
+            addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + 1, q->predicate_count - 1);
+        }
+
         // Sort is never required if the index is PK_UNIQUE
         if (type == PLAN_PK_RANGE) {
             addOrderStepIfRequired(plan, q);
