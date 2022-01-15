@@ -162,8 +162,20 @@ int main (int argc, char * argv[]) {
         return query(buffer, flags, output);
     }
 
-    if (argi < argc) {
+    int bare_args = argc - argi;
+
+    if (bare_args == 1) {
         return query(argv[argi], flags, output);
+    }
+    else if (bare_args > 1) {
+        int offset = 0;
+
+        while (argi < argc) {
+            offset += sprintf(buffer + offset, "%s ", argv[argi]);
+            argi++;
+        }
+
+        return query(buffer, flags, output);
     }
 
     // If we're here it means we don't yet have a query.
