@@ -49,51 +49,53 @@ int makePlan (struct Query *q, struct Plan *plan) {
         // First predicate
         struct Predicate *p = &q->predicates[0];
 
-        if (predicatesOnFirstTable > 0 && p->op != OPERATOR_LIKE) {
+        if (predicatesOnFirstTable > 0) {
 
             int step_type = 0;
 
-            if (p->left.function == FUNC_PK) {
+            if (p->op != OPERATOR_LIKE) {
+                if (p->left.function == FUNC_PK) {
 
-                if (p->op == OPERATOR_EQ) {
-                    step_type = PLAN_PK;
-                } else {
-                    step_type = PLAN_PK_RANGE;
-                }
-
-            } else if (p->left.function == FUNC_UNITY) {
-
-                // Remove qualified name so indexes can be searched etc.
-                int dot_index = str_find_index(p->left.text, '.');
-                if (dot_index >= 0) {
-                    char value[FIELD_MAX_LENGTH];
-                    strcpy(value, p->left.text);
-                    strcpy(p->left.text, value + dot_index + 1);
-                }
-
-                /*******************
-                 * INDEX SCAN
-                 *******************/
-
-                // Try to find any index
-                int find_result = findIndex(NULL, table.name, p->left.text, INDEX_ANY);
-
-                if (find_result) {
-
-                    if (find_result == INDEX_PRIMARY) {
-                        if (p->op == OPERATOR_EQ) {
-                            step_type = PLAN_PK;
-                        } else {
-                            step_type = PLAN_PK_RANGE;
-                        }
-                    } else if (find_result == INDEX_UNIQUE) {
-                        if (p->op == OPERATOR_EQ) {
-                            step_type = PLAN_UNIQUE;
-                        } else {
-                            step_type = PLAN_UNIQUE_RANGE;
-                        }
+                    if (p->op == OPERATOR_EQ) {
+                        step_type = PLAN_PK;
                     } else {
-                        step_type = PLAN_INDEX_RANGE;
+                        step_type = PLAN_PK_RANGE;
+                    }
+
+                } else if (p->left.function == FUNC_UNITY) {
+
+                    // Remove qualified name so indexes can be searched etc.
+                    int dot_index = str_find_index(p->left.text, '.');
+                    if (dot_index >= 0) {
+                        char value[FIELD_MAX_LENGTH];
+                        strcpy(value, p->left.text);
+                        strcpy(p->left.text, value + dot_index + 1);
+                    }
+
+                    /*******************
+                     * INDEX SCAN
+                     *******************/
+
+                    // Try to find any index
+                    int find_result = findIndex(NULL, table.name, p->left.text, INDEX_ANY);
+
+                    if (find_result) {
+
+                        if (find_result == INDEX_PRIMARY) {
+                            if (p->op == OPERATOR_EQ) {
+                                step_type = PLAN_PK;
+                            } else {
+                                step_type = PLAN_PK_RANGE;
+                            }
+                        } else if (find_result == INDEX_UNIQUE) {
+                            if (p->op == OPERATOR_EQ) {
+                                step_type = PLAN_UNIQUE;
+                            } else {
+                                step_type = PLAN_UNIQUE_RANGE;
+                            }
+                        } else {
+                            step_type = PLAN_INDEX_RANGE;
+                        }
                     }
                 }
             }
