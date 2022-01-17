@@ -35,6 +35,17 @@ static int makeDB (struct DB *db, FILE *f) {
         return csvMem_makeDB(db, f);
     }
 
+    // OK so we don't have a stream but memory access could still be 20x faster
+    // Seek to end get file size; if it's below limit then use faster memory
+    // implementation.
+    fseek(db->file, 0, SEEK_END);
+    size_t size = ftell(db->file);
+    rewind(db->file);
+    if (size < MEMORY_FILE_LIMIT) {
+        // Use faster VFS_CSV_MEM
+        return csvMem_makeDB(db, f);
+    }
+
     prepareHeaders(db);
 
     int line_count = countLines(f);

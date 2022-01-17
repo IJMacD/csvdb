@@ -5,3 +5,4 @@
 #define PLAN_MAX_STEPS      10
 #define FIELD_MAX_COUNT     32
 #define TABLE_MAX_COUNT     10
+#define MEMORY_FILE_LIMIT   (100 * 1024 * 1024)

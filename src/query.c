@@ -67,6 +67,7 @@ int select_query (const char *query, int output_flags, FILE * output) {
             q.tables = calloc(1, sizeof (struct Table));
             q.table_count = 1;
             strcpy(q.tables[0].name, "stdin");
+            strcpy(q.tables[0].alias, "stdin");
         }
         else {
             // We could have a constant query which will output a single row

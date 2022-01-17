@@ -92,7 +92,7 @@ test: prep release test.csv
 	./test.sh
 
 test.csv: $(GENEXE)
-	${GENEXE} 100000 test.csv
+	${GENEXE} 1000000 test.csv
 
 $(GENEXE): $(GENOBJS)
 	$(CC) $(CFLAGS) $(GENCFLAGS) -o $@ $^

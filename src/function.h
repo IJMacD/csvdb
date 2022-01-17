@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "db.h"
+#include "query.h"
 #include "result.h"
 
 #define MASK_FUNC_FAMILY            0xE0

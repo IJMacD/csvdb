@@ -11,9 +11,9 @@
 
 #define LCG_A   15961   // Chosen by fair dice roll - must be odd (if M is power of 2)
 #define LCG_C   13281   // Chosen by fair dice roll - must be 4K + 1
-#define LCG_M   (1<<17)   // will give range of (2 * 65536) days (approx 360 years)
+#define LCG_M   (1<<20)   // will give range of (16 * 65536) days (approx 2870 years)
 
-#define BASE_DATE   2341972 // 1700-01-01
+#define BASE_DATE   1721059 // 0000-01-01
 
 static char *field_names[] = {
     "id",
@@ -24,9 +24,9 @@ static char *field_names[] = {
 
 void random_name (char * out);
 void random_date (char * out);
-int lcg ();
+unsigned lcg ();
 
-int lcg_value;
+unsigned lcg_value;
 int prev_id;
 
 int sample_openDB (struct DB *db, const char *filename) {
@@ -105,13 +105,13 @@ void random_name (char *out) {
 }
 
 void random_date (char *out) {
-    int julian = BASE_DATE + lcg();
+    unsigned julian = BASE_DATE + lcg();
     struct DateTime dt;
     datetimeFromJulian(&dt, julian);
     sprintf(out, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
 }
 
-int lcg () {
+unsigned lcg () {
     lcg_value = (LCG_A * lcg_value + LCG_C) % LCG_M;
     return lcg_value;
 }

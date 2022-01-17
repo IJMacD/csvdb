@@ -26,7 +26,12 @@ int explain_select_query (
 
     int join_count = 0;
 
-    int row_estimate = q->tables[join_count].db->record_count;
+    int row_estimate = 1;
+
+    if (q->table_count > 0) {
+        row_estimate = q->tables[join_count].db->record_count;
+    }
+
     int log_rows = log_10(row_estimate);
 
 
