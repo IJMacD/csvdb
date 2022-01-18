@@ -15,6 +15,10 @@
 #define INDEX_UNIQUE        2
 #define INDEX_PRIMARY       3
 
+#define MODE_UNIQUE         0
+#define MODE_LOWER_BOUND    1
+#define MODE_UPPER_BOUND    2
+
 int indexPrimaryScan (struct DB *db, int predicate_op, const char *predicate_value, struct RowList * row_list, int limit);
 int indexUniqueScan (struct DB *index_db, int rowid_column, int predicate_op, const char *predicate_value, struct RowList * row_list, int limit);
 int indexScan (struct DB *index_db, int rowid_column, int predicate_op, const char *predicate_value, struct RowList * row_list, int limit);

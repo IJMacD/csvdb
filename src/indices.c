@@ -14,7 +14,7 @@ static int indexWalk(struct DB *db, int rowid_column, int lower_index, int upper
  * Just a unique scan but we know that [index rowid] == [table rowid]
  */
 int indexPrimaryScan (struct DB *db, int predicate_op, const char *predicate_value, struct RowList * row_list, int limit) {
-    return indexUniqueScan(db, -1, predicate_op, predicate_value, row_list, limit);
+    return indexUniqueScan(db, FIELD_ROW_INDEX, predicate_op, predicate_value, row_list, limit);
 }
 
 /**
@@ -33,7 +33,7 @@ int indexUniqueScan (struct DB *index_db, int rowid_column, int predicate_op, co
     // Output Flag: 0: value found; RESULT_BETWEEN: value not found but just before returned rowid; RESULT_BELOW_MIN: value below minimum; RESULT_ABOVE_MAX: value above maximum
     int search_status;
 
-    int index_rowid = indexSearch(index_db, predicate_value, /* rowid_col */ -1, /* UNIQUE */ 0, &search_status);
+    int index_rowid = indexSearch(index_db, predicate_value, FIELD_ROW_INDEX, MODE_UNIQUE, &search_status);
 
     if (predicate_op == OPERATOR_EQ && search_status) {
         // We want an exact match but value is not in index
@@ -121,7 +121,7 @@ int indexScan (struct DB *index_db, int rowid_column, int predicate_op, const ch
         int search_status1;
         int search_status2;
 
-        int lower_index_rowid = indexSearch(index_db, predicate_value, /* rowid_col */ -1, /* LOWER_BOUND */ 1, &search_status1);
+        int lower_index_rowid = indexSearch(index_db, predicate_value, FIELD_ROW_INDEX, MODE_LOWER_BOUND, &search_status1);
 
         if (predicate_op == OPERATOR_EQ && search_status1) {
             // We want an exact match but value is not in index
@@ -129,7 +129,7 @@ int indexScan (struct DB *index_db, int rowid_column, int predicate_op, const ch
             return RESULT_NO_ROWS;
         }
 
-        int upper_index_rowid = indexSearch(index_db, predicate_value, /* rowid_col */ -1, /* UPPER_BOUND */ 2, &search_status2);
+        int upper_index_rowid = indexSearch(index_db, predicate_value, FIELD_ROW_INDEX, MODE_UPPER_BOUND, &search_status2);
 
         if (predicate_op == OPERATOR_EQ) {
             lower_bound = lower_index_rowid;
@@ -203,7 +203,7 @@ int indexWalk(struct DB *db, int rowid_column, int lower_index, int upper_index,
 
     // Always ascending
     for (int i = lower_index; i < upper_index; i++) {
-        if (rowid_column == -1) {
+        if (rowid_column == FIELD_ROW_INDEX) {
             appendRowID(row_list, i);
         } else {
             getRecordValue(db, i, rowid_column, value, VALUE_MAX_LENGTH);

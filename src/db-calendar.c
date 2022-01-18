@@ -592,7 +592,7 @@ int calendar_indexSearch(struct DB *db, const char *value,  int rowid_field,  __
         return RESULT_NO_ROWS;
     }
 
-    if (rowid_field == -1){
+    if (rowid_field == FIELD_ROW_INDEX){
         // A "Primary key" search with a julian value
         *output_flag = RESULT_FOUND;
         return atol(value);

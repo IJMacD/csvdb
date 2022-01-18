@@ -11,6 +11,8 @@ EXPLAIN SELECT name, birth_date FROM test WHERE name = 'Walter KELLY'
 SELECT name, birth_date FROM test WHERE name = 'Walter KELLY'
 SELECT name, birth_date FROM test WHERE name > 'Walter KELLY' FETCH FIRST 5 ROWS ONLY
 SELECT name, birth_date FROM test WHERE name LIKE 'Walter M%' FETCH FIRST 5 ROWS ONLY
+EXPLAIN SELECT name, SUM(score) FROM test WHERE name = 'Walter KELLY'
+SELECT name, SUM(score) FROM test WHERE name = 'Walter KELLY'
 EXPLAIN SELECT name, birth_date FROM test WHERE birth_date = '2050-01-01'
 SELECT name, birth_date FROM test WHERE birth_date = '2050-01-01'
 SELECT name, birth_date FROM test WHERE birth_date = '2050-01-02'
@@ -38,8 +40,8 @@ EXPLAIN FROM test WHERE EXTRACT(WEEKDAY FROM birth_date) = 5 FETCH FIRST 5 ROWS 
 FROM test WHERE EXTRACT(WEEKDAY FROM birth_date) = 5 FETCH FIRST 5 ROWS ONLY
 EXPLAIN FROM test WHERE EXTRACT(WEEKDAY FROM birth_date) = 5 ORDER BY birth_date FETCH FIRST 5 ROWS ONLY
 FROM test WHERE EXTRACT(WEEKDAY FROM birth_date) = 5 ORDER BY birth_date FETCH FIRST 5 ROWS ONLY
-EXPLAIN FROM test WHERE birth_date < '1901-01-01' AND EXTRACT(WEEKDAY FROM birth_date) = 5 FETCH FIRST 5 ROWS ONLY
-FROM test WHERE birth_date < '1901-01-01' AND EXTRACT(WEEKDAY FROM birth_date) = 5 FETCH FIRST 5 ROWS ONLY
+EXPLAIN FROM test WHERE birth_date > '1901-01-01' AND EXTRACT(WEEKDAY FROM birth_date) = 5 FETCH FIRST 5 ROWS ONLY
+FROM test WHERE birth_date > '1901-01-01' AND EXTRACT(WEEKDAY FROM birth_date) = 5 FETCH FIRST 5 ROWS ONLY
 FROM view FETCH FIRST 5 ROWS ONLY
 FROM suits AS s1, suits AS s2 ON s1.name < s2.name ORDER BY name
 FROM suits, ranks WHERE value > 10 ORDER BY name SELECT ranks.name, 'of', suits.name

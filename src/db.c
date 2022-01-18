@@ -140,6 +140,9 @@ int getRecordValue (struct DB *db, int record_index, int field_index, char *valu
  * Returns 0 on failure; 1 for a regular index, 2 for unique index
  *
  * @param db struct DB * OUT - Database to populate with index (Can be NULL)
+ * @param table_name
+ * @param index_name
+ * @param index_type_flags INDEX_ANY|INDEX_REGULAR|INDEX_UNIQUE|INDEX_PRIMARY
  */
 int findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags) {
     if (strcmp(table_name, "CALENDAR") == 0) {
@@ -230,8 +233,7 @@ int fullTableAccess (struct DB *db, struct RowList * row_list, int limit_value) 
 }
 
 /**
- * @brief Special case of uniqueIndexSearch where:
- *      index rowid = table rowid
+ * @brief Special case of uniqueIndexSearch where [index rowid] = [table rowid]
  *
  * @return rowid, or RESULT_NO_ROWS (-1) if not found
  */
@@ -254,8 +256,8 @@ int pkSearch (struct DB *db, const char * value) {
  *
  * @param db must be an index with sorted column 0
  * @param value value to search for in cilumn 0 of db
- * @param rowid_field which column contains the rowid? (-1 means index rowid is returned)
- * @param mode 0: index is unique; 1: return first matching rowid; 2: return last matching rowid
+ * @param rowid_field which column contains the rowid? (FIELD_ROW_INDEX means index rowid is returned)
+ * @param mode MODE_UNIQUE: index is unique; MODE_LOWER_BOUND: return first matching rowid; MODE_UPPER_BOUND: return last matching rowid
  * @param output_flag 0: value found; RESULT_BETWEEN: value not found but would appear just before returned rowid; RESULT_BELOW_MIN: value below minimum; RESULT_ABOVE_MAX: value above maximum
  *
  * @returns rowid of match (or closest match); or RESULT_NO_ROWS (-1) if out of bounds;
@@ -351,13 +353,13 @@ int indexSearch (struct DB *db, const char *value, int rowid_field, int mode, in
     // If we're down here we must have found the value in the index
 
     // We've been told index is unique so we're done
-    if (mode == 0) {
+    if (mode == MODE_UNIQUE) {
         *output_flag = RESULT_FOUND;
         return index_match;
     }
 
     // Should we walk backwards to first instance of value?
-    if (mode == 1) {
+    if (mode == MODE_LOWER_BOUND) {
         // Backtrack until we find the first value
         while (index_match >= 0) {
             getRecordValue(db, --index_match, 0, val, VALUE_MAX_LENGTH);
@@ -372,7 +374,7 @@ int indexSearch (struct DB *db, const char *value, int rowid_field, int mode, in
     }
 
     // Should we walk forwards to last instance of value?
-    if (mode == 2) {
+    if (mode == MODE_UPPER_BOUND) {
         // Forward-track until we find the last value
         while (index_match < db->record_count) {
             getRecordValue(db, ++index_match, 0, val, VALUE_MAX_LENGTH);
