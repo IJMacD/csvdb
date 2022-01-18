@@ -98,6 +98,8 @@ int parseQuery (struct Query *q, const char *query) {
             q->column_count = curr_index;
         }
         else if (strcmp(keyword, "FROM") == 0) {
+            int next_join_flag = 0;
+
             while (index < query_length) {
                 q->table_count++;
 
@@ -118,6 +120,9 @@ int parseQuery (struct Query *q, const char *query) {
                 }
 
                 struct Table *table = &q->tables[q->table_count - 1];
+
+                table->join_type = next_join_flag;
+                next_join_flag = 0;
 
                 getQuotedToken(query, &index, table->name, TABLE_MAX_LENGTH);
 
@@ -140,9 +145,7 @@ int parseQuery (struct Query *q, const char *query) {
 
                     struct Predicate * p = &table->join;
 
-                    getQuotedToken(query, &index, p->left.text, FIELD_MAX_LENGTH);
-
-                    checkConstantColumn(&p->left);
+                    parseColumn(query, &index, &p->left);
 
                     char op[5];
                     getToken(query, &index, op, 5);
@@ -162,20 +165,41 @@ int parseQuery (struct Query *q, const char *query) {
                         }
                     }
 
-                    getQuotedToken(query, &index, p->right.text, FIELD_MAX_LENGTH);
-
-                    checkConstantColumn(&p->right);
+                    parseColumn(query, &index, &p->right);
 
                     skipWhitespace(query, &index);
                 } else {
                     table->join.op = OPERATOR_ALWAYS;
                 }
 
-                if (query[index] != ',') {
-                    break;
-                }
+                if (query[index] == ',') {
+                    index++;
 
-                index++;
+                    // loop again
+                }
+                else {
+                    int old_index = index;
+                    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+
+                    if (strcmp(keyword, "INNER") == 0) {
+                        // Carry on
+                        getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+                    }
+                    else if (strcmp(keyword, "LEFT") == 0) {
+                        // Mark join type and carry on
+                        next_join_flag = JOIN_LEFT;
+                        getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+                    }
+
+                    if (strcmp(keyword, "JOIN") == 0) {
+                        // loop again
+                    }
+                    else {
+                        // Rewind then break out of FROM clause
+                        index = old_index;
+                        break;
+                    }
+                }
             }
         }
         else if (strcmp(keyword, "WHERE") == 0) {

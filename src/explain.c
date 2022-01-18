@@ -246,8 +246,8 @@ int explain_select_query (
                 cost = rows;
             }
         }
-        else if (s.type == PLAN_INNER_JOIN) {
-            operation = "INNER JOIN";
+        else if (s.type == PLAN_LOOP_JOIN) {
+            operation = "LOOP JOIN";
 
             join_count++;
 

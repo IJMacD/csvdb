@@ -120,6 +120,12 @@ char *getFieldName (struct DB *db, int field_index) {
  * Returns the number of bytes read, or -1 on error
  */
 int getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
+    // A NULL rowid could come from a LEFT JOIN
+    if (record_index == ROWID_NULL) {
+        value[0] = '\0';
+        return 0;
+    }
+
     // This is the only field we can handle generically
     if (field_index == FIELD_ROW_INDEX) {
         return sprintf(value, "%d", record_index);

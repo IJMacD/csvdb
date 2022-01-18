@@ -32,11 +32,18 @@
 #define OUTPUT_FORMAT_JSON_ARRAY    (5 << 1)
 #define OUTPUT_FORMAT_SQL_INSERT    (6 << 1)
 
+#define JOIN_INNER  0
+#define JOIN_CROSS  0
+#define JOIN_LEFT   1
+
+#define ROWID_NULL  -1
+
 struct Table {
     char name[TABLE_MAX_LENGTH];
     char alias[FIELD_MAX_LENGTH];
     struct DB * db;
     struct Predicate join;
+    int join_type;
 };
 
 struct Query {

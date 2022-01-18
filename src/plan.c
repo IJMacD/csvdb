@@ -406,11 +406,11 @@ void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
                         addStepWithPredicate(plan, PLAN_UNIQUE_JOIN, join);
                     }
                     else {
-                        addStepWithPredicate(plan, PLAN_INNER_JOIN, join);
+                        addStepWithPredicate(plan, PLAN_LOOP_JOIN, join);
                     }
                 }
                 else {
-                    addStepWithPredicate(plan, PLAN_INNER_JOIN, join);
+                    addStepWithPredicate(plan, PLAN_LOOP_JOIN, join);
                 }
             }
         }

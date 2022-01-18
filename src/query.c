@@ -297,8 +297,9 @@ int basic_select_query (
 
             destroyRowList(&tmp_list);
         }
-        else if (s->type == PLAN_INNER_JOIN) {
-            struct DB *next_db = q->tables[row_list.join_count].db;
+        else if (s->type == PLAN_LOOP_JOIN) {
+            struct Table *table = &q->tables[row_list.join_count];
+            struct DB *next_db = table->db;
 
             int new_length = row_list.row_count * next_db->record_count;
 
@@ -322,12 +323,14 @@ int basic_select_query (
                 if (p.left.table_id < table_id) {
                     evaluateNode(q, &row_list, i, &p.left, p.left.text, FIELD_MAX_LENGTH);
                     p.left.field = FIELD_CONSTANT;
+                    p.left.function = FUNC_UNITY;
                 }
 
                 // Fill in value as constant from outer tables
                 if (p.right.table_id < table_id) {
                     evaluateNode(q, &row_list, i, &p.right, p.right.text, FIELD_MAX_LENGTH);
                     p.right.field = FIELD_CONSTANT;
+                    p.right.function = FUNC_UNITY;
                 }
 
                 tmp_list.row_count = 0;
@@ -340,6 +343,11 @@ int basic_select_query (
                     int rowid = getRowID(&tmp_list, 0, j);
                     appendJoinedRowID(&new_list, &row_list, i, rowid);
                 }
+
+                if (table->join_type == JOIN_LEFT && tmp_list.row_count == 0) {
+                    // Add NULL to list
+                    appendJoinedRowID(&new_list, &row_list, i, ROWID_NULL);
+                }
             }
 
             copyRowList(&row_list, &new_list);
@@ -349,6 +357,8 @@ int basic_select_query (
         else if (s->type == PLAN_UNIQUE_JOIN) {
             // Table ID being joined here
             int table_id = row_list.join_count;
+
+            struct Table *table = &q->tables[table_id];
 
             struct RowList new_list;
 
@@ -397,6 +407,10 @@ int basic_select_query (
                 if (rowid != RESULT_NO_ROWS) {
                     tmp_list.row_count = 0;
                     appendJoinedRowID(&new_list, &row_list, i, rowid);
+                }
+                else if (table->join_type == JOIN_LEFT) {
+                    // Add NULL rowid
+                    appendJoinedRowID(&new_list, &row_list, i, ROWID_NULL);
                 }
             }
 

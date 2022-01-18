@@ -14,7 +14,7 @@
 
 #define PLAN_CROSS_JOIN             10
 #define PLAN_CONSTANT_JOIN          11
-#define PLAN_INNER_JOIN             12
+#define PLAN_LOOP_JOIN              12
 #define PLAN_UNIQUE_JOIN            13
 
 #define PLAN_SORT                   20
