@@ -168,6 +168,25 @@ int parseQuery (struct Query *q, const char *query) {
                     parseColumn(query, &index, &p->right);
 
                     skipWhitespace(query, &index);
+                } else if (strncmp(query + index, "USING ", 6) == 0) {
+                    index += 6;
+                    skipWhitespace(query, &index);
+
+                    struct Predicate * p = &table->join;
+
+                    // parse column (could have function and field name)
+                    parseColumn(query, &index, &p->left);
+
+                    // copy function and field name to right side of predicate
+                    memcpy(&p->right, &p->left, sizeof (p->left));
+
+                    // One side (right) needs to be on this joined table
+                    // The other side needs to be from any of the previous tables
+                    // we don't which yet, but it will be filled in later
+                    p->right.table_id = q->table_count - 1;
+
+                    // Set operator
+                    p->op = OPERATOR_EQ;
                 } else {
                     table->join.op = OPERATOR_ALWAYS;
                 }

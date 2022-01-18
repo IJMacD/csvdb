@@ -52,3 +52,4 @@ FROM CALENDAR WHERE date = CURRENT_DATE SELECT julian, date, yeardayString, week
 FROM suits SELECT LISTAGG(name)
 FROM suits INNER JOIN ranks ON LENGTH(ranks.name) = LENGTH(suits.name)
 FROM suits LEFT JOIN ranks ON LENGTH(ranks.name) = LENGTH(suits.name)
+FROM suits JOIN ranks USING LENGTH(name)

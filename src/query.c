@@ -572,6 +572,25 @@ static int findColumn (struct Query *q, const char *text, int *table_id, int *co
 
     int dot_index = str_find_index(text, '.');
 
+    if (*table_id != -1) {
+        // table_id has already been filled in for us as a hint,
+        // we'll search for the column on that table
+
+        if (text[dot_index + 1] == '*') {
+            *column_id = FIELD_STAR;
+        }
+        else if (strcmp(text + dot_index + 1, "rowid") == 0) {
+            *column_id = FIELD_ROW_INDEX;
+        }
+        else {
+            struct DB *db = q->tables[*table_id].db;
+
+            *column_id = getFieldIndex(db, text + dot_index + 1);
+        }
+
+        return 1;
+    }
+
     if (dot_index >= 0) {
         char value[FIELD_MAX_LENGTH];
 
