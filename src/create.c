@@ -123,7 +123,7 @@ int create_index_query (const char * query) {
 
 int create_index (const char *index_name, const char *table_name, const char *index_field, int unique_flag) {
     struct DB db;
-    struct Table table;
+    struct Table table = {0};
     table.db = &db;
     strcpy(table.name, table_name);
 

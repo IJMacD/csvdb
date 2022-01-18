@@ -169,50 +169,50 @@ int basic_select_query (
     }
 
     for (int i = 0; i < plan->step_count; i++) {
-        struct PlanStep s = plan->steps[i];
+        struct PlanStep *s = &plan->steps[i];
 
-        if (s.type == PLAN_PK || s.type == PLAN_PK_RANGE) {
+        if (s->type == PLAN_PK || s->type == PLAN_PK_RANGE) {
             // First table
             struct Table * table = q->tables;
-            struct Predicate p = s.predicates[0];
-            indexPrimaryScan(table->db, p.op, p.right.text, &row_list, s.limit);
+            struct Predicate *p = &s->predicates[0];
+            indexPrimaryScan(table->db, p->op, p->right.text, &row_list, s->limit);
         }
-        else if (s.type == PLAN_UNIQUE || s.type == PLAN_UNIQUE_RANGE) {
+        else if (s->type == PLAN_UNIQUE || s->type == PLAN_UNIQUE_RANGE) {
             // First table
             struct Table * table = q->tables;
-            struct Predicate p = s.predicates[0];
+            struct Predicate *p = &s->predicates[0];
             struct DB index_db;
-            if (findIndex(&index_db, table->name, p.left.text, INDEX_UNIQUE) == 0) {
-                fprintf(stderr, "Unable to find unique index on column '%s' on table '%s'\n", p.left.text, table->name);
+            if (findIndex(&index_db, table->name, p->left.text, INDEX_UNIQUE) == 0) {
+                fprintf(stderr, "Unable to find unique index on column '%s' on table '%s'\n", p->left.text, table->name);
                 exit(-1);
             }
             int rowid_col = getFieldIndex(&index_db, "rowid");
-            indexUniqueScan(&index_db, rowid_col, p.op, p.right.text, &row_list, s.limit);
+            indexUniqueScan(&index_db, rowid_col, p->op, p->right.text, &row_list, s->limit);
         }
-        else if (s.type == PLAN_INDEX_RANGE) {
+        else if (s->type == PLAN_INDEX_RANGE) {
             // First table
             struct Table * table = q->tables;
-            struct Predicate p = s.predicates[0];
+            struct Predicate *p = &s->predicates[0];
             struct DB index_db;
-            if (findIndex(&index_db, table->name, p.left.text, INDEX_ANY) == 0) {
-                fprintf(stderr, "Unable to find index on column '%s' on table '%s'\n", p.left.text, table->name);
+            if (findIndex(&index_db, table->name, p->left.text, INDEX_ANY) == 0) {
+                fprintf(stderr, "Unable to find index on column '%s' on table '%s'\n", p->left.text, table->name);
                 exit(-1);
             }
             int rowid_col = getFieldIndex(&index_db, "rowid");
-            indexScan(&index_db, rowid_col, p.op, p.right.text, &row_list, s.limit);
+            indexScan(&index_db, rowid_col, p->op, p->right.text, &row_list, s->limit);
         }
-        else if (s.type == PLAN_TABLE_ACCESS_FULL) {
+        else if (s->type == PLAN_TABLE_ACCESS_FULL) {
             // First table
             struct Table * table = q->tables;
 
-            if (s.predicate_count > 0) {
-                fullTableScan(table->db, &row_list, s.predicates, s.predicate_count, s.limit);
+            if (s->predicate_count > 0) {
+                fullTableScan(table->db, &row_list, s->predicates, s->predicate_count, s->limit);
             }
             else {
-                fullTableAccess(table->db, &row_list, s.limit);
+                fullTableAccess(table->db, &row_list, s->limit);
             }
         }
-        else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
+        else if (s->type == PLAN_TABLE_ACCESS_ROWID) {
             int source_count = row_list.row_count;
 
             row_list.row_count = 0;
@@ -220,8 +220,8 @@ int basic_select_query (
             for (int i = 0; i < source_count; i++) {
                 int match = 1;
 
-                for (int j = 0; j < s.predicate_count; j++) {
-                    struct Predicate * p = s.predicates + j;
+                for (int j = 0; j < s->predicate_count; j++) {
+                    struct Predicate * p = s->predicates + j;
 
                     char value_left[VALUE_MAX_LENGTH] = {0};
                     char value_right[VALUE_MAX_LENGTH] = {0};
@@ -241,7 +241,7 @@ int basic_select_query (
                 }
             }
         }
-        else if (s.type == PLAN_CROSS_JOIN) {
+        else if (s->type == PLAN_CROSS_JOIN) {
             struct RowList new_list;
 
             struct DB *next_db = q->tables[row_list.join_count].db;
@@ -258,9 +258,9 @@ int basic_select_query (
 
             copyRowList(&row_list, &new_list);
         }
-        else if (s.type == PLAN_CONSTANT_JOIN) {
+        else if (s->type == PLAN_CONSTANT_JOIN) {
             // Sanity check
-            struct Predicate *p = s.predicates + 0;
+            struct Predicate *p = s->predicates + 0;
             if (p->left.table_id != row_list.join_count &&
                 p->right.table_id != row_list.join_count)
             {
@@ -276,7 +276,7 @@ int basic_select_query (
 
             // This is a constant join so we'll just populate the table once
             // Hopefully it won't be the whole table since we have a predicate
-            fullTableScan(next_db, &tmp_list, s.predicates, s.predicate_count, -1);
+            fullTableScan(next_db, &tmp_list, s->predicates, s->predicate_count, -1);
 
             struct RowList new_list;
 
@@ -297,7 +297,7 @@ int basic_select_query (
 
             destroyRowList(&tmp_list);
         }
-        else if (s.type == PLAN_INNER_JOIN) {
+        else if (s->type == PLAN_INNER_JOIN) {
             struct DB *next_db = q->tables[row_list.join_count].db;
 
             int new_length = row_list.row_count * next_db->record_count;
@@ -316,7 +316,7 @@ int basic_select_query (
 
             for (int i = 0; i < row_list.row_count; i++) {
                 // Make a local copy of predicate
-                struct Predicate p = s.predicates[0];
+                struct Predicate p = s->predicates[0];
 
                 // Fill in value as constant from outer tables
                 if (p.left.table_id < table_id) {
@@ -346,7 +346,7 @@ int basic_select_query (
 
             destroyRowList(&tmp_list);
         }
-        else if (s.type == PLAN_UNIQUE_JOIN) {
+        else if (s->type == PLAN_UNIQUE_JOIN) {
             // Table ID being joined here
             int table_id = row_list.join_count;
 
@@ -358,7 +358,7 @@ int basic_select_query (
 
             makeRowList(&tmp_list, 1, 1);
 
-            struct Predicate * p = &s.predicates[0];
+            struct Predicate * p = &s->predicates[0];
 
             struct ColumnNode * outer;
             struct ColumnNode * inner;
@@ -404,13 +404,13 @@ int basic_select_query (
 
             destroyRowList(&tmp_list);
         }
-        else if (s.type == PLAN_SORT) {
+        else if (s->type == PLAN_SORT) {
 
             int table_id = -1;
             int field_index;
 
-            if (!findColumn(q, s.predicates[0].left.text, &table_id, &field_index)) {
-                fprintf(stderr, "Sort column not found: %s\n", s.predicates[0].left.text);
+            if (!findColumn(q, s->predicates[0].left.text, &table_id, &field_index)) {
+                fprintf(stderr, "Sort column not found: %s\n", s->predicates[0].left.text);
                 exit(-1);
             }
 
@@ -422,13 +422,13 @@ int basic_select_query (
 
             makeRowList(&tmp, row_list.join_count, row_list.row_count);
 
-            sortResultRows(db, table_id, field_index, s.predicates[0].op, &row_list, &tmp);
+            sortResultRows(db, table_id, field_index, s->predicates[0].op, &row_list, &tmp);
 
             copyRowList(&row_list, &tmp);
 
             // debugRowList(&row_list, 2);
         }
-        else if (s.type == PLAN_REVERSE) {
+        else if (s->type == PLAN_REVERSE) {
             if (row_list.join_count > 1) {
                 fprintf(stderr, "Not Implemented: Unable to reverse joined rows\n");
                 exit(-1);
@@ -436,18 +436,18 @@ int basic_select_query (
 
             reverse_array(row_list.row_ids, row_list.row_count);
         }
-        else if (s.type == PLAN_SLICE) {
+        else if (s->type == PLAN_SLICE) {
             // Offset is taken care of in PLAN_SELECT
 
             // Apply limit (including offset rows - which will be omitted later)
-            if (s.limit >= 0 && s.limit < row_list.row_count) {
-                row_list.row_count = s.limit;
+            if (s->limit >= 0 && s->limit < row_list.row_count) {
+                row_list.row_count = s->limit;
             }
         }
-        else if (s.type == PLAN_GROUP) {
+        else if (s->type == PLAN_GROUP) {
             // NOP
         }
-        else if (s.type == PLAN_SELECT) {
+        else if (s->type == PLAN_SELECT) {
             /*******************
              * Output result set
              *******************/
@@ -461,7 +461,7 @@ int basic_select_query (
             }
         }
         else {
-            fprintf(stderr, "Unimplemented OP code: %d\n", s.type);
+            fprintf(stderr, "Unimplemented OP code: %d\n", s->type);
             return -1;
         }
 

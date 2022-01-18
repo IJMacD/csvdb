@@ -44,7 +44,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
         int predicatesOnFirstTable = optimisePredicates(q, q->predicates, q->predicate_count);
 
         // First table
-        struct Table table = q->tables[0];
+        struct Table *table = &q->tables[0];
 
         // First predicate
         struct Predicate *p = &q->predicates[0];
@@ -86,7 +86,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
                  *******************/
 
                 // Try to find any index
-                int find_result = findIndex(NULL, table.name, p->left.text, INDEX_ANY);
+                int find_result = findIndex(NULL, table->name, p->left.text, INDEX_ANY);
 
                 if (find_result) {
 
@@ -151,7 +151,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 // If we're selecting a lot of rows this optimisation is probably worth it.
                 // If we have an EQ operator then it's probably cheaper to filter first
                 (p->op != OPERATOR_EQ) &&
-                findIndex(NULL, table.name, q->order_field, INDEX_ANY)
+                findIndex(NULL, table->name, q->order_field, INDEX_ANY)
             ) {
 
                 struct Predicate *order_p = malloc(sizeof(*order_p));
@@ -236,8 +236,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
     else if ((q->flags & FLAG_ORDER) && !(q->flags & FLAG_GROUP)) {
         // Before we do a full table scan... we have one more opportunity to use an index
         // To save a sort later, see if we can use an index for ordering now
-        struct Table table = q->tables[0];
-        if (findIndex(NULL, table.name, q->order_field, INDEX_ANY)) {
+        struct Table *table = &q->tables[0];
+        if (findIndex(NULL, table->name, q->order_field, INDEX_ANY)) {
 
             struct Predicate *order_p = malloc(sizeof(*order_p));
             strcpy(order_p->left.text, q->order_field);
