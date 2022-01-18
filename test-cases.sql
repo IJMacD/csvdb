@@ -10,6 +10,7 @@ SELECT name, score FROM test WHERE score = 42 FETCH FIRST 5 ROWS ONLY
 EXPLAIN SELECT name, birth_date FROM test WHERE name = 'Walter KELLY'
 SELECT name, birth_date FROM test WHERE name = 'Walter KELLY'
 SELECT name, birth_date FROM test WHERE name > 'Walter KELLY' FETCH FIRST 5 ROWS ONLY
+EXPLAIN SELECT name, birth_date FROM test WHERE name LIKE 'Walter M%' FETCH FIRST 5 ROWS ONLY
 SELECT name, birth_date FROM test WHERE name LIKE 'Walter M%' FETCH FIRST 5 ROWS ONLY
 EXPLAIN SELECT name, SUM(score) FROM test WHERE name = 'Walter KELLY'
 SELECT name, SUM(score) FROM test WHERE name = 'Walter KELLY'

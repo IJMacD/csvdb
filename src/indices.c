@@ -73,7 +73,7 @@ int indexUniqueScan (struct DB *index_db, int rowid_column, int predicate_op, co
         return a + b;
     }
     else {
-        fprintf(stderr, "Not Implemented: Index range scan for operator: %d\n", predicate_op);
+        fprintf(stderr, "Not Implemented: Unique Index range scan for operator: %d\n", predicate_op);
         exit(-1);
     }
 
@@ -97,15 +97,22 @@ int indexUniqueScan (struct DB *index_db, int rowid_column, int predicate_op, co
  * @return number of matched rows; RESULT_NO_INDEX if index does not exist
  */
 int indexScan (struct DB *index_db, int rowid_column, int predicate_op, const char *predicate_value, struct RowList * row_list, int limit) {
-    // We can't handle LIKE with this index (yet)
-    if (predicate_op == OPERATOR_LIKE) {
-        return RESULT_NO_INDEX;
-    }
-
     // (inclusive)
     int lower_bound;
     // (exclusive)
     int upper_bound;
+
+    char value[VALUE_MAX_LENGTH];
+    strcpy(value, predicate_value);
+    size_t len = strlen(value);
+
+    if (predicate_op == OPERATOR_LIKE) {
+        if (value[len - 1] != '%') {
+            fprintf(stderr, "Cannot do INDEX SCAN on LIKE with without '%%' at the end\n");
+            exit(-1);
+        }
+        value[len - 1] = '\0';
+    }
 
     // OPERATOR_ALWAYS means scan the entire index
     if (predicate_op == OPERATOR_ALWAYS) {
@@ -121,7 +128,7 @@ int indexScan (struct DB *index_db, int rowid_column, int predicate_op, const ch
         int search_status1;
         int search_status2;
 
-        int lower_index_rowid = indexSearch(index_db, predicate_value, FIELD_ROW_INDEX, MODE_LOWER_BOUND, &search_status1);
+        int lower_index_rowid = indexSearch(index_db, value, FIELD_ROW_INDEX, MODE_LOWER_BOUND, &search_status1);
 
         if (predicate_op == OPERATOR_EQ && search_status1) {
             // We want an exact match but value is not in index
@@ -129,11 +136,21 @@ int indexScan (struct DB *index_db, int rowid_column, int predicate_op, const ch
             return RESULT_NO_ROWS;
         }
 
-        int upper_index_rowid = indexSearch(index_db, predicate_value, FIELD_ROW_INDEX, MODE_UPPER_BOUND, &search_status2);
+        // For LIKE the upper bound search will use the next letter in the alphabet
+        // e.g. M -> N
+        if (predicate_op == OPERATOR_LIKE) {
+            value[len - 2]++;
+        }
+
+        int upper_index_rowid = indexSearch(index_db, value, FIELD_ROW_INDEX, MODE_UPPER_BOUND, &search_status2);
 
         if (predicate_op == OPERATOR_EQ) {
             lower_bound = lower_index_rowid;
             upper_bound = upper_index_rowid + 1;
+        }
+        else if (predicate_op == OPERATOR_LIKE) {
+            lower_bound = lower_index_rowid;
+            upper_bound = upper_index_rowid;
         }
         else if (predicate_op == OPERATOR_LT) {
             lower_bound = 0;

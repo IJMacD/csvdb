@@ -53,49 +53,63 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
             int step_type = 0;
 
-            if (p->op != OPERATOR_LIKE) {
-                if (p->left.function == FUNC_PK) {
+            // LIKE can only use index if '%' is at the end
+            size_t len = strlen(p->right.text);
+            if (p->op == OPERATOR_LIKE && p->right.text[len-1] != '%') {
+                // NOP
+                step_type = 0;
+            }
+            else if (p->left.function == FUNC_PK) {
 
-                    if (p->op == OPERATOR_EQ) {
-                        step_type = PLAN_PK;
-                    } else {
-                        step_type = PLAN_PK_RANGE;
-                    }
+                if (p->op == OPERATOR_EQ) {
+                    step_type = PLAN_PK;
+                }
+                // Can't use PK index for LIKE yet
+                else if (p->op != OPERATOR_LIKE) {
+                    step_type = PLAN_PK_RANGE;
+                }
 
-                } else if (p->left.function == FUNC_UNITY) {
+            }
+            // Can only do indexes on bare columns for now
+            else if (p->left.function == FUNC_UNITY) {
 
-                    // Remove qualified name so indexes can be searched etc.
-                    int dot_index = str_find_index(p->left.text, '.');
-                    if (dot_index >= 0) {
-                        char value[FIELD_MAX_LENGTH];
-                        strcpy(value, p->left.text);
-                        strcpy(p->left.text, value + dot_index + 1);
-                    }
+                // Remove qualified name so indexes can be searched etc.
+                int dot_index = str_find_index(p->left.text, '.');
+                if (dot_index >= 0) {
+                    char value[FIELD_MAX_LENGTH];
+                    strcpy(value, p->left.text);
+                    strcpy(p->left.text, value + dot_index + 1);
+                }
 
-                    /*******************
-                     * INDEX SCAN
-                     *******************/
+                /*******************
+                 * INDEX SCAN
+                 *******************/
 
-                    // Try to find any index
-                    int find_result = findIndex(NULL, table.name, p->left.text, INDEX_ANY);
+                // Try to find any index
+                int find_result = findIndex(NULL, table.name, p->left.text, INDEX_ANY);
 
-                    if (find_result) {
+                if (find_result) {
 
-                        if (find_result == INDEX_PRIMARY) {
-                            if (p->op == OPERATOR_EQ) {
-                                step_type = PLAN_PK;
-                            } else {
-                                step_type = PLAN_PK_RANGE;
-                            }
-                        } else if (find_result == INDEX_UNIQUE) {
-                            if (p->op == OPERATOR_EQ) {
-                                step_type = PLAN_UNIQUE;
-                            } else {
-                                step_type = PLAN_UNIQUE_RANGE;
-                            }
-                        } else {
-                            step_type = PLAN_INDEX_RANGE;
+                    if (find_result == INDEX_PRIMARY) {
+                        if (p->op == OPERATOR_EQ) {
+                            step_type = PLAN_PK;
                         }
+                        // Can't use PK index for LIKE yet
+                        else if (p->op != OPERATOR_LIKE) {
+                            step_type = PLAN_PK_RANGE;
+                        }
+                    }
+                    // LIKE makes any INDEX automatically non-unique
+                    else if (find_result == INDEX_UNIQUE && p->op != OPERATOR_LIKE) {
+                        if (p->op == OPERATOR_EQ) {
+                            step_type = PLAN_UNIQUE;
+                        } else {
+                            step_type = PLAN_UNIQUE_RANGE;
+                        }
+                    }
+                    // INDEX RANGE can handle LIKE
+                    else {
+                        step_type = PLAN_INDEX_RANGE;
                     }
                 }
             }

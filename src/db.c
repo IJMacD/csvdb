@@ -262,7 +262,7 @@ int pkSearch (struct DB *db, const char * value) {
  *
  * @returns rowid of match (or closest match); or RESULT_NO_ROWS (-1) if out of bounds;
  */
-int indexSearch (struct DB *db, const char *value, int rowid_field, int mode, int * output_flag) {
+int indexSearch (struct DB *db, const char *search_value, int rowid_field, int mode, int * output_flag) {
     if (db->vfs == 0) {
         fprintf(stderr, "Trying to perform index search on unititialised DB\n");
         exit(-1);
@@ -271,7 +271,7 @@ int indexSearch (struct DB *db, const char *value, int rowid_field, int mode, in
     int (*vfs_indexSearch) (struct DB *, const char *, int, int, int *) = VFS_Table[db->vfs].indexSearch;
 
     if (vfs_indexSearch != NULL) {
-        return vfs_indexSearch(db, value, rowid_field, mode, output_flag);
+        return vfs_indexSearch(db, search_value, rowid_field, mode, output_flag);
     }
 
     // VFS-Agnostic implementation
@@ -282,18 +282,18 @@ int indexSearch (struct DB *db, const char *value, int rowid_field, int mode, in
     int index_a = 0;
     int index_b = db->record_count - 1;
     int index_match = -1;
-    int numeric_mode = is_numeric(value);
+    int numeric_mode = is_numeric(search_value);
 
     // Just in case we're in numeric mode
-    long search_value = atol(value);
+    long number_value = atol(search_value);
 
-    char val[VALUE_MAX_LENGTH] = {0};
+    char record_value[VALUE_MAX_LENGTH] = {0};
 
     // Check boundary cases before commencing search
 
     // Check lower boundary (index_a = 0)
-    getRecordValue(db, index_a, index_column, val, VALUE_MAX_LENGTH);
-    int res = compare(numeric_mode, value, search_value, val);
+    getRecordValue(db, index_a, index_column, record_value, VALUE_MAX_LENGTH);
+    int res = compare(numeric_mode, search_value, number_value, record_value);
 
     // Search value is below minimum
     if (res < 0) {
@@ -307,8 +307,8 @@ int indexSearch (struct DB *db, const char *value, int rowid_field, int mode, in
     }
     else {
         // Check upper boundary (index_b = record_count - 1)
-        getRecordValue(db, index_b, index_column, val, VALUE_MAX_LENGTH);
-        res = compare(numeric_mode, value, search_value, val);
+        getRecordValue(db, index_b, index_column, record_value, VALUE_MAX_LENGTH);
+        res = compare(numeric_mode, search_value, number_value, record_value);
 
         // Search value is above maximum
         if (res > 0) {
@@ -324,8 +324,8 @@ int indexSearch (struct DB *db, const char *value, int rowid_field, int mode, in
         else while (index_a < index_b - 1) {
             int index_curr = (index_a + index_b) / 2;
 
-            getRecordValue(db, index_curr, index_column, val, VALUE_MAX_LENGTH);
-            res = compare(numeric_mode, value, search_value, val);
+            getRecordValue(db, index_curr, index_column, record_value, VALUE_MAX_LENGTH);
+            res = compare(numeric_mode, search_value, number_value, record_value);
 
             if (res == 0) {
                 // printf("pk_search [%d   <%d>   %d]: %s\n", index_a, index_curr, index_b, val);
@@ -362,9 +362,9 @@ int indexSearch (struct DB *db, const char *value, int rowid_field, int mode, in
     if (mode == MODE_LOWER_BOUND) {
         // Backtrack until we find the first value
         while (index_match >= 0) {
-            getRecordValue(db, --index_match, 0, val, VALUE_MAX_LENGTH);
+            getRecordValue(db, --index_match, index_column, record_value, VALUE_MAX_LENGTH);
 
-            if (strcmp(val, value) != 0) {
+            if (strcmp(record_value, search_value) < 0) {
                 break;
             }
         }
@@ -377,9 +377,9 @@ int indexSearch (struct DB *db, const char *value, int rowid_field, int mode, in
     if (mode == MODE_UPPER_BOUND) {
         // Forward-track until we find the last value
         while (index_match < db->record_count) {
-            getRecordValue(db, ++index_match, 0, val, VALUE_MAX_LENGTH);
+            getRecordValue(db, ++index_match, index_column, record_value, VALUE_MAX_LENGTH);
 
-            if (strcmp(val, value) != 0) {
+            if (strcmp(record_value, search_value) > 0) {
                 break;
             }
         }
