@@ -76,7 +76,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 // Remove qualified name so indexes can be searched etc.
                 int dot_index = str_find_index(p->left.text, '.');
                 if (dot_index >= 0) {
-                    char value[FIELD_MAX_LENGTH];
+                    char value[MAX_FIELD_LENGTH];
                     strcpy(value, p->left.text);
                     strcpy(p->left.text, value + dot_index + 1);
                 }

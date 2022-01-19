@@ -39,8 +39,8 @@ int explain_select_query (
         struct PlanStep s = plan->steps[i];
 
         char *operation = "";
-        char table[FIELD_MAX_LENGTH] = {0};
-        char predicate[FIELD_MAX_LENGTH] = {0};
+        char table[MAX_FIELD_LENGTH] = {0};
+        char predicate[MAX_FIELD_LENGTH] = {0};
 
         if (s.predicate_count == 0) {
             predicate[0] = '\0';
@@ -53,7 +53,7 @@ int explain_select_query (
             for (int i = 0; i < s.predicate_count; i++) {
                 size_t l = strlen(s.predicates[i].left.text);
 
-                if (ptr + l > predicate + FIELD_MAX_LENGTH) break;
+                if (ptr + l > predicate + MAX_FIELD_LENGTH) break;
 
                 if (i > 0) {
                     *(ptr++) = ',';

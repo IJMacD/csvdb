@@ -98,7 +98,7 @@ int select_query (const char *query, int output_flags, FILE * output) {
      *************************/
 
     // Create array on stack to hold DB structs
-    struct DB dbs[TABLE_MAX_COUNT];
+    struct DB dbs[MAX_TABLE_COUNT];
 
     // Populate Tables
     // (including JOIN predicate columns)
@@ -223,11 +223,11 @@ int basic_select_query (
                 for (int j = 0; j < s->predicate_count; j++) {
                     struct Predicate * p = s->predicates + j;
 
-                    char value_left[VALUE_MAX_LENGTH] = {0};
-                    char value_right[VALUE_MAX_LENGTH] = {0};
+                    char value_left[MAX_VALUE_LENGTH] = {0};
+                    char value_right[MAX_VALUE_LENGTH] = {0};
 
-                    evaluateNode(q, &row_list, i, &p->left, value_left, VALUE_MAX_LENGTH);
-                    evaluateNode(q, &row_list, i, &p->right, value_right, VALUE_MAX_LENGTH);
+                    evaluateNode(q, &row_list, i, &p->left, value_left, MAX_VALUE_LENGTH);
+                    evaluateNode(q, &row_list, i, &p->right, value_right, MAX_VALUE_LENGTH);
 
                     if (!evaluateExpression(p->op, value_left, value_right)) {
                         match = 0;
@@ -321,14 +321,14 @@ int basic_select_query (
 
                 // Fill in value as constant from outer tables
                 if (p.left.table_id < table_id) {
-                    evaluateNode(q, &row_list, i, &p.left, p.left.text, FIELD_MAX_LENGTH);
+                    evaluateNode(q, &row_list, i, &p.left, p.left.text, MAX_FIELD_LENGTH);
                     p.left.field = FIELD_CONSTANT;
                     p.left.function = FUNC_UNITY;
                 }
 
                 // Fill in value as constant from outer tables
                 if (p.right.table_id < table_id) {
-                    evaluateNode(q, &row_list, i, &p.right, p.right.text, FIELD_MAX_LENGTH);
+                    evaluateNode(q, &row_list, i, &p.right, p.right.text, MAX_FIELD_LENGTH);
                     p.right.field = FIELD_CONSTANT;
                     p.right.function = FUNC_UNITY;
                 }
@@ -396,10 +396,10 @@ int basic_select_query (
             }
 
             for (int i = 0; i < row_list.row_count; i++) {
-                char value[VALUE_MAX_LENGTH];
+                char value[MAX_VALUE_LENGTH];
 
                 // Fill in value as constant from outer tables
-                evaluateNode(q, &row_list, i, outer, value, FIELD_MAX_LENGTH);
+                evaluateNode(q, &row_list, i, outer, value, MAX_FIELD_LENGTH);
 
                 // Hang on... won't this only work for calendar?
                 int rowid = pkSearch(&index_db, value);
@@ -592,7 +592,7 @@ static int findColumn (struct Query *q, const char *text, int *table_id, int *co
     }
 
     if (dot_index >= 0) {
-        char value[FIELD_MAX_LENGTH];
+        char value[MAX_FIELD_LENGTH];
 
         strncpy(value, text, dot_index);
         value[dot_index] = '\0';
@@ -670,7 +670,7 @@ static void populateColumnNode (struct Query * query, struct ColumnNode * column
             return;
         }
 
-        evaluateConstantNode(column, column->text, FIELD_MAX_LENGTH);
+        evaluateConstantNode(column, column->text, MAX_FIELD_LENGTH);
         evaluateFunction(column->text, NULL, column, -1);
         column->function = FUNC_UNITY;
     }

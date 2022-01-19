@@ -47,11 +47,11 @@ int parseQuery (struct Query *q, const char *query) {
         index += 8;
     }
 
-    char keyword[FIELD_MAX_LENGTH] = {0};
+    char keyword[MAX_FIELD_LENGTH] = {0};
 
     while (index < query_length) {
 
-        int token_length = getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+        int token_length = getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
         if (token_length <= 0) {
             break;
@@ -65,7 +65,7 @@ int parseQuery (struct Query *q, const char *query) {
             while (index < query_length) {
                 struct ColumnNode *column = &(q->columns[curr_index++]);
 
-                if (curr_index >= FIELD_MAX_COUNT + 1) {
+                if (curr_index >= MAX_FIELD_COUNT + 1) {
                     fprintf(stderr, "Too many columns\n");
                     return -1;
                 }
@@ -83,7 +83,7 @@ int parseQuery (struct Query *q, const char *query) {
                 if (strncmp(query + index, "AS ", 3) == 0) {
                     index += 3;
 
-                    getQuotedToken(query, &index, column->alias, FIELD_MAX_LENGTH);
+                    getQuotedToken(query, &index, column->alias, MAX_FIELD_LENGTH);
                 }
 
                 skipWhitespace(query, &index);
@@ -124,14 +124,14 @@ int parseQuery (struct Query *q, const char *query) {
                 table->join_type = next_join_flag;
                 next_join_flag = 0;
 
-                getQuotedToken(query, &index, table->name, TABLE_MAX_LENGTH);
+                getQuotedToken(query, &index, table->name, MAX_TABLE_LENGTH);
 
                 skipWhitespace(query, &index);
 
                 if (strncmp(query + index, "AS ", 3) == 0) {
                     index += 3;
 
-                    getQuotedToken(query, &index, table->alias, FIELD_MAX_LENGTH);
+                    getQuotedToken(query, &index, table->alias, MAX_FIELD_LENGTH);
                 } else {
                     strcpy(table->alias, table->name);
                 }
@@ -198,16 +198,16 @@ int parseQuery (struct Query *q, const char *query) {
                 }
                 else {
                     int old_index = index;
-                    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+                    getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
                     if (strcmp(keyword, "INNER") == 0) {
                         // Carry on
-                        getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+                        getToken(query, &index, keyword, MAX_FIELD_LENGTH);
                     }
                     else if (strcmp(keyword, "LEFT") == 0) {
                         // Mark join type and carry on
                         next_join_flag = JOIN_LEFT;
-                        getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+                        getToken(query, &index, keyword, MAX_FIELD_LENGTH);
                     }
 
                     if (strcmp(keyword, "JOIN") == 0) {
@@ -290,7 +290,7 @@ int parseQuery (struct Query *q, const char *query) {
             }
         }
         else if (strcmp(keyword, "FETCH") == 0) {
-            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+            getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
             if (strcmp(keyword, "FIRST") != 0 && strcmp(keyword, "NEXT") != 0) {
                 fprintf(stderr, "Bad query - expected FIRST|NEXT\n");
@@ -311,14 +311,14 @@ int parseQuery (struct Query *q, const char *query) {
                 q->limit_value = 1;
             }
 
-            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+            getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
             if (strcmp(keyword, "ROW") != 0 && strcmp(keyword, "ROWS") != 0) {
                 fprintf(stderr, "Bad query - expected ROW|ROWS; Got '%s'\n", keyword);
                 return -1;
             }
 
-            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+            getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
             if (strcmp(keyword, "ONLY") != 0) {
                 fprintf(stderr, "Bad query - expected ONLY; Got '%s'\n", keyword);
@@ -334,7 +334,7 @@ int parseQuery (struct Query *q, const char *query) {
             }
         }
         else if (strcmp(keyword, "ORDER") == 0) {
-            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+            getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
             if (strcmp(keyword, "BY") != 0) {
                 fprintf(stderr, "Bad query - expected BY\n");
@@ -343,11 +343,11 @@ int parseQuery (struct Query *q, const char *query) {
 
             q->flags |= FLAG_ORDER;
 
-            getQuotedToken(query, &index, q->order_field, FIELD_MAX_LENGTH);
+            getQuotedToken(query, &index, q->order_field, MAX_FIELD_LENGTH);
 
             size_t original_index = index;
 
-            getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+            getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
             if (strcmp(keyword, "ASC") == 0) {
                 q->order_direction = ORDER_ASC;
@@ -388,7 +388,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
     column->field = FIELD_UNKNOWN;
     column->function = FUNC_UNITY;
 
-    int quoted_flag = getQuotedToken(query, index, column->text, FIELD_MAX_LENGTH);
+    int quoted_flag = getQuotedToken(query, index, column->text, MAX_FIELD_LENGTH);
 
     strcpy(column->alias, column->text);
 
@@ -466,7 +466,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
 
         column->function = FUNC_LEFT;
 
-        char field_name[FIELD_MAX_LENGTH - 5];
+        char field_name[MAX_FIELD_LENGTH - 5];
         strcpy(field_name, column->text + 5);
         strcpy(column->text, field_name);
 
@@ -491,14 +491,14 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
 
         int len = strlen(column->text);
 
-        getToken(query, index, column->text + len + 1, FIELD_MAX_LENGTH - len);
+        getToken(query, index, column->text + len + 1, MAX_FIELD_LENGTH - len);
     }
     else if (strncmp(column->text, "RIGHT(", strlen("RIGHT(")) == 0) {
         // RIGHT(<field>, <count>)
 
         column->function = FUNC_RIGHT;
 
-        char field_name[FIELD_MAX_LENGTH - 6];
+        char field_name[MAX_FIELD_LENGTH - 6];
         strcpy(field_name, column->text + 6);
         strcpy(column->text, field_name);
 
@@ -523,11 +523,11 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
 
         int len = strlen(column->text);
 
-        getToken(query, index, column->text + len + 1, FIELD_MAX_LENGTH - len);
+        getToken(query, index, column->text + len + 1, MAX_FIELD_LENGTH - len);
 
     }
     else if (strncmp(column->text, "EXTRACT(", strlen("EXTRACT(")) == 0) {
-        char part[FIELD_MAX_LENGTH - 8];
+        char part[MAX_FIELD_LENGTH - 8];
         strcpy(part, column->text + 8);
 
         if (strcmp(part, "YEAR") == 0) {
@@ -601,7 +601,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
 
         skipWhitespace(query, index);
 
-        getQuotedToken(query, index, column->text, FIELD_MAX_LENGTH);
+        getQuotedToken(query, index, column->text, MAX_FIELD_LENGTH);
 
         size_t len = strlen(column->text);
 
@@ -619,7 +619,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
             (*index)++;
         }
 
-        if (strlen(part) + strlen(column->text) + 15 < FIELD_MAX_LENGTH)
+        if (strlen(part) + strlen(column->text) + 15 < MAX_FIELD_LENGTH)
             sprintf(column->alias, "EXTRACT(%s FROM %s)", part, column->text);
 
         if (checkConstantColumn(column) < 0) {
@@ -634,7 +634,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
             return -1;
         }
 
-        if (strlen(column->text) + 7 < FIELD_MAX_LENGTH)
+        if (strlen(column->text) + 7 < MAX_FIELD_LENGTH)
             sprintf(column->alias, "COUNT(%s)", column->text);
     }
     else if (strncmp(column->text, "MAX(", strlen("MAX(")) == 0) {
@@ -645,7 +645,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
             return -1;
         }
 
-        if (strlen(column->text) + 5 < FIELD_MAX_LENGTH)
+        if (strlen(column->text) + 5 < MAX_FIELD_LENGTH)
             sprintf(column->alias, "MAX(%s)", column->text);
     }
     else if (strncmp(column->text, "MIN(", strlen("MIN(")) == 0) {
@@ -656,7 +656,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
             return -1;
         }
 
-        if (strlen(column->text) + 5 < FIELD_MAX_LENGTH)
+        if (strlen(column->text) + 5 < MAX_FIELD_LENGTH)
             sprintf(column->alias, "MIN(%s)", column->text);
     }
     else if (strncmp(column->text, "SUM(", strlen("SUM(")) == 0) {
@@ -667,7 +667,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
             return -1;
         }
 
-        if (strlen(column->text) + 5 < FIELD_MAX_LENGTH)
+        if (strlen(column->text) + 5 < MAX_FIELD_LENGTH)
             sprintf(column->alias, "SUM(%s)", column->text);
     }
     else if (strncmp(column->text, "AVG(", strlen("AVG(")) == 0) {
@@ -678,7 +678,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
             return -1;
         }
 
-        if (strlen(column->text) + 5 < FIELD_MAX_LENGTH)
+        if (strlen(column->text) + 5 < MAX_FIELD_LENGTH)
             sprintf(column->alias, "AVG(%s)", column->text);
     }
     else if (strncmp(column->text, "LISTAGG(", strlen("LISTAGG(")) == 0) {
@@ -689,7 +689,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
             return -1;
         }
 
-        if (strlen(column->text) + 9 < FIELD_MAX_LENGTH)
+        if (strlen(column->text) + 9 < MAX_FIELD_LENGTH)
             sprintf(column->alias, "LISTAGG(%s)", column->text);
     }
 
@@ -707,7 +707,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
  */
 int parseFunction (const char * query, size_t * index, struct ColumnNode * column, int name_length) {
 
-    char field[FIELD_MAX_LENGTH];
+    char field[MAX_FIELD_LENGTH];
     strcpy(field, column->text + name_length + 1);
     strcpy(column->text, field);
 
@@ -752,7 +752,7 @@ static int checkConstantColumn(struct ColumnNode * column) {
             return -1;
         }
 
-        char value[FIELD_MAX_LENGTH];
+        char value[MAX_FIELD_LENGTH];
         strncpy(value, column->text + 1, len - 2);
         value[len - 2] = '\0';
 

@@ -359,8 +359,8 @@ int calendar_fullTableScan (struct DB *db, struct RowList *row_list, struct Pred
     }
 
     int count = 0;
-    char value_left[VALUE_MAX_LENGTH];
-    char value_right[VALUE_MAX_LENGTH];
+    char value_left[MAX_VALUE_LENGTH];
+    char value_right[MAX_VALUE_LENGTH];
 
     for (; julian < max_julian; julian++) {
         int matching = 1;
@@ -371,8 +371,8 @@ int calendar_fullTableScan (struct DB *db, struct RowList *row_list, struct Pred
         for (int j = 0; j < predicate_count && matching; j++) {
             struct Predicate *predicate = predicates + j;
 
-            calendar_evaluateNode(db, &predicate->left, julian, value_left, VALUE_MAX_LENGTH);
-            calendar_evaluateNode(db, &predicate->right, julian, value_right, VALUE_MAX_LENGTH);
+            calendar_evaluateNode(db, &predicate->left, julian, value_left, MAX_VALUE_LENGTH);
+            calendar_evaluateNode(db, &predicate->right, julian, value_right, MAX_VALUE_LENGTH);
 
             if (!evaluateExpression(predicate->op, value_left, value_right)) {
                 matching = 0;

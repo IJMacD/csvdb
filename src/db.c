@@ -179,8 +179,8 @@ int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *p
 
     // VFS-agnostic implementation
 
-    char value_left[VALUE_MAX_LENGTH] = {0};
-    char value_right[VALUE_MAX_LENGTH] = {0};
+    char value_left[MAX_VALUE_LENGTH] = {0};
+    char value_right[MAX_VALUE_LENGTH] = {0};
 
     for (int i = 0; i < db->record_count; i++) {
         int matching = 1;
@@ -293,12 +293,12 @@ int indexSearch (struct DB *db, const char *search_value, int rowid_field, int m
     // Just in case we're in numeric mode
     long number_value = atol(search_value);
 
-    char record_value[VALUE_MAX_LENGTH] = {0};
+    char record_value[MAX_VALUE_LENGTH] = {0};
 
     // Check boundary cases before commencing search
 
     // Check lower boundary (index_a = 0)
-    getRecordValue(db, index_a, index_column, record_value, VALUE_MAX_LENGTH);
+    getRecordValue(db, index_a, index_column, record_value, MAX_VALUE_LENGTH);
     int res = compare(numeric_mode, search_value, number_value, record_value);
 
     // Search value is below minimum
@@ -313,7 +313,7 @@ int indexSearch (struct DB *db, const char *search_value, int rowid_field, int m
     }
     else {
         // Check upper boundary (index_b = record_count - 1)
-        getRecordValue(db, index_b, index_column, record_value, VALUE_MAX_LENGTH);
+        getRecordValue(db, index_b, index_column, record_value, MAX_VALUE_LENGTH);
         res = compare(numeric_mode, search_value, number_value, record_value);
 
         // Search value is above maximum
@@ -330,7 +330,7 @@ int indexSearch (struct DB *db, const char *search_value, int rowid_field, int m
         else while (index_a < index_b - 1) {
             int index_curr = (index_a + index_b) / 2;
 
-            getRecordValue(db, index_curr, index_column, record_value, VALUE_MAX_LENGTH);
+            getRecordValue(db, index_curr, index_column, record_value, MAX_VALUE_LENGTH);
             res = compare(numeric_mode, search_value, number_value, record_value);
 
             if (res == 0) {
@@ -368,7 +368,7 @@ int indexSearch (struct DB *db, const char *search_value, int rowid_field, int m
     if (mode == MODE_LOWER_BOUND) {
         // Backtrack until we find the first value
         while (index_match >= 0) {
-            getRecordValue(db, --index_match, index_column, record_value, VALUE_MAX_LENGTH);
+            getRecordValue(db, --index_match, index_column, record_value, MAX_VALUE_LENGTH);
 
             if (strcmp(record_value, search_value) < 0) {
                 break;
@@ -383,7 +383,7 @@ int indexSearch (struct DB *db, const char *search_value, int rowid_field, int m
     if (mode == MODE_UPPER_BOUND) {
         // Forward-track until we find the last value
         while (index_match < db->record_count) {
-            getRecordValue(db, ++index_match, index_column, record_value, VALUE_MAX_LENGTH);
+            getRecordValue(db, ++index_match, index_column, record_value, MAX_VALUE_LENGTH);
 
             if (strcmp(record_value, search_value) > 0) {
                 break;

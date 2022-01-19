@@ -21,8 +21,8 @@ void insertNode (struct DB *db, int field_index, struct tree *root, struct tree 
     node->left = NULL;
     node->right = NULL;
 
-    char field_value[VALUE_MAX_LENGTH] = {0};
-    getRecordValue(db, node->rowid, field_index, field_value, VALUE_MAX_LENGTH);
+    char field_value[MAX_VALUE_LENGTH] = {0};
+    getRecordValue(db, node->rowid, field_index, field_value, MAX_VALUE_LENGTH);
 
     if (is_numeric(field_value)) {
         // Prepare `value`
@@ -70,11 +70,11 @@ void insertTextNode (struct DB *db, int field_index, struct tree *root, struct t
     }
     // If numeric value is equal then fallback to comparing the rest of the string
     else {
-        char root_value[VALUE_MAX_LENGTH] = {0};
-        char node_value[VALUE_MAX_LENGTH] = {0};
+        char root_value[MAX_VALUE_LENGTH] = {0};
+        char node_value[MAX_VALUE_LENGTH] = {0};
 
-        getRecordValue(db, root->rowid, field_index, root_value, VALUE_MAX_LENGTH);
-        getRecordValue(db, node->rowid, field_index, node_value, VALUE_MAX_LENGTH);
+        getRecordValue(db, root->rowid, field_index, root_value, MAX_VALUE_LENGTH);
+        getRecordValue(db, node->rowid, field_index, node_value, MAX_VALUE_LENGTH);
 
         if (strcmp(node_value, root_value) < 0) {
             if (root->left == NULL) root->left = node;

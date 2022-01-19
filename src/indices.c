@@ -102,7 +102,7 @@ int indexScan (struct DB *index_db, int rowid_column, int predicate_op, const ch
     // (exclusive)
     int upper_bound;
 
-    char value[VALUE_MAX_LENGTH];
+    char value[MAX_VALUE_LENGTH];
     strcpy(value, predicate_value);
     size_t len = strlen(value);
 
@@ -216,14 +216,14 @@ int indexScan (struct DB *index_db, int rowid_column, int predicate_op, const ch
  * @return Number of rows added
  */
 int indexWalk(struct DB *db, int rowid_column, int lower_index, int upper_index, struct RowList * row_list) {
-    char value[VALUE_MAX_LENGTH];
+    char value[MAX_VALUE_LENGTH];
 
     // Always ascending
     for (int i = lower_index; i < upper_index; i++) {
         if (rowid_column == FIELD_ROW_INDEX) {
             appendRowID(row_list, i);
         } else {
-            getRecordValue(db, i, rowid_column, value, VALUE_MAX_LENGTH);
+            getRecordValue(db, i, rowid_column, value, MAX_VALUE_LENGTH);
             appendRowID(row_list, atoi(value));
         }
     }

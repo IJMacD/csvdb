@@ -3,8 +3,8 @@
 #include "limits.h"
 
 struct ColumnNode {
-    char text[FIELD_MAX_LENGTH];
-    char alias[FIELD_MAX_LENGTH];
+    char text[MAX_FIELD_LENGTH];
+    char alias[MAX_FIELD_LENGTH];
     int table_id;
     int field;
     int function;

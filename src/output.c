@@ -94,7 +94,7 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
             fprintf(f, "%d", rowid);
         }
         else if (column.field == FIELD_CONSTANT) {
-            char output[VALUE_MAX_LENGTH];
+            char output[MAX_VALUE_LENGTH];
             int result = evaluateFunction(output, NULL, &column, -1);
 
             if (result < 0) {
@@ -114,7 +114,7 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
             // Evaluate plain columns as well as functions
             int rowid = getRowID(row_list, column.table_id, result_index);
             struct DB *db = tables[column.table_id].db;
-            char output[VALUE_MAX_LENGTH];
+            char output[MAX_VALUE_LENGTH];
 
             int result = evaluateFunction(output, db, columns + j, rowid);
 
@@ -253,8 +253,8 @@ static void printAllColumns (FILE *f, struct DB *db, int rowid, int format, cons
         }
 
         // Value
-        char value[VALUE_MAX_LENGTH];
-        if (getRecordValue(db, rowid, k, value, VALUE_MAX_LENGTH) > 0) {
+        char value[MAX_VALUE_LENGTH];
+        if (getRecordValue(db, rowid, k, value, MAX_VALUE_LENGTH) > 0) {
             fprintf(f, "%s", value);
         }
 

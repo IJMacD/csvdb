@@ -37,7 +37,7 @@ struct PlanStep {
 
 struct Plan {
     int step_count;
-    struct PlanStep steps[PLAN_MAX_STEPS];
+    struct PlanStep steps[MAX_PLAN_STEPS];
 };
 
 int makePlan (struct Query *q, struct Plan *plan);

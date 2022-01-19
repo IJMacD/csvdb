@@ -23,16 +23,16 @@ int create_index (const char *index_name, const char *table_name, const char *in
 int create_query (const char *query) {
     size_t index = 0;
 
-    char keyword[FIELD_MAX_LENGTH] = {0};
+    char keyword[MAX_FIELD_LENGTH] = {0};
 
-    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+    getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "CREATE") != 0) {
         fprintf(stderr, "Expected CREATE got '%s'\n", keyword);
         return -1;
     }
 
-    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+    getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "TABLE") == 0) {
         return create_table_query(query);
@@ -51,26 +51,26 @@ int create_index_query (const char * query) {
 
     size_t index = 0;
 
-    char keyword[FIELD_MAX_LENGTH] = {0};
+    char keyword[MAX_FIELD_LENGTH] = {0};
 
-    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+    getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "CREATE") != 0) {
         fprintf(stderr, "Expected CREATE got '%s'\n", keyword);
         return -1;
     }
 
-    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+    getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-    char index_name[TABLE_MAX_LENGTH + FIELD_MAX_LENGTH + 2] = {0};
-    char table_name[TABLE_MAX_LENGTH] = {0};
+    char index_name[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 2] = {0};
+    char table_name[MAX_TABLE_LENGTH] = {0};
 
-    char index_field[FIELD_MAX_LENGTH] = {0};
+    char index_field[MAX_FIELD_LENGTH] = {0};
 
     if (strcmp(keyword, "UNIQUE") == 0) {
         unique_flag = 1;
 
-        getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+        getToken(query, &index, keyword, MAX_FIELD_LENGTH);
     }
 
     if (strcmp(keyword, "INDEX") != 0) {
@@ -84,17 +84,17 @@ int create_index_query (const char * query) {
         // Auto generated index name
         auto_name = 1;
     } else {
-        getQuotedToken(query, &index, index_name, TABLE_MAX_LENGTH);
+        getQuotedToken(query, &index, index_name, MAX_TABLE_LENGTH);
     }
 
-    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+    getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "ON") != 0) {
         fprintf(stderr, "Expected ON got '%s'\n", keyword);
         return -1;
     }
 
-    getQuotedToken(query, &index, table_name, TABLE_MAX_LENGTH);
+    getQuotedToken(query, &index, table_name, MAX_TABLE_LENGTH);
 
     skipWhitespace(query, &index);
 
@@ -103,7 +103,7 @@ int create_index_query (const char * query) {
         return -1;
     }
 
-    int length = getToken(query, &index, index_field, TABLE_MAX_LENGTH);
+    int length = getToken(query, &index, index_field, MAX_TABLE_LENGTH);
 
     if (index_field[length - 1] != ')') {
         fprintf(stderr, "Expected ) got '%c'\n", index_field[length - 1]);
@@ -139,7 +139,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
         return -1;
     }
 
-    char file_name[TABLE_MAX_LENGTH + FIELD_MAX_LENGTH + 12];
+    char file_name[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12];
     sprintf(file_name, "%s.%s.csv", index_name, unique_flag ? "unique" : "index");
 
     FILE *f = fopen(file_name, "w");
@@ -174,13 +174,13 @@ int create_index (const char *index_name, const char *table_name, const char *in
     // Output functions assume array of DBs
     printHeaderLine(f, &table, 1, columns, 2, OUTPUT_FORMAT_COMMA);
 
-    char values[2][VALUE_MAX_LENGTH];
+    char values[2][MAX_VALUE_LENGTH];
 
     for (int i = 0; i < db.record_count; i++) {
         // Check for UNIQUE
         if (unique_flag) {
             int row_id = getRowID(&row_list, 0, i);
-            getRecordValue(&db, row_id, index_field_index, values[i % 2], VALUE_MAX_LENGTH);
+            getRecordValue(&db, row_id, index_field_index, values[i % 2], MAX_VALUE_LENGTH);
 
             if (i > 0 && strcmp(values[0], values[1]) == 0) {
                 fprintf(stderr, "UNIQUE constraint failed. Multiple values for: '%s'\n", values[0]);
@@ -202,18 +202,18 @@ int create_table_query (const char * query) {
 
     size_t index = 0;
 
-    char keyword[FIELD_MAX_LENGTH] = {0};
+    char keyword[MAX_FIELD_LENGTH] = {0};
 
-    char table_name[TABLE_MAX_LENGTH] = {0};
+    char table_name[MAX_TABLE_LENGTH] = {0};
 
-    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+    getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "CREATE") != 0) {
         fprintf(stderr, "Expected CREATE got '%s'\n", keyword);
         return -1;
     }
 
-    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+    getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "TABLE") != 0) {
         fprintf(stderr, "Expected TABLE got '%s'\n", keyword);
@@ -222,9 +222,9 @@ int create_table_query (const char * query) {
 
     skipWhitespace(query, &index);
 
-    getQuotedToken(query, &index, table_name, TABLE_MAX_LENGTH);
+    getQuotedToken(query, &index, table_name, MAX_TABLE_LENGTH);
 
-    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+    getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "AS") != 0) {
         fprintf(stderr, "Expected AS got '%s'\n", keyword);
@@ -233,7 +233,7 @@ int create_table_query (const char * query) {
 
     skipWhitespace(query, &index);
 
-    char file_name[TABLE_MAX_LENGTH + 4];
+    char file_name[MAX_TABLE_LENGTH + 4];
     sprintf(file_name, "%s.csv", table_name);
 
     FILE *f = fopen(file_name, "w");
@@ -251,18 +251,18 @@ int create_table_query (const char * query) {
 int create_view_query (const char * query) {
     size_t index = 0;
 
-    char keyword[FIELD_MAX_LENGTH] = {0};
+    char keyword[MAX_FIELD_LENGTH] = {0};
 
-    char view_name[TABLE_MAX_LENGTH] = {0};
+    char view_name[MAX_TABLE_LENGTH] = {0};
 
-    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+    getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "CREATE") != 0) {
         fprintf(stderr, "Expected CREATE got '%s'\n", keyword);
         return -1;
     }
 
-    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+    getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "VIEW") != 0) {
         fprintf(stderr, "Expected VIEW got '%s'\n", keyword);
@@ -271,9 +271,9 @@ int create_view_query (const char * query) {
 
     skipWhitespace(query, &index);
 
-    getQuotedToken(query, &index, view_name, TABLE_MAX_LENGTH);
+    getQuotedToken(query, &index, view_name, MAX_TABLE_LENGTH);
 
-    getToken(query, &index, keyword, FIELD_MAX_LENGTH);
+    getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "AS") != 0) {
         fprintf(stderr, "Expected AS got '%s'\n", keyword);
@@ -282,7 +282,7 @@ int create_view_query (const char * query) {
 
     skipWhitespace(query, &index);
 
-    char file_name[TABLE_MAX_LENGTH + 4];
+    char file_name[MAX_TABLE_LENGTH + 4];
     sprintf(file_name, "%s.sql", view_name);
 
     FILE *f = fopen(file_name, "w");
@@ -304,9 +304,9 @@ int create_view_query (const char * query) {
 int insert_query (const char * query) {
     size_t index = 0;
 
-    char keyword[FIELD_MAX_LENGTH] = {0};
+    char keyword[MAX_FIELD_LENGTH] = {0};
 
-    char table_name[TABLE_MAX_LENGTH] = {0};
+    char table_name[MAX_TABLE_LENGTH] = {0};
 
     if (strncmp(query, "INSERT INTO", 11) != 0) {
         fprintf(stderr, "Expected INSERT INTO got '%s'\n", keyword);
@@ -317,7 +317,7 @@ int insert_query (const char * query) {
 
     skipWhitespace(query, &index);
 
-    getQuotedToken(query, &index, table_name, TABLE_MAX_LENGTH);
+    getQuotedToken(query, &index, table_name, MAX_TABLE_LENGTH);
 
     skipWhitespace(query, &index);
 
@@ -326,7 +326,7 @@ int insert_query (const char * query) {
         return -1;
     }
 
-    char file_name[TABLE_MAX_LENGTH + 4];
+    char file_name[MAX_TABLE_LENGTH + 4];
     sprintf(file_name, "%s.csv", table_name);
 
     FILE *f = fopen(file_name, "a");

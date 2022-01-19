@@ -39,8 +39,8 @@
 #define ROWID_NULL  -1
 
 struct Table {
-    char name[TABLE_MAX_LENGTH];
-    char alias[FIELD_MAX_LENGTH];
+    char name[MAX_TABLE_LENGTH];
+    char alias[MAX_FIELD_LENGTH];
     struct DB * db;
     struct Predicate join;
     int join_type;
@@ -49,14 +49,14 @@ struct Table {
 struct Query {
     struct Table *tables;
     int table_count;
-    struct ColumnNode columns[FIELD_MAX_COUNT];
+    struct ColumnNode columns[MAX_FIELD_COUNT];
     int column_count;
     int flags;
     int offset_value;
     int limit_value;
     struct Predicate *predicates;
     int predicate_count;
-    char order_field[FIELD_MAX_LENGTH];
+    char order_field[MAX_FIELD_LENGTH];
     int order_direction;
 };
 

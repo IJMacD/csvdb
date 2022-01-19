@@ -1,8 +1,8 @@
 
-#define VALUE_MAX_LENGTH    255
-#define FIELD_MAX_LENGTH    32
-#define TABLE_MAX_LENGTH    255
-#define PLAN_MAX_STEPS      10
-#define FIELD_MAX_COUNT     32
-#define TABLE_MAX_COUNT     10
+#define MAX_VALUE_LENGTH    255
+#define MAX_FIELD_LENGTH    32
+#define MAX_TABLE_LENGTH    255
+#define MAX_PLAN_STEPS      10
+#define MAX_FIELD_COUNT     32
+#define MAX_TABLE_COUNT     10
 #define MEMORY_FILE_LIMIT   (100 * 1024 * 1024)
