@@ -1,3 +1,5 @@
+#include <stdlib.h>
+#include <stdio.h>
 #include <ctype.h>
 
 int is_numeric (const char *string) {
@@ -67,4 +69,41 @@ int writeUTF8(char * output, int codepoint) {
     }
 
     return 0;
+}
+
+/**
+ * @brief Given a string starting with an open parenthesis, search for a
+ * matching closing parenthesis and return the total length of string
+ * (including the open and closing parentheses). This function allows nested
+ * parentheses.
+ *
+ * @param string
+ * @return int
+ */
+int find_closing_parenthesis (const char *string) {
+    int offset = 0;
+    int depth = 1;
+
+    if (string[offset] != '(') {
+        fprintf(stderr, "find_closing_parenthesis was expecting '(' but actually got '%c'\n", string[offset]);
+        exit(-1);
+    }
+
+    offset++;
+
+    while(string[offset] != '\0') {
+        char c = string[offset++];
+        if (c == '(') {
+            depth++;
+        }
+        else if(c == ')') {
+            depth--;
+        }
+
+        if (depth == 0) {
+            return offset;
+        }
+    }
+
+    return -1;
 }

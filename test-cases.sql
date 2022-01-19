@@ -53,3 +53,4 @@ FROM suits SELECT LISTAGG(name)
 FROM suits INNER JOIN ranks ON LENGTH(ranks.name) = LENGTH(suits.name)
 FROM suits LEFT JOIN ranks ON LENGTH(ranks.name) = LENGTH(suits.name)
 FROM suits JOIN ranks USING LENGTH(name)
+FROM (FROM SEQUENCE(10) OFFSET 5) AS a, (FROM SEQUENCE(2)) AS b SELECT b.value, a.value

@@ -3,7 +3,6 @@
 #include <ctype.h>
 
 #include "token.h"
-#include "parse.h"
 #include "predicates.h"
 #include "function.h"
 #include "sort.h"
@@ -124,7 +123,30 @@ int parseQuery (struct Query *q, const char *query) {
                 table->join_type = next_join_flag;
                 next_join_flag = 0;
 
-                getQuotedToken(query, &index, table->name, MAX_TABLE_LENGTH);
+                skipWhitespace(query, &index);
+
+                if (query[index] == '(') {
+                    // Subquery time!
+
+                    int len = find_closing_parenthesis(query + index);
+
+                    if (len >= MAX_TABLE_LENGTH) {
+                        fprintf(stderr, "Subqueries longer than %d are not supported.\n", MAX_TABLE_LENGTH);
+                        exit(-1);
+                    }
+
+                    strncpy(table->name, query + index + 1, len - 2);
+
+                    // Indicate to query processor this is a subquery
+                    table->db = DB_SUBQUERY;
+
+                    index += len;
+
+                    strcpy(table->alias, "subquery");
+                }
+                else {
+                    getQuotedToken(query, &index, table->name, MAX_TABLE_LENGTH);
+                }
 
                 skipWhitespace(query, &index);
 

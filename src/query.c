@@ -7,6 +7,7 @@
 
 #include "query.h"
 #include "db.h"
+#include "db-csv-mem.h"
 #include "parse.h"
 #include "predicates.h"
 #include "function.h"
@@ -32,6 +33,8 @@ static int populateTables (struct Query *q, struct DB * dbs);
 static void populateColumnNode (struct Query * query, struct ColumnNode * column);
 
 static int findColumn (struct Query *q, const char *text, int *table_id, int *column_id);
+
+extern char **global_argv;
 
 int query (const char *query, int output_flags, FILE * output) {
     if (strncmp(query, "CREATE ", 7) == 0) {
@@ -536,8 +539,23 @@ static int populateTables (struct Query *q, struct DB *dbs) {
 
         int found = 0;
 
+        if (table->db == DB_SUBQUERY) {
+            char *cmd = malloc(MAX_TABLE_LENGTH * 2);
+
+            // Construct command line for sub-process
+            sprintf(cmd, "%s -H -F csv \"%s\"", global_argv[0], table->name);
+
+            FILE *f = popen(cmd, "r");
+            free(cmd);
+
+            // hand off to CSV Mem
+            csvMem_makeDB(&dbs[i], f);
+
+            table->db = &dbs[i];
+            found = 1;
+        }
         // Try to reuse existing open table
-        for (int j = 0; j < i; j++) {
+        else for (int j = 0; j < i; j++) {
             if (strcmp(q->tables[j].name, table->name) == 0) {
                 // Copy pointer
                 table->db = q->tables[j].db;

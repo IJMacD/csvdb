@@ -12,6 +12,7 @@ SRCDIR = src
 OBJS = $(SRCS:.c=.o)
 EXE  = csvdb
 GENEXE = gen
+INSTALL_DIR = /usr/local/bin
 
 #
 # Debug build settings
@@ -47,7 +48,7 @@ GENSRCS = $(filter-out main.c, $(SRCS)) gen.c
 GENOBJS = $(addprefix $(GENDIR)/, $(GENSRCS:.c=.o))
 GENCFLAGS = -O3 -DNDEBUG
 
-.PHONY: all clean debug prep release remake cgi test
+.PHONY: all clean debug prep release remake cgi test install
 
 # Default build
 all: prep release
@@ -107,3 +108,6 @@ remake: clean all
 
 clean:
 	rm -f $(RELEXE) $(RELOBJS) $(DBGEXE) $(DBGOBJS) $(CGIEXE) ${CGIOBJS}
+
+install: release
+	cp $(RELEXE) $(INSTALL_DIR)

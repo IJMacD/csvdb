@@ -2,6 +2,8 @@
 
 #include <stdio.h>
 
+#include "db.h"
+
 int csvMem_openDB (struct DB *db, const char *filename);
 
 void csvMem_closeDB (struct DB *db);

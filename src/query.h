@@ -38,6 +38,8 @@
 
 #define ROWID_NULL  -1
 
+#define DB_SUBQUERY (void *)-1
+
 struct Table {
     char name[MAX_TABLE_LENGTH];
     char alias[MAX_FIELD_LENGTH];
