@@ -46,6 +46,35 @@ int parseQuery (struct Query *q, const char *query) {
         index += 8;
     }
 
+    skipWhitespace(query, &index);
+
+    // Special treatment for VALUES only (top-level) query
+    // Will behave as a query: SELECT * FROM values_mem
+    // Where values_mem is a simulated DB in memory
+    if (strncmp(query + index, "VALUES", 6) == 0 && isspace(query[index + 6])) {
+        index += 7;
+
+        q->tables = calloc(1, sizeof(q->tables[0]));
+        q->table_count = 1;
+
+        struct Table *table = &q->tables[0];
+
+        skipWhitespace(query, &index);
+
+        strncpy(table->name, query + index, MAX_TABLE_LENGTH - 1);
+
+        if (table->name[MAX_TABLE_LENGTH - 2] != '\0') {
+            fprintf(stderr, "VALUES query was too long (limited to %d characters)\n", MAX_TABLE_LENGTH - 1);
+            exit(-1);
+        }
+
+        table->db = DB_VALUES;
+
+        strcpy(table->alias, "values");
+
+        return 0;
+    }
+
     char keyword[MAX_FIELD_LENGTH] = {0};
 
     while (index < query_length) {
@@ -128,7 +157,7 @@ int parseQuery (struct Query *q, const char *query) {
                 if (query[index] == '(') {
                     // Subquery time!
 
-                    int len = find_closing_parenthesis(query + index);
+                    int len = find_matching_parenthesis(query + index);
 
                     if (len >= MAX_TABLE_LENGTH) {
                         fprintf(stderr, "Subqueries longer than %d are not supported.\n", MAX_TABLE_LENGTH);
@@ -154,7 +183,8 @@ int parseQuery (struct Query *q, const char *query) {
                     index += 3;
 
                     getQuotedToken(query, &index, table->alias, MAX_FIELD_LENGTH);
-                } else {
+                } else if (table->alias[0] == '\0') {
+                    // Warning! alias is char[32] and name is char[255]
                     strcpy(table->alias, table->name);
                 }
 

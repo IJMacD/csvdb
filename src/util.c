@@ -80,12 +80,12 @@ int writeUTF8(char * output, int codepoint) {
  * @param string
  * @return int
  */
-int find_closing_parenthesis (const char *string) {
+int find_matching_parenthesis (const char *string) {
     int offset = 0;
     int depth = 1;
 
     if (string[offset] != '(') {
-        fprintf(stderr, "find_closing_parenthesis was expecting '(' but actually got '%c'\n", string[offset]);
+        fprintf(stderr, "find_matching_parenthesis was expecting '(' but actually got '%c'\n", string[offset]);
         exit(-1);
     }
 

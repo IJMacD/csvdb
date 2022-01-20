@@ -539,22 +539,40 @@ static int populateTables (struct Query *q, struct DB *dbs) {
 
         int found = 0;
 
+        // Handle special kinds of table, info provided by parser
+
+        // Check for subquery first
         if (table->db == DB_SUBQUERY) {
-            char *cmd = malloc(MAX_TABLE_LENGTH * 2);
+            // Special-special treatment: VALUES can be handled in process
+            if (strncmp(table->name, "VALUES", 6) == 0 && isspace(table->name[6])) {
+                csvMem_fromValues(&dbs[i], table->name + 7);
+            }
+            else {
+                char *cmd = malloc(MAX_TABLE_LENGTH * 2);
 
-            // Construct command line for sub-process
-            sprintf(cmd, "%s -H -F csv \"%s\"", global_argv[0], table->name);
+                // Construct command line for sub-process
+                sprintf(cmd, "%s -H -F csv \"%s\"", global_argv[0], table->name);
 
-            FILE *f = popen(cmd, "r");
-            free(cmd);
+                FILE *f = popen(cmd, "r");
+                free(cmd);
 
-            // hand off to CSV Mem
-            csvMem_makeDB(&dbs[i], f);
+                // hand off to CSV Mem
+                csvMem_makeDB(&dbs[i], f);
+            }
 
             table->db = &dbs[i];
             found = 1;
         }
-        // Try to reuse existing open table
+        // If it is VALUES only (top-level) query
+        else if (table->db == DB_VALUES) {
+
+            csvMem_fromValues(&dbs[i], table->name);
+
+            table->db = &dbs[i];
+            found = 1;
+        }
+        // Must be a regular table
+        // Try to reuse existing open table first
         else for (int j = 0; j < i; j++) {
             if (strcmp(q->tables[j].name, table->name) == 0) {
                 // Copy pointer
@@ -568,6 +586,7 @@ static int populateTables (struct Query *q, struct DB *dbs) {
             }
         }
 
+        // Not a special table and not already open
         if (found == 0) {
             if (openDB(&dbs[i], table->name) != 0) {
                 fprintf(stderr, "File not found: '%s'\n", table->name);

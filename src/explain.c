@@ -84,7 +84,8 @@ int explain_select_query (
                 }
             }
 
-            strcpy(table, q->tables[join_count].name);
+            strncpy(table, q->tables[join_count].name, MAX_FIELD_LENGTH);
+            table[MAX_FIELD_LENGTH - 1] = '\0';
         }
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
             operation = "TABLE ACCESS BY ROWID";
@@ -104,30 +105,35 @@ int explain_select_query (
             if (s.predicate_count > 0) {
                 int table_id = s.predicates->left.table_id;
 
-                strcpy(table, q->tables[table_id].name);
+                strncpy(table, q->tables[table_id].name, MAX_FIELD_LENGTH);
+                table[MAX_FIELD_LENGTH - 1] = '\0';
             }
         }
         else if (s.type == PLAN_PK) {
             operation = "PRIMARY KEY UNIQUE";
-            strcpy(table, q->tables[join_count].name);
+            strncpy(table, q->tables[join_count].name, MAX_FIELD_LENGTH);
+            table[MAX_FIELD_LENGTH - 1] = '\0';
             rows = 1;
             cost = log_rows;
         }
         else if (s.type == PLAN_PK_RANGE) {
             operation = "PRIMARY KEY RANGE";
-            strcpy(table, q->tables[join_count].name);
+            strncpy(table, q->tables[join_count].name, MAX_FIELD_LENGTH);
+            table[MAX_FIELD_LENGTH - 1] = '\0';
             rows = row_estimate / 2;
             cost = rows;
         }
         else if (s.type == PLAN_UNIQUE) {
             operation = "INDEX UNIQUE";
-            strcpy(table, q->tables[join_count].name);
+            strncpy(table, q->tables[join_count].name, MAX_FIELD_LENGTH);
+            table[MAX_FIELD_LENGTH - 1] = '\0';
             rows = 1;
             cost = log_rows;
         }
         else if (s.type == PLAN_UNIQUE_RANGE) {
             operation = "INDEX UNIQUE RANGE";
-            strcpy(table, q->tables[join_count].name);
+            strncpy(table, q->tables[join_count].name, MAX_FIELD_LENGTH);
+            table[MAX_FIELD_LENGTH - 1] = '\0';
             if (s.predicate_count > 0) {
                 if (s.limit >= 0) {
                     rows = (s.limit < row_estimate) ? s.limit : row_estimate;
@@ -150,7 +156,8 @@ int explain_select_query (
         }
         else if (s.type == PLAN_INDEX_RANGE) {
             operation = "INDEX RANGE";
-            strcpy(table, q->tables[join_count].name);
+            strncpy(table, q->tables[join_count].name, MAX_FIELD_LENGTH);
+            table[MAX_FIELD_LENGTH - 1] = '\0';
             if (s.predicate_count > 0) {
                 if (s.limit >= 0) {
                     rows = (s.limit < row_estimate) ? s.limit : row_estimate;
@@ -211,7 +218,8 @@ int explain_select_query (
 
             struct Table *t = &q->tables[join_count];
 
-            strcpy(table, t->name);
+            strncpy(table, t->name, MAX_FIELD_LENGTH);
+            table[MAX_FIELD_LENGTH - 1] = '\0';
 
             rows *= t->db->record_count;
             if (cost < rows) {
@@ -225,7 +233,8 @@ int explain_select_query (
 
             struct Table *t = &q->tables[join_count];
 
-            strcpy(table, t->name);
+            strncpy(table, t->name, MAX_FIELD_LENGTH);
+            table[MAX_FIELD_LENGTH - 1] = '\0';
 
             if (s.predicate_count > 0) {
                 if (s.predicates[0].op == OPERATOR_EQ) {
@@ -253,7 +262,8 @@ int explain_select_query (
 
             struct Table *t = &q->tables[join_count];
 
-            strcpy(table, t->name);
+            strncpy(table, t->name, MAX_FIELD_LENGTH);
+            table[MAX_FIELD_LENGTH - 1] = '\0';
 
             if (s.predicate_count > 0) {
                 if (s.predicates[0].op == OPERATOR_EQ) {
@@ -281,7 +291,8 @@ int explain_select_query (
 
             struct Table *t = &q->tables[join_count];
 
-            strcpy(table, t->name);
+            strncpy(table, t->name, MAX_FIELD_LENGTH);
+            table[MAX_FIELD_LENGTH - 1] = '\0';
 
             // We might have been too hasty copying predicate name
             if (s.predicates[0].left.table_id != join_count) {

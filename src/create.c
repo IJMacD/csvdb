@@ -321,11 +321,6 @@ int insert_query (const char * query) {
 
     skipWhitespace(query, &index);
 
-    if (strncmp(query + index, "VALUES", 6) == 0) {
-        fprintf(stderr, "Unimplemented: VALUES keyword\n");
-        return -1;
-    }
-
     char file_name[MAX_TABLE_LENGTH + 4];
     sprintf(file_name, "%s.csv", table_name);
 

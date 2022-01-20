@@ -1,12 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "db.h"
 #include "indices.h"
 #include "limits.h"
+#include "util.h"
 
-static int countFields (struct DB *db);
+static int countFields (const char *ptr);
 
 static int countLines (struct DB *db);
 
@@ -106,21 +108,20 @@ static int countLines (struct DB *db) {
     return count;
 }
 
-static int countFields (struct DB *db) {
+static int countFields (const char *ptr) {
     int count = 1;
-    size_t i = 0;
 
     // Note: abritrary line limit
-    while (db->data[i] != '\0') {
-        if (db->data[i] == '\n'){
+    while (*ptr != '\0') {
+        if (*ptr == '\n'){
             return count;
         }
 
-        if (db->data[i] == ','){
+        if (*ptr == ','){
             count++;
         }
 
-        i++;
+        ptr++;
     }
 
     return count;
@@ -215,6 +216,7 @@ int csvMem_getRecordValue (struct DB *db, int record_index, int field_index, cha
     while (db->data[i] != '\0') {
         if (char_index == 0 && db->data[i] == '"') {
             quoted_flag = !quoted_flag;
+            i++;
             continue;
         }
 
@@ -267,7 +269,7 @@ int csvMem_getRecordValue (struct DB *db, int record_index, int field_index, cha
 
 static void prepareHeaders (struct DB *db) {
 
-    db->field_count = countFields(db);
+    db->field_count = countFields(db->data);
 
     int header_length = measureLine(db, 0);
 
@@ -318,4 +320,80 @@ static void consumeStream (struct DB *db) {
 
         read_size = fread(db->data + offset, block_size, 1, db->file);
     } while (read_size > 0);
+}
+
+/**
+ * @brief Convert from VALUES layout e.g. ('a',1),('b',2) to csv in memory
+ */
+void csvMem_fromValues(struct DB *db, const char *values) {
+    const char *in_ptr = values;
+    char *out_ptr;
+
+    db->vfs = VFS_CSV_MEM;
+    db->file = NULL;
+
+    db->data = malloc(MAX_TABLE_LENGTH);
+    out_ptr = db->data;
+
+    db->line_indices = malloc(100 * sizeof (long));
+
+    // Headers
+    db->line_indices[0] = 0;
+    const char headers[] = "col1\0col2\0col3\0col4\0col5\0col6\0col7\0col8\0col9\0col10\n";
+    memcpy(out_ptr, headers, sizeof(headers));
+    out_ptr += sizeof(headers);
+
+    db->fields = db->data;
+    db->data += sizeof(headers);
+
+    int line_index = 0;
+
+    while(*in_ptr != '\0') {
+        // Skip whitespace
+        while (isspace(*(in_ptr++))) {}
+        in_ptr--;
+
+        if (*in_ptr != '(') {
+            fprintf(stderr, "VALUES expected to start with '('\n");
+            exit(-1);
+        }
+
+        db->line_indices[line_index++] = out_ptr - db->data;
+
+        int line_length = find_matching_parenthesis(in_ptr);
+
+        strncpy(out_ptr, in_ptr + 1, line_length - 2);
+
+        // Swap quotes '\'' -> '"'
+        // Warning: will break quotes in string (converts to space)
+        // Warning: can't cope with escaped quotes in string
+        for (int i = 0; i < line_length - 2; i++) {
+            if (*out_ptr == '\'') *out_ptr = '"';
+            else if (*out_ptr == '"') *out_ptr = ' ';
+            out_ptr++;
+        }
+
+        in_ptr += line_length;
+
+        // End of file
+        if (*in_ptr == '\0') {
+            break;
+        }
+        // End of line
+        else if (*in_ptr == ',') {
+            in_ptr++;
+            *(out_ptr++) = '\n';
+        }
+        // Skip whitespace
+        else while (isspace(*(in_ptr++))) {}
+
+        // Might have been trailing whitespace at end of file
+        if (*in_ptr == '\0') {
+            break;
+        }
+    }
+
+    db->field_count = countFields(db->data + db->line_indices[0]);
+
+    db->record_count = line_index;
 }

@@ -3,6 +3,12 @@
 
 #include "token.h"
 
+/**
+ * @brief Skips spaces, newlines, tabs and comment lines
+ *
+ * @param string
+ * @param index
+ */
 void skipWhitespace (const char *string, size_t *index) {
     while (string[*index] != '\0') {
         while(isspace(string[*index])) { (*index)++; }
