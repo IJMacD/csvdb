@@ -7,13 +7,16 @@
 #include "db-csv-mem.h"
 #include "db-sequence.h"
 #include "db-sample.h"
+#include "db-dir.h"
 #include "limits.h"
 #include "indices.h"
 #include "function.h"
 #include "query.h"
 #include "util.h"
 
-struct VFS VFS_Table[10] = {
+#define VFS_COUNT   10
+
+struct VFS VFS_Table[VFS_COUNT] = {
     {
         0
     },
@@ -57,6 +60,13 @@ struct VFS VFS_Table[10] = {
         .getFieldName = &sample_getFieldName,
         .getRecordValue = &sample_getRecordValue,
     },
+    {
+        .openDB = &dir_openDB,
+        .closeDB = &dir_closeDB,
+        .getFieldIndex = &dir_getFieldIndex,
+        .getFieldName = &dir_getFieldName,
+        .getRecordValue = &dir_getRecordValue,
+    },
 };
 
 /**
@@ -65,20 +75,20 @@ struct VFS VFS_Table[10] = {
  * @return 0 on success, -1 on failure
  */
 int openDB (struct DB *db, const char *filename) {
-    if (strcmp(filename, "CALENDAR") == 0) {
-        return calendar_openDB(db, filename);
-    }
-
-    if (strncmp(filename, "SEQUENCE(", 9) == 0) {
-        return sequence_openDB(db, filename);
-    }
-
     if (strncmp(filename, "memory:", 7) == 0) {
         return csvMem_openDB(db, filename + 7);
     }
 
-    if (strcmp(filename, "SAMPLE") == 0) {
-        return sample_openDB(db, filename);
+    for (int i = 0; i < VFS_COUNT; i++) {
+        int (*vfs_openDB) (struct DB *, const char *filename) = VFS_Table[i].openDB;
+
+        if (vfs_openDB != NULL) {
+            int result = vfs_openDB(db, filename);
+
+            if (result == 0) {
+                return 0;
+            }
+        }
     }
 
     return csv_openDB(db, filename);

@@ -425,10 +425,6 @@ void destroyQuery (struct Query *query) {
         free(query->predicates);
     }
 
-    for (int i = 0; i < query->table_count; i++) {
-        closeDB(query->tables[i].db);
-    }
-
     if (query->table_count > 0) {
         free(query->tables);
     }

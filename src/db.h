@@ -12,6 +12,7 @@
 #define VFS_CSV_MEM     4
 #define VFS_SEQUENCE    5
 #define VFS_SAMPLE      6
+#define VFS_DIR         7
 
 struct DB {
     int vfs;
