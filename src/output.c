@@ -266,7 +266,11 @@ static void printAllColumns (FILE *f, struct DB *db, int rowid, int format, cons
 
         // Value
         char value[MAX_VALUE_LENGTH];
-        if (getRecordValue(db, rowid, k, value, MAX_VALUE_LENGTH) > 0) {
+        int length = getRecordValue(db, rowid, k, value, MAX_VALUE_LENGTH);
+        if (length == 0) {
+            value[0] = '\0';
+        }
+        if (length >= 0) {
             fprintf(f, string_frmt, value);
         }
 

@@ -89,6 +89,8 @@ int dir_getRecordValue (struct DB *db, int record_index, int field_index, char *
             return sprintf(value, "%c", 'd');
         if (dp->d_type == DT_REG)
             return sprintf(value, "%c", 'f');
+        if (dp->d_type == DT_LNK)
+            return sprintf(value, "%c", 's');
         return 0;
     }
 
@@ -108,7 +110,7 @@ int dir_getRecordValue (struct DB *db, int record_index, int field_index, char *
 
     // size
     if (field_index == 4) {
-        if (dp->d_type == DT_DIR) {
+        if (dp->d_type != DT_REG) {
             return 0;
         }
 
