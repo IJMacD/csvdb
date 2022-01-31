@@ -32,6 +32,7 @@
 #define OUTPUT_FORMAT_HTML          (4 << 1)
 #define OUTPUT_FORMAT_JSON_ARRAY    (5 << 1)
 #define OUTPUT_FORMAT_SQL_INSERT    (6 << 1)
+#define OUTPUT_FORMAT_TABLE         (7 << 1)
 
 #define JOIN_INNER  0
 #define JOIN_CROSS  0

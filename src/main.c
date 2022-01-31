@@ -149,6 +149,8 @@ int main (int argc, char * argv[]) {
             flags |= OUTPUT_FORMAT_JSON;
         } else if (strcmp(format_val, "sql") == 0) {
             flags |= OUTPUT_FORMAT_SQL_INSERT;
+        } else if (strcmp(format_val, "table") == 0) {
+            flags |= OUTPUT_FORMAT_TABLE;
         } else {
             fprintf(stderr, "Unrecognised format: %s\n", format_val);
             return -1;
