@@ -38,9 +38,10 @@ int csvMem_makeDB (struct DB *db, FILE *f) {
             fprintf(stderr, "Sub-process failed\n");
             return -1;
         }
+    } else {
+        fclose(db->file);
+        db->file = NULL;
     }
-
-    db->file = f;
 
     prepareHeaders(db);
 
@@ -92,11 +93,6 @@ void csvMem_closeDB (struct DB *db) {
         // db->data is in the same block as db->fields
         free(db->fields);
         db->fields = NULL;
-    }
-
-    if (db->file != NULL) {
-        fclose(db->file);
-        db->file = NULL;
     }
 }
 
