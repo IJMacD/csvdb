@@ -19,6 +19,7 @@ static char *field_names[] = {
     "inode",
     "name",
     "type",
+    "path",
     "size",
     "created",
     "modified",
@@ -70,6 +71,7 @@ char *dir_getFieldName (__attribute__((unused)) struct DB *db, int field_index) 
 int dir_getRecordValue (struct DB *db, int record_index, int field_index, char *value, __attribute__((unused)) size_t value_max_length) {
 
     struct dirent *dp = getDirectoryEntry(db, record_index);
+    char path[MAX_TABLE_LENGTH * 2];
 
     // inode
     if (field_index == 0) {
@@ -90,30 +92,38 @@ int dir_getRecordValue (struct DB *db, int record_index, int field_index, char *
         return 0;
     }
 
-    // size
+    // The rest of the fields require the path
+    strcpy(path, db->data);
+    int len = strlen(path);
+    strcpy(path + len, dp->d_name);
+
+    // path
     if (field_index == 3) {
+        return sprintf(value, "%s", path);
+    }
+
+    // The rest of the fields require stat
+    struct stat s;
+    if(stat(path, &s)) { return 0; }
+
+    // size
+    if (field_index == 4) {
         if (dp->d_type == DT_DIR) {
             return 0;
         }
 
-        struct stat s;
-        stat(dp->d_name, &s);
         return sprintf(value, "%ld", s.st_size);
     }
 
     // created
-    if (field_index == 4) {
-        struct stat s;
-        stat(dp->d_name, &s);
+    if (field_index == 5) {
         struct DateTime dt;
         datetimeFromJulian(&dt, unixToJulian(s.st_ctime));
         return sprintf(value, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
     }
 
     // modified
-    if (field_index == 5) {
-        struct stat s;
-        stat(dp->d_name, &s);
+    if (field_index == 6) {
         struct DateTime dt;
         datetimeFromJulian(&dt, unixToJulian(s.st_mtime));
         return sprintf(value, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
@@ -129,7 +139,7 @@ int dir_findIndex(__attribute__((unused)) struct DB *db, __attribute__((unused))
 
 static int makeDB(struct DB *db, const char * path) {
     db->record_count = 0;
-
+    db->data = NULL;
 
     DIR *dfd = opendir(path);
     if (dfd == NULL) {
@@ -139,7 +149,14 @@ static int makeDB(struct DB *db, const char * path) {
     struct dirent *dp;
 
     // man7.org says sizeof(*dp) is unreliable
-    db->data = malloc(max_count * sizeof(*dp));
+    db->data = malloc(MAX_TABLE_LENGTH + max_count * sizeof(*dp));
+
+    // Put directory path in data
+    strcpy(db->data, path);
+    int len = strlen(path);
+    // Add directory separator
+    db->data[len] = '/';
+    db->data[len + 1] = '\0';
 
     while((dp = readdir(dfd)) != NULL) {
         memcpy(getDirectoryEntry(db, db->record_count), dp, sizeof(*dp));
@@ -157,7 +174,7 @@ static int makeDB(struct DB *db, const char * path) {
 }
 
 static struct dirent * getDirectoryEntry (struct DB *db, int record_index) {
-    return (struct dirent *)&db->data[record_index * sizeof(struct dirent)];
+    return (struct dirent *)&db->data[MAX_TABLE_LENGTH + record_index * sizeof(struct dirent)];
 }
 
 static int unixToJulian (long time) {
