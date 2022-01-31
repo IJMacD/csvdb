@@ -7,12 +7,17 @@
 
 #define VFS_NULL        0
 #define VFS_CSV         1
-#define VFS_INTERNAL    2
-#define VFS_CALENDAR    3
-#define VFS_CSV_MEM     4
+#define VFS_CSV_MEM     2
+#define VFS_INTERNAL    3
+#define VFS_CALENDAR    4
 #define VFS_SEQUENCE    5
 #define VFS_SAMPLE      6
 #define VFS_DIR         7
+
+#define STREAM_NULL     (void *)0
+#define STREAM_FILE     (void *)1
+#define STREAM_PIPE     (void *)2
+#define STREAM_PROC     (void *)3
 
 struct DB {
     int vfs;

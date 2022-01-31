@@ -11,11 +11,12 @@
 #define FIELD_ROW_INDEX                     -5
 #define FIELD_CONSTANT                      -6
 
-#define FLAG_HAVE_PREDICATE         1
-#define FLAG_GROUP                  2
-#define FLAG_PRIMARY_KEY_SEARCH     4
-#define FLAG_ORDER                  8
-#define FLAG_EXPLAIN                4096
+#define FLAG_HAVE_PREDICATE         (1<<0)
+#define FLAG_GROUP                  (1<<1)
+#define FLAG_PRIMARY_KEY_SEARCH     (1<<2)
+#define FLAG_ORDER                  (1<<3)
+#define FLAG_EXPLAIN                (1<<12)
+#define FLAG_READ_ONLY              (1<<13)
 
 // xxxx aaa h
 //          h - headers

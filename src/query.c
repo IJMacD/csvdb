@@ -38,10 +38,20 @@ extern char **global_argv;
 
 int query (const char *query, int output_flags, FILE * output) {
     if (strncmp(query, "CREATE ", 7) == 0) {
+        if (output_flags & FLAG_READ_ONLY) {
+            fprintf(stderr, "Tried to CREATE while in read-only mode\n");
+            exit(-1);
+
+        }
         return create_query(query);
     }
 
     if (strncmp(query, "INSERT ", 7) == 0) {
+        if (output_flags & FLAG_READ_ONLY) {
+            fprintf(stderr, "Tried to INSERT while in read-only mode\n");
+            exit(-1);
+        }
+
         return insert_query(query);
     }
 
@@ -551,13 +561,18 @@ static int populateTables (struct Query *q, struct DB *dbs) {
                 char *cmd = malloc(MAX_TABLE_LENGTH * 2);
 
                 // Construct command line for sub-process
-                sprintf(cmd, "%s -H -F csv \"%s\"", global_argv[0], table->name);
+                sprintf(cmd, "%s -0 -H -F csv \"%s\"", global_argv[0], table->name);
 
                 FILE *f = popen(cmd, "r");
                 free(cmd);
 
+                struct DB *db = &dbs[i];
+
+                // Leave a note for csvMem to close the stream
+                db->file = STREAM_PROC;
+
                 // hand off to CSV Mem
-                csvMem_makeDB(&dbs[i], f);
+                csvMem_makeDB(db, f);
             }
 
             table->db = &dbs[i];
@@ -589,7 +604,7 @@ static int populateTables (struct Query *q, struct DB *dbs) {
         // Not a special table and not already open
         if (found == 0) {
             if (openDB(&dbs[i], table->name) != 0) {
-                fprintf(stderr, "File not found: '%s'\n", table->name);
+                fprintf(stderr, "Unable to use file: '%s'\n", table->name);
                 return -1;
             }
 
@@ -695,6 +710,7 @@ static void populateColumnNode (struct Query * query, struct ColumnNode * column
     if (column->field == FIELD_UNKNOWN) {
         if (!findColumn(query, column->text, &column->table_id, &column->field)) {
             fprintf(stderr, "Unable to find column '%s'\n", column->text);
+            exit(-1);
         }
     }
 

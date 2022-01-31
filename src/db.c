@@ -29,6 +29,13 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .findIndex = &csv_findIndex,
     },
     {
+        .openDB = &csvMem_openDB,
+        .closeDB = &csvMem_closeDB,
+        .getFieldIndex = &csvMem_getFieldIndex,
+        .getFieldName = &csvMem_getFieldName,
+        .getRecordValue = &csvMem_getRecordValue,
+    },
+    {
         0
     },
     {
@@ -40,13 +47,6 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .findIndex = &calendar_findIndex,
         .fullTableScan = &calendar_fullTableScan,
         .indexSearch = &calendar_indexSearch,
-    },
-    {
-        .openDB = &csvMem_openDB,
-        .closeDB = &csvMem_closeDB,
-        .getFieldIndex = &csvMem_getFieldIndex,
-        .getFieldName = &csvMem_getFieldName,
-        .getRecordValue = &csvMem_getRecordValue,
     },
     {
         .openDB = &sequence_openDB,
@@ -75,11 +75,15 @@ struct VFS VFS_Table[VFS_COUNT] = {
  * @return 0 on success, -1 on failure
  */
 int openDB (struct DB *db, const char *filename) {
+    // Process explicit CSV_MEM first
     if (strncmp(filename, "memory:", 7) == 0) {
         return csvMem_openDB(db, filename + 7);
     }
 
-    for (int i = 0; i < VFS_COUNT; i++) {
+    // Need to skip CSV and CSV_MEM for now because they are not very picky and
+    // will attempt to find files with the same name, which might not be what
+    // we want.
+    for (int i = VFS_INTERNAL; i < VFS_COUNT; i++) {
         int (*vfs_openDB) (struct DB *, const char *filename) = VFS_Table[i].openDB;
 
         if (vfs_openDB != NULL) {
@@ -91,6 +95,8 @@ int openDB (struct DB *db, const char *filename) {
         }
     }
 
+    // None of the other VFSs wanted to open the file
+    // Fallback to CSV
     return csv_openDB(db, filename);
 }
 

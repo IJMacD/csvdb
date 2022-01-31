@@ -79,8 +79,17 @@ int csv_openDB (struct DB *db, const char *filename) {
         int len = strlen(filename);
         if (strcmp(filename + len - 4, ".sql") == 0) {
             fclose(f);
-            sprintf(buffer, "%s -H -F csv -f %s", global_argv[0], filename);
+            sprintf(buffer, "%s -0 -H -F csv -f %s", global_argv[0], filename);
             f = popen(buffer, "r");
+
+            if (f == NULL) {
+                fprintf(stderr, "Unable to open process\n");
+            }
+
+            // Leave a note for csvMem to close the stream
+            db->file = STREAM_PROC;
+
+            return csvMem_makeDB(db, f);
         }
     }
     else {
@@ -94,8 +103,17 @@ int csv_openDB (struct DB *db, const char *filename) {
 
             if (f) {
                 fclose(f);
-                sprintf(buffer, "%s -H -F csv -f %s.sql", global_argv[0], filename);
+                sprintf(buffer, "%s -0 -H -F csv -f %s.sql", global_argv[0], filename);
                 f = popen(buffer, "r");
+
+                if (f == NULL) {
+                    fprintf(stderr, "Unable to open process\n");
+                }
+
+                // Leave a note for csvMem to close the stream
+                db->file = STREAM_PROC;
+
+                return csvMem_makeDB(db, f);
             }
             else {
                 return -1;

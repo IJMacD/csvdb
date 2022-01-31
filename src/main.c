@@ -123,6 +123,10 @@ int main (int argc, char * argv[]) {
 
             buffer[count] = '\0';
         }
+        else if (strcmp(arg, "-0") == 0) {
+            // Secret internal argument to force read-only mode
+            flags |= FLAG_READ_ONLY;
+        }
         else {
             fprintf(stderr, "Unknown option %s\n", arg);
             printUsage(argv[0]);

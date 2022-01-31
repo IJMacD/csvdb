@@ -21,15 +21,26 @@ static void prepareHeaders (struct DB *db);
  */
 static int indexLines (struct DB *db, long *indices);
 
-static void consumeStream (struct DB *db);
+static void consumeStream (struct DB *db, FILE *stream);
 
 int csvMem_makeDB (struct DB *db, FILE *f) {
     db->vfs = VFS_CSV_MEM;
-    db->file = f;
 
     // It would be nice to have a streaming solution but I don't think it's
     // realistically possible. We will just read the entire stream into memory.
-    consumeStream(db);
+    consumeStream(db, f);
+
+    // Check if we've been told that the stream is actually a sub-process.
+    if (db->file == STREAM_PROC) {
+        int result = pclose(f);
+
+        if (result) {
+            fprintf(stderr, "Sub-process failed\n");
+            return -1;
+        }
+    }
+
+    db->file = f;
 
     prepareHeaders(db);
 
@@ -291,7 +302,7 @@ int csvMem_findIndex(__attribute__((unused)) struct DB *db, __attribute__((unuse
     return 0;
 }
 
-static void consumeStream (struct DB *db) {
+static void consumeStream (struct DB *db, FILE *stream) {
     // 4 KB blocks
     int block_size = 4 * 1024;
 
@@ -318,7 +329,7 @@ static void consumeStream (struct DB *db) {
             db->data = ptr;
         }
 
-        read_size = fread(db->data + offset, block_size, 1, db->file);
+        read_size = fread(db->data + offset, block_size, 1, stream);
     } while (read_size > 0);
 }
 
