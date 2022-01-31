@@ -18,6 +18,7 @@ static int max_count = 1000;
 static char *field_names[] = {
     "inode",
     "name",
+    "type",
     "size",
     "created",
     "modified",
@@ -26,6 +27,8 @@ static char *field_names[] = {
 static int makeDB(struct DB *db, const char * path);
 
 static struct dirent * getDirectoryEntry (struct DB *db, int record_index);
+
+static int unixToJulian (long time);
 
 int dir_openDB (struct DB *db, const char *filename) {
     if (strncmp(filename, "DIR(", 4) != 0) {
@@ -78,8 +81,17 @@ int dir_getRecordValue (struct DB *db, int record_index, int field_index, char *
         return sprintf(value, "%s", dp->d_name);
     }
 
-    // size
+    // type
     if (field_index == 2) {
+        if (dp->d_type == DT_DIR)
+            return sprintf(value, "%c", 'd');
+        if (dp->d_type == DT_REG)
+            return sprintf(value, "%c", 'f');
+        return 0;
+    }
+
+    // size
+    if (field_index == 3) {
         if (dp->d_type == DT_DIR) {
             return 0;
         }
@@ -90,17 +102,21 @@ int dir_getRecordValue (struct DB *db, int record_index, int field_index, char *
     }
 
     // created
-    if (field_index == 3) {
-        struct stat s;
-        stat(dp->d_name, &s);
-        return sprintf(value, "%ld", s.st_ctime);
-    }
-
-    // modified
     if (field_index == 4) {
         struct stat s;
         stat(dp->d_name, &s);
-        return sprintf(value, "%ld", s.st_mtime);
+        struct DateTime dt;
+        datetimeFromJulian(&dt, unixToJulian(s.st_ctime));
+        return sprintf(value, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
+    }
+
+    // modified
+    if (field_index == 5) {
+        struct stat s;
+        stat(dp->d_name, &s);
+        struct DateTime dt;
+        datetimeFromJulian(&dt, unixToJulian(s.st_mtime));
+        return sprintf(value, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
     }
 
     return -1;
@@ -122,7 +138,7 @@ static int makeDB(struct DB *db, const char * path) {
 
     struct dirent *dp;
 
-    // ma7.org says sizeof(*dp) is unreliable
+    // man7.org says sizeof(*dp) is unreliable
     db->data = malloc(max_count * sizeof(*dp));
 
     while((dp = readdir(dfd)) != NULL) {
@@ -142,4 +158,8 @@ static int makeDB(struct DB *db, const char * path) {
 
 static struct dirent * getDirectoryEntry (struct DB *db, int record_index) {
     return (struct dirent *)&db->data[record_index * sizeof(struct dirent)];
+}
+
+static int unixToJulian (long time) {
+    return 2440587 + time / 86400;
 }
