@@ -33,7 +33,8 @@ void printUsage (const char* name) {
         "\n"
         "Options:\n"
         "\t[-E|--explain]\n"
-        "\t[-H|--headers]\n"
+        "\t[-H|--headers] (default)\n"
+        "\t[--no-headers]\n"
         "\t[(-F |--format=)(tsv|csv|html|json|json_array|sql)]\n"
         "\t[(-o |--output=)<filename>]\n"
     , name);
@@ -45,6 +46,9 @@ int main (int argc, char * argv[]) {
     srand((unsigned) time(NULL) * getpid());
 
     int flags = 0;
+
+    // Default: with headers
+    flags |= OUTPUT_OPTION_HEADERS;
 
     FILE * output = stdout;
     const char * format_val = NULL;
@@ -66,6 +70,9 @@ int main (int argc, char * argv[]) {
         }
         else if ((strcmp(arg, "-H") == 0 || strcmp(arg, "--headers") == 0)) {
             flags |= OUTPUT_OPTION_HEADERS;
+        }
+        else if (strcmp(arg, "--no-headers") == 0) {
+            flags &= !OUTPUT_OPTION_HEADERS;
         }
         else if (strcmp(arg, "-F") == 0) {
             if (argi + 1 >= argc) {

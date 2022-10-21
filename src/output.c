@@ -6,8 +6,9 @@
 #include "query.h"
 #include "limits.h"
 #include "function.h"
+#include "util.h"
 
-static void printAllColumns (FILE *f, struct DB *db, int rowid, int format, const char * field_sep);
+static void printAllColumns (FILE *f, struct DB *db, int rowid, int format, const char * field_sep, const char * string_fmt, const char * num_fmt);
 static void printAllHeaders (FILE *f, struct DB *db, int format, const char * field_sep);
 
 void printResultLine (FILE *f, struct Table *tables, int table_count, struct ColumnNode columns[], int column_count, int result_index, struct RowList * row_list, int flags) {
@@ -17,8 +18,8 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
 
     int format = flags & OUTPUT_MASK_FORMAT;
 
-    char *string_frmt = (format == OUTPUT_FORMAT_TABLE) ? "%-20s" : "%s";
-    char *num_frmt = (format == OUTPUT_FORMAT_TABLE) ? "%20d" : "%d";
+    char *string_fmt = "%s";
+    char *num_fmt = "%d";
 
     if (format == OUTPUT_FORMAT_COMMA) {
         field_sep = ",";
@@ -31,20 +32,24 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
         record_end = "</TD></TR>\n";
     }
     else if (format == OUTPUT_FORMAT_JSON_ARRAY) {
-        fprintf(f, "[\"");
+        fprintf(f, "[");
 
-        field_sep = "\",\"";
+        string_fmt = "\"%s\"";
 
-        record_end = "\"]";
+        field_sep = ",";
+
+        record_end = "]";
 
         record_sep = ",";
     }
     else if (format == OUTPUT_FORMAT_JSON) {
         fprintf(f, "{");
 
-        field_sep = "\",";
+        string_fmt = "\"%s\"";
 
-        record_end = "\"}";
+        field_sep = ",";
+
+        record_end = "}";
 
         record_sep = ",";
     }
@@ -60,12 +65,16 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
     else if (format == OUTPUT_FORMAT_TABLE) {
         field_sep = "";
     }
+    else if (format == OUTPUT_FORMAT_TABLE) {
+        string_fmt = "%-20s";
+        num_fmt = "%20d";
+    }
 
     for (int j = 0; j < column_count; j++) {
         struct ColumnNode column = columns[j];
 
         if (format == OUTPUT_FORMAT_JSON && column.field != FIELD_STAR) {
-            fprintf(f, "\"%s\": \"", column.alias);
+            fprintf(f, "\"%s\": ", column.alias);
         }
 
         if (column.field == FIELD_STAR) {
@@ -73,13 +82,13 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
                 // e.g. table.*
                 struct DB *db = tables[column.table_id].db;
                 int rowid = getRowID(row_list, column.table_id, result_index);
-                printAllColumns(f, db, rowid, format, field_sep);
+                printAllColumns(f, db, rowid, format, field_sep, string_fmt, num_fmt);
             } else {
                 // e.g. *
                 for (int m = 0; m < table_count; m++) {
                     struct DB *db = tables[m].db;
                     int rowid = getRowID(row_list, m, result_index);
-                    printAllColumns(f, db, rowid, format, field_sep);
+                    printAllColumns(f, db, rowid, format, field_sep, string_fmt, num_fmt);
 
                     if (m < table_count - 1) {
                         fprintf(f, "%s", field_sep);
@@ -88,16 +97,16 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
             }
         }
         else if (column.field == FIELD_COUNT_STAR) {
-            fprintf(f, num_frmt, row_list->row_count);
+            fprintf(f, num_fmt, row_list->row_count);
         }
         else if (column.field == FIELD_ROW_NUMBER) {
             // ROW_NUMBER() is 1-indexed
-            fprintf(f, num_frmt, result_index + 1);
+            fprintf(f, num_fmt, result_index + 1);
         }
         else if (column.field == FIELD_ROW_INDEX) {
             // FIELD_ROW_INDEX is the input line (0 indexed)
             int rowid = getRowID(row_list, column.table_id, result_index);
-            fprintf(f, num_frmt, rowid);
+            fprintf(f, num_fmt, rowid);
         }
         else if (column.field == FIELD_CONSTANT) {
             char output[MAX_VALUE_LENGTH];
@@ -107,7 +116,11 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
                 fprintf(f, "BADFUNC");
             }
 
-            fprintf(f, string_frmt, output);
+            if (is_numeric(output)) {
+                fprintf(f, num_fmt, atoi(output));
+            } else {
+                fprintf(f, string_fmt, output);
+            }
         }
         else if ((column.function & MASK_FUNC_FAMILY) == FUNC_FAM_AGG) {
             int result = evaluateAggregateFunction(f, tables, table_count, columns + j, row_list);
@@ -128,7 +141,11 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
                 fprintf(f, "BADFUNC");
             }
 
-            fprintf(f, string_frmt, output);
+            if (is_numeric(output)) {
+                fprintf(f, num_fmt, atoi(output));
+            } else {
+                fprintf(f, string_fmt, output);
+            }
         }
         else {
             fprintf(f, "UNKNOWN");
@@ -152,7 +169,7 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
 
     int format = flags & OUTPUT_MASK_FORMAT;
 
-    char *string_frmt = (format == OUTPUT_FORMAT_TABLE) ? "%-20s" : "%s";
+    char *string_fmt = (format == OUTPUT_FORMAT_TABLE) ? "%-20s" : "%s";
 
     if (format == OUTPUT_FORMAT_COMMA) {
         field_sep = ",";
@@ -205,19 +222,19 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
             }
         }
         else if (column.alias[0] != '\0') {
-            fprintf(f, string_frmt, column.alias);
+            fprintf(f, string_fmt, column.alias);
         }
         else if (column.field == FIELD_COUNT_STAR) {
-            fprintf(f, string_frmt, "COUNT(*)");
+            fprintf(f, string_fmt, "COUNT(*)");
         }
         else if (column.field == FIELD_ROW_NUMBER) {
-            fprintf(f, string_frmt, "ROW_NUMBER()");
+            fprintf(f, string_fmt, "ROW_NUMBER()");
         }
         else if (column.field == FIELD_ROW_INDEX) {
-            fprintf(f, string_frmt, "rowid");
+            fprintf(f, string_fmt, "rowid");
         }
         else {
-            fprintf(f, string_frmt, column.text);
+            fprintf(f, string_fmt, column.text);
         }
 
         if (j < column_count - 1) {
@@ -254,24 +271,28 @@ void printPostamble (FILE *f, __attribute__((unused)) struct Table *table, __att
     }
 }
 
-static void printAllColumns (FILE *f, struct DB *db, int rowid, int format, const char * field_sep) {
-    char *string_frmt = (format == OUTPUT_FORMAT_TABLE) ? "%-20s" : "%s";
-
+static void printAllColumns (FILE *f, struct DB *db, int rowid, int format, const char * field_sep, const char * string_fmt, const char * num_fmt) {
     for (int k = 0; k < db->field_count; k++) {
 
         // Prefix
         if (format == OUTPUT_FORMAT_JSON) {
-            fprintf(f, "\"%s\": \"", getFieldName(db, k));
+            fprintf(f, "\"%s\": ", getFieldName(db, k));
         }
 
         // Value
         char value[MAX_VALUE_LENGTH];
         int length = getRecordValue(db, rowid, k, value, MAX_VALUE_LENGTH);
+
         if (length == 0) {
             value[0] = '\0';
         }
+
         if (length >= 0) {
-            fprintf(f, string_frmt, value);
+            if (is_numeric(value)) {
+                fprintf(f, num_fmt, atoi(value));
+            } else {
+                fprintf(f, string_fmt, value);
+            }
         }
 
         // Seperator
@@ -282,10 +303,10 @@ static void printAllColumns (FILE *f, struct DB *db, int rowid, int format, cons
 }
 
 static void printAllHeaders (FILE *f, struct DB *db, int format, const char * field_sep) {
-    char *string_frmt = (format == OUTPUT_FORMAT_TABLE) ? "%-20s" : "%s";
+    char *string_fmt = (format == OUTPUT_FORMAT_TABLE) ? "%-20s" : "%s";
 
     for (int k = 0; k < db->field_count; k++) {
-        fprintf(f, string_frmt, getFieldName(db, k));
+        fprintf(f, string_fmt, getFieldName(db, k));
 
         if (k < db->field_count - 1) {
             fprintf(f, "%s", field_sep);
