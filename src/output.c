@@ -54,11 +54,13 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
         record_sep = ",";
     }
     else if (format == OUTPUT_FORMAT_SQL_INSERT) {
-        fprintf(f, "('");
+        fprintf(f, "(");
 
-        field_sep = "','";
+        string_fmt = "'%s'";
 
-        record_end = "')";
+        field_sep = ",";
+
+        record_end = ")";
 
         record_sep = ",\n";
     }
