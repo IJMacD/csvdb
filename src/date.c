@@ -29,6 +29,28 @@ int parseDateTime(const char *input, struct DateTime *output) {
         return 1;
     }
 
+    if (checkFormat(input, "+nnnnn-nn-nn")) {
+        char v[6] = {0};
+
+        memcpy(v, input + 1, 5);
+        v[5] = '\0';
+        output->year = atoi(v);
+
+        memcpy(v, input + 7, 2);
+        v[2] = '\0';
+        output->month = atoi(v);
+
+        memcpy(v, input + 10, 2);
+        v[2] = '\0';
+        output->day = atoi(v);
+
+        output->hour = 0;
+        output->minute = 0;
+        output->second = 0;
+
+        return 1;
+    }
+
     if (checkFormat(input, "nnnn-nn-nn")) {
         char v[5] = {0};
 
