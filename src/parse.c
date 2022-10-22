@@ -215,8 +215,23 @@ int parseQuery (struct Query *q, const char *query) {
                     index += 3;
 
                     getQuotedToken(query, &index, table->alias, MAX_FIELD_LENGTH);
+
+                    skipWhitespace(query, &index);
+
+                    if (query[index] == '(') {
+                        int start_index = index;
+
+                        while (query[index] != '\0' && query[index] != ')') {
+                            index++;
+                        }
+
+                        index++;
+
+                        char * c = strncpy(table->alias + strlen(table->alias) + 1, query + start_index, index - start_index);
+
+                        c[index - start_index] = '\0';
+                    }
                 } else if (table->alias[0] == '\0') {
-                    // Warning! alias is char[32] and name is char[255]
                     strcpy(table->alias, table->name);
                 }
 

@@ -45,7 +45,7 @@
 
 struct Table {
     char name[MAX_TABLE_LENGTH];
-    char alias[MAX_FIELD_LENGTH];
+    char alias[MAX_TABLE_LENGTH];
     struct DB * db;
     struct Predicate join;
     int join_type;

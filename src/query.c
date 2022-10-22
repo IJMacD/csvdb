@@ -34,6 +34,8 @@ static void populateColumnNode (struct Query * query, struct ColumnNode * column
 
 static int findColumn (struct Query *q, const char *text, int *table_id, int *column_id);
 
+static void checkColumnAliases (struct Table * table);
+
 extern char *process_name;
 
 int query (const char *query, int output_flags, FILE * output) {
@@ -576,6 +578,9 @@ static int populateTables (struct Query *q, struct DB *dbs) {
             }
 
             table->db = &dbs[i];
+
+            checkColumnAliases(table);
+
             found = 1;
         }
         // If it is VALUES only (top-level) query
@@ -584,6 +589,9 @@ static int populateTables (struct Query *q, struct DB *dbs) {
             csvMem_fromValues(&dbs[i], table->name);
 
             table->db = &dbs[i];
+
+            checkColumnAliases(table);
+
             found = 1;
         }
         // Must be a regular table
@@ -609,6 +617,8 @@ static int populateTables (struct Query *q, struct DB *dbs) {
             }
 
             table->db = &dbs[i];
+
+            checkColumnAliases(table);
         }
 
         if (table->join.op != OPERATOR_ALWAYS) {
@@ -726,5 +736,30 @@ static void populateColumnNode (struct Query * query, struct ColumnNode * column
         evaluateConstantNode(column, column->text, MAX_FIELD_LENGTH);
         evaluateFunction(column->text, NULL, column, -1);
         column->function = FUNC_UNITY;
+    }
+}
+
+static void checkColumnAliases (struct Table * table) {
+    int alias_len = strlen(table->alias);
+
+    if (table->alias[alias_len + 1] == '(') {
+        char * c = table->alias + alias_len + 2;
+        char * d = table->db->fields;
+        while (*c != '\0') {
+            if (*c == ','){
+                *d++ = '\0';
+            }
+            else if (*c == ' '){
+                // No-op
+            }
+            else if (*c == ')') {
+                break;
+            }
+            else {
+                *d++ = *c;
+            }
+            c++;
+        }
+        *d = '\0';
     }
 }
