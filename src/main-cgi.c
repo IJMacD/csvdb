@@ -84,6 +84,10 @@ int main () {
             flags |= OUTPUT_FORMAT_HTML;
         } else if (strcmp(format, "json") == 0) {
             flags |= OUTPUT_FORMAT_JSON;
+        } else if (strcmp(format, "json_array") == 0) {
+            flags |= OUTPUT_FORMAT_JSON_ARRAY;
+        } else if (strcmp(format, "sql") == 0) {
+            flags |= OUTPUT_FORMAT_SQL_INSERT;
         } else {
             flags |= OUTPUT_FORMAT_HTML;
         }
@@ -103,7 +107,7 @@ int main () {
             offset = 6;
         }
 
-        // printf("%s\n", buffer + offset);
+        printf("Access-Control-Allow-Origin: *\n");
 
         urldecode2(buffer, buffer + offset);
 
@@ -114,16 +118,41 @@ int main () {
         else if ((flags & OUTPUT_MASK_FORMAT) == OUTPUT_FORMAT_HTML) {
             printf("Content-Type: text/html\n\n");
         }
-        else if ((flags & OUTPUT_MASK_FORMAT) == OUTPUT_FORMAT_JSON) {
+        else if ((flags & OUTPUT_MASK_FORMAT) == OUTPUT_FORMAT_JSON
+            || (flags & OUTPUT_MASK_FORMAT) == OUTPUT_FORMAT_JSON_ARRAY)
+        {
             printf("Content-Type: application/json\n\n");
+        }
+        else if ((flags & OUTPUT_MASK_FORMAT) == OUTPUT_FORMAT_SQL_INSERT) {
+            printf("Content-Type: application/sql\n\n");
         }
         else {
             printf("Content-Type: text/plain\n\n");
         }
 
+        // This will end up as a header
         // fprintf(stderr, "query: %s\n", buffer);
 
-        int result = query(buffer, flags, output);
+        int has_concat = strstr(buffer, "||") != NULL;
+        int format = (flags & OUTPUT_MASK_FORMAT);
+        int is_escaped_output = format == OUTPUT_FORMAT_JSON
+            || format == OUTPUT_FORMAT_JSON_ARRAY
+            || format == OUTPUT_FORMAT_SQL_INSERT;
+
+        int result;
+
+        // In order to support concat for these output formats
+        // we wrap the whole query in a subquery
+        if (is_escaped_output && has_concat)
+        {
+            char buffer2[1024];
+            sprintf(buffer2, "FROM (%s)", buffer);
+
+            result = query(buffer2, flags, output);
+        }
+        else {
+            result = query(buffer, flags, output);
+        }
 
         if (result) {
             printf("Error processing query\n");

@@ -8,8 +8,8 @@
 #include "function.h"
 #include "util.h"
 
-static void printAllColumns (FILE *f, struct DB *db, int rowid, int format, const char * field_sep, const char * string_fmt, const char * num_fmt);
-static void printAllHeaders (FILE *f, struct DB *db, int format, const char * field_sep);
+static void printAllColumns (FILE *f, struct DB *db, const char *prefix, int rowid, int format, const char * field_sep, const char * string_fmt, const char * num_fmt);
+static void printAllHeaders (FILE *f, struct DB *db, const char *prefix, int format, const char * field_sep);
 
 void printResultLine (FILE *f, struct Table *tables, int table_count, struct ColumnNode columns[], int column_count, int result_index, struct RowList * row_list, int flags) {
     const char * field_sep = "\t";
@@ -66,8 +66,6 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
     }
     else if (format == OUTPUT_FORMAT_TABLE) {
         field_sep = "";
-    }
-    else if (format == OUTPUT_FORMAT_TABLE) {
         string_fmt = "%-20s";
         num_fmt = "%20d";
     }
@@ -93,13 +91,15 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
                 // e.g. table.*
                 struct DB *db = tables[column.table_id].db;
                 int rowid = getRowID(row_list, column.table_id, result_index);
-                printAllColumns(f, db, rowid, format, field_sep, string_fmt, num_fmt);
+                const char *prefix = table_count > 1 ? tables[column.table_id].alias : NULL;
+                printAllColumns(f, db, prefix, rowid, format, field_sep, string_fmt, num_fmt);
             } else {
                 // e.g. *
                 for (int m = 0; m < table_count; m++) {
                     struct DB *db = tables[m].db;
                     int rowid = getRowID(row_list, m, result_index);
-                    printAllColumns(f, db, rowid, format, field_sep, string_fmt, num_fmt);
+                    const char *prefix = table_count > 1 ? tables[m].alias : NULL;
+                    printAllColumns(f, db, prefix, rowid, format, field_sep, string_fmt, num_fmt);
 
                     if (m < table_count - 1) {
                         fprintf(f, "%s", field_sep);
@@ -243,12 +243,14 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
         if (column.field == FIELD_STAR) {
             if (column.table_id >= 0) {
                 struct DB *db = tables[column.table_id].db;
-                printAllHeaders(f, db, format, field_sep);
+                const char *prefix = table_count > 1 ? tables[column.table_id].alias : NULL;
+                printAllHeaders(f, db, prefix, format, field_sep);
             }
             else {
                 for (int m = 0; m < table_count; m++) {
                     struct DB *db = tables[m].db;
-                    printAllHeaders(f, db, format, field_sep);
+                    const char *prefix = table_count > 1 ? tables[m].alias : NULL;
+                    printAllHeaders(f, db, prefix, format, field_sep);
 
                     if (m < table_count - 1) {
                         fprintf(f, "%s", field_sep);
@@ -309,12 +311,17 @@ void printPostamble (FILE *f, __attribute__((unused)) struct Table *table, __att
     }
 }
 
-static void printAllColumns (FILE *f, struct DB *db, int rowid, int format, const char * field_sep, const char * string_fmt, const char * num_fmt) {
+static void printAllColumns (FILE *f, struct DB *db, const char *prefix, int rowid, int format, const char * field_sep, const char * string_fmt, const char * num_fmt) {
     for (int k = 0; k < db->field_count; k++) {
 
         // Prefix
         if (format == OUTPUT_FORMAT_JSON) {
-            fprintf(f, "\"%s\": ", getFieldName(db, k));
+            if (prefix) {
+                fprintf(f, "\"%s.%s\": ", prefix, getFieldName(db, k));
+            }
+            else {
+                fprintf(f, "\"%s\": ", getFieldName(db, k));
+            }
         }
 
         // Value
@@ -344,10 +351,13 @@ static void printAllColumns (FILE *f, struct DB *db, int rowid, int format, cons
     }
 }
 
-static void printAllHeaders (FILE *f, struct DB *db, int format, const char * field_sep) {
+static void printAllHeaders (FILE *f, struct DB *db, const char *prefix, int format, const char * field_sep) {
     char *string_fmt = (format == OUTPUT_FORMAT_TABLE) ? "%-20s" : "%s";
 
     for (int k = 0; k < db->field_count; k++) {
+        if (prefix) {
+            fprintf(f, "%s.", prefix);
+        }
         fprintf(f, string_fmt, getFieldName(db, k));
 
         if (k < db->field_count - 1) {
