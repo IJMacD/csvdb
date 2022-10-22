@@ -6,7 +6,7 @@ int is_numeric (const char *string) {
     const char *ptr = string;
     int decimal = 0;
     while (*ptr != '\0') {
-        if (*ptr == '.') {
+        if (ptr > string && *ptr == '.') {
             if (decimal) return 0;
             decimal = 1;
         }
