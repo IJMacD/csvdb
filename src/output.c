@@ -67,7 +67,7 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
     else if (format == OUTPUT_FORMAT_TABLE) {
         field_sep = "";
         string_fmt = "%-20s";
-        num_fmt = "%20d";
+        num_fmt = "%19d ";
     }
 
     for (int j = 0; j < column_count; j++) {
@@ -195,7 +195,7 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
 
     int format = flags & OUTPUT_MASK_FORMAT;
 
-    char *string_fmt = (format == OUTPUT_FORMAT_TABLE) ? "%-20s" : "%s";
+    char *string_fmt = "%s";
 
     if (format == OUTPUT_FORMAT_COMMA) {
         field_sep = ",";
@@ -225,6 +225,8 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
         line_end = "\") VALUES\n";
     } else if (format == OUTPUT_FORMAT_TABLE) {
         field_sep = "";
+
+        string_fmt = "%-20s";
     }
 
 
