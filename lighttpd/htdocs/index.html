@@ -11,14 +11,82 @@
                 min-height: 100vh;
                 box-sizing: border-box;
             }
+            #history {
+                font-family: monospace;
+                max-height: 100px;
+                overflow-y: auto;
+                padding: 0 2px;
+                border: 1px solid #999;
+                color: #444;
+            }
+            #history:empty {
+                border: none;
+            }
+            #history p {
+                margin: 0;
+            }
+            #history p:hover {
+                background: rgba(0,0,0,0.1);
+                cursor: pointer;
+            }
+            form {
+                display: flex;
+            }
+            textarea {
+                display: block;
+                min-height: 150px;
+                flex: 1;
+            }
+            iframe.loading {
+                background: repeating-linear-gradient(
+                    135deg,
+                    transparent,
+                    transparent 20px,
+                    rgba(0,0,0,0.25) 20px,
+                    rgba(0,0,0,0.25) 40px,
+                    transparent 40px
+                );
+            }
         </style>
     </head>
     <body>
+        <div id="history"></div>
         <form action="/cgi-bin/csvdb" method="post" target="output">
-            <textarea name="query" style="display: block; min-height: 150px; width: 100%"></textarea>
+            <textarea name="query"></textarea>
             <button>Run</button>
         </form>
 
         <iframe name="output" style="flex: 1"></iframe>
+        <script>
+            const hist = document.getElementById("history");
+            const form = document.forms[0];
+            const textarea = document.querySelector("textarea");
+            const frame = document.querySelector("iframe");
+            function updateHistory () {
+                const query = new FormData(form).get("query");
+                const p = document.createElement("p");
+                p.textContent = query;
+                hist.appendChild(p);
+                hist.scrollTo(0, 1e6);
+            }
+            form.addEventListener("submit", () => {
+                updateHistory();
+                frame.classList.add("loading");
+            });
+            hist.addEventListener("click", e => {
+                if (e.target instanceof HTMLParagraphElement) {
+                    textarea.value = e.target.textContent;
+                }
+            });
+            document.addEventListener("keyup", e => {
+                if (e.key === "F9") {
+                    form.submit();
+                    // form.submit does not call onSubmit
+                    updateHistory();
+                    frame.classList.add("loading");
+                }
+            });
+            frame.addEventListener("load", () => frame.classList.remove("loading"));
+        </script>
     </body>
 </html>
