@@ -34,7 +34,7 @@ static void populateColumnNode (struct Query * query, struct ColumnNode * column
 
 static int findColumn (struct Query *q, const char *text, int *table_id, int *column_id);
 
-extern char **global_argv;
+extern char *process_name;
 
 int query (const char *query, int output_flags, FILE * output) {
     if (strncmp(query, "CREATE ", 7) == 0) {
@@ -561,7 +561,7 @@ static int populateTables (struct Query *q, struct DB *dbs) {
                 char *cmd = malloc(MAX_TABLE_LENGTH * 2);
 
                 // Construct command line for sub-process
-                sprintf(cmd, "%s -0 -H -F csv \"%s\"", global_argv[0], table->name);
+                sprintf(cmd, "%s -0 -H -F csv \"%s\"", process_name, table->name);
 
                 FILE *f = popen(cmd, "r");
                 free(cmd);

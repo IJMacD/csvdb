@@ -27,9 +27,6 @@ int indexUniqueScan (struct DB *index_db, int rowid_column, int predicate_op, co
         return RESULT_NO_INDEX;
     }
 
-    // Find the upper and lower rowid for the index
-    // (maybe we don't need both but it's quite cheap)
-
     // Output Flag: 0: value found; RESULT_BETWEEN: value not found but just before returned rowid; RESULT_BELOW_MIN: value below minimum; RESULT_ABOVE_MAX: value above maximum
     int search_status;
 

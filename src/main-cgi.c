@@ -3,8 +3,10 @@
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
+#include <errno.h>
 
 #include <unistd.h>
+#include <sys/stat.h>
 
 #include "query.h"
 
@@ -19,7 +21,9 @@
  * POST data: stdin
  */
 
-char **global_argv;
+// Process name for VIEWs/subqueries
+// Hardcoded in Dockerfile
+char *process_name = "/bin/csvdb";
 
 void urldecode2(char *dst, const char *src);
 
@@ -32,8 +36,42 @@ int main () {
 
     srand((unsigned) time(NULL) * getpid());
 
-    // is this working?
-    // dup2(STDOUT_FILENO, STDERR_FILENO);
+    // Redirect stderr -> stdout
+    dup2(STDOUT_FILENO, STDERR_FILENO);
+
+    char dirname[255];
+    fprintf(stderr, "debug: cwd %s\n", getcwd(dirname, 255));
+
+    char *datadir = "/data"; // Hardcoded in Dockerfile getenv("CSVDB_DATA_DIR");
+    if (datadir != NULL) {
+        if (chdir(datadir)) {
+            if (errno == ENOENT) {
+                if (mkdir(datadir, S_IRWXU|S_IRGRP|S_IXGRP)) {
+                    printf("HTTP/1.1 500 Server Error\n");
+                    printf("Content-Type: text/plain\n\n");
+                    fprintf(stderr, "%s\n", strerror(errno));
+                    printf("%s\n", strerror(errno));
+                    exit(-1);
+                }
+                // fprintf(stderr, "[DEBUG] created dir: %s\n", datadir);
+                if (chdir(datadir)) {
+                    printf("HTTP/1.1 500 Server Error\n");
+                    printf("Content-Type: text/plain\n\n");
+                    fprintf(stderr, "%s\n", strerror(errno));
+                    perror("chdir");
+                    exit(-1);
+                }
+            }
+            else  {
+                printf("HTTP/1.1 500 Server Error\n");
+                printf("Content-Type: text/plain\n\n");
+                fprintf(stderr, "%s\n", strerror(errno));
+                fprintf(stderr, "Errno: %d\n", errno);
+                exit(-1);
+            }
+        }
+        fprintf(stderr, "debug: cwd %s\n", getcwd(dirname, 255));
+    }
 
     char *query_string = getenv("QUERY_STRING");
 
@@ -85,7 +123,15 @@ int main () {
             printf("Content-Type: text/plain\n\n");
         }
 
-        return query(buffer, flags, output);
+        // fprintf(stderr, "query: %s\n", buffer);
+
+        int result = query(buffer, flags, output);
+
+        if (result) {
+            printf("Error processing query\n");
+        }
+
+        return result;
     }
 
     printf("Content-Type: text/plain\n\n");

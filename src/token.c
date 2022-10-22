@@ -74,7 +74,10 @@ void skipLine (const char *string, size_t *index) {
 int getToken (const char *string, size_t *index, char *token, int token_max_length) {
     skipWhitespace(string, index);
 
+    // End of string
     if (string[*index] == '\0') {
+        // clear output value
+        token[0] = '\0';
         return -1;
     }
     int start_index = *index;

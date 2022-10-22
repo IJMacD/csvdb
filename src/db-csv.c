@@ -17,7 +17,7 @@ static int measureLine (FILE *f, size_t byte_offset);
 
 static void prepareHeaders (struct DB *db);
 
-extern char **global_argv;
+extern char *process_name;
 
 /**
  * Indices must point to enough memory to contain all the indices
@@ -79,11 +79,11 @@ int csv_openDB (struct DB *db, const char *filename) {
         int len = strlen(filename);
         if (strcmp(filename + len - 4, ".sql") == 0) {
             fclose(f);
-            sprintf(buffer, "%s -0 -H -F csv -f %s", global_argv[0], filename);
+            sprintf(buffer, "%s -0 -H -F csv -f %s", process_name, filename);
             f = popen(buffer, "r");
 
             if (f == NULL) {
-                fprintf(stderr, "Unable to open process\n");
+                fprintf(stderr, "error: Unable to open process\n");
             }
 
             // Leave a note for csvMem to close the stream
@@ -103,11 +103,11 @@ int csv_openDB (struct DB *db, const char *filename) {
 
             if (f) {
                 fclose(f);
-                sprintf(buffer, "%s -0 -H -F csv -f %s.sql", global_argv[0], filename);
+                sprintf(buffer, "%s -0 -H -F csv -f %s.sql", process_name, filename);
                 f = popen(buffer, "r");
 
                 if (f == NULL) {
-                    fprintf(stderr, "Unable to open process\n");
+                    fprintf(stderr, "error: Unable to open process\n");
                 }
 
                 // Leave a note for csvMem to close the stream
@@ -411,20 +411,20 @@ static void prepareHeaders (struct DB *db) {
     int header_length = measureLine(db->file, 0);
 
     if (header_length < 0) {
-        fprintf(stderr, "Something went wrong measuring header\n");
+        fprintf(stderr, "error: Something went wrong measuring header\n");
         exit(-1);
     }
 
     db->fields = malloc(header_length);
 
     if (fseek(db->file, 0, SEEK_SET)) {
-        fprintf(stderr, "File is not seekable\n");
+        fprintf(stderr, "error: File is not seekable\n");
         exit(-1);
     }
 
     int count = fread(db->fields, 1, header_length, db->file);
     if (count < header_length) {
-        fprintf(stderr, "Something went wrong reading header\n");
+        fprintf(stderr, "error: Something went wrong reading header\n");
         exit(-1);
     }
 

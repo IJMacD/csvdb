@@ -8,7 +8,7 @@
 #include "query.h"
 #include "output.h"
 
-char **global_argv;
+char *process_name;
 
 void printUsage (const char* name) {
     printf(
@@ -41,7 +41,7 @@ void printUsage (const char* name) {
 }
 
 int main (int argc, char * argv[]) {
-    global_argv = argv;
+    process_name = argv[0];
 
     srand((unsigned) time(NULL) * getpid());
 

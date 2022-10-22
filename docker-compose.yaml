@@ -1,0 +1,12 @@
+services:
+  web:
+    build: .
+    image: csvdb-cgi
+    ports:
+      - "8001:80"
+    container_name: csvdb
+    restart: unless-stopped
+    volumes:
+      - /var/www/csvdb.ijmacd.com/data:/data
+    # environment:
+    #   - CSVDB_DATA_DIR=/data
