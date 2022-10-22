@@ -116,7 +116,12 @@ int parseQuery (struct Query *q, const char *query) {
 
                 skipWhitespace(query, &index);
 
-                if (query[index] != ',') {
+                if (query[index] == '|' && query[index+1] == '|') {
+                    column->concat = 1;
+                    index++; // (will get another increment below)
+                    skipWhitespace(query, &index);
+                }
+                else if (query[index] != ',') {
                     break;
                 }
 

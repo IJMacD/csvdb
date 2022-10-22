@@ -8,6 +8,7 @@ struct ColumnNode {
     int table_id;
     int field;
     int function;
+    int concat;
 };
 
 struct RowList {

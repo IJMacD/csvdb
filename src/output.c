@@ -75,6 +75,15 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
     for (int j = 0; j < column_count; j++) {
         struct ColumnNode column = columns[j];
 
+        if ((format == OUTPUT_FORMAT_JSON
+            || format == OUTPUT_FORMAT_JSON_ARRAY
+            || format == OUTPUT_FORMAT_SQL_INSERT
+            ) && column.concat == 1
+        ) {
+            fprintf(stderr, "error: Cannot output json, json_array, sql with concat columns\n");
+            exit(-1);
+        }
+
         if (format == OUTPUT_FORMAT_JSON && column.field != FIELD_STAR) {
             fprintf(f, "\"%s\": ", column.alias);
         }
@@ -153,7 +162,7 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
             fprintf(f, "UNKNOWN");
         }
 
-        if (j < column_count - 1) {
+        if (j < column_count - 1 && column.concat == 0) {
             fprintf(f, "%s", field_sep);
         }
     }
@@ -207,6 +216,15 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
     for (int j = 0; j < column_count; j++) {
         struct ColumnNode column = columns[j];
 
+        if ((format == OUTPUT_FORMAT_JSON
+            || format == OUTPUT_FORMAT_JSON_ARRAY
+            || format == OUTPUT_FORMAT_SQL_INSERT
+            ) && column.concat == 1
+        ) {
+            fprintf(stderr, "error: Cannot output json, json_array, sql with concat columns\n");
+            exit(-1);
+        }
+
         if (column.field == FIELD_STAR) {
             if (column.table_id >= 0) {
                 struct DB *db = tables[column.table_id].db;
@@ -222,6 +240,9 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
                     }
                 }
             }
+        }
+        else if (column.concat == 1) {
+            // noop
         }
         else if (column.alias[0] != '\0') {
             fprintf(f, string_fmt, column.alias);
@@ -239,7 +260,7 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
             fprintf(f, string_fmt, column.text);
         }
 
-        if (j < column_count - 1) {
+        if (j < column_count - 1 && column.concat == 0) {
             fprintf(f, "%s", field_sep);
         }
     }

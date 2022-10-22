@@ -45,7 +45,7 @@ EXPLAIN FROM test WHERE birth_date > '1901-01-01' AND EXTRACT(WEEKDAY FROM birth
 FROM test WHERE birth_date > '1901-01-01' AND EXTRACT(WEEKDAY FROM birth_date) = 5 FETCH FIRST 5 ROWS ONLY
 FROM view FETCH FIRST 5 ROWS ONLY
 FROM suits AS s1, suits AS s2 ON s1.name < s2.name ORDER BY name
-FROM suits, ranks WHERE value > 10 ORDER BY name SELECT ranks.name, 'of', suits.name
+FROM suits, ranks WHERE value > 10 ORDER BY name SELECT ranks.name || ' of ' || suits.name AS cards
 EXPLAIN SELECT TODAY(), EXTRACT(YEARDAY FROM TODAY()), EXTRACT(JULIAN FROM '1995-10-10')
 SELECT TODAY(), EXTRACT(YEARDAY FROM TODAY()), EXTRACT(JULIAN FROM '1995-10-10')
 FROM CALENDAR WHERE date = CURRENT_DATE SELECT julian, date, yeardayString, weekdayString
