@@ -134,10 +134,21 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
             }
         }
         else if ((column.function & MASK_FUNC_FAMILY) == FUNC_FAM_AGG) {
-            int result = evaluateAggregateFunction(f, tables, table_count, columns + j, row_list);
+            char output[MAX_VALUE_LENGTH];
+            int result = evaluateAggregateFunction(output, tables, table_count, columns + j, row_list);
 
             if (result < 0) {
                 fprintf(f, "BADFUNC");
+            }
+
+            if (is_numeric(output)) {
+                fprintf(f, num_fmt, atoi(output));
+            } else if (format == OUTPUT_FORMAT_COMMA && strchr(output, ',')) {
+                // Special Case: it's important that csv be handled correctly as it
+                // is used as a intermediate for VIEWs and subqueries.
+                fprintf(f, "\"%s\"", output);
+            } else {
+                fprintf(f, string_fmt, output);
             }
         }
         else if (column.field >= 0) {
@@ -154,6 +165,10 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
 
             if (is_numeric(output)) {
                 fprintf(f, num_fmt, atoi(output));
+            } else if (format == OUTPUT_FORMAT_COMMA && strchr(output, ',')) {
+                // Special Case: it's important that csv be handled correctly as it
+                // is used as a intermediate for VIEWs and subqueries.
+                fprintf(f, "\"%s\"", output);
             } else {
                 fprintf(f, string_fmt, output);
             }
@@ -313,6 +328,10 @@ static void printAllColumns (FILE *f, struct DB *db, int rowid, int format, cons
         if (length >= 0) {
             if (is_numeric(value)) {
                 fprintf(f, num_fmt, atoi(value));
+            } else if (format == OUTPUT_FORMAT_COMMA && strchr(value, ',')) {
+                // Special Case: it's important that csv be handled correctly as it
+                // is used as a intermediate for VIEWs and subqueries.
+                fprintf(f, "\"%s\"", value);
             } else {
                 fprintf(f, string_fmt, value);
             }
