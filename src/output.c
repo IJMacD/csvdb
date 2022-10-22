@@ -18,6 +18,8 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
 
     int format = flags & OUTPUT_MASK_FORMAT;
 
+    int have_aggregate = 0;
+
     char *string_fmt = "%s";
     char *num_fmt = "%d";
 
@@ -137,6 +139,8 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
             char output[MAX_VALUE_LENGTH];
             int result = evaluateAggregateFunction(output, tables, table_count, columns + j, row_list);
 
+            have_aggregate = 1;
+
             if (result < 0) {
                 fprintf(f, "BADFUNC");
             }
@@ -184,7 +188,7 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
 
     fprintf(f, "%s", record_end);
 
-    if (result_index < row_list->row_count - 1) {
+    if (result_index < row_list->row_count - 1 && have_aggregate == 0) {
         fprintf(f, "%s", record_sep);
     }
 }
