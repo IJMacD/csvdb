@@ -75,6 +75,33 @@ int parseQuery (struct Query *q, const char *query) {
         return 0;
     }
 
+    // Special treatment for TABLE query
+    // Will behave as a query: SELECT * FROM table
+    if (strncmp(query + index, "TABLE", 5) == 0 && isspace(query[index + 5])) {
+        index += 6;
+
+        char name[MAX_TABLE_LENGTH] = {0};
+
+        getQuotedToken(query, &index, name, MAX_FIELD_LENGTH);
+
+        if (name[0] == '\0') {
+            fprintf(stderr, "error: expected a table name\n");
+            exit(-1);
+        }
+
+        skipWhitespace(query, &index);
+
+        if (query[index] != '\0') {
+            fprintf(stderr, "error: expected end of TABLE query found '%s'\n", query + index);
+            exit(-1);
+        }
+
+        char buffer[1024];
+        sprintf(buffer, "FROM \"%s\"", name);
+
+        return parseQuery(q, buffer);
+    }
+
     char keyword[MAX_FIELD_LENGTH] = {0};
 
     while (index < query_length) {
