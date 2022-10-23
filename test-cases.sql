@@ -1,6 +1,6 @@
 SELECT name, score FROM test FETCH FIRST ROW ONLY
 SELECT name, score FROM test FETCH FIRST 5 ROWS ONLY
-SELECT name, score FROM test OFFSET 2 FETCH NEXT 5 ROWS ONLY
+SELECT name, score FROM test OFFSET 2 ROWS FETCH NEXT 5 ROWS ONLY
 CREATE INDEX ON test (name)
 CREATE UNIQUE INDEX ON test (birth_date)
 EXPLAIN SELECT name FROM test ORDER BY name FETCH FIRST 5 ROWS ONLY
@@ -55,7 +55,7 @@ FROM suits LEFT JOIN ranks ON LENGTH(ranks.name) = LENGTH(suits.name)
 FROM suits JOIN ranks USING LENGTH(name)
 FROM suits AS s (n, s)
 TABLE suits
-FROM (FROM SEQUENCE(10) OFFSET 5) AS a, (FROM SEQUENCE(2)) AS b SELECT b.value, a.value
+FROM (FROM SEQUENCE(10) OFFSET 5 ROWS) AS a, (FROM SEQUENCE(2)) AS b SELECT b.value, a.value
 VALUES ('a',1),('b',2),('c',3)
 FROM (VALUES ('a',1),('b',2),('c',3)) AS a WHERE a.col2 < 3 SELECT a.col2, a.col1
 FROM (VALUES ('a',1),('b',2),('c',3)) AS a (first, second)

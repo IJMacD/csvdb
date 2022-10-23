@@ -387,6 +387,13 @@ int parseQuery (struct Query *q, const char *query) {
                 fprintf(stderr, "OFFSET cannot be negative\n");
                 return -1;
             }
+
+            getToken(query, &index, keyword, MAX_FIELD_LENGTH);
+
+            if (strcmp(keyword, "ROW") != 0 && strcmp(keyword, "ROWS") != 0) {
+                fprintf(stderr, "Bad query - expected ROW|ROWS; Got '%s'\n", keyword);
+                return -1;
+            }
         }
         else if (strcmp(keyword, "FETCH") == 0) {
             getToken(query, &index, keyword, MAX_FIELD_LENGTH);

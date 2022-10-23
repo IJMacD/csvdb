@@ -574,7 +574,11 @@ static int populateTables (struct Query *q, struct DB *dbs) {
                 db->file = STREAM_PROC;
 
                 // hand off to CSV Mem
-                csvMem_makeDB(db, f);
+                int result = csvMem_makeDB(db, f);
+
+                if (result < 0) {
+                    return -1;
+                }
             }
 
             table->db = &dbs[i];
