@@ -12,16 +12,16 @@ static void printAllColumns (FILE *f, struct DB *db, const char *prefix, int row
 static void printAllHeaders (FILE *f, struct DB *db, const char *prefix, int format, const char * field_sep);
 
 void printResultLine (FILE *f, struct Table *tables, int table_count, struct ColumnNode columns[], int column_count, int result_index, struct RowList * row_list, int flags) {
+    // Defaults
     const char * field_sep = "\t";
     const char * record_end = "\n";
     const char * record_sep = "";
+    const char * string_fmt = "%s";
+    const char * num_fmt = "%d";
 
     int format = flags & OUTPUT_MASK_FORMAT;
 
     int have_aggregate = 0;
-
-    char *string_fmt = "%s";
-    char *num_fmt = "%d";
 
     if (format == OUTPUT_FORMAT_COMMA) {
         field_sep = ",";
@@ -71,6 +71,26 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
         string_fmt = "%-20s";
         num_fmt = "%19d ";
     }
+    else if (format == OUTPUT_FORMAT_INFO_SEP) {
+        if (result_index == 0) {
+            printf("\x02"); // Start of Text
+        }
+
+        field_sep = "\x1f"; // Unit Separator
+
+        record_end = "";
+
+        record_sep = "\x1e"; // Record Separator
+    }
+    else if (format == OUTPUT_FORMAT_XML) {
+        fprintf(f, "<record>");
+
+        field_sep = "";
+
+        record_end = "</record>";
+
+        record_sep = "";
+    }
 
     for (int j = 0; j < column_count; j++) {
         struct ColumnNode column = columns[j];
@@ -78,14 +98,20 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
         if ((format == OUTPUT_FORMAT_JSON
             || format == OUTPUT_FORMAT_JSON_ARRAY
             || format == OUTPUT_FORMAT_SQL_INSERT
+            || format == OUTPUT_FORMAT_XML
             ) && column.concat == 1
         ) {
             fprintf(stderr, "error: Cannot output json, json_array, sql with concat columns\n");
             exit(-1);
         }
 
-        if (format == OUTPUT_FORMAT_JSON && column.field != FIELD_STAR) {
-            fprintf(f, "\"%s\": ", column.alias);
+        if (column.field != FIELD_STAR) {
+            if (format == OUTPUT_FORMAT_JSON) {
+                fprintf(f, "\"%s\": ", column.alias);
+            }
+            else if (format == OUTPUT_FORMAT_XML) {
+                fprintf(f, "<%s>", column.alias);
+            }
         }
 
         if (column.field == FIELD_STAR) {
@@ -184,12 +210,22 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
         if (j < column_count - 1 && column.concat == 0) {
             fprintf(f, "%s", field_sep);
         }
+
+        if (column.field != FIELD_STAR) {
+            if (format == OUTPUT_FORMAT_XML) {
+                fprintf(f, "</%s>", column.alias);
+            }
+        }
     }
 
     fprintf(f, "%s", record_end);
 
     if (result_index < row_list->row_count - 1 && have_aggregate == 0) {
         fprintf(f, "%s", record_sep);
+    }
+
+    if (result_index == row_list->row_count - 1 && format == OUTPUT_FORMAT_INFO_SEP) {
+        printf("\x03"); // End of Text
     }
 }
 
@@ -231,6 +267,14 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
         field_sep = "";
 
         string_fmt = "%-20s";
+    }
+    else if (format == OUTPUT_FORMAT_INFO_SEP) {
+        printf("\x01"); // Start of Heading
+        field_sep = "\x1f";
+        line_end = "";
+    }
+    else if (format == OUTPUT_FORMAT_XML) {
+        return;
     }
 
 
@@ -300,6 +344,9 @@ void printPreamble (FILE *f, __attribute__((unused)) struct Table *table, __attr
     else if (format == OUTPUT_FORMAT_JSON_ARRAY || format == OUTPUT_FORMAT_JSON) {
         fprintf(f, "[");
     }
+    else if (format == OUTPUT_FORMAT_XML) {
+        fprintf(f, "<results>");
+    }
 }
 
 void printPostamble (FILE *f, __attribute__((unused)) struct Table *table, __attribute__((unused)) struct ColumnNode columns[], __attribute__((unused)) int column_count, __attribute__((unused)) int result_count, int flags) {
@@ -315,6 +362,9 @@ void printPostamble (FILE *f, __attribute__((unused)) struct Table *table, __att
     else if (format == OUTPUT_FORMAT_SQL_INSERT) {
         fprintf(f, "\n");
     }
+    else if (format == OUTPUT_FORMAT_XML) {
+        fprintf(f, "</results>");
+    }
 }
 
 static void printAllColumns (FILE *f, struct DB *db, const char *prefix, int rowid, int format, const char * field_sep, const char * string_fmt, const char * num_fmt) {
@@ -327,6 +377,14 @@ static void printAllColumns (FILE *f, struct DB *db, const char *prefix, int row
             }
             else {
                 fprintf(f, "\"%s\": ", getFieldName(db, k));
+            }
+        }
+        else if (format == OUTPUT_FORMAT_XML) {
+            if (prefix) {
+                fprintf(f, "<%s.%s>", prefix, getFieldName(db, k));
+            }
+            else {
+                fprintf(f, "<%s>", getFieldName(db, k));
             }
         }
 
@@ -353,6 +411,15 @@ static void printAllColumns (FILE *f, struct DB *db, const char *prefix, int row
         // Seperator
         if (k < db->field_count - 1) {
             fprintf(f, "%s", field_sep);
+        }
+
+        if (format == OUTPUT_FORMAT_XML) {
+            if (prefix) {
+                fprintf(f, "</%s.%s>", prefix, getFieldName(db, k));
+            }
+            else {
+                fprintf(f, "</%s>", getFieldName(db, k));
+            }
         }
     }
 }

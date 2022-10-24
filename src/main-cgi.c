@@ -61,6 +61,9 @@ int main () {
     else if (strstr(accept_env, "application/sql") != NULL) {
         format = OUTPUT_FORMAT_SQL_INSERT;
     }
+    else if (strstr(accept_env, "application/xml") != NULL) {
+        format = OUTPUT_FORMAT_XML;
+    }
     else {
         format = OUTPUT_FORMAT_TABLE;
     }
@@ -109,6 +112,8 @@ int main () {
                 format = OUTPUT_FORMAT_JSON_ARRAY;
             } else if (strcmp(value, "sql") == 0) {
                 format = OUTPUT_FORMAT_SQL_INSERT;
+            } else if (strcmp(value, "xml") == 0) {
+                format = OUTPUT_FORMAT_XML;
             } else {
                 format = OUTPUT_FORMAT_HTML;
             }
@@ -142,13 +147,15 @@ int main () {
     else if (format == OUTPUT_FORMAT_HTML) {
         printf("Content-Type: text/html; charset=utf-8\n");
     }
-    else if (format == OUTPUT_FORMAT_JSON
-        || format == OUTPUT_FORMAT_JSON_ARRAY)
+    else if (format == OUTPUT_FORMAT_JSON || format == OUTPUT_FORMAT_JSON_ARRAY)
     {
         printf("Content-Type: application/json; charset=utf-8\n");
     }
     else if (format == OUTPUT_FORMAT_SQL_INSERT) {
         printf("Content-Type: application/sql; charset=utf-8\n");
+    }
+    else if (format == OUTPUT_FORMAT_XML) {
+        printf("Content-Type: application/xml; charset=utf-8\n");
     }
     else {
         printf("Content-Type: text/plain; charset=utf-8\n");
