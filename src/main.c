@@ -194,23 +194,6 @@ int main (int argc, char * argv[]) {
     }
 
     if (buffer[0] != '\0') {
-        int has_concat = strstr(buffer, "||") != NULL;
-        int format = (flags & OUTPUT_MASK_FORMAT);
-        int is_escaped_output = format == OUTPUT_FORMAT_JSON
-            || format == OUTPUT_FORMAT_JSON_ARRAY
-            || format == OUTPUT_FORMAT_SQL_INSERT
-            || format == OUTPUT_FORMAT_TABLE;
-
-        // In order to support concat for these output formats
-        // we wrap the whole query in a subquery
-        if (is_escaped_output && has_concat)
-        {
-            char buffer2[1024];
-            sprintf(buffer2, "FROM (%s)", buffer);
-
-            return query(buffer2, flags, output);
-        }
-
         return query(buffer, flags, output);
     }
 

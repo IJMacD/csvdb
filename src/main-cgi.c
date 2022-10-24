@@ -25,12 +25,15 @@
 // Hardcoded in Dockerfile
 char *process_name = "/bin/csvdb";
 
-void urldecode2(char *dst, const char *src);
+static void urldecode2(char *dst, const char *src);
+
+static void setDataDir (const char * datadir);
 
 int main () {
 
-    char buffer[1024];
+    char query_buffer[1024];
     int flags = OUTPUT_OPTION_HEADERS;
+    int format = 0;
 
     FILE * output = stdout;
 
@@ -42,133 +45,130 @@ int main () {
     // char dirname[255];
     // fprintf(stderr, "debug: cwd %s\n", getcwd(dirname, 255));
 
-    char *datadir = "/data"; // Hardcoded in Dockerfile getenv("CSVDB_DATA_DIR");
-    if (datadir != NULL) {
-        if (chdir(datadir)) {
-            if (errno == ENOENT) {
-                if (mkdir(datadir, S_IRWXU|S_IRGRP|S_IXGRP)) {
-                    printf("HTTP/1.1 500 Server Error\n");
-                    printf("Content-Type: text/plain\n\n");
-                    printf("error: %s\n", strerror(errno));
-                    exit(-1);
-                }
-                // fprintf(stderr, "[DEBUG] created dir: %s\n", datadir);
-                if (chdir(datadir)) {
-                    printf("HTTP/1.1 500 Server Error\n");
-                    printf("Content-Type: text/plain\n\n");
-                    printf("error: %s\n", strerror(errno));
-                    perror("chdir");
-                    exit(-1);
-                }
-            }
-            else  {
-                printf("HTTP/1.1 500 Server Error\n");
-                printf("Content-Type: text/plain\n\n");
-                printf("error: %s\n", strerror(errno));
-                exit(-1);
-            }
-        }
-        // fprintf(stderr, "debug: cwd %s\n", getcwd(dirname, 255));
+    setDataDir("/data"); // Hardcoded in Dockerfile getenv("CSVDB_DATA_DIR");
+
+    char *accept_env = getenv("HTTP_ACCEPT");
+
+    if (strstr(accept_env, "text/html") != NULL) {
+        format = OUTPUT_FORMAT_HTML;
+    }
+    else if (strstr(accept_env, "application/json") != NULL) {
+        format = OUTPUT_FORMAT_JSON;
+    }
+    else if (strstr(accept_env, "text/csv") != NULL) {
+        format = OUTPUT_FORMAT_COMMA;
+    }
+    else if (strstr(accept_env, "application/sql") != NULL) {
+        format = OUTPUT_FORMAT_SQL_INSERT;
+    }
+    else {
+        format = OUTPUT_FORMAT_TABLE;
     }
 
+    // Don't modify char * returned from getenv
     char *query_string = getenv("QUERY_STRING");
 
-    if (query_string != NULL && strncmp(query_string, "format=", 7) == 0) {
-        char * format = query_string + 7;
-
-        if (strcmp(format, "csv") == 0) {
-            flags |= OUTPUT_FORMAT_COMMA;
-        } else if (strcmp(format, "tsv") == 0) {
-            flags |= OUTPUT_FORMAT_TAB;
-        } else if (strcmp(format, "html") == 0) {
-            flags |= OUTPUT_FORMAT_HTML;
-        } else if (strcmp(format, "json") == 0) {
-            flags |= OUTPUT_FORMAT_JSON;
-        } else if (strcmp(format, "json_array") == 0) {
-            flags |= OUTPUT_FORMAT_JSON_ARRAY;
-        } else if (strcmp(format, "sql") == 0) {
-            flags |= OUTPUT_FORMAT_SQL_INSERT;
-        } else {
-            flags |= OUTPUT_FORMAT_HTML;
-        }
-
-    } else {
-        flags |= OUTPUT_FORMAT_HTML;
+    if (query_string == NULL) {
+        printf("HTTP/1.1 500 Server Error\n");
+        printf("Content-Type: text/plain\n\n");
+        printf("No query string was provided\n");
+        exit(-1);
     }
 
-    size_t count = fread(buffer, 1, 1024, stdin);
+    while (*query_string != '\0') {
+        char * eq = strchr(query_string, '=');
+        if (eq == NULL) {
+            break;
+        }
+        *eq = '\0';
+        char * key = query_string;
+        query_string = eq + 1;
 
-    if (count > 0) {
-        buffer[count] = '\0';
-
-        int offset = 0;
-
-        if (strncmp(buffer, "query=", 6) == 0) {
-            offset = 6;
+        char * amp = strchr(query_string, '&');
+        char * value = query_string;
+        if (amp != NULL) {
+            *amp = '\0';
+            query_string = amp + 1;
         }
 
-        printf("Access-Control-Allow-Origin: *\n");
+        // printf("Query-Value: %s: %s\n", key, value);
 
-        urldecode2(buffer, buffer + offset);
+        if (strcmp(key, "format") == 0) {
 
-        // Explain query still only outputs "unformatted"
-        if (strncmp(buffer, "EXPLAIN", 7) == 0) {
-            printf("Content-Type: text/plain\n\n");
+            if (strcmp(value, "txt") == 0) {
+                format = OUTPUT_FORMAT_TABLE;
+            } else if (strcmp(value, "csv") == 0) {
+                format = OUTPUT_FORMAT_COMMA;
+            } else if (strcmp(value, "tsv") == 0) {
+                format = OUTPUT_FORMAT_TAB;
+            } else if (strcmp(value, "html") == 0) {
+                format = OUTPUT_FORMAT_HTML;
+            } else if (strcmp(value, "json") == 0) {
+                format = OUTPUT_FORMAT_JSON;
+            } else if (strcmp(value, "json_array") == 0) {
+                format = OUTPUT_FORMAT_JSON_ARRAY;
+            } else if (strcmp(value, "sql") == 0) {
+                format = OUTPUT_FORMAT_SQL_INSERT;
+            } else {
+                format = OUTPUT_FORMAT_HTML;
+            }
+
+        } else if (strcmp(key, "query") == 0) {
+            urldecode2(query_buffer, value);
         }
-        else if ((flags & OUTPUT_MASK_FORMAT) == OUTPUT_FORMAT_HTML) {
-            printf("Content-Type: text/html\n\n");
-        }
-        else if ((flags & OUTPUT_MASK_FORMAT) == OUTPUT_FORMAT_JSON
-            || (flags & OUTPUT_MASK_FORMAT) == OUTPUT_FORMAT_JSON_ARRAY)
-        {
-            printf("Content-Type: application/json\n\n");
-        }
-        else if ((flags & OUTPUT_MASK_FORMAT) == OUTPUT_FORMAT_SQL_INSERT) {
-            printf("Content-Type: application/sql\n\n");
-        }
-        else {
-            printf("Content-Type: text/plain\n\n");
-        }
-
-        // This will end up as a header
-        // fprintf(stderr, "query: %s\n", buffer);
-
-        int has_concat = strstr(buffer, "||") != NULL;
-        int format = (flags & OUTPUT_MASK_FORMAT);
-        int is_escaped_output = format == OUTPUT_FORMAT_JSON
-            || format == OUTPUT_FORMAT_JSON_ARRAY
-            || format == OUTPUT_FORMAT_SQL_INSERT;
-
-        int result;
-
-        // In order to support concat for these output formats
-        // we wrap the whole query in a subquery
-        if (is_escaped_output && has_concat)
-        {
-            char buffer2[1024];
-            sprintf(buffer2, "FROM (%s)", buffer);
-
-            result = query(buffer2, flags, output);
-        }
-        else {
-            result = query(buffer, flags, output);
-        }
-
-        if (result) {
-            printf("Error processing query\n");
-        }
-
-        return result;
     }
 
-    printf("Content-Type: text/plain\n\n");
+    if (query_buffer == NULL) {
+        printf("HTTP/1.1 500 Server Error\n");
+        printf("Content-Type: text/plain\n\n");
+        printf("No query was provided in the query string\n");
+        exit(-1);
+    }
 
-    printf("Error processing query\n");
+    flags |= format;
 
-    return -1;
+    printf("Access-Control-Allow-Origin: *\n");
+
+    // EXPLAIN query still only outputs "unformatted"
+    if (strncmp(query_buffer, "EXPLAIN", 7) == 0) {
+        printf("Content-Type: text/plain; charset=utf-8\n");
+    }
+    else if (format == OUTPUT_FORMAT_COMMA) {
+        printf("Content-Type: text/csv; charset=utf-8\n");
+    }
+    else if (format == OUTPUT_FORMAT_TAB) {
+        printf("Content-Type: text/tab-separated-values; charset=utf-8\n");
+    }
+    else if (format == OUTPUT_FORMAT_HTML) {
+        printf("Content-Type: text/html; charset=utf-8\n");
+    }
+    else if (format == OUTPUT_FORMAT_JSON
+        || format == OUTPUT_FORMAT_JSON_ARRAY)
+    {
+        printf("Content-Type: application/json; charset=utf-8\n");
+    }
+    else if (format == OUTPUT_FORMAT_SQL_INSERT) {
+        printf("Content-Type: application/sql; charset=utf-8\n");
+    }
+    else {
+        printf("Content-Type: text/plain; charset=utf-8\n");
+    }
+
+    // This will end up as a header
+    // fprintf(stderr, "query: %s\n", query_buffer);
+
+    // Double newline to end headers
+    printf("\n");
+
+    if (query(query_buffer, flags, output)) {
+        printf("Error processing query\n");
+        return -1;
+    }
+
+    return 0;
 }
 
-void urldecode2(char *dst, const char *src)
+static void urldecode2(char *dst, const char *src)
 {
     char a, b;
     while (*src) {
@@ -197,4 +197,34 @@ void urldecode2(char *dst, const char *src)
         }
     }
     *dst++ = '\0';
+}
+
+static void setDataDir (const char * datadir) {
+    if (datadir != NULL) {
+        if (chdir(datadir)) {
+            if (errno == ENOENT) {
+                if (mkdir(datadir, S_IRWXU|S_IRGRP|S_IXGRP)) {
+                    printf("HTTP/1.1 500 Server Error\n");
+                    printf("Content-Type: text/plain\n\n");
+                    printf("error: %s\n", strerror(errno));
+                    exit(-1);
+                }
+                // fprintf(stderr, "[DEBUG] created dir: %s\n", datadir);
+                if (chdir(datadir)) {
+                    printf("HTTP/1.1 500 Server Error\n");
+                    printf("Content-Type: text/plain\n\n");
+                    printf("error: %s\n", strerror(errno));
+                    perror("chdir");
+                    exit(-1);
+                }
+            }
+            else  {
+                printf("HTTP/1.1 500 Server Error\n");
+                printf("Content-Type: text/plain\n\n");
+                printf("error: %s\n", strerror(errno));
+                exit(-1);
+            }
+        }
+        // fprintf(stderr, "debug: cwd %s\n", getcwd(dirname, 255));
+    }
 }

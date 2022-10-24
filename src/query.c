@@ -57,6 +57,21 @@ int query (const char *query, int output_flags, FILE * output) {
         return insert_query(query);
     }
 
+    int format = output_flags & OUTPUT_MASK_FORMAT;
+    int is_escaped_output = format == OUTPUT_FORMAT_JSON
+        || format == OUTPUT_FORMAT_JSON_ARRAY
+        || format == OUTPUT_FORMAT_SQL_INSERT;
+
+    // In order to support concat for these output formats
+    // we wrap the whole query in a subquery
+    if (is_escaped_output && strstr(query, "||") != NULL)
+    {
+        char query2[1024];
+        sprintf(query2, "FROM (%s)", query);
+
+        return select_query(query2, output_flags, output);
+    }
+
     return select_query(query, output_flags, output);
 }
 
