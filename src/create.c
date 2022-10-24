@@ -174,7 +174,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
 
     sortResultRows(&db, 0, index_field_index, ORDER_ASC, &row_list, &tmp);
 
-    copyRowList(&row_list, &tmp);
+    overwriteRowList(&row_list, &tmp);
 
     // Output functions assume array of DBs
     printHeaderLine(f, &table, 1, columns, 2, OUTPUT_FORMAT_COMMA);

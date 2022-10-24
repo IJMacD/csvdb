@@ -113,7 +113,7 @@ void destroyRowList (struct RowList * list) {
  * @param dest
  * @param src
  */
-void copyRowList (struct RowList * dest, struct RowList * src) {
+void overwriteRowList (struct RowList * dest, struct RowList * src) {
     destroyRowList(dest);
 
     dest->join_count = src->join_count;

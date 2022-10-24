@@ -271,7 +271,7 @@ int basic_select_query (
                 }
             }
 
-            copyRowList(&row_list, &new_list);
+            overwriteRowList(&row_list, &new_list);
         }
         else if (s->type == PLAN_CONSTANT_JOIN) {
             // Sanity check
@@ -308,7 +308,7 @@ int basic_select_query (
                 }
             }
 
-            copyRowList(&row_list, &new_list);
+            overwriteRowList(&row_list, &new_list);
 
             destroyRowList(&tmp_list);
         }
@@ -365,7 +365,7 @@ int basic_select_query (
                 }
             }
 
-            copyRowList(&row_list, &new_list);
+            overwriteRowList(&row_list, &new_list);
 
             destroyRowList(&tmp_list);
         }
@@ -429,7 +429,7 @@ int basic_select_query (
                 }
             }
 
-            copyRowList(&row_list, &new_list);
+            overwriteRowList(&row_list, &new_list);
 
             destroyRowList(&tmp_list);
         }
@@ -453,7 +453,7 @@ int basic_select_query (
 
             sortResultRows(db, table_id, field_index, s->predicates[0].op, &row_list, &tmp);
 
-            copyRowList(&row_list, &tmp);
+            overwriteRowList(&row_list, &tmp);
 
             // debugRowList(&row_list, 2);
         }

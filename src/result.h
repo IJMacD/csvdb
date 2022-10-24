@@ -41,4 +41,5 @@ void makeRowList (struct RowList * list, int join_count, int max_rows);
 
 void destroyRowList (struct RowList * list);
 
-void copyRowList (struct RowList * dest, struct RowList * src);
+void overwriteRowList (struct RowList * dest, struct RowList * src);
+
