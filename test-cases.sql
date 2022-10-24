@@ -49,12 +49,16 @@ FROM suits, ranks WHERE value > 10 ORDER BY name SELECT ranks.name || ' of ' || 
 EXPLAIN SELECT TODAY(), EXTRACT(YEARDAY FROM TODAY()), EXTRACT(JULIAN FROM '1995-10-10')
 SELECT TODAY(), EXTRACT(YEARDAY FROM TODAY()), EXTRACT(JULIAN FROM '1995-10-10')
 FROM CALENDAR WHERE date = CURRENT_DATE SELECT julian, date, yeardayString, weekdayString
+TABLE suits
 FROM suits SELECT LISTAGG(name)
 FROM suits INNER JOIN ranks ON LENGTH(ranks.name) = LENGTH(suits.name)
 FROM suits LEFT JOIN ranks ON LENGTH(ranks.name) = LENGTH(suits.name)
 FROM suits JOIN ranks USING LENGTH(name)
 FROM suits AS s (n, s)
-TABLE suits
+FROM suits, ranks ORDER BY ranks.name ASC, suits.name ASC FETCH FIRST 2 ROWS ONLY
+FROM suits, ranks ORDER BY ranks.name ASC, suits.name DESC FETCH FIRST 2 ROWS ONLY
+FROM suits, ranks ORDER BY ranks.name DESC, suits.name ASC FETCH FIRST 2 ROWS ONLY
+FROM suits, ranks ORDER BY ranks.name DESC, suits.name DESC FETCH FIRST 2 ROWS ONLY
 FROM (FROM SEQUENCE(10) OFFSET 5 ROWS) AS a, (FROM SEQUENCE(2)) AS b SELECT b.value, a.value
 VALUES ('a',1),('b',2),('c',3)
 FROM (VALUES ('a',1),('b',2),('c',3)) AS a WHERE a.col2 < 3 SELECT a.col2, a.col1

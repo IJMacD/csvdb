@@ -452,18 +452,15 @@ int basic_select_query (
             makeRowList(&tmp, row_list.join_count, row_list.row_count);
 
             sortResultRows(db, table_id, field_index, s->predicates[0].op, &row_list, &tmp);
+            // To implement better sort later
+            // sortResultRows(db, order_fields, s->predicate_count, &row_list, &tmp);
 
             overwriteRowList(&row_list, &tmp);
 
             // debugRowList(&row_list, 2);
         }
         else if (s->type == PLAN_REVERSE) {
-            if (row_list.join_count > 1) {
-                fprintf(stderr, "Not Implemented: Unable to reverse joined rows\n");
-                exit(-1);
-            }
-
-            reverse_array(row_list.row_ids, row_list.row_count);
+            reverseRowList(&row_list);
         }
         else if (s->type == PLAN_SLICE) {
             // Offset is taken care of in PLAN_SELECT

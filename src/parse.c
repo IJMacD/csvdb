@@ -33,7 +33,7 @@ int parseQuery (struct Query *q, const char *query) {
 
     q->predicate_count = 0;
 
-    q->order_direction = ORDER_ASC;
+    q->order_count = 0;
 
     q->flags = 0;
     q->offset_value = 0;
@@ -449,18 +449,33 @@ int parseQuery (struct Query *q, const char *query) {
 
             q->flags |= FLAG_ORDER;
 
-            getQuotedToken(query, &index, q->order_field, MAX_FIELD_LENGTH);
+            while (index < query_length) {
+                int i = q->order_count++;
 
-            size_t original_index = index;
+                getQuotedToken(query, &index, q->order_field[i], MAX_FIELD_LENGTH);
 
-            getToken(query, &index, keyword, MAX_FIELD_LENGTH);
+                size_t original_index = index;
 
-            if (strcmp(keyword, "ASC") == 0) {
-                q->order_direction = ORDER_ASC;
-            } else if (strcmp(keyword, "DESC") == 0) {
-                q->order_direction = ORDER_DESC;
-            } else {
-                index = original_index;
+                getToken(query, &index, keyword, MAX_FIELD_LENGTH);
+
+                // Note: current implementation only supports all ASC or all DESC
+                if (strcmp(keyword, "ASC") == 0) {
+                    q->order_direction[i] = ORDER_ASC;
+                } else if (strcmp(keyword, "DESC") == 0) {
+                    q->order_direction[i] = ORDER_DESC;
+                } else {
+                    q->order_direction[i] = ORDER_ASC;
+                    // backtrack
+                    index = original_index;
+                }
+
+                skipWhitespace(query, &index);
+
+                if (query[index] != ',') {
+                    break;
+                }
+
+                index++;
             }
 
         }

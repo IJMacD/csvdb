@@ -10,9 +10,20 @@ static void sort_walkTreeBackwards (struct tree *node, struct RowList * source_l
 
 /**
  * @param db
+ * @param sort_fields
+ * @param sort_count
+ * @param source_list
+ * @param target_list
+ */
+// To implement better sort later
+// void sortResultRows (struct DB *db, struct SortField *sort_fields, int sort_count, struct RowList * source_list, struct RowList * target_list) {
+
+/**
+ * @param db
+ * @param table_id
  * @param field_index
  * @param direction
- * @param source_list Can be NULL to default to every row
+ * @param source_list
  * @param target_list
  */
 void sortResultRows (struct DB *db, int table_id, int field_index, int direction, struct RowList * source_list, struct RowList * target_list) {

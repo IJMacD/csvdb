@@ -61,8 +61,9 @@ struct Query {
     int limit_value;
     struct Predicate *predicates;
     int predicate_count;
-    char order_field[MAX_FIELD_LENGTH];
-    int order_direction;
+    char order_field[MAX_FIELD_LENGTH][MAX_FIELD_COUNT];
+    int order_direction[MAX_FIELD_COUNT];
+    int order_count;
 };
 
 int query (const char *query, int output_flags, FILE * output);

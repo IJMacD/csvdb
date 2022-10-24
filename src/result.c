@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "result.h"
+#include "util.h"
 
 int getRowID (struct RowList * row_list, int join_id, int index) {
     return row_list->row_ids[index * row_list->join_count + join_id];
@@ -119,4 +121,22 @@ void overwriteRowList (struct RowList * dest, struct RowList * src) {
     dest->join_count = src->join_count;
     dest->row_count = src->row_count;
     dest->row_ids = src->row_ids;
+}
+
+void reverseRowList (struct RowList * row_list) {
+    if (row_list->join_count == 1) {
+        // quick dirty implementation
+        reverse_array(row_list->row_ids, row_list->row_count);
+    }
+    else {
+        for (int i = 0; i < row_list->row_count / 2; i++) {
+            int i1 = row_list->row_count - i - 1;
+
+            for (int j = 0; j < row_list->join_count; j++) {
+                int temp = getRowID(row_list, j, i1);
+                writeRowID(row_list, j, i1, getRowID(row_list, j, i));
+                writeRowID(row_list, j, i, temp);
+            }
+        }
+    }
 }

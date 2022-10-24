@@ -127,7 +127,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
                 // Follow our own logic to add an order step
                 // We can avoid it if we're just going to sort on the same column we've just scanned
-                if ((q->flags & FLAG_ORDER) && strcmp(p->left.text, q->order_field) == 0) {
+                if ((q->flags & FLAG_ORDER) && (q->order_count == 1) && strcmp(p->left.text, q->order_field[0]) == 0) {
 
                     // So a sort is not necessary but we might still need to reverse
 
@@ -135,7 +135,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
                         // Reverse is never required if the plan is PLAN_PK or PLAN_UNIQUE
                     } else if (q->flags & FLAG_GROUP){
                         // Reverse is not required if we're grouping
-                    } else if (q->order_direction == ORDER_DESC) {
+                    } else if (q->order_direction[0] == ORDER_DESC) {
                         addStep(plan, PLAN_REVERSE);
                     }
                 } else {
@@ -148,14 +148,15 @@ int makePlan (struct Query *q, struct Plan *plan) {
             // To save a sort later, see if we can use an index for ordering now
             else if (
                 (q->flags & FLAG_ORDER) &&
+                q->order_count == 1 &&
                 // If we're selecting a lot of rows this optimisation is probably worth it.
                 // If we have an EQ operator then it's probably cheaper to filter first
                 (p->op != OPERATOR_EQ) &&
-                findIndex(NULL, table->name, q->order_field, INDEX_ANY)
+                findIndex(NULL, table->name, q->order_field[0], INDEX_ANY)
             ) {
 
                 struct Predicate *order_p = malloc(sizeof(*order_p));
-                strcpy(order_p->left.text, q->order_field);
+                strcpy(order_p->left.text, q->order_field[0]);
                 // OPERATOR_ALWAYS on index range means the entire range;
                 order_p->op = OPERATOR_ALWAYS;
                 order_p->right.text[0] = '\0';
@@ -182,7 +183,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
                 addJoinStepsIfRequired(plan, q);
 
-                if (q->order_direction == ORDER_DESC && !(q->flags & FLAG_GROUP)) {
+                if (q->order_direction[0] == ORDER_DESC && !(q->flags & FLAG_GROUP)) {
                     addStep(plan, PLAN_REVERSE);
                 }
 
@@ -233,21 +234,21 @@ int makePlan (struct Query *q, struct Plan *plan) {
             applyLimitOptimisation(plan, q);
         }
     }
-    else if ((q->flags & FLAG_ORDER) && !(q->flags & FLAG_GROUP)) {
+    else if ((q->flags & FLAG_ORDER) && q->order_count == 1 && !(q->flags & FLAG_GROUP)) {
         // Before we do a full table scan... we have one more opportunity to use an index
         // To save a sort later, see if we can use an index for ordering now
         struct Table *table = &q->tables[0];
-        if (findIndex(NULL, table->name, q->order_field, INDEX_ANY)) {
+        if (findIndex(NULL, table->name, q->order_field[0], INDEX_ANY)) {
 
             struct Predicate *order_p = malloc(sizeof(*order_p));
-            strcpy(order_p->left.text, q->order_field);
+            strcpy(order_p->left.text, q->order_field[0]);
             // OPERATOR_ALWAYS means scan full index
             order_p->op = OPERATOR_ALWAYS;
             order_p->right.text[0] = '\0';
 
             addStepWithPredicate(plan, PLAN_INDEX_RANGE, order_p);
 
-            if (q->order_direction == ORDER_DESC) {
+            if (q->order_direction[0] == ORDER_DESC) {
                 addStep(plan, PLAN_REVERSE);
             }
             else if (q->limit_value >= 0 && q->table_count <= 1) {
@@ -271,6 +272,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
         addStep(plan, PLAN_TABLE_ACCESS_FULL);
 
         addJoinStepsIfRequired(plan, q);
+
+        addOrderStepIfRequired(plan, q);
     }
 
     /*******************
@@ -316,8 +319,6 @@ void addStep (struct Plan *plan, int type) {
  * Will check if it's necessary
  */
 void addOrderStepIfRequired (struct Plan *plan, struct Query *q) {
-    int i = plan->step_count;
-
     // Check if there's an order by clause
     if (!(q->flags & FLAG_ORDER)) {
         return;
@@ -333,23 +334,35 @@ void addOrderStepIfRequired (struct Plan *plan, struct Query *q) {
     // Comment: This assumes we folled a specific path above
     //
     // Comment: should properly check both sides for functions/constants etc.
-    for (int j = 0; j < q->predicate_count; j++) {
-        if (strcmp(q->predicates[j].left.text, q->order_field) == 0 && q->predicates[j].op == OPERATOR_EQ && q->predicates[j].left.function == FUNC_UNITY) {
-            return;
+    if (q->order_count == 1) {
+        for (int j = 0; j < q->predicate_count; j++) {
+            if (strcmp(q->predicates[j].left.text, q->order_field[0]) == 0 && q->predicates[j].op == OPERATOR_EQ && q->predicates[j].left.function == FUNC_UNITY) {
+                return;
+            }
         }
     }
 
-    struct Predicate *order_p = malloc(sizeof(*order_p));
-    strcpy(order_p->left.text, q->order_field);
-    order_p->op = q->order_direction;
-    order_p->right.text[0] = '\0';
+    // To implement better sort later
+    // struct Predicate *order_predicates = malloc(sizeof(*order_predicates) * q->order_count);
 
-    plan->steps[i].predicate_count = 1;
-    plan->steps[i].predicates = order_p;
-    plan->steps[i].type = PLAN_SORT;
-    plan->steps[i].limit = -1;
+    for (int i = q->order_count - 1; i >= 0 ; i--) {
+        if (i < (q->order_count - 1) && q->order_direction[i] == ORDER_DESC) {
+            // If there are previous sort steps and this one is DESC then the
+            // results need to be flipped first.
+            addStep(plan, PLAN_REVERSE);
+        }
 
-    plan->step_count++;
+        struct Predicate *order_predicate = malloc(sizeof(*order_predicate));
+
+        strcpy(order_predicate->left.text, q->order_field[i]);
+        order_predicate->op = q->order_direction[i];
+        order_predicate->right.text[0] = '\0';
+
+        addStepWithPredicate(plan, PLAN_SORT, order_predicate);
+    }
+
+    // To implement better sort later
+    // addStepWithPredicates(plan, PLAN_SORT, order_predicates, q->order_count);
 }
 
 void addStepWithPredicate (struct Plan *plan, int type, struct Predicate *p) {

@@ -43,3 +43,4 @@ void destroyRowList (struct RowList * list);
 
 void overwriteRowList (struct RowList * dest, struct RowList * src);
 
+void reverseRowList (struct RowList * row_list);
