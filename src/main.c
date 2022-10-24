@@ -166,6 +166,9 @@ int main (int argc, char * argv[]) {
             fprintf(stderr, "Unrecognised format: %s\n", format_val);
             return -1;
         }
+    } else {
+        // Disable next line for some fun just dumping data with no delineation
+        flags |= OUTPUT_FORMAT_TAB;
     }
 
     if (output_name != NULL) {

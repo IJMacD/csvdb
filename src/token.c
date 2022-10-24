@@ -49,7 +49,7 @@ void skipToken (const char *string, size_t *index) {
         }
     }
     else {
-        while (!iscntrl(string[*index]) && string[*index] != ' ' && string[*index] != ',') {
+        while (!iscntrl(string[*index]) && string[*index] != ' ' && string[*index] != ',' && string[*index] != '|') {
             (*index)++;
         }
     }
