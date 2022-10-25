@@ -9,11 +9,15 @@
 #include "date.h"
 #include "util.h"
 
-int parseColumn (const char * query, size_t * index, struct ColumnNode *column);
+#define MAX_CTES    10
 
-int parseFunction (const char * query, size_t * index, struct ColumnNode * column, int name_length);
+static int parseColumn (const char * query, size_t * index, struct ColumnNode *column);
+
+static int parseFunction (const char * query, size_t * index, struct ColumnNode * column, int name_length);
 
 static int checkConstantColumn(struct ColumnNode * column);
+
+static struct Table *findTable (const char *table_name, struct Table *tables, int table_count);
 
 int parseQuery (struct Query *q, const char *query) {
     /*********************
@@ -38,6 +42,9 @@ int parseQuery (struct Query *q, const char *query) {
     q->flags = 0;
     q->offset_value = 0;
     q->limit_value = -1;
+
+    struct Table ctes[MAX_CTES];
+    int cte_count = 0;
 
     skipWhitespace(query, &index);
 
@@ -114,7 +121,56 @@ int parseQuery (struct Query *q, const char *query) {
 
         // printf("Token: '%s'\n", keyword);
 
-        if (strcmp(keyword, "SELECT") == 0) {
+        if (strcmp(keyword, "WITH") == 0) {
+            while (index < query_length) {
+                int cte_index = cte_count++;
+
+                if (cte_index >= MAX_CTES) {
+                    fprintf(stderr, "Error: Cannot have more than %d ctes.\n", MAX_CTES);
+                }
+
+                struct Table *cte = ctes + cte_index;
+
+                getQuotedToken(query, &index, cte->alias, MAX_TABLE_LENGTH);
+
+                getToken(query, &index, keyword, MAX_FIELD_LENGTH);
+
+                if (strcmp(keyword, "AS") != 0) {
+                    fprintf(stderr, "Error: expected AS\n");
+                    return -1;
+                }
+
+                skipWhitespace(query, &index);
+
+                if (query[index] != '(') {
+                    fprintf(stderr, "Error: Expected '('\n");
+                    return -1;
+                }
+
+                int len = find_matching_parenthesis(query + index);
+
+                if (len >= MAX_TABLE_LENGTH) {
+                    fprintf(stderr, "Error: CTEs longer than %d are not supported. CTE was %d bytes.\n", MAX_TABLE_LENGTH, len);
+                    exit(-1);
+                }
+
+                strncpy(cte->name, query + index + 1, len - 2);
+
+                // Indicate to query processor this is a subquery
+                cte->db = DB_SUBQUERY;
+
+                index += len;
+
+                skipWhitespace(query, &index);
+
+                if (query[index] != ',') {
+                    break;
+                }
+
+                index++;
+            }
+        }
+        else if (strcmp(keyword, "SELECT") == 0) {
 
             int curr_index = 0;
             while (index < query_length) {
@@ -169,7 +225,7 @@ int parseQuery (struct Query *q, const char *query) {
                     void * ptr = realloc(q->tables, sizeof (struct Table) * q->table_count);
 
                     if (ptr == NULL) {
-                        fprintf(stderr, "Can't allocate memory\n");
+                        fprintf(stderr, "Error: Can't allocate memory\n");
                         exit(-1);
                     }
 
@@ -192,7 +248,7 @@ int parseQuery (struct Query *q, const char *query) {
                     int len = find_matching_parenthesis(query + index);
 
                     if (len >= MAX_TABLE_LENGTH) {
-                        fprintf(stderr, "Subqueries longer than %d are not supported.\n", MAX_TABLE_LENGTH);
+                        fprintf(stderr, "Error: Subqueries longer than %d are not supported. Subquery was %d bytes.\n", MAX_TABLE_LENGTH, len);
                         exit(-1);
                     }
 
@@ -204,9 +260,19 @@ int parseQuery (struct Query *q, const char *query) {
                     index += len;
 
                     strcpy(table->alias, "subquery");
+
+                    // TODO: subqueries can't reference CTEs
                 }
                 else {
                     getQuotedToken(query, &index, table->name, MAX_TABLE_LENGTH);
+
+                    // As soon as we have a name we should search for a matching CTE
+                    struct Table *cte = findTable(table->name, ctes, MAX_CTES);
+                    if (cte != NULL) {
+                        memcpy(table, cte, sizeof(*cte));
+
+                        // TODO: CTEs can't reference CTEs
+                    }
                 }
 
                 skipWhitespace(query, &index);
@@ -251,7 +317,7 @@ int parseQuery (struct Query *q, const char *query) {
 
                     p->op = parseOperator(op);
                     if (p->op == OPERATOR_UN) {
-                        fprintf(stderr, "Bad query - expected =|!=|<|<=|>|>=\n");
+                        fprintf(stderr, "Error: expected =|!=|<|<=|>|>=\n");
                         return -1;
                     }
 
@@ -333,7 +399,7 @@ int parseQuery (struct Query *q, const char *query) {
                 }
 
                 if (mem == NULL) {
-                    fprintf(stderr, "Out of memory\n");
+                    fprintf(stderr, "Error: Out of memory\n");
                     return -1;
                 }
 
@@ -353,7 +419,7 @@ int parseQuery (struct Query *q, const char *query) {
 
                 p->op = parseOperator(op);
                 if (p->op == OPERATOR_UN) {
-                    fprintf(stderr, "Bad query - expected =|!=|<|<=|>|>=\n");
+                    fprintf(stderr, "Error: expected =|!=|<|<=|>|>=\n");
                     return -1;
                 }
 
@@ -384,14 +450,14 @@ int parseQuery (struct Query *q, const char *query) {
             q->offset_value = getNumericToken(query, &index);
 
             if (q->offset_value < 0) {
-                fprintf(stderr, "OFFSET cannot be negative\n");
+                fprintf(stderr, "Error: OFFSET cannot be negative\n");
                 return -1;
             }
 
             getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
             if (strcmp(keyword, "ROW") != 0 && strcmp(keyword, "ROWS") != 0) {
-                fprintf(stderr, "Bad query - expected ROW|ROWS; Got '%s'\n", keyword);
+                fprintf(stderr, "Error: expected ROW|ROWS; Got '%s'\n", keyword);
                 return -1;
             }
         }
@@ -399,7 +465,7 @@ int parseQuery (struct Query *q, const char *query) {
             getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
             if (strcmp(keyword, "FIRST") != 0 && strcmp(keyword, "NEXT") != 0) {
-                fprintf(stderr, "Bad query - expected FIRST|NEXT\n");
+                fprintf(stderr, "Error: expected FIRST|NEXT\n");
                 return -1;
             }
 
@@ -410,7 +476,7 @@ int parseQuery (struct Query *q, const char *query) {
                 q->limit_value = getNumericToken(query, &index);
 
                 if (q->limit_value < 0) {
-                    fprintf(stderr, "FETCH FIRST cannot be negative\n");
+                    fprintf(stderr, "Error: FETCH FIRST cannot be negative\n");
                     return -1;
                 }
             } else {
@@ -420,14 +486,14 @@ int parseQuery (struct Query *q, const char *query) {
             getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
             if (strcmp(keyword, "ROW") != 0 && strcmp(keyword, "ROWS") != 0) {
-                fprintf(stderr, "Bad query - expected ROW|ROWS; Got '%s'\n", keyword);
+                fprintf(stderr, "Error: expected ROW|ROWS; Got '%s'\n", keyword);
                 return -1;
             }
 
             getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
             if (strcmp(keyword, "ONLY") != 0) {
-                fprintf(stderr, "Bad query - expected ONLY; Got '%s'\n", keyword);
+                fprintf(stderr, "Error: expected ONLY; Got '%s'\n", keyword);
                 return -1;
             }
         }
@@ -443,7 +509,7 @@ int parseQuery (struct Query *q, const char *query) {
             getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
             if (strcmp(keyword, "BY") != 0) {
-                fprintf(stderr, "Bad query - expected BY\n");
+                fprintf(stderr, "Error: expected BY\n");
                 return -1;
             }
 
@@ -499,7 +565,7 @@ void destroyQuery (struct Query *query) {
     }
 }
 
-int parseColumn (const char * query, size_t * index, struct ColumnNode *column) {
+static int parseColumn (const char * query, size_t * index, struct ColumnNode *column) {
     int flags = 0;
 
     column->field = FIELD_UNKNOWN;
@@ -822,7 +888,7 @@ int parseColumn (const char * query, size_t * index, struct ColumnNode *column) 
  * @param name_length Length of function name (excluding opening bracket)
  * @return int
  */
-int parseFunction (const char * query, size_t * index, struct ColumnNode * column, int name_length) {
+static int parseFunction (const char * query, size_t * index, struct ColumnNode * column, int name_length) {
 
     char field[MAX_FIELD_LENGTH];
     strcpy(field, column->text + name_length + 1);
@@ -888,4 +954,20 @@ static int checkConstantColumn(struct ColumnNode * column) {
     }
 
     return 0;
+}
+
+static struct Table *findTable (const char *table_name, struct Table *tables, int table_count) {
+    for (int i = 0; i < table_count; i++) {
+        struct Table *table = tables + i;
+
+        if (strcmp(table->alias, table_name) == 0) {
+            return table;
+        }
+
+        if (strcmp(table->name, table_name) == 0) {
+            return table;
+        }
+    }
+
+    return NULL;
 }

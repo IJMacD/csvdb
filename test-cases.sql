@@ -34,7 +34,7 @@ SELECT COUNT(*) FROM test WHERE name = 'Walter KELLY'
 SELECT COUNT(*) FROM test WHERE birth_date = '2050-01-01'
 SELECT COUNT(*) FROM test WHERE score = 42
 FROM test WHERE name < 'Bob' AND score > 50 FETCH FIRST 5 ROWS ONLY
-EXPLAIN FROM test, CALENDAR ON date = birth_date WHERE name LIKE 'Walter M%' SELECT name, yearday FETCH FIRST 5 ROWS ONLY
+EXPLAIN FROM test, CALENDAR ON date = birth_date WHERE name LIKE 'Walter M%' SELECT name, yearday, birth_date, date FETCH FIRST 5 ROWS ONLY
 FROM test, CALENDAR ON date = birth_date WHERE name LIKE 'Walter M%' SELECT name, birth_date, yearday FETCH FIRST 5 ROWS ONLY
 FROM test, CALENDAR ON birth_date = date WHERE name < 'Aaron Z' SELECT name, date, yearday ORDER BY yearday FETCH FIRST 5 ROWS ONLY
 EXPLAIN FROM test WHERE EXTRACT(WEEKDAY FROM birth_date) = 5 FETCH FIRST 5 ROWS ONLY
@@ -63,3 +63,5 @@ FROM (FROM SEQUENCE(10) OFFSET 5 ROWS) AS a, (FROM SEQUENCE(2)) AS b SELECT b.va
 VALUES ('a',1),('b',2),('c',3)
 FROM (VALUES ('a',1),('b',2),('c',3)) AS a WHERE a.col2 < 3 SELECT a.col2, a.col1
 FROM (VALUES ('a',1),('b',2),('c',3)) AS a (first, second)
+WITH r1 AS (FROM ranks WHERE value < 8 SELECT name, symbol) FROM r1 ORDER BY name
+WITH r1 AS (FROM ranks WHERE value < 8 SELECT name, symbol), s1 AS (FROM suits SELECT name), v1 AS (VALUES ('b')) FROM r1,r1 AS r2,v1 ORDER BY r2.name, r1.name DESC FETCH FIRST 5 ROWS ONLY

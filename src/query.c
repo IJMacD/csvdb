@@ -39,6 +39,10 @@ static void checkColumnAliases (struct Table * table);
 extern char *process_name;
 
 int query (const char *query, int output_flags, FILE * output) {
+    #ifdef DEBUG
+    fprintf(stderr, "Start Query (%d)\n", getpid());
+    #endif
+
     if (strncmp(query, "CREATE ", 7) == 0) {
         if (output_flags & FLAG_READ_ONLY) {
             fprintf(stderr, "Tried to CREATE while in read-only mode\n");
@@ -203,12 +207,18 @@ int basic_select_query (
         struct PlanStep *s = &plan->steps[i];
 
         if (s->type == PLAN_PK || s->type == PLAN_PK_RANGE) {
+            #ifdef DEBUG
+            fprintf(stderr, "Q%d: PLAN_PK\n", getpid());
+            #endif
             // First table
             struct Table * table = q->tables;
             struct Predicate *p = &s->predicates[0];
             indexPrimaryScan(table->db, p->op, p->right.text, &row_list, s->limit);
         }
         else if (s->type == PLAN_UNIQUE || s->type == PLAN_UNIQUE_RANGE) {
+            #ifdef DEBUG
+            fprintf(stderr, "Q%d: PLAN_UNIQUE\n", getpid());
+            #endif
             // First table
             struct Table * table = q->tables;
             struct Predicate *p = &s->predicates[0];
@@ -220,6 +230,9 @@ int basic_select_query (
             indexUniqueScan(&index_db, FIELD_ROW_INDEX, p->op, p->right.text, &row_list, s->limit);
         }
         else if (s->type == PLAN_INDEX_RANGE) {
+            #ifdef DEBUG
+            fprintf(stderr, "Q%d: PLAN_INDEX_RANGE\n", getpid());
+            #endif
             // First table
             struct Table * table = q->tables;
             struct Predicate *p = &s->predicates[0];
@@ -231,6 +244,9 @@ int basic_select_query (
             indexScan(&index_db, FIELD_ROW_INDEX, p->op, p->right.text, &row_list, s->limit);
         }
         else if (s->type == PLAN_TABLE_ACCESS_FULL) {
+            #ifdef DEBUG
+            fprintf(stderr, "Q%d: PLAN_TABLE_ACCESS_FULL\n", getpid());
+            #endif
             // First table
             struct Table * table = q->tables;
 
@@ -242,6 +258,9 @@ int basic_select_query (
             }
         }
         else if (s->type == PLAN_TABLE_ACCESS_ROWID) {
+            #ifdef DEBUG
+            fprintf(stderr, "Q%d: PLAN_TABLE_ACCESS_ROWID\n", getpid());
+            #endif
             int source_count = row_list.row_count;
 
             row_list.row_count = 0;
@@ -271,6 +290,9 @@ int basic_select_query (
             }
         }
         else if (s->type == PLAN_CROSS_JOIN) {
+            #ifdef DEBUG
+            fprintf(stderr, "Q%d: PLAN_CROSS_JOIN\n", getpid());
+            #endif
             struct RowList new_list;
 
             struct DB *next_db = q->tables[row_list.join_count].db;
@@ -288,6 +310,9 @@ int basic_select_query (
             overwriteRowList(&row_list, &new_list);
         }
         else if (s->type == PLAN_CONSTANT_JOIN) {
+            #ifdef DEBUG
+            fprintf(stderr, "Q%d: PLAN_CONSTANT_JOIN\n", getpid());
+            #endif
             // Sanity check
             struct Predicate *p = s->predicates + 0;
             if (p->left.table_id != row_list.join_count &&
@@ -327,6 +352,9 @@ int basic_select_query (
             destroyRowList(&tmp_list);
         }
         else if (s->type == PLAN_LOOP_JOIN) {
+            #ifdef DEBUG
+            fprintf(stderr, "Q%d: PLAN_LOOP_JOIN\n", getpid());
+            #endif
             struct Table *table = &q->tables[row_list.join_count];
             struct DB *next_db = table->db;
 
@@ -384,6 +412,9 @@ int basic_select_query (
             destroyRowList(&tmp_list);
         }
         else if (s->type == PLAN_UNIQUE_JOIN) {
+            #ifdef DEBUG
+            fprintf(stderr, "Q%d: PLAN_UNIQUE_JOIN\n", getpid());
+            #endif
             // Table ID being joined here
             int table_id = row_list.join_count;
 
@@ -448,6 +479,9 @@ int basic_select_query (
             destroyRowList(&tmp_list);
         }
         else if (s->type == PLAN_SORT) {
+            #ifdef DEBUG
+            fprintf(stderr, "Q%d: PLAN_SORT\n", getpid());
+            #endif
 
             int table_id = -1;
             int field_index;
@@ -474,9 +508,15 @@ int basic_select_query (
             // debugRowList(&row_list, 2);
         }
         else if (s->type == PLAN_REVERSE) {
+            #ifdef DEBUG
+            fprintf(stderr, "Q%d: PLAN_REVERSE\n", getpid());
+            #endif
             reverseRowList(&row_list);
         }
         else if (s->type == PLAN_SLICE) {
+            #ifdef DEBUG
+            fprintf(stderr, "Q%d: PLAN_SLICE\n", getpid());
+            #endif
             // Offset is taken care of in PLAN_SELECT
 
             // Apply limit (including offset rows - which will be omitted later)
@@ -485,9 +525,15 @@ int basic_select_query (
             }
         }
         else if (s->type == PLAN_GROUP) {
+            #ifdef DEBUG
+            fprintf(stderr, "Q%d: PLAN_GROUP\n", getpid());
+            #endif
             // NOP
         }
         else if (s->type == PLAN_SELECT) {
+            #ifdef DEBUG
+            fprintf(stderr, "Q%d: PLAN_SELECT\n", getpid());
+            #endif
             /*******************
              * Output result set
              *******************/
@@ -562,56 +608,8 @@ static int populateTables (struct Query *q, struct DB *dbs) {
 
         int found = 0;
 
-        // Handle special kinds of table, info provided by parser
-
-        // Check for subquery first
-        if (table->db == DB_SUBQUERY) {
-            // Special-special treatment: VALUES can be handled in process
-            if (strncmp(table->name, "VALUES", 6) == 0 && isspace(table->name[6])) {
-                csvMem_fromValues(&dbs[i], table->name + 7);
-            }
-            else {
-                char *cmd = malloc(MAX_TABLE_LENGTH * 2);
-
-                // Construct command line for sub-process
-                sprintf(cmd, "%s -0 -H -F csv \"%s\"", process_name, table->name);
-
-                FILE *f = popen(cmd, "r");
-                free(cmd);
-
-                struct DB *db = &dbs[i];
-
-                // Leave a note for csvMem to close the stream
-                db->file = STREAM_PROC;
-
-                // hand off to CSV Mem
-                int result = csvMem_makeDB(db, f);
-
-                if (result < 0) {
-                    return -1;
-                }
-            }
-
-            table->db = &dbs[i];
-
-            checkColumnAliases(table);
-
-            found = 1;
-        }
-        // If it is VALUES only (top-level) query
-        else if (table->db == DB_VALUES) {
-
-            csvMem_fromValues(&dbs[i], table->name);
-
-            table->db = &dbs[i];
-
-            checkColumnAliases(table);
-
-            found = 1;
-        }
-        // Must be a regular table
         // Try to reuse existing open table first
-        else for (int j = 0; j < i; j++) {
+        for (int j = 0; j < i; j++) {
             if (strcmp(q->tables[j].name, table->name) == 0) {
                 // Copy pointer
                 table->db = q->tables[j].db;
@@ -624,6 +622,57 @@ static int populateTables (struct Query *q, struct DB *dbs) {
             }
         }
 
+        // Handle special kinds of table, info provided by parser
+
+        if (found == 0) {
+            // Check for subquery first
+            if (table->db == DB_SUBQUERY) {
+                // Special-special treatment: VALUES can be handled in process
+                if (strncmp(table->name, "VALUES", 6) == 0 && isspace(table->name[6])) {
+                    csvMem_fromValues(&dbs[i], table->name + 7);
+                }
+                else {
+                    char *cmd = malloc(MAX_TABLE_LENGTH * 2);
+
+                    // Construct command line for sub-process
+                    sprintf(cmd, "%s -0 -H -F csv \"%s\"", process_name, table->name);
+
+                    FILE *f = popen(cmd, "r");
+                    free(cmd);
+
+                    struct DB *db = &dbs[i];
+
+                    // Leave a note for csvMem to close the stream
+                    db->file = STREAM_PROC;
+
+                    // hand off to CSV Mem
+                    int result = csvMem_makeDB(db, f);
+
+                    if (result < 0) {
+                        return -1;
+                    }
+                }
+
+                table->db = &dbs[i];
+
+                checkColumnAliases(table);
+
+                found = 1;
+            }
+            // If it is VALUES only (top-level) query
+            else if (table->db == DB_VALUES) {
+
+                csvMem_fromValues(&dbs[i], table->name);
+
+                table->db = &dbs[i];
+
+                checkColumnAliases(table);
+
+                found = 1;
+            }
+        }
+
+        // Must be a regular table
         // Not a special table and not already open
         if (found == 0) {
             if (openDB(&dbs[i], table->name) != 0) {
