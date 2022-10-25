@@ -217,8 +217,7 @@ int basic_select_query (
                 fprintf(stderr, "Unable to find unique index on column '%s' on table '%s'\n", p->left.text, table->name);
                 exit(-1);
             }
-            int rowid_col = getFieldIndex(&index_db, "rowid");
-            indexUniqueScan(&index_db, rowid_col, p->op, p->right.text, &row_list, s->limit);
+            indexUniqueScan(&index_db, FIELD_ROW_INDEX, p->op, p->right.text, &row_list, s->limit);
         }
         else if (s->type == PLAN_INDEX_RANGE) {
             // First table
@@ -229,8 +228,7 @@ int basic_select_query (
                 fprintf(stderr, "Unable to find index on column '%s' on table '%s'\n", p->left.text, table->name);
                 exit(-1);
             }
-            int rowid_col = getFieldIndex(&index_db, "rowid");
-            indexScan(&index_db, rowid_col, p->op, p->right.text, &row_list, s->limit);
+            indexScan(&index_db, FIELD_ROW_INDEX, p->op, p->right.text, &row_list, s->limit);
         }
         else if (s->type == PLAN_TABLE_ACCESS_FULL) {
             // First table

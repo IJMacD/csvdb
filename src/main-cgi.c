@@ -58,6 +58,9 @@ int main () {
     else if (strstr(accept_env, "text/csv") != NULL) {
         format = OUTPUT_FORMAT_COMMA;
     }
+    else if (strstr(accept_env, "text/tab-separated-values") != NULL) {
+        format = OUTPUT_FORMAT_TAB;
+    }
     else if (strstr(accept_env, "application/sql") != NULL) {
         format = OUTPUT_FORMAT_SQL_INSERT;
     }

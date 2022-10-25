@@ -52,64 +52,83 @@ int makePlan (struct Query *q, struct Plan *plan) {
         if (predicatesOnFirstTable > 0) {
 
             int step_type = 0;
-
-            // LIKE can only use index if '%' is at the end
             size_t len = strlen(p->right.text);
-            if (p->op == OPERATOR_LIKE && p->right.text[len-1] != '%') {
-                // NOP
-                step_type = 0;
+
+            int skip_index = 0;
+
+            // We know that CALENDAR can perform super efficient full table
+            // scans with predicates.
+            // Currently Index access can only use a single predicate at a
+            // time which makes CALENDAR access much slower than it needs to
+            // be.
+            // In the future with real index ranges this special case could
+            // probably be removed.
+            if (predicatesOnFirstTable > 1 && table->db->vfs == VFS_CALENDAR) {
+                struct Predicate *p2 = &q->predicates[1];
+
+                if (strcmp(p->left.text, p2->left.text) == 0) {
+                    skip_index = 1;
+                }
             }
-            else if (p->left.function == FUNC_PK) {
 
-                if (p->op == OPERATOR_EQ) {
-                    step_type = PLAN_PK;
+            if (skip_index == 0) {
+                // LIKE can only use index if '%' is at the end
+                if (p->op == OPERATOR_LIKE && p->right.text[len-1] != '%') {
+                    // NOP
+                    step_type = 0;
                 }
-                // Can't use PK index for LIKE yet
-                else if (p->op != OPERATOR_LIKE) {
-                    step_type = PLAN_PK_RANGE;
-                }
+                else if (p->left.function == FUNC_PK) {
 
-            }
-            // Can only do indexes on bare columns for now
-            else if (p->left.function == FUNC_UNITY) {
-
-                // Remove qualified name so indexes can be searched etc.
-                int dot_index = str_find_index(p->left.text, '.');
-                if (dot_index >= 0) {
-                    char value[MAX_FIELD_LENGTH];
-                    strcpy(value, p->left.text);
-                    strcpy(p->left.text, value + dot_index + 1);
-                }
-
-                /*******************
-                 * INDEX SCAN
-                 *******************/
-
-                // Try to find any index
-                int find_result = findIndex(NULL, table->name, p->left.text, INDEX_ANY);
-
-                if (find_result) {
-
-                    if (find_result == INDEX_PRIMARY) {
-                        if (p->op == OPERATOR_EQ) {
-                            step_type = PLAN_PK;
-                        }
-                        // Can't use PK index for LIKE yet
-                        else if (p->op != OPERATOR_LIKE) {
-                            step_type = PLAN_PK_RANGE;
-                        }
+                    if (p->op == OPERATOR_EQ) {
+                        step_type = PLAN_PK;
                     }
-                    // LIKE makes any INDEX automatically non-unique
-                    else if (find_result == INDEX_UNIQUE && p->op != OPERATOR_LIKE) {
-                        if (p->op == OPERATOR_EQ) {
-                            step_type = PLAN_UNIQUE;
-                        } else {
-                            step_type = PLAN_UNIQUE_RANGE;
-                        }
+                    // Can't use PK index for LIKE yet
+                    else if (p->op != OPERATOR_LIKE) {
+                        step_type = PLAN_PK_RANGE;
                     }
-                    // INDEX RANGE can handle LIKE
-                    else {
-                        step_type = PLAN_INDEX_RANGE;
+
+                }
+                // Can only do indexes on bare columns for now
+                else if (p->left.function == FUNC_UNITY) {
+
+                    // Remove qualified name so indexes can be searched etc.
+                    int dot_index = str_find_index(p->left.text, '.');
+                    if (dot_index >= 0) {
+                        char value[MAX_FIELD_LENGTH];
+                        strcpy(value, p->left.text);
+                        strcpy(p->left.text, value + dot_index + 1);
+                    }
+
+                    /*******************
+                     * INDEX SCAN
+                     *******************/
+
+                    // Try to find any index
+                    int find_result = findIndex(NULL, table->name, p->left.text, INDEX_ANY);
+
+                    if (find_result) {
+
+                        if (find_result == INDEX_PRIMARY) {
+                            if (p->op == OPERATOR_EQ) {
+                                step_type = PLAN_PK;
+                            }
+                            // Can't use PK index for LIKE yet
+                            else if (p->op != OPERATOR_LIKE) {
+                                step_type = PLAN_PK_RANGE;
+                            }
+                        }
+                        // LIKE makes any INDEX automatically non-unique
+                        else if (find_result == INDEX_UNIQUE && p->op != OPERATOR_LIKE) {
+                            if (p->op == OPERATOR_EQ) {
+                                step_type = PLAN_UNIQUE;
+                            } else {
+                                step_type = PLAN_UNIQUE_RANGE;
+                            }
+                        }
+                        // INDEX RANGE can handle LIKE
+                        else {
+                            step_type = PLAN_INDEX_RANGE;
+                        }
                     }
                 }
             }
@@ -147,6 +166,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
             // Before we do a full table scan... we have one more opportunity to use an index
             // To save a sort later, see if we can use an index for ordering now
             else if (
+                skip_index == 0 &&
                 (q->flags & FLAG_ORDER) &&
                 q->order_count == 1 &&
                 // If we're selecting a lot of rows this optimisation is probably worth it.
@@ -475,9 +495,15 @@ static int optimisePredicates (__attribute__((unused)) struct Query *q, struct P
         memcpy(&predicates[chosen_predicate_index], &tmp, sizeof(tmp));
     }
 
-    // Indicate how many predicates we guarantee are on the first table
-    if (chosen_predicate_index >= 0)
-        return 1;
+    // We found at least one predicate on the first table now just count how
+    // many are already in place
+    if (chosen_predicate_index >= 0) {
+        int i = 1;
+        while (predicates[i].left.table_id == 0 && i < count) {
+            i++;
+        }
+        return i;
+    }
 
     return 0;
 }
