@@ -29,6 +29,8 @@ static void urldecode2(char *dst, const char *src);
 
 static void setDataDir (const char * datadir);
 
+static void printError (int format, FILE *error);
+
 int main () {
 
     char query_buffer[1024];
@@ -39,8 +41,11 @@ int main () {
 
     srand((unsigned) time(NULL) * getpid());
 
-    // Redirect stderr -> stdout
-    dup2(STDOUT_FILENO, STDERR_FILENO);
+    // open tmp file to collect errors
+    FILE * error = fopen("/tmp/csvdb_error", "w+");
+
+    // Redirect stderr -> error file
+    dup2(fileno(error), STDERR_FILENO);
 
     // char dirname[255];
     // fprintf(stderr, "debug: cwd %s\n", getcwd(dirname, 255));
@@ -150,8 +155,7 @@ int main () {
     else if (format == OUTPUT_FORMAT_HTML) {
         printf("Content-Type: text/html; charset=utf-8\n");
     }
-    else if (format == OUTPUT_FORMAT_JSON || format == OUTPUT_FORMAT_JSON_ARRAY)
-    {
+    else if (format == OUTPUT_FORMAT_JSON || format == OUTPUT_FORMAT_JSON_ARRAY) {
         printf("Content-Type: application/json; charset=utf-8\n");
     }
     else if (format == OUTPUT_FORMAT_SQL_INSERT) {
@@ -171,7 +175,8 @@ int main () {
     printf("\n");
 
     if (query(query_buffer, flags, output)) {
-        printf("Error processing query\n");
+        // Write errors to stdout now
+        printError(format, error);
         return -1;
     }
 
@@ -216,14 +221,14 @@ static void setDataDir (const char * datadir) {
                 if (mkdir(datadir, S_IRWXU|S_IRGRP|S_IXGRP)) {
                     printf("HTTP/1.1 500 Server Error\n");
                     printf("Content-Type: text/plain\n\n");
-                    printf("error: %s\n", strerror(errno));
+                    printf("%s\n", strerror(errno));
                     exit(-1);
                 }
                 // fprintf(stderr, "[DEBUG] created dir: %s\n", datadir);
                 if (chdir(datadir)) {
                     printf("HTTP/1.1 500 Server Error\n");
                     printf("Content-Type: text/plain\n\n");
-                    printf("error: %s\n", strerror(errno));
+                    printf("%s\n", strerror(errno));
                     perror("chdir");
                     exit(-1);
                 }
@@ -231,10 +236,47 @@ static void setDataDir (const char * datadir) {
             else  {
                 printf("HTTP/1.1 500 Server Error\n");
                 printf("Content-Type: text/plain\n\n");
-                printf("error: %s\n", strerror(errno));
+                printf("%s\n", strerror(errno));
                 exit(-1);
             }
         }
         // fprintf(stderr, "debug: cwd %s\n", getcwd(dirname, 255));
+    }
+}
+
+static void printError (int format, FILE *error) {
+    if (format == OUTPUT_FORMAT_HTML) {
+        printf("<p style=\"font-family: sans-serif;color: red\">");
+    }
+    else if (format == OUTPUT_FORMAT_JSON) {
+        printf("{\"error\": \"");
+    }
+    else if (format == OUTPUT_FORMAT_XML) {
+        printf("<results><error>");
+    }
+
+    printf("Error processing query: ");
+
+    fseek(error, 0, SEEK_SET);
+    char buffer[4096] = {0};
+    int size = fread(buffer, 1, sizeof(buffer), error);
+
+    // JSON doesn't allow newlines
+    if (format == OUTPUT_FORMAT_JSON) {
+        for (char *c = buffer; *c; c++) {
+            if (*c == '\n') *c = ' ';
+        }
+    }
+
+    fwrite(buffer, 1, size, stdout);
+
+    if (format == OUTPUT_FORMAT_HTML) {
+        printf("</p>");
+    }
+    else if (format == OUTPUT_FORMAT_JSON) {
+        printf("\"}");
+    }
+    else if (format == OUTPUT_FORMAT_XML) {
+        printf("</error></results>");
     }
 }

@@ -30,7 +30,7 @@ int information_query (const char *table, FILE * output);
 
 static int populateTables (struct Query *q, struct DB * dbs);
 
-static void populateColumnNode (struct Query * query, struct ColumnNode * column);
+static int populateColumnNode (struct Query * query, struct ColumnNode * column);
 
 static int findColumn (struct Query *q, const char *text, int *table_id, int *column_id);
 
@@ -46,7 +46,7 @@ int query (const char *query, int output_flags, FILE * output) {
     if (strncmp(query, "CREATE ", 7) == 0) {
         if (output_flags & FLAG_READ_ONLY) {
             fprintf(stderr, "Tried to CREATE while in read-only mode\n");
-            exit(-1);
+            return -1;
 
         }
         return create_query(query);
@@ -55,7 +55,7 @@ int query (const char *query, int output_flags, FILE * output) {
     if (strncmp(query, "INSERT ", 7) == 0) {
         if (output_flags & FLAG_READ_ONLY) {
             fprintf(stderr, "Tried to INSERT while in read-only mode\n");
-            exit(-1);
+            return -1;
         }
 
         return insert_query(query);
@@ -86,7 +86,7 @@ int select_query (const char *query, int output_flags, FILE * output) {
     struct Query q = {0};
 
     if (parseQuery(&q, query) < 0) {
-        fprintf(stderr, "Error parsing query\n");
+        fprintf(stderr, "Parsing query\n");
         return -1;
     }
 
@@ -145,13 +145,22 @@ int select_query (const char *query, int output_flags, FILE * output) {
 
     // Populate SELECT Columns
     for (int i = 0; i < q.column_count; i++) {
-        populateColumnNode(&q, &q.columns[i]);
+        result = populateColumnNode(&q, &q.columns[i]);
+        if (result < 0) {
+            return result;
+        }
     }
 
     // Populate WHERE columns
     for (int i = 0; i < q.predicate_count; i++) {
-        populateColumnNode(&q, &q.predicates[i].left);
-        populateColumnNode(&q, &q.predicates[i].right);
+        result = populateColumnNode(&q, &q.predicates[i].left);
+        if (result < 0) {
+            return result;
+        }
+        result = populateColumnNode(&q, &q.predicates[i].right);
+        if (result < 0) {
+            return result;
+        }
     }
 
     /**********************
@@ -226,7 +235,7 @@ int basic_select_query (
             struct DB index_db;
             if (findIndex(&index_db, table->name, p->left.text, INDEX_UNIQUE) == 0) {
                 fprintf(stderr, "Unable to find unique index on column '%s' on table '%s'\n", p->left.text, table->name);
-                exit(-1);
+                return -1;
             }
             // Find which column in the index table contains the rowids of the primary table
             int rowid_col = getFieldIndex(&index_db, "rowid");
@@ -242,7 +251,7 @@ int basic_select_query (
             struct DB index_db;
             if (findIndex(&index_db, table->name, p->left.text, INDEX_ANY) == 0) {
                 fprintf(stderr, "Unable to find index on column '%s' on table '%s'\n", p->left.text, table->name);
-                exit(-1);
+                return -1;
             }
             // Find which column in the index table contains the rowids of the primary table
             int rowid_col = getFieldIndex(&index_db, "rowid");
@@ -324,7 +333,7 @@ int basic_select_query (
                 p->right.table_id != row_list.join_count)
             {
                 fprintf(stderr, "Cannot perform constant join (Join Index: %d)\n", row_list.join_count);
-                exit(-1);
+                return -1;
             }
 
             struct DB *next_db = q->tables[row_list.join_count].db;
@@ -446,18 +455,18 @@ int basic_select_query (
                 inner = &p->right;
             } else {
                 fprintf(stderr, "Unable to perform UNIQUE JOIN\n");
-                exit(-1);
+                return -1;
             }
 
             if (outer->table_id >= table_id) {
                 fprintf(stderr, "Unable to perform UNIQUE JOIN\n");
-                exit(-1);
+                return -1;
             }
 
             struct DB index_db = {0};
             if (findIndex(&index_db, q->tables[table_id].name, inner->text, INDEX_UNIQUE) == 0) {
                 fprintf(stderr, "Couldn't find unique index on '%s(%s)'\n", q->tables[table_id].name, inner->text);
-                exit(-1);
+                return -1;
             }
 
             for (int i = 0; i < row_list.row_count; i++) {
@@ -493,7 +502,7 @@ int basic_select_query (
 
             if (!findColumn(q, s->predicates[0].left.text, &table_id, &field_index)) {
                 fprintf(stderr, "Sort column not found: %s\n", s->predicates[0].left.text);
-                exit(-1);
+                return -1;
             }
 
             // debugRowList(&row_list, 2);
@@ -690,9 +699,17 @@ static int populateTables (struct Query *q, struct DB *dbs) {
             checkColumnAliases(table);
         }
 
+        int result;
+
         if (table->join.op != OPERATOR_ALWAYS) {
-            populateColumnNode(q, &table->join.left);
-            populateColumnNode(q, &table->join.right);
+            result = populateColumnNode(q, &table->join.left);
+            if (result < 0) {
+                return result;
+            }
+            result = populateColumnNode(q, &table->join.right);
+            if (result < 0) {
+                return result;
+            }
         }
     }
 
@@ -784,12 +801,14 @@ static int findColumn (struct Query *q, const char *text, int *table_id, int *co
  * Will resolve a column name to a table_id and column_id
  *
  * Will also pre-fill constant values so they can be used in comparisons later
+ *
+ * @returns 0 on success
  */
-static void populateColumnNode (struct Query * query, struct ColumnNode * column) {
+static int populateColumnNode (struct Query * query, struct ColumnNode * column) {
     if (column->field == FIELD_UNKNOWN) {
         if (!findColumn(query, column->text, &column->table_id, &column->field)) {
             fprintf(stderr, "Unable to find column '%s'\n", column->text);
-            exit(-1);
+            return -1;
         }
     }
 
@@ -799,13 +818,15 @@ static void populateColumnNode (struct Query * query, struct ColumnNode * column
 
         // RANDOM() is non-pure so cannot be evaluated early
         if (column->function == FUNC_RANDOM) {
-            return;
+            return 0;
         }
 
         evaluateConstantNode(column, column->text, MAX_FIELD_LENGTH);
         evaluateFunction(column->text, NULL, column, -1);
         column->function = FUNC_UNITY;
     }
+
+    return 0;
 }
 
 static void checkColumnAliases (struct Table * table) {

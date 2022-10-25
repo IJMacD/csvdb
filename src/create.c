@@ -28,7 +28,7 @@ int create_query (const char *query) {
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "CREATE") != 0) {
-        fprintf(stderr, "error: Expected CREATE got '%s'\n", keyword);
+        fprintf(stderr, "Expected CREATE got '%s'\n", keyword);
         return -1;
     }
 
@@ -46,7 +46,7 @@ int create_query (const char *query) {
         return create_index_query(query);
     }
 
-    fprintf(stderr, "error: Cannot CREATE '%s'\n", keyword);
+    fprintf(stderr, "Cannot CREATE '%s'\n", keyword);
     return -1;
 }
 
@@ -61,7 +61,7 @@ int create_index_query (const char * query) {
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "CREATE") != 0) {
-        fprintf(stderr, "error: Expected CREATE got '%s'\n", keyword);
+        fprintf(stderr, "Expected CREATE got '%s'\n", keyword);
         return -1;
     }
 
@@ -79,7 +79,7 @@ int create_index_query (const char * query) {
     }
 
     if (strcmp(keyword, "INDEX") != 0) {
-        fprintf(stderr, "error: Expected INDEX got '%s'\n", keyword);
+        fprintf(stderr, "Expected INDEX got '%s'\n", keyword);
         return -1;
     }
 
@@ -95,7 +95,7 @@ int create_index_query (const char * query) {
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "ON") != 0) {
-        fprintf(stderr, "error: Expected ON got '%s'\n", keyword);
+        fprintf(stderr, "Expected ON got '%s'\n", keyword);
         return -1;
     }
 
@@ -104,14 +104,14 @@ int create_index_query (const char * query) {
     skipWhitespace(query, &index);
 
     if (query[index++] != '(') {
-        fprintf(stderr, "error: Expected ( got '%c'\n", query[index-1]);
+        fprintf(stderr, "Expected ( got '%c'\n", query[index-1]);
         return -1;
     }
 
     int length = getToken(query, &index, index_field, MAX_TABLE_LENGTH);
 
     if (index_field[length - 1] != ')') {
-        fprintf(stderr, "error: Expected ) got '%c'\n", index_field[length - 1]);
+        fprintf(stderr, "Expected ) got '%c'\n", index_field[length - 1]);
         return -1;
     }
 
@@ -133,14 +133,14 @@ int create_index (const char *index_name, const char *table_name, const char *in
     strcpy(table.name, table_name);
 
     if (openDB(&db, table_name) != 0) {
-        fprintf(stderr, "error: File not found: '%s'\n", table_name);
+        fprintf(stderr, "File not found: '%s'\n", table_name);
         return -1;
     }
 
     int index_field_index = getFieldIndex(&db, index_field);
 
     if (index_field_index < 0) {
-        fprintf(stderr, "error: Field does not exist: '%s'\n", index_field);
+        fprintf(stderr, "Field does not exist: '%s'\n", index_field);
         return -1;
     }
 
@@ -150,7 +150,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
     FILE *f = fopen(file_name, "w");
 
     if (!f) {
-        fprintf(stderr, "error: Unable to create file for index: '%s'\n", file_name);
+        fprintf(stderr, "Unable to create file for index: '%s'\n", file_name);
         return -1;
     }
 
@@ -188,7 +188,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
             getRecordValue(&db, row_id, index_field_index, values[i % 2], MAX_VALUE_LENGTH);
 
             if (i > 0 && strcmp(values[0], values[1]) == 0) {
-                fprintf(stderr, "error: UNIQUE constraint failed. Multiple values for: '%s'\n", values[0]);
+                fprintf(stderr, "UNIQUE constraint failed. Multiple values for: '%s'\n", values[0]);
                 fclose(f);
                 remove(file_name);
                 exit(-1);
@@ -214,14 +214,14 @@ int create_table_query (const char * query) {
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "CREATE") != 0) {
-        fprintf(stderr, "error: Expected CREATE got '%s'\n", keyword);
+        fprintf(stderr, "Expected CREATE got '%s'\n", keyword);
         return -1;
     }
 
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "TABLE") != 0) {
-        fprintf(stderr, "error: Expected TABLE got '%s'\n", keyword);
+        fprintf(stderr, "Expected TABLE got '%s'\n", keyword);
         return -1;
     }
 
@@ -232,7 +232,7 @@ int create_table_query (const char * query) {
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "AS") != 0) {
-        fprintf(stderr, "error: Expected AS got '%s'\n", keyword);
+        fprintf(stderr, "Expected AS got '%s'\n", keyword);
         return -1;
     }
 
@@ -244,7 +244,7 @@ int create_table_query (const char * query) {
     FILE *f = fopen(file_name, "w");
 
     if (!f) {
-        fprintf(stderr, "error: Unable to create file for table: '%s'\n", file_name);
+        fprintf(stderr, "Unable to create file for table: '%s'\n", file_name);
         return -1;
     }
 
@@ -263,14 +263,14 @@ int create_view_query (const char * query) {
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "CREATE") != 0) {
-        fprintf(stderr, "error: Expected CREATE got '%s'\n", keyword);
+        fprintf(stderr, "Expected CREATE got '%s'\n", keyword);
         return -1;
     }
 
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "VIEW") != 0) {
-        fprintf(stderr, "error: Expected VIEW got '%s'\n", keyword);
+        fprintf(stderr, "Expected VIEW got '%s'\n", keyword);
         return -1;
     }
 
@@ -281,7 +281,7 @@ int create_view_query (const char * query) {
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "AS") != 0) {
-        fprintf(stderr, "error: Expected AS got '%s'\n", keyword);
+        fprintf(stderr, "Expected AS got '%s'\n", keyword);
         return -1;
     }
 
@@ -293,7 +293,7 @@ int create_view_query (const char * query) {
     FILE *f = fopen(file_name, "w");
 
     if (!f) {
-        fprintf(stderr, "error: Unable to create file for view: '%s'\n", file_name);
+        fprintf(stderr, "Unable to create file for view: '%s'\n", file_name);
         return -1;
     }
 
@@ -314,7 +314,7 @@ int insert_query (const char * query) {
     char table_name[MAX_TABLE_LENGTH] = {0};
 
     if (strncmp(query, "INSERT INTO", 11) != 0) {
-        fprintf(stderr, "error: Expected INSERT INTO got '%s'\n", keyword);
+        fprintf(stderr, "Expected INSERT INTO got '%s'\n", keyword);
         return -1;
     }
 
@@ -332,7 +332,7 @@ int insert_query (const char * query) {
     FILE *f = fopen(file_name, "a");
 
     if (!f) {
-        fprintf(stderr, "error: Unable to open file for insertion: '%s'\n", file_name);
+        fprintf(stderr, "Unable to open file for insertion: '%s'\n", file_name);
         return -1;
     }
 

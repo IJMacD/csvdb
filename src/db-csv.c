@@ -83,7 +83,8 @@ int csv_openDB (struct DB *db, const char *filename) {
             f = popen(buffer, "r");
 
             if (f == NULL) {
-                fprintf(stderr, "error: Unable to open process\n");
+                fprintf(stderr, "Unable to open process\n");
+                exit(-1);
             }
 
             // Leave a note for csvMem to close the stream
@@ -107,7 +108,8 @@ int csv_openDB (struct DB *db, const char *filename) {
                 f = popen(buffer, "r");
 
                 if (f == NULL) {
-                    fprintf(stderr, "error: Unable to open process\n");
+                    fprintf(stderr, "Unable to open process\n");
+                    exit(-1);
                 }
 
                 // Leave a note for csvMem to close the stream
@@ -411,20 +413,20 @@ static void prepareHeaders (struct DB *db) {
     int header_length = measureLine(db->file, 0);
 
     if (header_length < 0) {
-        fprintf(stderr, "error: Something went wrong measuring header\n");
+        fprintf(stderr, "Something went wrong measuring header\n");
         exit(-1);
     }
 
     db->fields = malloc(header_length);
 
     if (fseek(db->file, 0, SEEK_SET)) {
-        fprintf(stderr, "error: File is not seekable\n");
+        fprintf(stderr, "File is not seekable\n");
         exit(-1);
     }
 
     int count = fread(db->fields, 1, header_length, db->file);
     if (count < header_length) {
-        fprintf(stderr, "error: Something went wrong reading header\n");
+        fprintf(stderr, "Something went wrong reading header\n");
         exit(-1);
     }
 
