@@ -117,8 +117,8 @@ int main () {
                 format = OUTPUT_FORMAT_SQL_INSERT;
             } else if (strcmp(value, "xml") == 0) {
                 format = OUTPUT_FORMAT_XML;
-            } else {
-                format = OUTPUT_FORMAT_HTML;
+            } else if (strcmp(value, "markdown") == 0) {
+                format = OUTPUT_FORMAT_TABLE;
             }
 
         } else if (strcmp(key, "query") == 0) {

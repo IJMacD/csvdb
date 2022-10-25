@@ -36,6 +36,7 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
             || format == OUTPUT_FORMAT_JSON_ARRAY
             || format == OUTPUT_FORMAT_SQL_INSERT
             || format == OUTPUT_FORMAT_XML
+            || format == OUTPUT_FORMAT_TABLE
             ) && column.concat == 1
         ) {
             fprintf(stderr, "error: Cannot output json, json_array, sql with concat columns\n");
@@ -121,6 +122,10 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
 void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct ColumnNode columns[], int column_count, int flags) {
     int format = flags & OUTPUT_MASK_FORMAT;
 
+    /********************
+     * Header Start
+     ********************/
+
     if (format == OUTPUT_FORMAT_HTML) {
         fprintf(f, "<TR><TH>");
     }
@@ -147,6 +152,10 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
     else if (format == OUTPUT_FORMAT_XML) {
         return;
     }
+
+    /********************
+     * Header Name
+     ********************/
 
     for (int j = 0; j < column_count; j++) {
         struct ColumnNode column = columns[j];
@@ -204,6 +213,10 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
         }
     }
 
+    /********************
+     * Header End
+     ********************/
+
     if (format == OUTPUT_FORMAT_TAB) {
         fprintf(f, "\n");
     }
@@ -220,7 +233,32 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
         fprintf(f, "\") VALUES\n");
     }
     else if (format == OUTPUT_FORMAT_TABLE) {
-        fprintf(f, "\n");
+        fprintf(f, "|\n");
+
+        for (int i = 0; i < column_count; i++) {
+            struct ColumnNode *col = columns + i;
+
+            if (col->field == FIELD_STAR) {
+                if (col->table_id >= 0) {
+                    struct DB *db = tables[col->table_id].db;
+                    for (int j = 0; j < db->field_count; j++) {
+                        fprintf(f, "|--------------------");
+                    }
+                }
+                else {
+                    for (int m = 0; m < table_count; m++) {
+                        struct DB *db = tables[m].db;
+                        for (int j = 0; j < db->field_count; j++) {
+                            fprintf(f, "|--------------------");
+                        }
+                    }
+                }
+            }
+            else {
+                fprintf(f, "|--------------------");
+            }
+        }
+        fprintf(f, "|\n");
     }
 }
 
@@ -290,10 +328,10 @@ static void printHeaderName (FILE *f, int format, const char *prefix, const char
         if (prefix) {
             char s[MAX_FIELD_LENGTH];
             sprintf(s, "%s.%s", prefix, name);
-            fprintf(f, "%-20s", s);
+            fprintf(f, "| %-19s", s);
         }
         else {
-            fprintf(f, "%-20s", name);
+            fprintf(f, "| %-19s", name);
         }
     }
     else {
@@ -375,6 +413,9 @@ static void printColumnValue (FILE *f, int format, const char *prefix, const cha
             fprintf(f, "<%s>", name);
         }
     }
+    else if (format == OUTPUT_FORMAT_TABLE) {
+        fprintf(f, "| ");
+    }
 
     const char * string_fmt = "%s";
     const char * num_fmt = string_fmt;
@@ -397,8 +438,8 @@ static void printColumnValue (FILE *f, int format, const char *prefix, const cha
         num_fmt = "%d";
     }
     else if (format == OUTPUT_FORMAT_TABLE) {
-        string_fmt = "%-20s";
-        num_fmt = "%19d ";
+        string_fmt = "%-19s";
+        num_fmt = "%18d ";
     }
 
     if (num_fmt != string_fmt && is_numeric(value)) {
@@ -472,7 +513,7 @@ static void printRecordEnd (FILE *f, int format, int is_single_column) {
         fprintf(f, "</record>");
     }
     else if (format == OUTPUT_FORMAT_TABLE) {
-        fprintf(f, "\n");
+        fprintf(f, "|\n");
     }
 }
 

@@ -168,7 +168,7 @@ int main (int argc, char * argv[]) {
         }
     } else {
         // Disable next line for some fun just dumping data with no delineation
-        flags |= OUTPUT_FORMAT_TAB;
+        flags |= OUTPUT_FORMAT_TABLE;
     }
 
     if (output_name != NULL) {
