@@ -239,17 +239,25 @@ int evaluateAggregateFunction (char * output, struct Table *tables, __attribute_
 
     if (column->function == FUNC_AGG_SUM) {
         int sum = 0;
+        int non_null = 0;
 
         for (int i = 0; i < row_list->row_count; i++) {
             int rowid = getRowID(row_list, column->table_id, i);
 
-            // Count up the non-NULL values
+            // Sum the non-NULL values
             if (getRecordValue(tables[column->table_id].db, rowid, column->field, value, MAX_VALUE_LENGTH) > 0) {
+                non_null = 1;
                 sum += atoi(value);
             }
         }
 
-        sprintf(output, "%d", sum);
+        // If *all* rows are NULL then the result is NULL
+        if (non_null) {
+            sprintf(output, "%d", sum);
+        }
+        else {
+            output[0] = '\0';
+        }
 
         return 0;
     }
@@ -269,7 +277,13 @@ int evaluateAggregateFunction (char * output, struct Table *tables, __attribute_
             }
         }
 
-        sprintf(output, "%d", sum / count);
+        if (count > 0) {
+            sprintf(output, "%d", sum / count);
+        }
+        else {
+            output[0] = '\0';
+        }
+
 
         return 0;
     }

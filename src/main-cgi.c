@@ -83,7 +83,7 @@ int main () {
         printf("HTTP/1.1 500 Server Error\n");
         printf("Content-Type: text/plain\n\n");
         printf("No query string was provided\n");
-        exit(-1);
+        return -1;
     }
 
     while (*query_string != '\0') {
@@ -131,11 +131,12 @@ int main () {
         }
     }
 
-    if (query_buffer == NULL) {
+    if (query_buffer[0] == '\0') {
         printf("HTTP/1.1 500 Server Error\n");
+        printf("Access-Control-Allow-Origin: *\n");
         printf("Content-Type: text/plain\n\n");
         printf("No query was provided in the query string\n");
-        exit(-1);
+        return -1;
     }
 
     flags |= format;

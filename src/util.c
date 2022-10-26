@@ -3,6 +3,7 @@
 #include <ctype.h>
 
 int is_numeric (const char *string) {
+    if (*string == '\0') return 0;
     const char *ptr = string;
     int decimal = 0;
     while (*ptr != '\0') {
