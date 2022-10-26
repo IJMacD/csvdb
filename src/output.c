@@ -266,7 +266,7 @@ void printPreamble (FILE *f, __attribute__((unused)) struct Table *table, __attr
     int format = flags & OUTPUT_MASK_FORMAT;
 
     if (format == OUTPUT_FORMAT_HTML) {
-        fputs("<META CHARSET=\"UTF8\" /><STYLE>.csvdb{font-family:sans-serif;width:100%;border-collapse:collapse}.csvdb th{border-bottom:1px solid #333}.csvdb td{padding:.5em 0}.csvdb tr:hover td{background-color:#f8f8f8}</STYLE>\n<TABLE CLASS=\"csvdb\">\n", f);
+        fputs("<STYLE>.csvdb{font-family:sans-serif;width:100%;border-collapse:collapse}.csvdb th{border-bottom:1px solid #333}.csvdb td{padding:.5em 0}.csvdb tr:hover td{background-color:#f8f8f8}</STYLE>\n<TABLE CLASS=\"csvdb\">\n", f);
     }
     else if (format == OUTPUT_FORMAT_JSON_ARRAY || format == OUTPUT_FORMAT_JSON) {
         fprintf(f, "[");
