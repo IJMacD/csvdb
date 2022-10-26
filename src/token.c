@@ -3,6 +3,15 @@
 
 #include "token.h"
 
+
+static void skipToken (const char *string, size_t *index);
+
+static void skipLine (const char * string, size_t *index);
+
+static int isTokenChar (char c);
+
+static int isOperatorChar (char c);
+
 /**
  * @brief Skips spaces, newlines, tabs and comment lines
  *
@@ -21,7 +30,7 @@ void skipWhitespace (const char *string, size_t *index) {
     }
 }
 
-void skipToken (const char *string, size_t *index) {
+static void skipToken (const char *string, size_t *index) {
     if (string[*index] == '\'') {
         // Skip open quote
         (*index)++;
@@ -49,13 +58,13 @@ void skipToken (const char *string, size_t *index) {
         }
     }
     else {
-        while (!iscntrl(string[*index]) && string[*index] != ' ' && string[*index] != ',' && string[*index] != '|') {
+        while (isTokenChar(string[*index])) {
             (*index)++;
         }
     }
 }
 
-void skipLine (const char *string, size_t *index) {
+static void skipLine (const char *string, size_t *index) {
     while (string[*index] != '\n' && string[*index] != '\0') {
         (*index)++;
     }
@@ -82,8 +91,6 @@ int getToken (const char *string, size_t *index, char *token, int token_max_leng
     }
     int start_index = *index;
 
-    // printf("Token starts at %d\n", start_index);
-
     skipToken(string, index);
 
     int token_length = *index - start_index;
@@ -91,8 +98,6 @@ int getToken (const char *string, size_t *index, char *token, int token_max_leng
     if (token_length > token_max_length) {
         return -1;
     }
-
-    // printf("Token is %d characters\n", token_length);
 
     memcpy(token, string + start_index, token_length);
 
@@ -125,8 +130,6 @@ int getQuotedToken (const char *string, size_t *index, char *token, int token_ma
         start_index++;
     }
 
-    // printf("Token starts at %d\n", start_index);
-
     skipToken(string, index);
 
     int token_length = *index - start_index;
@@ -139,8 +142,6 @@ int getQuotedToken (const char *string, size_t *index, char *token, int token_ma
         return -1;
     }
 
-    // printf("Token is %d characters\n", token_length);
-
     memcpy(token, string + start_index, token_length);
 
     token[token_length] = '\0';
@@ -152,4 +153,66 @@ int getNumericToken (const char *string, size_t *index) {
     char val[10];
     getToken(string, index, val, 10);
     return atol(val);
+}
+
+/**
+ * @brief Get an operator token from the stream
+ *
+ * @param string
+ * @param index
+ * @param token
+ * @param token_max_length
+ * @return int Length of token
+ */
+int getOperatorToken (const char *string, size_t *index, char *token, int token_max_length) {
+    skipWhitespace(string, index);
+
+    // End of string
+    if (string[*index] == '\0') {
+        // clear output value
+        token[0] = '\0';
+        return -1;
+    }
+    int start_index = *index;
+
+    while (isOperatorChar(string[*index])) {
+        (*index)++;
+    }
+
+    int token_length = *index - start_index;
+
+    if (token_length > token_max_length) {
+        return -1;
+    }
+
+    memcpy(token, string + start_index, token_length);
+
+    token[token_length] = '\0';
+
+    return token_length;
+}
+
+static int isTokenChar (char c) {
+    return !iscntrl(c) &&
+        c != ' ' &&
+        c != ',' &&
+        c != '|' &&
+        c != '=' &&
+        c != '!' &&
+        c != '>' &&
+        c != '<';
+}
+
+/**
+ * @brief Operator could be =, !=, >, <, >=, IS, LIKE etc.
+ *
+ * @param c
+ * @return int
+ */
+static int isOperatorChar (char c) {
+    return !iscntrl(c) &&
+        !isdigit(c) &&
+        c != ' ' &&
+        c != ',' &&
+        c != '|';
 }

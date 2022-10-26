@@ -318,7 +318,7 @@ int parseQuery (struct Query *q, const char *query) {
                     }
 
                     char op[5];
-                    getToken(query, &index, op, 5);
+                    getOperatorToken(query, &index, op, 5);
 
                     p->op = parseOperator(op);
                     if (p->op == OPERATOR_UN) {
@@ -426,7 +426,7 @@ int parseQuery (struct Query *q, const char *query) {
                 // printf("Predicate field: %s\n", predicate_field);
 
                 char op[5];
-                getToken(query, &index, op, 5);
+                getOperatorToken(query, &index, op, 5);
 
                 p->op = parseOperator(op);
                 if (p->op == OPERATOR_UN) {
