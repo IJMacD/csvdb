@@ -110,7 +110,8 @@ int select_query (const char *query, int output_flags, FILE * output) {
             // Check if any of the fields are non-constant and abort
 
             for (int i = 0; i < q.column_count; i++) {
-                if (q.columns[i].field != FIELD_CONSTANT) {
+                struct Field * field = q.columns[0].fields;
+                if (field->index != FIELD_CONSTANT) {
                     fprintf(stderr, "No Tables specified\n");
                     return -1;
                 }
@@ -124,7 +125,7 @@ int select_query (const char *query, int output_flags, FILE * output) {
 
         q.tables[0].db = NULL;
 
-        result = information_query(q.predicates[0].right.text, output);
+        result = information_query(q.predicates[0].right.fields[0].text, output);
         destroyQuery(&q);
         return result;
     }
@@ -223,7 +224,7 @@ int basic_select_query (
             // First table
             struct Table * table = q->tables;
             struct Predicate *p = &s->predicates[0];
-            indexPrimaryScan(table->db, p->op, p->right.text, &row_list, s->limit);
+            indexPrimaryScan(table->db, p->op, p->right.fields[0].text, &row_list, s->limit);
         }
         else if (s->type == PLAN_UNIQUE || s->type == PLAN_UNIQUE_RANGE) {
             #ifdef DEBUG
@@ -233,13 +234,13 @@ int basic_select_query (
             struct Table * table = q->tables;
             struct Predicate *p = &s->predicates[0];
             struct DB index_db;
-            if (findIndex(&index_db, table->name, p->left.text, INDEX_UNIQUE) == 0) {
-                fprintf(stderr, "Unable to find unique index on column '%s' on table '%s'\n", p->left.text, table->name);
+            if (findIndex(&index_db, table->name, p->left.fields[0].text, INDEX_UNIQUE) == 0) {
+                fprintf(stderr, "Unable to find unique index on column '%s' on table '%s'\n", p->left.fields[0].text, table->name);
                 return -1;
             }
             // Find which column in the index table contains the rowids of the primary table
             int rowid_col = getFieldIndex(&index_db, "rowid");
-            indexUniqueScan(&index_db, rowid_col, p->op, p->right.text, &row_list, s->limit);
+            indexUniqueScan(&index_db, rowid_col, p->op, p->right.fields[0].text, &row_list, s->limit);
         }
         else if (s->type == PLAN_INDEX_RANGE) {
             #ifdef DEBUG
@@ -249,13 +250,13 @@ int basic_select_query (
             struct Table * table = q->tables;
             struct Predicate *p = &s->predicates[0];
             struct DB index_db;
-            if (findIndex(&index_db, table->name, p->left.text, INDEX_ANY) == 0) {
-                fprintf(stderr, "Unable to find index on column '%s' on table '%s'\n", p->left.text, table->name);
+            if (findIndex(&index_db, table->name, p->left.fields[0].text, INDEX_ANY) == 0) {
+                fprintf(stderr, "Unable to find index on column '%s' on table '%s'\n", p->left.fields[0].text, table->name);
                 return -1;
             }
             // Find which column in the index table contains the rowids of the primary table
             int rowid_col = getFieldIndex(&index_db, "rowid");
-            indexScan(&index_db, rowid_col, p->op, p->right.text, &row_list, s->limit);
+            indexScan(&index_db, rowid_col, p->op, p->right.fields[0].text, &row_list, s->limit);
         }
         else if (s->type == PLAN_TABLE_ACCESS_FULL) {
             #ifdef DEBUG
@@ -329,8 +330,8 @@ int basic_select_query (
             #endif
             // Sanity check
             struct Predicate *p = s->predicates + 0;
-            if (p->left.table_id != row_list.join_count &&
-                p->right.table_id != row_list.join_count)
+            if (p->left.fields[0].table_id != row_list.join_count &&
+                p->right.fields[0].table_id != row_list.join_count)
             {
                 fprintf(stderr, "Cannot perform constant join (Join Index: %d)\n", row_list.join_count);
                 return -1;
@@ -391,17 +392,22 @@ int basic_select_query (
                 struct Predicate p = s->predicates[0];
 
                 // Fill in value as constant from outer tables
-                if (p.left.table_id < table_id) {
-                    evaluateNode(q, &row_list, i, &p.left, p.left.text, MAX_FIELD_LENGTH);
-                    p.left.field = FIELD_CONSTANT;
+                if (p.left.fields[0].table_id < table_id) {
+                    evaluateNode(q, &row_list, i, &p.left, p.left.fields[0].text, MAX_FIELD_LENGTH);
+                    p.left.fields[0].index = FIELD_CONSTANT;
                     p.left.function = FUNC_UNITY;
-                }
 
+                    // We're only passing one table to fullTableScan so predicate will be on first table
+                    p.right.fields[0].table_id = 0;
+                }
                 // Fill in value as constant from outer tables
-                if (p.right.table_id < table_id) {
-                    evaluateNode(q, &row_list, i, &p.right, p.right.text, MAX_FIELD_LENGTH);
-                    p.right.field = FIELD_CONSTANT;
+                else if (p.right.fields[0].table_id < table_id) {
+                    evaluateNode(q, &row_list, i, &p.right, p.right.fields[0].text, MAX_FIELD_LENGTH);
+                    p.right.fields[0].index = FIELD_CONSTANT;
                     p.right.function = FUNC_UNITY;
+
+                    // We're only passing one table to fullTableScan so predicate will be on first table
+                    p.left.fields[0].table_id = 0;
                 }
 
                 tmp_list.row_count = 0;
@@ -447,10 +453,10 @@ int basic_select_query (
             struct ColumnNode * outer;
             struct ColumnNode * inner;
 
-            if (p->left.table_id == table_id) {
+            if (p->left.fields[0].table_id == table_id) {
                 outer = &p->right;
                 inner = &p->left;
-            } else if (p->right.table_id == table_id) {
+            } else if (p->right.fields[0].table_id == table_id) {
                 outer = &p->left;
                 inner = &p->right;
             } else {
@@ -458,14 +464,14 @@ int basic_select_query (
                 return -1;
             }
 
-            if (outer->table_id >= table_id) {
+            if (outer->fields[0].table_id >= table_id) {
                 fprintf(stderr, "Unable to perform UNIQUE JOIN\n");
                 return -1;
             }
 
             struct DB index_db = {0};
-            if (findIndex(&index_db, q->tables[table_id].name, inner->text, INDEX_UNIQUE) == 0) {
-                fprintf(stderr, "Couldn't find unique index on '%s(%s)'\n", q->tables[table_id].name, inner->text);
+            if (findIndex(&index_db, q->tables[table_id].name, inner->fields[0].text, INDEX_UNIQUE) == 0) {
+                fprintf(stderr, "Couldn't find unique index on '%s(%s)'\n", q->tables[table_id].name, inner->fields[0].text);
                 return -1;
             }
 
@@ -500,8 +506,8 @@ int basic_select_query (
             int table_id = -1;
             int field_index;
 
-            if (!findColumn(q, s->predicates[0].left.text, &table_id, &field_index)) {
-                fprintf(stderr, "Sort column not found: %s\n", s->predicates[0].left.text);
+            if (!findColumn(q, s->predicates[0].left.fields[0].text, &table_id, &field_index)) {
+                fprintf(stderr, "Sort column not found: %s\n", s->predicates[0].left.fields[0].text);
                 return -1;
             }
 
@@ -805,14 +811,16 @@ static int findColumn (struct Query *q, const char *text, int *table_id, int *co
  * @returns 0 on success
  */
 static int populateColumnNode (struct Query * query, struct ColumnNode * column) {
-    if (column->field == FIELD_UNKNOWN) {
-        if (!findColumn(query, column->text, &column->table_id, &column->field)) {
-            fprintf(stderr, "Unable to find column '%s'\n", column->text);
+    struct Field * field = column->fields;
+
+    if (field->index == FIELD_UNKNOWN) {
+        if (!findColumn(query, field->text, &field->table_id, &field->index)) {
+            fprintf(stderr, "Unable to find column '%s'\n", field->text);
             return -1;
         }
     }
 
-    else if (column->field == FIELD_CONSTANT) {
+    else if (field->index == FIELD_CONSTANT) {
         // Fill in constant values such as CURRENT_DATE
         // Then evaluate any functions on the column
 
@@ -821,8 +829,8 @@ static int populateColumnNode (struct Query * query, struct ColumnNode * column)
             return 0;
         }
 
-        evaluateConstantNode(column, column->text, MAX_FIELD_LENGTH);
-        evaluateFunction(column->text, NULL, column, -1);
+        evaluateConstantNode(column, field->text, MAX_FIELD_LENGTH);
+        evaluateFunction(field->text, NULL, column, -1);
         column->function = FUNC_UNITY;
     }
 

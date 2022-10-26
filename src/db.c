@@ -205,8 +205,13 @@ int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *p
         for (int j = 0; j < predicate_count && matching; j++) {
             struct Predicate *predicate = predicates + j;
 
-            evaluateFunction(value_left, db, &predicate->left, i);
-            evaluateFunction(value_right, db, &predicate->right, i);
+            // Mock up a table for evaluate function to work with
+            // (it should only be accessing the db member)
+            struct Table t = {0};
+            t.db = db;
+
+            evaluateFunction(value_left, &t, &predicate->left, i);
+            evaluateFunction(value_right, &t, &predicate->right, i);
 
             if (!evaluateExpression(predicate->op, value_left, value_right)) {
                 matching = 0;

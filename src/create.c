@@ -155,11 +155,11 @@ int create_index (const char *index_name, const char *table_name, const char *in
     }
 
     struct ColumnNode columns[2] = {0};
-    columns[0].table_id = 0;
-    columns[0].field = index_field_index;
-    strcpy(columns[0].text, index_field);
-    columns[1].table_id = 0;
-    columns[1].field = FIELD_ROW_INDEX;
+    columns[0].fields[0].table_id = 0;
+    columns[0].fields[0].index = index_field_index;
+    strcpy(columns[0].alias, index_field);
+    columns[1].fields[0].table_id = 0;
+    columns[1].fields[0].index = FIELD_ROW_INDEX;
 
     struct RowList row_list;
 

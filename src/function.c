@@ -7,16 +7,23 @@
 #include "date.h"
 #include "util.h"
 
-int evaluateFunction(char * output, struct DB *db, struct ColumnNode *column, int record_index) {
+int evaluateFunction(char * output, struct Table *tables, struct ColumnNode *column, int record_index) {
+    struct Field *field = column->fields;
+
     char value[MAX_VALUE_LENGTH] = {0};
     int result;
 
-    if (column->field == FIELD_CONSTANT) {
-        strcpy(value, column->text);
+    if (field->index == FIELD_CONSTANT) {
+        strcpy(value, field->text);
         result = 1;
     }
+    else if (field->table_id >= 0) {
+        struct DB *db = tables[field->table_id].db;
+        result = getRecordValue(db, record_index, field->index, value, MAX_VALUE_LENGTH) > 0;
+    }
     else {
-        result = getRecordValue(db, record_index, column->field, value, MAX_VALUE_LENGTH) > 0;
+        fprintf(stderr, "can't find requested table %d\n", field->table_id);
+        exit(-1);
     }
 
     // NULL output from VFS
@@ -60,14 +67,14 @@ int evaluateFunction(char * output, struct DB *db, struct ColumnNode *column, in
             // Layout:
             // <field>\0 <count>)
 
-            int field_len = strlen(column->text);
+            int field_len = strlen(field->text);
 
             if (field_len > MAX_FIELD_LENGTH) {
-                fprintf(stderr, "Missing count from LEFT: %s\n", column->text);
+                fprintf(stderr, "Missing count from LEFT: %s\n", field->text);
                 exit(-1);
             }
 
-            int count = atoi(column->text + field_len + 1);
+            int count = atoi(field->text + field_len + 1);
             int len = strlen(value);
 
             if (len > count) {
@@ -82,14 +89,14 @@ int evaluateFunction(char * output, struct DB *db, struct ColumnNode *column, in
             // Layout:
             // <field>\0 <count>)
 
-            int field_len = strlen(column->text);
+            int field_len = strlen(field->text);
 
             if (field_len > MAX_FIELD_LENGTH) {
-                fprintf(stderr, "Missing count from RIGHT: %s\n", column->text);
+                fprintf(stderr, "Missing count from RIGHT: %s\n", field->text);
                 exit(-1);
             }
 
-            int count = atoi(column->text + field_len + 1);
+            int count = atoi(field->text + field_len + 1);
             int len = strlen(value);
 
             if (len > count) {
@@ -172,6 +179,8 @@ int evaluateFunction(char * output, struct DB *db, struct ColumnNode *column, in
 }
 
 int evaluateAggregateFunction (char * output, struct Table *tables, __attribute__((unused)) int table_count, struct ColumnNode *column, struct RowList * row_list) {
+    struct Field *field = column->fields;
+
     char value[MAX_VALUE_LENGTH];
 
     if ((column->function & MASK_FUNC_FAMILY) != FUNC_FAM_AGG) {
@@ -182,10 +191,10 @@ int evaluateAggregateFunction (char * output, struct Table *tables, __attribute_
         int count = 0;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, column->table_id, i);
+            int rowid = getRowID(row_list, field->table_id, i);
 
             // Count up the non-NULL values
-            if (getRecordValue(tables[column->table_id].db, rowid, column->field, value, MAX_VALUE_LENGTH) > 0) {
+            if (getRecordValue(tables[field->table_id].db, rowid, field->index, value, MAX_VALUE_LENGTH) > 0) {
                 count++;
             }
         }
@@ -199,10 +208,10 @@ int evaluateAggregateFunction (char * output, struct Table *tables, __attribute_
         int min = INT_MAX;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, column->table_id, i);
+            int rowid = getRowID(row_list, field->table_id, i);
 
             // Only consider the non-NULL values
-            if (getRecordValue(tables[column->table_id].db, rowid, column->field, value, MAX_VALUE_LENGTH) > 0) {
+            if (getRecordValue(tables[field->table_id].db, rowid, field->index, value, MAX_VALUE_LENGTH) > 0) {
                 int v = atoi(value);
 
                 if (v < min) min = v;
@@ -220,10 +229,10 @@ int evaluateAggregateFunction (char * output, struct Table *tables, __attribute_
         int max = INT_MIN;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, column->table_id, i);
+            int rowid = getRowID(row_list, field->table_id, i);
 
             // Only consider the non-NULL values
-            if (getRecordValue(tables[column->table_id].db, rowid, column->field, value, MAX_VALUE_LENGTH) > 0) {
+            if (getRecordValue(tables[field->table_id].db, rowid, field->index, value, MAX_VALUE_LENGTH) > 0) {
                 int v = atoi(value);
 
                 if (v > max) max = v;
@@ -242,10 +251,10 @@ int evaluateAggregateFunction (char * output, struct Table *tables, __attribute_
         int non_null = 0;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, column->table_id, i);
+            int rowid = getRowID(row_list, field->table_id, i);
 
             // Sum the non-NULL values
-            if (getRecordValue(tables[column->table_id].db, rowid, column->field, value, MAX_VALUE_LENGTH) > 0) {
+            if (getRecordValue(tables[field->table_id].db, rowid, field->index, value, MAX_VALUE_LENGTH) > 0) {
                 non_null = 1;
                 sum += atoi(value);
             }
@@ -267,10 +276,10 @@ int evaluateAggregateFunction (char * output, struct Table *tables, __attribute_
         int sum = 0;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, column->table_id, i);
+            int rowid = getRowID(row_list, field->table_id, i);
 
             // Count up the non-NULL values
-            if (getRecordValue(tables[column->table_id].db, rowid, column->field, value, MAX_VALUE_LENGTH) > 0) {
+            if (getRecordValue(tables[field->table_id].db, rowid, field->index, value, MAX_VALUE_LENGTH) > 0) {
                 count++;
 
                 sum += atoi(value);
@@ -293,10 +302,10 @@ int evaluateAggregateFunction (char * output, struct Table *tables, __attribute_
         int have_prev = 0;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, column->table_id, i);
+            int rowid = getRowID(row_list, field->table_id, i);
 
             // Count up the non-NULL values
-            if (getRecordValue(tables[column->table_id].db, rowid, column->field, value, MAX_VALUE_LENGTH) > 0) {
+            if (getRecordValue(tables[field->table_id].db, rowid, field->index, value, MAX_VALUE_LENGTH) > 0) {
                 if (have_prev == 1) {
                     sprintf(output++, ",");
                 }

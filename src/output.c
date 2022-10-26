@@ -31,6 +31,7 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
 
     for (int j = 0; j < column_count; j++) {
         struct ColumnNode column = columns[j];
+        struct Field * field = column.fields;
 
         if ((format == OUTPUT_FORMAT_JSON
             || format == OUTPUT_FORMAT_JSON_ARRAY
@@ -43,12 +44,12 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
             exit(-1);
         }
 
-        if (column.field == FIELD_STAR) {
-            if (column.table_id >= 0) {
+        if (field->index == FIELD_STAR) {
+            if (field->table_id >= 0) {
                 // e.g. table.*
-                struct DB *db = tables[column.table_id].db;
-                int rowid = getRowID(row_list, column.table_id, result_index);
-                const char *prefix = table_count > 1 ? tables[column.table_id].alias : NULL;
+                struct DB *db = tables[field->table_id].db;
+                int rowid = getRowID(row_list, field->table_id, result_index);
+                const char *prefix = table_count > 1 ? tables[field->table_id].alias : NULL;
                 printAllColumnValues(f, db, prefix, rowid, format);
             } else {
                 // e.g. *
@@ -64,19 +65,19 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
                 }
             }
         }
-        else if (column.field == FIELD_COUNT_STAR) {
+        else if (field->index == FIELD_COUNT_STAR) {
             printColumnValueNumber(f, format, NULL, column.alias, row_list->row_count);
         }
-        else if (column.field == FIELD_ROW_NUMBER) {
+        else if (field->index == FIELD_ROW_NUMBER) {
             // ROW_NUMBER() is 1-indexed
             printColumnValueNumber(f, format, NULL, column.alias, result_index + 1);
         }
-        else if (column.field == FIELD_ROW_INDEX) {
+        else if (field->index == FIELD_ROW_INDEX) {
             // FIELD_ROW_INDEX is the input line (0 indexed)
-            int rowid = getRowID(row_list, column.table_id, result_index);
+            int rowid = getRowID(row_list, field->table_id, result_index);
             printColumnValueNumber(f, format, NULL, column.alias, rowid);
         }
-        else if (column.field == FIELD_CONSTANT) {
+        else if (field->index == FIELD_CONSTANT) {
             char output[MAX_VALUE_LENGTH];
             int result = evaluateFunction(output, NULL, &column, -1);
 
@@ -90,13 +91,13 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
 
             printColumnValue(f, format, NULL, column.alias, result < 0 ? "BADFUNC" : output);
         }
-        else if (column.field >= 0) {
+        else if (field->index >= 0) {
             // Evaluate plain columns as well as functions
-            int rowid = getRowID(row_list, column.table_id, result_index);
-            struct DB *db = tables[column.table_id].db;
+            int rowid = getRowID(row_list, field->table_id, result_index);
             char output[MAX_VALUE_LENGTH];
 
-            int result = evaluateFunction(output, db, columns + j, rowid);
+
+            int result = evaluateFunction(output, tables, columns + j, rowid);
 
             printColumnValue(f, format, NULL, column.alias, result < 0 ? "BADFUNC" : output);
         }
@@ -159,6 +160,7 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
 
     for (int j = 0; j < column_count; j++) {
         struct ColumnNode column = columns[j];
+        struct Field * field = column.fields;
 
         if ((format == OUTPUT_FORMAT_JSON
             || format == OUTPUT_FORMAT_JSON_ARRAY
@@ -171,10 +173,10 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
 
         int is_last = j == column_count - 1;
 
-        if (column.field == FIELD_STAR) {
-            if (column.table_id >= 0) {
-                struct DB *db = tables[column.table_id].db;
-                const char *prefix = table_count > 1 ? tables[column.table_id].alias : NULL;
+        if (field->index == FIELD_STAR) {
+            if (field->table_id >= 0) {
+                struct DB *db = tables[field->table_id].db;
+                const char *prefix = table_count > 1 ? tables[field->table_id].alias : NULL;
                 printAllHeaderNames(f, db, prefix, format);
             }
             else {
@@ -195,17 +197,17 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
         else if (column.alias[0] != '\0') {
             printHeaderName(f, format, NULL, column.alias);
         }
-        else if (column.field == FIELD_COUNT_STAR) {
+        else if (field->index == FIELD_COUNT_STAR) {
             printHeaderName(f, format, NULL, "COUNT(*)");
         }
-        else if (column.field == FIELD_ROW_NUMBER) {
+        else if (field->index == FIELD_ROW_NUMBER) {
             printHeaderName(f, format, NULL, "ROW_NUMBER()");
         }
-        else if (column.field == FIELD_ROW_INDEX) {
+        else if (field->index == FIELD_ROW_INDEX) {
             printHeaderName(f, format, NULL, "rowid");
         }
         else {
-            printHeaderName(f, format, NULL, column.text);
+            printHeaderName(f, format, NULL, field->text);
         }
 
         if (!is_last && !column.concat) {
@@ -237,10 +239,11 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
 
         for (int i = 0; i < column_count; i++) {
             struct ColumnNode *col = columns + i;
+            struct Field * field = col->fields;
 
-            if (col->field == FIELD_STAR) {
-                if (col->table_id >= 0) {
-                    struct DB *db = tables[col->table_id].db;
+            if (field->index == FIELD_STAR) {
+                if (field->table_id >= 0) {
+                    struct DB *db = tables[field->table_id].db;
                     for (int j = 0; j < db->field_count; j++) {
                         fprintf(f, "|--------------------");
                     }

@@ -49,10 +49,13 @@ int makePlan (struct Query *q, struct Plan *plan) {
         // First predicate
         struct Predicate *p = &q->predicates[0];
 
+        struct Field * field_left = p->left.fields;
+        struct Field * field_right = p->right.fields;
+
         if (predicatesOnFirstTable > 0) {
 
             int step_type = 0;
-            size_t len = strlen(p->right.text);
+            size_t len = strlen(field_right->text);
 
             int skip_index = 0;
 
@@ -66,14 +69,14 @@ int makePlan (struct Query *q, struct Plan *plan) {
             if (predicatesOnFirstTable > 1 && table->db->vfs == VFS_CALENDAR) {
                 struct Predicate *p2 = &q->predicates[1];
 
-                if (strcmp(p->left.text, p2->left.text) == 0) {
+                if (strcmp(field_left->text, p2->left.fields[0].text) == 0) {
                     skip_index = 1;
                 }
             }
 
             if (skip_index == 0) {
                 // LIKE can only use index if '%' is at the end
-                if (p->op == OPERATOR_LIKE && p->right.text[len-1] != '%') {
+                if (p->op == OPERATOR_LIKE && field_right->text[len-1] != '%') {
                     // NOP
                     step_type = 0;
                 }
@@ -92,11 +95,11 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 else if (p->left.function == FUNC_UNITY) {
 
                     // Remove qualified name so indexes can be searched etc.
-                    int dot_index = str_find_index(p->left.text, '.');
+                    int dot_index = str_find_index(field_left->text, '.');
                     if (dot_index >= 0) {
                         char value[MAX_FIELD_LENGTH];
-                        strcpy(value, p->left.text);
-                        strcpy(p->left.text, value + dot_index + 1);
+                        strcpy(value, field_left->text);
+                        strcpy(field_left->text, value + dot_index + 1);
                     }
 
                     /*******************
@@ -104,7 +107,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
                      *******************/
 
                     // Try to find any index
-                    int find_result = findIndex(NULL, table->name, p->left.text, INDEX_ANY);
+                    int find_result = findIndex(NULL, table->name, field_left->text, INDEX_ANY);
 
                     if (find_result) {
 
@@ -146,7 +149,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
                 // Follow our own logic to add an order step
                 // We can avoid it if we're just going to sort on the same column we've just scanned
-                if ((q->flags & FLAG_ORDER) && (q->order_count == 1) && strcmp(p->left.text, q->order_field[0]) == 0) {
+                if ((q->flags & FLAG_ORDER) && (q->order_count == 1) && strcmp(field_left->text, q->order_field[0]) == 0) {
 
                     // So a sort is not necessary but we might still need to reverse
 
@@ -176,10 +179,10 @@ int makePlan (struct Query *q, struct Plan *plan) {
             ) {
 
                 struct Predicate *order_p = malloc(sizeof(*order_p));
-                strcpy(order_p->left.text, q->order_field[0]);
+                strcpy(order_p->left.fields[0].text, q->order_field[0]);
                 // OPERATOR_ALWAYS on index range means the entire range;
                 order_p->op = OPERATOR_ALWAYS;
-                order_p->right.text[0] = '\0';
+                order_p->right.fields[0].text[0] = '\0';
 
                 // Add step for Sorted index access
                 addStepWithPredicate(plan, PLAN_INDEX_RANGE, order_p);
@@ -188,8 +191,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 int skip_predicates = 0;
                 for (int i = 0; i < q->predicate_count; i++) {
                     // If left and right are either constant or table 0 then we can filter
-                    if (q->predicates[i].left.table_id <= 0 &&
-                        q->predicates[i].right.table_id <= 0)
+                    if (q->predicates[i].left.fields[0].table_id <= 0 &&
+                        q->predicates[i].right.fields[0].table_id <= 0)
                     {
                         skip_predicates++;
                     } else {
@@ -261,10 +264,10 @@ int makePlan (struct Query *q, struct Plan *plan) {
         if (findIndex(NULL, table->name, q->order_field[0], INDEX_ANY)) {
 
             struct Predicate *order_p = malloc(sizeof(*order_p));
-            strcpy(order_p->left.text, q->order_field[0]);
+            strcpy(order_p->left.fields[0].text, q->order_field[0]);
             // OPERATOR_ALWAYS means scan full index
             order_p->op = OPERATOR_ALWAYS;
-            order_p->right.text[0] = '\0';
+            order_p->right.fields[0].text[0] = '\0';
 
             addStepWithPredicate(plan, PLAN_INDEX_RANGE, order_p);
 
@@ -320,7 +323,7 @@ void destroyPlan (struct Plan *plan) {
     for (int i = 0; i < plan->step_count; i++) {
         // don't double free
         // Most predicates will be free'd in destroyQuery
-        if (plan->steps[i].predicate_count > 0 && plan->steps[i].predicates[0].right.text[0] == '\0') free(plan->steps[i].predicates);
+        if (plan->steps[i].predicate_count > 0 && plan->steps[i].predicates[0].right.fields[0].text[0] == '\0') free(plan->steps[i].predicates);
     }
 }
 
@@ -356,7 +359,7 @@ void addOrderStepIfRequired (struct Plan *plan, struct Query *q) {
     // Comment: should properly check both sides for functions/constants etc.
     if (q->order_count == 1) {
         for (int j = 0; j < q->predicate_count; j++) {
-            if (strcmp(q->predicates[j].left.text, q->order_field[0]) == 0 && q->predicates[j].op == OPERATOR_EQ && q->predicates[j].left.function == FUNC_UNITY) {
+            if (strcmp(q->predicates[j].left.fields[0].text, q->order_field[0]) == 0 && q->predicates[j].op == OPERATOR_EQ && q->predicates[j].left.function == FUNC_UNITY) {
                 return;
             }
         }
@@ -374,9 +377,9 @@ void addOrderStepIfRequired (struct Plan *plan, struct Query *q) {
 
         struct Predicate *order_predicate = malloc(sizeof(*order_predicate));
 
-        strcpy(order_predicate->left.text, q->order_field[i]);
+        strcpy(order_predicate->left.fields[0].text, q->order_field[i]);
         order_predicate->op = q->order_direction[i];
-        order_predicate->right.text[0] = '\0';
+        order_predicate->right.fields[0].text[0] = '\0';
 
         addStepWithPredicate(plan, PLAN_SORT, order_predicate);
     }
@@ -421,16 +424,16 @@ void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
         if (join->op == OPERATOR_ALWAYS) {
             addStep(plan, PLAN_CROSS_JOIN);
         } else {
-            if (join->left.field == FIELD_CONSTANT ||
-                join->right.field == FIELD_CONSTANT)
+            if (join->left.fields[0].index == FIELD_CONSTANT ||
+                join->right.fields[0].index == FIELD_CONSTANT)
             {
                 addStepWithPredicate(plan, PLAN_CONSTANT_JOIN, join);
             }
             else {
 
                 if (join->op == OPERATOR_EQ) {
-                    int join_result_left = findIndex(NULL, table->name, join->left.text, INDEX_UNIQUE);
-                    int join_result_right = findIndex(NULL, table->name, join->right.text, INDEX_UNIQUE);
+                    int join_result_left = findIndex(NULL, table->name, join->left.fields[0].text, INDEX_UNIQUE);
+                    int join_result_right = findIndex(NULL, table->name, join->right.fields[0].text, INDEX_UNIQUE);
 
                     if (
                         join_result_left == INDEX_UNIQUE || join_result_left == INDEX_PRIMARY ||
@@ -468,7 +471,7 @@ static int optimisePredicates (__attribute__((unused)) struct Query *q, struct P
         // Swap left and right if necessary
         normalisePredicate(predicates + i);
 
-        if (predicates[i].left.function == FUNC_PK && predicates[i].left.table_id == 0) {
+        if (predicates[i].left.function == FUNC_PK && predicates[i].left.fields[0].table_id == 0) {
             chosen_predicate_index = i;
             break;
         }
@@ -480,7 +483,7 @@ static int optimisePredicates (__attribute__((unused)) struct Query *q, struct P
         for (int i = 0; i < count; i++) {
             // Any predicate on the first table is fine
             // Comment: Only checking left?
-            if (predicates[i].left.table_id == 0) {
+            if (predicates[i].left.fields[0].table_id == 0) {
                 chosen_predicate_index = i;
                 break;
             }
@@ -499,7 +502,7 @@ static int optimisePredicates (__attribute__((unused)) struct Query *q, struct P
     // many are already in place
     if (chosen_predicate_index >= 0) {
         int i = 1;
-        while (predicates[i].left.table_id == 0 && i < count) {
+        while (predicates[i].left.fields[0].table_id == 0 && i < count) {
             i++;
         }
         return i;

@@ -399,30 +399,33 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
     for (int i = 0; i < predicate_count; i++) {
         struct Predicate *p = predicates + i;
 
+        struct Field * field_left = p->left.fields;
+        struct Field * field_right = p->right.fields;
+
         // Prep: We need field on the left and constant on the right, swap if necessary
         normalisePredicate(p);
 
         // Prep: We're only looking for constants
-        if (p->right.field != FIELD_CONSTANT) {
+        if (field_right->index != FIELD_CONSTANT) {
             continue;
         }
 
         // Prep: This should already have been taken care of
-        if (strcmp(p->left.text, "julian") == 0) {
-            p->left.field = FIELD_ROW_INDEX;
+        if (strcmp(field_left->text, "julian") == 0) {
+            field_left->index = FIELD_ROW_INDEX;
         }
 
         // Check what kind of predicate we have
-        if (p->left.field == FIELD_ROW_INDEX) {
+        if (field_left->index == FIELD_ROW_INDEX) {
             // An exact Julian
             if( p->op == OPERATOR_EQ) {
-                *julian_start = atoi(p->right.text);
+                *julian_start = atoi(field_right->text);
                 *julian_end = *julian_start + 1;
             }
 
             // Dates after a specific Julian
             else if (p->op & OPERATOR_GT) {
-                *julian_start = atoi(p->right.text);
+                *julian_start = atoi(field_right->text);
 
                 if (!(p->op & OPERATOR_EQ)) {
                     (*julian_start)++;
@@ -431,7 +434,7 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
 
             // Dates before a specific Julian
             else if (p->op & OPERATOR_LT) {
-                *julian_end = atoi(p->right.text);
+                *julian_end = atoi(field_right->text);
 
                 // End is exclusive
                 if (p->op & OPERATOR_EQ) {
@@ -440,12 +443,12 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
             }
         }
 
-        else if (p->left.field == COL_DATE) {
+        else if (field_left->index == COL_DATE) {
 
             // An exact date
             if (p->op == OPERATOR_EQ) {
                 struct DateTime dt = {0};
-                parseDateTime(p->right.text, &dt);
+                parseDateTime(field_right->text, &dt);
                 *julian_start = datetimeGetJulian(&dt);
                 *julian_end = *julian_start + 1;
             }
@@ -453,7 +456,7 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
             // Dates after a specific date
             else if (p->op & OPERATOR_GT) {
                 struct DateTime dt = {0};
-                parseDateTime(p->right.text, &dt);
+                parseDateTime(field_right->text, &dt);
                 *julian_start = datetimeGetJulian(&dt);
 
                 if (!(p->op & OPERATOR_EQ)) {
@@ -464,7 +467,7 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
             // Dates before a specific date
             if (p->op & OPERATOR_LT) {
                 struct DateTime dt = {0};
-                parseDateTime(p->right.text, &dt);
+                parseDateTime(field_right->text, &dt);
                 *julian_end = datetimeGetJulian(&dt);
 
                 // End is exclusive
@@ -473,13 +476,13 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
                 }
             }
         }
-        else if (p->left.field == COL_YEAR) {
+        else if (field_left->index == COL_YEAR) {
 
             // All dates in the given year
             if (p->op == OPERATOR_EQ) {
                 struct DateTime dt = {0};
 
-                dt.year = atoi(p->right.text);
+                dt.year = atoi(field_right->text);
                 dt.month = 1;
                 dt.day = 1;
 
@@ -496,7 +499,7 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
                 struct DateTime dt = {0};
 
                 // End is exclusive
-                dt.year = atoi(p->right.text);
+                dt.year = atoi(field_right->text);
                 dt.month = 1;
                 dt.day = 1;
 
@@ -508,7 +511,7 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
                 struct DateTime dt = {0};
 
                 // End is exclusive
-                dt.year = atoi(p->right.text) + 1;
+                dt.year = atoi(field_right->text) + 1;
                 dt.month = 1;
                 dt.day = 1;
 
@@ -519,7 +522,7 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
             else if (p->op == OPERATOR_GT) {
                 struct DateTime dt = {0};
 
-                dt.year = atoi(p->right.text) + 1;
+                dt.year = atoi(field_right->text) + 1;
                 dt.month = 1;
                 dt.day = 1;
 
@@ -530,7 +533,7 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
             else if (p->op == OPERATOR_GE) {
                 struct DateTime dt = {0};
 
-                dt.year = atoi(p->right.text);
+                dt.year = atoi(field_right->text);
                 dt.month = 1;
                 dt.day = 1;
 
@@ -551,20 +554,22 @@ static int printDate (char *value, int max_length, struct DateTime date) {
 
 
 static int calendar_evaluateNode(struct DB *db, struct ColumnNode *column, int rowid, char *value, int max_length) {
-    if (column->field == FIELD_CONSTANT) {
-        strcpy(value, column->text);
+    struct Field *field = column->fields;
+
+    if (field->index == FIELD_CONSTANT) {
+        strcpy(value, field->text);
         return 0;
     }
 
-    if (column->field == FIELD_ROW_INDEX) {
+    if (field->index == FIELD_ROW_INDEX) {
         return sprintf(value, "%d", rowid);
     }
 
-    if (column->field >= 0) {
-        return calendar_getRecordValue(db, rowid, column->field, value, max_length);
+    if (field->index >= 0) {
+        return calendar_getRecordValue(db, rowid, field->index, value, max_length);
     }
 
-    fprintf(stderr, "CALENDAR Cannot evaluate column '%s'\n", column->text);
+    fprintf(stderr, "CALENDAR Cannot evaluate column '%s'\n", field->text);
     exit(-1);
 }
 

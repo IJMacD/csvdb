@@ -46,12 +46,12 @@ int explain_select_query (
             predicate[0] = '\0';
         }
         else if (s.predicate_count == 1) {
-            strcpy(predicate, s.predicates[0].left.text);
+            strcpy(predicate, s.predicates[0].left.fields[0].text);
         }
         else {
             char *ptr = predicate;
             for (int i = 0; i < s.predicate_count; i++) {
-                size_t l = strlen(s.predicates[i].left.text);
+                size_t l = strlen(s.predicates[i].left.fields[0].text);
 
                 if (ptr + l > predicate + MAX_FIELD_LENGTH) break;
 
@@ -59,7 +59,7 @@ int explain_select_query (
                     *(ptr++) = ',';
                 }
 
-                strcpy(ptr, s.predicates[i].left.text);
+                strcpy(ptr, s.predicates[i].left.fields[0].text);
 
                 ptr += l;
 
@@ -103,7 +103,7 @@ int explain_select_query (
             }
 
             if (s.predicate_count > 0) {
-                int table_id = s.predicates->left.table_id;
+                int table_id = s.predicates->left.fields[0].table_id;
 
                 strncpy(table, q->tables[table_id].name, MAX_FIELD_LENGTH);
                 table[MAX_FIELD_LENGTH - 1] = '\0';
@@ -244,8 +244,8 @@ int explain_select_query (
                 }
 
                 // We might have been too hasty copying predicate name
-                if (s.predicates[0].left.table_id != join_count) {
-                    strcpy(predicate, s.predicates[0].right.text);
+                if (s.predicates[0].left.fields[0].table_id != join_count) {
+                    strcpy(predicate, s.predicates[0].right.fields[0].text);
                 }
             } else {
                 rows += t->db->record_count;
@@ -273,8 +273,8 @@ int explain_select_query (
                 }
 
                 // We might have been too hasty copying predicate name
-                if (s.predicates[0].left.table_id != join_count) {
-                    strcpy(predicate, s.predicates[0].right.text);
+                if (s.predicates[0].left.fields[0].table_id != join_count) {
+                    strcpy(predicate, s.predicates[0].right.fields[0].text);
                 }
             } else {
                 rows *= t->db->record_count;
@@ -295,8 +295,8 @@ int explain_select_query (
             table[MAX_FIELD_LENGTH - 1] = '\0';
 
             // We might have been too hasty copying predicate name
-            if (s.predicates[0].left.table_id != join_count) {
-                strcpy(predicate, s.predicates[0].right.text);
+            if (s.predicates[0].left.fields[0].table_id != join_count) {
+                strcpy(predicate, s.predicates[0].right.fields[0].text);
             }
 
             if (cost < rows) {

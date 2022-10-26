@@ -2,13 +2,17 @@
 
 #include "limits.h"
 
-struct ColumnNode {
+struct Field {
     char text[MAX_FIELD_LENGTH];
-    char alias[MAX_FIELD_LENGTH];
     int table_id;
-    int field;
+    int index;
+};
+
+struct ColumnNode {
+    char alias[MAX_FIELD_LENGTH];
     int function;
     int concat;
+    struct Field fields[2];
 };
 
 struct RowList {

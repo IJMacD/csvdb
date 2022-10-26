@@ -80,6 +80,6 @@
 #define FUNC_INDEX                  0xE3
 
 
-int evaluateFunction(char * output, struct DB *db, struct ColumnNode *column, int record_index);
+int evaluateFunction(char * output, struct Table *tables, struct ColumnNode *column, int record_index);
 
 int evaluateAggregateFunction (char * output, struct Table *db, int table_count, struct ColumnNode *column, struct RowList * row_list);
