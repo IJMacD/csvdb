@@ -367,7 +367,7 @@ static void printHeaderSeparator (FILE *f, int format) {
 
 static void printRecordStart (FILE *f, int format, int is_first, int is_single_col) {
     if (format == OUTPUT_FORMAT_HTML) {
-        fprintf(f, "<TR><TD>");
+        fprintf(f, "<TR>");
     }
     else if (format == OUTPUT_FORMAT_JSON_ARRAY) {
         // For JSON Array output a single column with an alias of "_" means
@@ -394,6 +394,7 @@ static void printRecordStart (FILE *f, int format, int is_first, int is_single_c
 }
 
 static void printColumnValue (FILE *f, int format, const char *prefix, const char *name, const char *value) {
+    int value_is_numeric = is_numeric(value);
 
     if (format == OUTPUT_FORMAT_JSON) {
         if (prefix) {
@@ -415,6 +416,14 @@ static void printColumnValue (FILE *f, int format, const char *prefix, const cha
     }
     else if (format == OUTPUT_FORMAT_TABLE) {
         fprintf(f, "| ");
+    }
+    else if (format == OUTPUT_FORMAT_HTML) {
+        if (value_is_numeric) {
+            fprintf(f, "<TD ALIGN=\"RIGHT\">");
+        }
+        else {
+            fprintf(f, "<TD>");
+        }
     }
 
     const char * string_fmt = "%s";
@@ -442,7 +451,7 @@ static void printColumnValue (FILE *f, int format, const char *prefix, const cha
         num_fmt = "%18d ";
     }
 
-    if (num_fmt != string_fmt && is_numeric(value)) {
+    if (num_fmt != string_fmt && value_is_numeric) {
         fprintf(f, num_fmt, atoi(value));
     } else {
         fprintf(f, string_fmt, value);
@@ -455,6 +464,9 @@ static void printColumnValue (FILE *f, int format, const char *prefix, const cha
         else {
             fprintf(f, "</%s>", name);
         }
+    }
+    else if (format == OUTPUT_FORMAT_HTML) {
+        fprintf(f, "</TD>");
     }
 }
 
@@ -470,9 +482,6 @@ static void printColumnSeparator (FILE *f, int format) {
     }
     else if (format == OUTPUT_FORMAT_COMMA) {
         fprintf(f, ",");
-    }
-    else if (format == OUTPUT_FORMAT_HTML) {
-        fprintf(f, "</TD><TD>");
     }
     else if (format == OUTPUT_FORMAT_JSON_ARRAY) {
         fprintf(f, ",");
@@ -496,7 +505,7 @@ static void printRecordEnd (FILE *f, int format, int is_single_column) {
         fprintf(f, "\n");
     }
     else if (format == OUTPUT_FORMAT_HTML) {
-        fprintf(f, "</TD></TR>\n");
+        fprintf(f, "</TR>\n");
     }
     else if (format == OUTPUT_FORMAT_JSON_ARRAY) {
         if (!is_single_column) {
