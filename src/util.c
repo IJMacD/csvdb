@@ -5,6 +5,8 @@
 int is_numeric (const char *string) {
     if (*string == '\0') return 0;
     const char *ptr = string;
+    // First character can be a negative sign
+    if (*ptr == '-') ptr++;
     int decimal = 0;
     while (*ptr != '\0') {
         if (ptr > string && *ptr == '.') {

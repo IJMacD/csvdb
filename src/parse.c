@@ -183,10 +183,21 @@ int parseQuery (struct Query *q, const char *query) {
                     return -1;
                 }
 
+                skipWhitespace(query, &index);
+
+                int col_start_index = index;
+
                 int result = parseColumn(query, &index, column);
 
                 if (result < 0) {
                     return result;
+                }
+
+                // Default alias is whole column spec (if it fits in)
+                int len = index - col_start_index;
+                if (len < MAX_FIELD_LENGTH) {
+                    strncpy(column->alias, query + col_start_index, len);
+                    column->alias[len] = '\0';
                 }
 
                 q->flags |= result;
