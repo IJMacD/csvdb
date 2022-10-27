@@ -474,6 +474,13 @@ static void printColumnValue (FILE *f, int format, const char *prefix, const cha
         num_fmt = "%18ld ";
     }
 
+    #ifdef JSON_NULL
+    if ((format == OUTPUT_FORMAT_JSON || format == OUTPUT_FORMAT_JSON_ARRAY) && strlen(value) == 0) {
+        fprintf(f, "null");
+    }
+    else
+    #endif
+
     if (num_fmt != string_fmt && value_is_numeric) {
         fprintf(f, num_fmt, atol(value));
     } else {

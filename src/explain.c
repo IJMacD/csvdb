@@ -18,7 +18,7 @@ int explain_select_query (
     FILE * output
 ) {
     if (output_flags & OUTPUT_OPTION_HEADERS) {
-        fprintf(output, "ID\tOperation           \tTable       \tPredicate\tRows\tCost\n");
+        fprintf(output, "ID,Operation,Table,Predicate,Rows,Cost\n");
     }
 
     long rows = 0;
@@ -56,7 +56,7 @@ int explain_select_query (
                 if (ptr + l > predicate + MAX_FIELD_LENGTH) break;
 
                 if (i > 0) {
-                    *(ptr++) = ',';
+                    *(ptr++) = ';';
                 }
 
                 strcpy(ptr, s.predicates[i].left.fields[0].text);
@@ -88,7 +88,7 @@ int explain_select_query (
             table[MAX_FIELD_LENGTH - 1] = '\0';
         }
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
-            operation = "TABLE ACCESS BY ROWID";
+            operation = "ACCESS BY ROWID";
 
             if (cost < rows) {
                 cost = rows;
@@ -308,7 +308,7 @@ int explain_select_query (
             sprintf(predicate, "%d\n", s.type);
         }
 
-        fprintf(output, "%d\t%-23s\t%-15s\t%-15s\t%ld\t%ld\n", i, operation, table, predicate, rows, cost);
+        fprintf(output, "%d,%s,%s,%s,%ld,%ld\n", i, operation, table, predicate, rows, cost);
     }
 
     return 0;

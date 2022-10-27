@@ -20,7 +20,7 @@ INSTALL_DIR = /usr/local/bin
 DBGDIR = debug
 DBGEXE = $(DBGDIR)/$(EXE)
 DBGOBJS = $(addprefix $(DBGDIR)/, $(OBJS))
-DBGCFLAGS = -g -O0 -DDEBUG
+DBGCFLAGS = -g -O0 -DDEBUG -DJSON_NULL
 
 #
 # Release build settings
@@ -28,7 +28,7 @@ DBGCFLAGS = -g -O0 -DDEBUG
 RELDIR = release
 RELEXE = $(RELDIR)/$(EXE)
 RELOBJS = $(addprefix $(RELDIR)/, $(OBJS))
-RELCFLAGS = -O3 -DNDEBUG
+RELCFLAGS = -O3 -DNDEBUG -DJSON_NULL
 
 #
 # CGI build settings
@@ -37,7 +37,7 @@ CGIDIR = release
 CGIEXE = $(CGIDIR)/$(EXE).cgi
 CGISRCS = $(filter-out main.c, $(SRCS)) main-cgi.c
 CGIOBJS = $(addprefix $(CGIDIR)/, $(CGISRCS:.c=.o))
-CGICFLAGS = -O3 -DNDEBUG
+CGICFLAGS = -O3 -DNDEBUG -DJSON_NULL
 
 #
 # GEN build settings

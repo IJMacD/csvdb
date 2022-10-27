@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 
 #include "query.h"
+#include "output.h"
 
 /*
  * CGI Spec:
@@ -143,11 +144,7 @@ int main () {
 
     printf("Access-Control-Allow-Origin: *\n");
 
-    // EXPLAIN query still only outputs "unformatted"
-    if (strncmp(query_buffer, "EXPLAIN", 7) == 0) {
-        printf("Content-Type: text/plain; charset=utf-8\n");
-    }
-    else if (format == OUTPUT_FORMAT_COMMA) {
+    if (format == OUTPUT_FORMAT_COMMA) {
         printf("Content-Type: text/csv; charset=utf-8\n");
     }
     else if (format == OUTPUT_FORMAT_TAB) {

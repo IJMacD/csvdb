@@ -78,6 +78,20 @@ int query (const char *query, int output_flags, FILE * output) {
         return select_query(query2, output_flags, output);
     }
 
+    // In order to support different output formats for EXPLAIN we wrap the
+    // whole query in a subquery. This EXPLAIN has come from the command line.
+    // (There could also be an EXPLAIN keyword in the query which will probably
+    // confuse the parser.)
+    if (format != OUTPUT_FORMAT_COMMA && output_flags & FLAG_EXPLAIN)
+    {
+        char query2[1024];
+        sprintf(query2, "FROM (EXPLAIN %s)", query);
+
+        output_flags &= ~FLAG_EXPLAIN;
+
+        return select_query(query2, output_flags, output);
+    }
+
     return select_query(query, output_flags, output);
 }
 
@@ -90,7 +104,22 @@ int select_query (const char *query, int output_flags, FILE * output) {
         return -1;
     }
 
-    // Explain can be specified on the command line
+    int format = output_flags & OUTPUT_MASK_FORMAT;
+    // In order to support different output formats for EXPLAIN we wrap the
+    // whole query in a subquery. This EXPLAIN has come from the start of the
+    // query.
+    if (format != OUTPUT_FORMAT_COMMA && q.flags & FLAG_EXPLAIN)
+    {
+        char query2[1024];
+        sprintf(query2, "FROM (%s)", query);
+
+        output_flags &= ~FLAG_EXPLAIN;
+
+        return select_query(query2, output_flags, output);
+    }
+
+    // Explain can be specified on the command line so copy that value in jsut
+    // in case.
     if (output_flags & FLAG_EXPLAIN) {
         q.flags |= FLAG_EXPLAIN;
     }
