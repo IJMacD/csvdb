@@ -41,60 +41,60 @@ int evaluateFunction(char * output, int function, char **values, __attribute__((
         sprintf(output, "%d", rand());
     }
     else if (function == FUNC_ADD) {
-        int val1 = atoi(values[0]);
-        int val2 = atoi(values[1]);
+        long val1 = atol(values[0]);
+        long val2 = atol(values[1]);
 
-        sprintf(output, "%d", val1 + val2);
+        sprintf(output, "%ld", val1 + val2);
     }
     else if (function == FUNC_SUB) {
-        int val1 = atoi(values[0]);
-        int val2 = atoi(values[1]);
+        long val1 = atol(values[0]);
+        long val2 = atol(values[1]);
 
-        sprintf(output, "%d", val1 - val2);
+        sprintf(output, "%ld", val1 - val2);
     }
     else if (function == FUNC_MUL) {
-        int val1 = atoi(values[0]);
-        int val2 = atoi(values[1]);
+        long val1 = atol(values[0]);
+        long val2 = atol(values[1]);
 
-        sprintf(output, "%d", val1 * val2);
+        sprintf(output, "%ld", val1 * val2);
     }
     else if (function == FUNC_DIV) {
-        int val1 = atoi(values[0]);
-        int val2 = atoi(values[1]);
+        long val1 = atol(values[0]);
+        long val2 = atol(values[1]);
 
         if (val2 == 0) {
             output[0] = '\0';
             return 0;
         }
 
-        sprintf(output, "%d", val1 / val2);
+        sprintf(output, "%ld", val1 / val2);
     }
     else if (function == FUNC_MOD) {
-        int val1 = atoi(values[0]);
-        int val2 = atoi(values[1]);
+        long val1 = atol(values[0]);
+        long val2 = atol(values[1]);
 
         if (val2 == 0) {
             output[0] = '\0';
             return 0;
         }
 
-        sprintf(output, "%d", val1 % val2);
+        sprintf(output, "%ld", val1 % val2);
     }
     else if (function == FUNC_POW) {
-        int val1 = atoi(values[0]);
-        int val2 = atoi(values[1]);
+        long val1 = atol(values[0]);
+        long val2 = atol(values[1]);
 
         if (val2 < 0) {
             return sprintf(output, "0");
         }
 
-        int prod = 1;
+        long prod = 1;
 
         for (int i = 0; i < val2; i++) {
             prod *= val1;
         }
 
-        sprintf(output, "%d", prod);
+        sprintf(output, "%ld", prod);
     }
     else if ((function & MASK_FUNC_FAMILY) == FUNC_FAM_STRING) {
         if (function == FUNC_LENGTH) {

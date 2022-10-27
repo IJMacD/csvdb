@@ -450,23 +450,23 @@ static void printColumnValue (FILE *f, int format, const char *prefix, const cha
     }
     else if (format == OUTPUT_FORMAT_JSON_ARRAY) {
         string_fmt = "\"%s\"";
-        num_fmt = "%d";
+        num_fmt = "%ld";
     }
     else if (format == OUTPUT_FORMAT_JSON) {
         string_fmt = "\"%s\"";
-        num_fmt = "%d";
+        num_fmt = "%ld";
     }
     else if (format == OUTPUT_FORMAT_SQL_INSERT) {
         string_fmt = "'%s'";
-        num_fmt = "%d";
+        num_fmt = "%ld";
     }
     else if (format == OUTPUT_FORMAT_TABLE) {
         string_fmt = "%-19s";
-        num_fmt = "%18d ";
+        num_fmt = "%18ld ";
     }
 
     if (num_fmt != string_fmt && value_is_numeric) {
-        fprintf(f, num_fmt, atoi(value));
+        fprintf(f, num_fmt, atol(value));
     } else {
         fprintf(f, string_fmt, value);
     }
