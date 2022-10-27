@@ -147,24 +147,26 @@ int makePlan (struct Query *q, struct Plan *plan) {
                     addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + 1, q->predicate_count - 1);
                 }
 
-                // Follow our own logic to add an order step
-                // We can avoid it if we're just going to sort on the same column we've just scanned
-                if ((q->flags & FLAG_ORDER) && (q->order_count == 1) && strcmp(field_left->text, q->order_field[0]) == 0) {
-
-                    // So a sort is not necessary but we might still need to reverse
-
-                    if (step_type == PLAN_PK || step_type == PLAN_UNIQUE) {
-                        // Reverse is never required if the plan is PLAN_PK or PLAN_UNIQUE
-                    } else if (q->flags & FLAG_GROUP){
-                        // Reverse is not required if we're grouping
-                    } else if (q->order_direction[0] == ORDER_DESC) {
-                        addStep(plan, PLAN_REVERSE);
-                    }
+                if (step_type == PLAN_PK || step_type == PLAN_UNIQUE) {
+                    // Reverse is never required if the plan is PLAN_PK or PLAN_UNIQUE
+                } else if (q->flags & FLAG_GROUP){
+                    // Reverse is not required if we're grouping
                 } else {
-                    addOrderStepIfRequired(plan, q);
+                    // Follow our own logic to add an order step
+                    // We can avoid it if we're just going to sort on the same column we've just scanned
+                    if ((q->flags & FLAG_ORDER) && (q->order_count == 1) && strcmp(field_left->text, q->order_field[0]) == 0) {
+
+                        // So a sort is not necessary but we might still need to reverse
+                        if (q->order_direction[0] == ORDER_DESC) {
+                            addStep(plan, PLAN_REVERSE);
+                        }
+                    } else {
+                        addOrderStepIfRequired(plan, q);
+                    }
+
+                    applyLimitOptimisation(plan, q);
                 }
 
-                applyLimitOptimisation(plan, q);
             }
             // Before we do a full table scan... we have one more opportunity to use an index
             // To save a sort later, see if we can use an index for ordering now
@@ -311,7 +313,14 @@ int makePlan (struct Query *q, struct Plan *plan) {
      ********************/
 
     if (q->limit_value >= 0) {
-        addStepWithLimit(plan, PLAN_SLICE, q->offset_value + q->limit_value);
+        struct PlanStep *prev = &plan->steps[plan->step_count - 1];
+
+        if (prev->type == PLAN_PK || prev->type == PLAN_UNIQUE || prev->type == PLAN_GROUP) {
+            // No op - don't need limit for these previous step types
+        }
+        else {
+            addStepWithLimit(plan, PLAN_SLICE, q->offset_value + q->limit_value);
+        }
     }
 
     addStep(plan, PLAN_SELECT);
@@ -367,15 +376,21 @@ void addOrderStepIfRequired (struct Plan *plan, struct Query *q) {
 
     // If we're sorting on rowid or PK on single table then we can optimse
     if (q->order_count > 0 && q->table_count == 1) {
-        if (strcmp(q->order_field[0], "rowid") == 0 || strcmp(q->order_field[0], "PK") == 0) {
-            if (q->order_direction[0] == ORDER_ASC) {
-                // No op - already sorted
+        struct PlanStep *first = &plan->steps[0];
+
+        // Only works if results were retrieved in table order
+        if (first->type == PLAN_TABLE_ACCESS_FULL || first->type == PLAN_TABLE_SCAN) {
+
+            if (strcmp(q->order_field[0], "rowid") == 0 || strcmp(q->order_field[0], "PK") == 0) {
+                if (q->order_direction[0] == ORDER_ASC) {
+                    // No op - already sorted
+                }
+                else {
+                    // Just need to reverse
+                    addStep(plan, PLAN_REVERSE);
+                }
+                return;
             }
-            else {
-                // Just need to reverse
-                addStep(plan, PLAN_REVERSE);
-            }
-            return;
         }
     }
 

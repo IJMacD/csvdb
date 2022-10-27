@@ -5,6 +5,8 @@
 #include "limits.h"
 
 #define PLAN_TABLE_ACCESS_FULL      0
+// Duplicated at the moment but plan to separate
+#define PLAN_TABLE_SCAN             0
 #define PLAN_TABLE_ACCESS_ROWID     1
 #define PLAN_PK                     2
 #define PLAN_PK_RANGE               3
