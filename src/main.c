@@ -162,6 +162,8 @@ int main (int argc, char * argv[]) {
             flags |= OUTPUT_FORMAT_INFO_SEP;
         } else if (strcmp(format_val, "xml") == 0) {
             flags |= OUTPUT_FORMAT_XML;
+        } else if (strcmp(format_val, "sql_values") == 0) {
+            flags |= OUTPUT_FORMAT_SQL_VALUES;
         } else {
             fprintf(stderr, "Unrecognised format: %s\n", format_val);
             return -1;

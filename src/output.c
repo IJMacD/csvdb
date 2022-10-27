@@ -18,7 +18,7 @@ static void printRecordStart (FILE *f, int format, int is_first, int is_single_c
 static void printRecordEnd (FILE *f, int format, int is_single_column);
 static void printRecordSeparator (FILE *f, int format);
 static void printColumnValue (FILE *f, int format, const char *prefix, const char *name, const char *value);
-static void printColumnValueNumber (FILE *f, int format, const char *prefix, const char *name, int value);
+static void printColumnValueNumber (FILE *f, int format, const char *prefix, const char *name, long value);
 static void printColumnSeparator (FILE *f, int format);
 
 void printResultLine (FILE *f, struct Table *tables, int table_count, struct ColumnNode columns[], int column_count, int result_index, struct RowList * row_list, int flags) {
@@ -164,6 +164,9 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
     else if (format == OUTPUT_FORMAT_XML) {
         return;
     }
+    else if (format == OUTPUT_FORMAT_SQL_VALUES) {
+        return;
+    }
 
     /********************
      * Header Name
@@ -288,6 +291,9 @@ void printPreamble (FILE *f, __attribute__((unused)) struct Table *table, __attr
     else if (format == OUTPUT_FORMAT_XML) {
         fprintf(f, "<results>");
     }
+    else if (format == OUTPUT_FORMAT_SQL_VALUES) {
+        fprintf(f, "VALUES\n");
+    }
 }
 
 void printPostamble (FILE *f, __attribute__((unused)) struct Table *table, __attribute__((unused)) struct ColumnNode columns[], __attribute__((unused)) int column_count, __attribute__((unused)) int result_count, int flags) {
@@ -300,7 +306,7 @@ void printPostamble (FILE *f, __attribute__((unused)) struct Table *table, __att
     else if (format == OUTPUT_FORMAT_JSON_ARRAY || format == OUTPUT_FORMAT_JSON) {
         fprintf(f, "]\n");
     }
-    else if (format == OUTPUT_FORMAT_SQL_INSERT) {
+    else if (format == OUTPUT_FORMAT_SQL_INSERT || format == OUTPUT_FORMAT_SQL_VALUES) {
         fprintf(f, "\n");
     }
     else if (format == OUTPUT_FORMAT_XML) {
@@ -404,6 +410,9 @@ static void printRecordStart (FILE *f, int format, int is_first, int is_single_c
     else if (format == OUTPUT_FORMAT_XML) {
         fprintf(f, "<record>");
     }
+    else if (format == OUTPUT_FORMAT_SQL_VALUES) {
+        fprintf(f, "(");
+    }
 
 }
 
@@ -456,7 +465,7 @@ static void printColumnValue (FILE *f, int format, const char *prefix, const cha
         string_fmt = "\"%s\"";
         num_fmt = "%ld";
     }
-    else if (format == OUTPUT_FORMAT_SQL_INSERT) {
+    else if (format == OUTPUT_FORMAT_SQL_INSERT || format == OUTPUT_FORMAT_SQL_VALUES) {
         string_fmt = "'%s'";
         num_fmt = "%ld";
     }
@@ -484,9 +493,9 @@ static void printColumnValue (FILE *f, int format, const char *prefix, const cha
     }
 }
 
-static void printColumnValueNumber (FILE *f, int format, const char *prefix, const char *name, int value) {
+static void printColumnValueNumber (FILE *f, int format, const char *prefix, const char *name, long value) {
     char output[16];
-    sprintf(output, "%d", value);
+    sprintf(output, "%ld", value);
     printColumnValue(f, format, prefix, name, output);
 }
 
@@ -503,7 +512,7 @@ static void printColumnSeparator (FILE *f, int format) {
     else if (format == OUTPUT_FORMAT_JSON) {
         fprintf(f, ",");
     }
-    else if (format == OUTPUT_FORMAT_SQL_INSERT) {
+    else if (format == OUTPUT_FORMAT_SQL_INSERT || format == OUTPUT_FORMAT_SQL_VALUES) {
         fprintf(f, ",");
     }
     else if (format == OUTPUT_FORMAT_INFO_SEP) {
@@ -529,7 +538,7 @@ static void printRecordEnd (FILE *f, int format, int is_single_column) {
     else if (format == OUTPUT_FORMAT_JSON) {
         fprintf(f, "}");
     }
-    else if (format == OUTPUT_FORMAT_SQL_INSERT) {
+    else if (format == OUTPUT_FORMAT_SQL_INSERT || format == OUTPUT_FORMAT_SQL_VALUES) {
         fprintf(f, ")");
     }
     else if (format == OUTPUT_FORMAT_XML) {
@@ -547,7 +556,7 @@ static void printRecordSeparator (FILE *f, int format) {
     else if (format == OUTPUT_FORMAT_JSON) {
         fprintf(f, ",");
     }
-    else if (format == OUTPUT_FORMAT_SQL_INSERT) {
+    else if (format == OUTPUT_FORMAT_SQL_INSERT || format == OUTPUT_FORMAT_SQL_VALUES) {
         fprintf(f, ",\n");
     }
     else if (format == OUTPUT_FORMAT_INFO_SEP) {

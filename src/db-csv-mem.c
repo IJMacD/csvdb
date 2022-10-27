@@ -425,8 +425,9 @@ void csvMem_fromValues(struct DB *db, const char *input, int length) {
             in_ptr++;
             *(out_ptr++) = '\n';
         }
+
         // Skip whitespace
-        else while (isspace(*in_ptr)) {
+        while (isspace(*in_ptr)) {
             in_ptr++;
         }
     }
