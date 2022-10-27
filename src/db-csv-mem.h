@@ -21,4 +21,4 @@ int csvMem_getRecordValue (struct DB *db, int record_index, int field_index, cha
 
 int csvMem_findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);
 
-int csvMem_fromValues (struct DB *db, const char *values);
+int csvMem_fromValues (struct DB *db, const char *values, int length);

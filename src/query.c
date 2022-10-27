@@ -630,17 +630,35 @@ static int populateTables (struct Query *q, struct DB *dbs) {
 
         int found = 0;
 
-        // Try to reuse existing open table first
-        for (int j = 0; j < i; j++) {
-            if (strcmp(q->tables[j].name, table->name) == 0) {
-                // Copy pointer
-                table->db = q->tables[j].db;
+        // Perform a sanity check first
 
-                // Make actual copy of DB for output functions
-                memcpy(&dbs[i], &dbs[j], sizeof (dbs[i]));
+        if (table->db != NULL && table->db != DB_SUBQUERY) {
+            // DB has already been opened for us. This is most probably a
+            // VALUES "subquery". We need to copy the db to our stack then free
+            // the previously opened DB.
 
-                found = 1;
-                break;
+            memcpy(&dbs[i], table->db, sizeof(dbs[i]));
+
+            free(table->db);
+
+            table->db = &dbs[i];
+
+            found = 1;
+        }
+
+        if (found == 0) {
+            // Try to reuse existing open table next
+            for (int j = 0; j < i; j++) {
+                if (strcmp(q->tables[j].name, table->name) == 0) {
+                    // Copy pointer
+                    table->db = q->tables[j].db;
+
+                    // Make actual copy of DB for output functions
+                    memcpy(&dbs[i], &dbs[j], sizeof (dbs[i]));
+
+                    found = 1;
+                    break;
+                }
             }
         }
 
@@ -649,46 +667,27 @@ static int populateTables (struct Query *q, struct DB *dbs) {
         if (found == 0) {
             // Check for subquery first
             if (table->db == DB_SUBQUERY) {
-                // Special-special treatment: VALUES can be handled in process
-                if (strncmp(table->name, "VALUES", 6) == 0 && isspace(table->name[6])) {
-                    csvMem_fromValues(&dbs[i], table->name + 7);
-                }
-                else {
-                    char *cmd = malloc(MAX_TABLE_LENGTH * 2);
+                char *cmd = malloc(MAX_TABLE_LENGTH * 2);
 
-                    // Construct command line for sub-process
-                    sprintf(cmd, "%s -0 -H -F csv \"%s\"", process_name, table->name);
+                // Construct command line for sub-process
+                sprintf(cmd, "%s -0 -H -F csv \"%s\"", process_name, table->name);
 
-                    FILE *f = popen(cmd, "r");
-                    free(cmd);
+                FILE *f = popen(cmd, "r");
+                free(cmd);
 
-                    struct DB *db = &dbs[i];
+                struct DB *db = &dbs[i];
 
-                    // Leave a note for csvMem to close the stream
-                    db->file = STREAM_PROC;
+                // Leave a note for csvMem to close the stream
+                db->file = STREAM_PROC;
 
-                    // hand off to CSV Mem
-                    int result = csvMem_makeDB(db, f);
+                // hand off to CSV Mem
+                int result = csvMem_makeDB(db, f);
 
-                    if (result < 0) {
-                        return -1;
-                    }
+                if (result < 0) {
+                    return -1;
                 }
 
                 table->db = &dbs[i];
-
-                checkColumnAliases(table);
-
-                found = 1;
-            }
-            // If it is VALUES only (top-level) query
-            else if (table->db == DB_VALUES) {
-
-                csvMem_fromValues(&dbs[i], table->name);
-
-                table->db = &dbs[i];
-
-                checkColumnAliases(table);
 
                 found = 1;
             }
@@ -703,9 +702,9 @@ static int populateTables (struct Query *q, struct DB *dbs) {
             }
 
             table->db = &dbs[i];
-
-            checkColumnAliases(table);
         }
+
+        checkColumnAliases(table);
 
         int result;
 
@@ -858,6 +857,12 @@ static int populateColumnNode (struct Query * query, struct ColumnNode * column)
     return 0;
 }
 
+/**
+ * @brief Support column aliasing in FROM clause
+ * e.g. `FROM table (alias1, alias2)`
+ *
+ * @param table
+ */
 static void checkColumnAliases (struct Table * table) {
     int alias_len = strlen(table->alias);
 

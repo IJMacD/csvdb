@@ -8,6 +8,7 @@
 #include "sort.h"
 #include "date.h"
 #include "util.h"
+#include "db-csv-mem.h"
 
 #define MAX_CTES    10
 
@@ -68,14 +69,14 @@ int parseQuery (struct Query *q, const char *query) {
 
         skipWhitespace(query, &index);
 
-        strncpy(table->name, query + index, MAX_TABLE_LENGTH - 1);
+        // Malloc a DB ahead of time. It will be copied to the stack in
+        // populateTables() then populateTables() will free this for us.
+        struct DB *db = malloc(sizeof(*db));
 
-        if (table->name[MAX_TABLE_LENGTH - 2] != '\0') {
-            fprintf(stderr, "VALUES query was too long (limited to %d characters)\n", MAX_TABLE_LENGTH - 1);
-            return -1;
-        }
+        csvMem_fromValues(db, query + index, -1);
 
-        table->db = DB_VALUES;
+        // This DB needs to be free'd in populateTables()
+        table->db = db;
 
         strcpy(table->alias, "values");
 
@@ -259,21 +260,46 @@ int parseQuery (struct Query *q, const char *query) {
 
                     int len = find_matching_parenthesis(query + index);
 
-                    if (len >= MAX_TABLE_LENGTH) {
-                        fprintf(stderr, "Subqueries longer than %d are not supported. Subquery was %d bytes.\n", MAX_TABLE_LENGTH, len);
-                        return -1;
+                    if (strncmp(query + index + 1, "VALUES", 6) == 0) {
+                        // VALUES subqueries can be handled in process
+                        // We'll construct a temp DB to hold data until
+                        // populateTables().
+
+                        const char *end_ptr = query + index + len;
+
+                        index += 1 + 6; // '(' + 'VALUES'
+
+                        skipWhitespace(query, &index);
+
+                        // Malloc a DB ahead of time. It will be copied to the
+                        // stack in populateTables() then populateTables() will
+                        // free this for us.
+                        struct DB *db = malloc(sizeof(*db));
+
+                        csvMem_fromValues(db, query + index, end_ptr - query - index);
+
+                        // This DB needs to be free'd in populateTables()
+                        table->db = db;
+
+                        index = end_ptr - query;
                     }
+                    else {
+                        if (len >= MAX_TABLE_LENGTH) {
+                            fprintf(stderr, "Subqueries longer than %d are not supported. Subquery was %d bytes.\n", MAX_TABLE_LENGTH, len);
+                            return -1;
+                        }
 
-                    strncpy(table->name, query + index + 1, len - 2);
+                        strncpy(table->name, query + index + 1, len - 2);
 
-                    // Indicate to query processor this is a subquery
-                    table->db = DB_SUBQUERY;
+                        // Indicate to query processor this is a subquery
+                        table->db = DB_SUBQUERY;
 
-                    index += len;
+                        index += len;
 
-                    strcpy(table->alias, "subquery");
+                        strcpy(table->alias, "subquery");
 
-                    // TODO: subqueries can't reference CTEs
+                        // TODO: subqueries can't reference CTEs
+                    }
                 }
                 else {
                     getQuotedToken(query, &index, table->name, MAX_TABLE_LENGTH);

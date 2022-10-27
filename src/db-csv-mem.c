@@ -331,18 +331,27 @@ static void consumeStream (struct DB *db, FILE *stream) {
 
 /**
  * @brief Convert from VALUES layout e.g. ('a',1),('b',2) to csv in memory
+ *
+ * @param db
+ * @param input
+ * @param length Maximum length to read from input. -1 for no limit
  */
-void csvMem_fromValues(struct DB *db, const char *values) {
-    const char *in_ptr = values;
+void csvMem_fromValues(struct DB *db, const char *input, int length) {
+    const char *in_ptr = input;
+    const char *end_ptr = input + length - 1;
     char *out_ptr;
 
     db->vfs = VFS_CSV_MEM;
     db->file = NULL;
 
-    db->data = malloc(MAX_TABLE_LENGTH);
+    size_t max_data_size = MAX_VALUE_LENGTH;
+
+    db->data = malloc(max_data_size);
     out_ptr = db->data;
 
-    db->line_indices = malloc(100 * sizeof (long));
+    int max_line_count = 100;
+
+    db->line_indices = malloc(max_line_count * sizeof (long));
 
     // Headers
     db->line_indices[0] = 0;
@@ -355,19 +364,44 @@ void csvMem_fromValues(struct DB *db, const char *values) {
 
     int line_index = 0;
 
-    while(*in_ptr != '\0') {
-        // Skip whitespace
-        while (isspace(*(in_ptr++))) {}
-        in_ptr--;
+    while(*in_ptr != '\0' && in_ptr != end_ptr) {
 
         if (*in_ptr != '(') {
-            fprintf(stderr, "VALUES expected to start with '('\n");
+            fprintf(stderr, "VALUES expected to start with '('. Found: %c\n", *in_ptr);
             exit(-1);
         }
 
         db->line_indices[line_index++] = out_ptr - db->data;
 
+        // Check to see if we need to extend the line index allocation
+        if (line_index == max_line_count) {
+            max_line_count *= 2;
+            size_t size = max_line_count * sizeof(long);
+            long *ptr = realloc(db->line_indices, size);
+            if (ptr == NULL) {
+                fprintf(stderr, "Unable to allocate memory: %ld\n", size);
+                exit(-1);
+            }
+            db->line_indices = ptr;
+        }
+
         int line_length = find_matching_parenthesis(in_ptr);
+
+        // Check to see if we need to extend the data allocation
+        // NOTE: db->fields is the start of the allocation
+        size_t len = out_ptr - db->fields;
+        if (len + line_length >= max_data_size) {
+            max_data_size *= 2;
+            // NOTE: db->fields is the start of the allocation
+            void *ptr = realloc(db->fields, max_data_size);
+            if (ptr == NULL) {
+                fprintf(stderr, "Unable to allocate memory: %ld\n", max_data_size);
+                exit(-1);
+            }
+            db->fields = ptr;
+            db->data = ptr + sizeof(headers);
+            out_ptr = db->data + len;
+        }
 
         strncpy(out_ptr, in_ptr + 1, line_length - 2);
 
@@ -392,11 +426,8 @@ void csvMem_fromValues(struct DB *db, const char *values) {
             *(out_ptr++) = '\n';
         }
         // Skip whitespace
-        else while (isspace(*(in_ptr++))) {}
-
-        // Might have been trailing whitespace at end of file
-        if (*in_ptr == '\0') {
-            break;
+        else while (isspace(*in_ptr)) {
+            in_ptr++;
         }
     }
 
