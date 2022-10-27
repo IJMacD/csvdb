@@ -21,6 +21,13 @@
 
 #define FUNC_RANDOM                 0x10
 
+#define FUNC_ADD                    0x11
+#define FUNC_SUB                    0x12
+#define FUNC_MUL                    0x13
+#define FUNC_DIV                    0x14
+#define FUNC_MOD                    0x15
+#define FUNC_POW                    0x16
+
 // Family 001x (0x20) String
 #define FUNC_FAM_STRING             0x20
 

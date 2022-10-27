@@ -772,6 +772,24 @@ static int parseColumn (const char * query, size_t * index, struct ColumnNode *c
             field->index = FIELD_CONSTANT;
             field->table_id = -1;
         }
+        else if (strcmp(value, "ADD") == 0) {
+            column->function = FUNC_ADD;
+        }
+        else if (strcmp(value, "SUB") == 0) {
+            column->function = FUNC_SUB;
+        }
+        else if (strcmp(value, "MUL") == 0) {
+            column->function = FUNC_MUL;
+        }
+        else if (strcmp(value, "DIV") == 0) {
+            column->function = FUNC_DIV;
+        }
+        else if (strcmp(value, "MOD") == 0) {
+            column->function = FUNC_MOD;
+        }
+        else if (strcmp(value, "POW") == 0) {
+            column->function = FUNC_POW;
+        }
         else if (strcmp(value, "TO_HEX") == 0) {
             column->function = FUNC_TO_HEX;
         }
