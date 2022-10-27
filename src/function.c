@@ -7,42 +7,25 @@
 #include "date.h"
 #include "util.h"
 
-int evaluateFunction(char * output, struct Table *tables, struct ColumnNode *column, int record_index) {
-    struct Field *field = column->fields;
-
-    char value[MAX_VALUE_LENGTH] = {0};
-    int result;
-
-    if (field->index == FIELD_CONSTANT) {
-        strcpy(value, field->text);
-        result = 1;
-    }
-    else if (field->table_id >= 0) {
-        struct DB *db = tables[field->table_id].db;
-        result = getRecordValue(db, record_index, field->index, value, MAX_VALUE_LENGTH) > 0;
-    }
-    else {
-        fprintf(stderr, "can't find requested table %d\n", field->table_id);
-        exit(-1);
-    }
+int evaluateFunction(char * output, int function, char **values, __attribute__((unused)) int value_count) {
 
     // NULL output from VFS
-    if (result == 0) {
+    if (values[0][0] == 0) {
         output[0] = '\0';
         return 0;
     }
 
-    if (column->function == FUNC_UNITY) {
-        sprintf(output, "%s", value);
+    if (function == FUNC_UNITY) {
+        sprintf(output, "%s", values[0]);
     }
-    else if (column->function == FUNC_CHR) {
-        int codepoint = atoi(value);
-        writeUTF8(value, codepoint);
+    else if (function == FUNC_CHR) {
+        int codepoint = atoi(values[0]);
+        writeUTF8(values[0], codepoint);
 
-        sprintf(output, "%s", value);
+        sprintf(output, "%s", values[0]);
     }
-    else if (column->function == FUNC_TO_HEX) {
-        int val = atoi(value);
+    else if (function == FUNC_TO_HEX) {
+        int val = atoi(values[0]);
 
         if (val < 0) {
             sprintf(output, "-0x%x", abs(val));
@@ -54,122 +37,151 @@ int evaluateFunction(char * output, struct Table *tables, struct ColumnNode *col
             sprintf(output, "0x%x", val);
         }
     }
-    else if (column->function == FUNC_RANDOM) {
+    else if (function == FUNC_RANDOM) {
         sprintf(output, "%d", rand());
     }
-    else if ((column->function & MASK_FUNC_FAMILY) == FUNC_FAM_STRING) {
-        if (column->function == FUNC_LENGTH) {
-            int len = strlen(value);
+    else if ((function & MASK_FUNC_FAMILY) == FUNC_FAM_STRING) {
+        if (function == FUNC_LENGTH) {
+            int len = strlen(values[0]);
             sprintf(output, "%d", len);
         }
-        else if (column->function == FUNC_LEFT) {
-            // Both field name and length stored in same array
-            // Layout:
-            // <field>\0 <count>)
-
-            int field_len = strlen(field->text);
-
-            if (field_len > MAX_FIELD_LENGTH) {
-                fprintf(stderr, "Missing count from LEFT: %s\n", field->text);
-                exit(-1);
-            }
-
-            int count = atoi(field->text + field_len + 1);
-            int len = strlen(value);
+        else if (function == FUNC_LEFT) {
+            int count = atoi(values[1]);
+            int len = strlen(values[0]);
 
             if (len > count) {
-                strncpy(output, value, count);
+                strncpy(output, values[0], count);
                 output[count] = '\0';
             } else {
-                sprintf(output, "%s", value);
+                sprintf(output, "%s", values[0]);
             }
         }
-        else if (column->function == FUNC_RIGHT) {
-            // Both field name and length stored in same array
-            // Layout:
-            // <field>\0 <count>)
-
-            int field_len = strlen(field->text);
-
-            if (field_len > MAX_FIELD_LENGTH) {
-                fprintf(stderr, "Missing count from RIGHT: %s\n", field->text);
-                exit(-1);
-            }
-
-            int count = atoi(field->text + field_len + 1);
-            int len = strlen(value);
+        else if (function == FUNC_RIGHT) {
+            int count = atoi(values[1]);
+            int len = strlen(values[0]);
 
             if (len > count) {
-                sprintf(output, "%s", value + len - count);
+                sprintf(output, "%s", values[0] + len - count);
             } else {
-                sprintf(output, "%s", value);
+                sprintf(output, "%s", values[0]);
             }
         }
     }
-    else if ((column->function & MASK_FUNC_FAMILY) == FUNC_FAM_EXTRACT) {
+    else if ((function & MASK_FUNC_FAMILY) == FUNC_FAM_EXTRACT) {
         struct DateTime dt;
 
-        if (!parseDateTime(value, &dt)) {
+        if (!parseDateTime(values[0], &dt)) {
             return 0;
         }
 
-        if (column->function == FUNC_EXTRACT_YEAR){
+        if (function == FUNC_EXTRACT_YEAR){
             sprintf(output, "%d", dt.year);
         }
-        else if (column->function == FUNC_EXTRACT_MONTH) {
+        else if (function == FUNC_EXTRACT_MONTH) {
             sprintf(output, "%d", dt.month);
         }
-        else if (column->function == FUNC_EXTRACT_DAY) {
+        else if (function == FUNC_EXTRACT_DAY) {
             sprintf(output, "%d", dt.day);
         }
-        else if (column->function == FUNC_EXTRACT_WEEK) {
+        else if (function == FUNC_EXTRACT_WEEK) {
             sprintf(output, "%d", datetimeGetWeek(&dt));
         }
-        else if (column->function == FUNC_EXTRACT_WEEKYEAR) {
+        else if (function == FUNC_EXTRACT_WEEKYEAR) {
             sprintf(output, "%d", datetimeGetWeekYear(&dt));
         }
-        else if (column->function == FUNC_EXTRACT_WEEKDAY) {
+        else if (function == FUNC_EXTRACT_WEEKDAY) {
             sprintf(output, "%d", datetimeGetWeekDay(&dt));
         }
-        else if (column->function == FUNC_EXTRACT_HEYEAR) {
+        else if (function == FUNC_EXTRACT_HEYEAR) {
             sprintf(output, "%d", dt.year + 10000);
         }
-        else if (column->function == FUNC_EXTRACT_YEARDAY) {
+        else if (function == FUNC_EXTRACT_YEARDAY) {
             sprintf(output, "%d", datetimeGetYearDay(&dt));
         }
-        else if (column->function == FUNC_EXTRACT_MILLENNIUM) {
+        else if (function == FUNC_EXTRACT_MILLENNIUM) {
             sprintf(output, "%d", dt.year / 1000);
         }
-        else if (column->function == FUNC_EXTRACT_CENTURY) {
+        else if (function == FUNC_EXTRACT_CENTURY) {
             sprintf(output, "%d", dt.year / 100);
         }
-        else if (column->function == FUNC_EXTRACT_DECADE) {
+        else if (function == FUNC_EXTRACT_DECADE) {
             sprintf(output, "%d", dt.year / 10);
         }
-        else if (column->function == FUNC_EXTRACT_QUARTER) {
+        else if (function == FUNC_EXTRACT_QUARTER) {
             sprintf(output, "%d", (dt.month - 1) / 3 + 1);
         }
-        else if (column->function == FUNC_EXTRACT_JULIAN) {
+        else if (function == FUNC_EXTRACT_JULIAN) {
             sprintf(output, "%d", datetimeGetJulian(&dt));
         }
-        else if (column->function == FUNC_EXTRACT_DATE) {
+        else if (function == FUNC_EXTRACT_DATE) {
             sprintf(output, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
         }
-        else if (column->function == FUNC_EXTRACT_DATETIME) {
+        else if (function == FUNC_EXTRACT_DATETIME) {
             sprintf(output, "%04d-%02d-%02dT%02d:%02d:%02d", dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second);
         }
-        else if (column->function == FUNC_EXTRACT_MONTH_STRING) {
+        else if (function == FUNC_EXTRACT_MONTH_STRING) {
             sprintf(output, "%04d-%02d", dt.year, dt.month);
         }
-        else if (column->function == FUNC_EXTRACT_WEEK_STRING) {
+        else if (function == FUNC_EXTRACT_WEEK_STRING) {
             sprintf(output, "%04d-W%02d", datetimeGetWeekYear(&dt), datetimeGetWeek(&dt));
         }
-        else if (column->function == FUNC_EXTRACT_YEARDAY_STRING) {
+        else if (function == FUNC_EXTRACT_YEARDAY_STRING) {
             sprintf(output, "%04d-%03d", dt.year, datetimeGetYearDay(&dt));
         }
         else {
             sprintf(output, "BADEXTRACT");
         }
+    }
+    else if (function == FUNC_DATE_ADD) {
+        struct DateTime dt1;
+        struct DateTime dt2;
+
+        if (!parseDateTime(values[0], &dt1)) {
+            return 0;
+        }
+
+        int diff = atoi(values[1]);
+
+        int julian1 = datetimeGetJulian(&dt1);
+        int julian2 = julian1 + diff;
+
+        datetimeFromJulian(&dt2, julian2);
+
+        return sprintf(output, "%04d-%02d-%02d", dt2.year, dt2.month, dt2.day);
+    }
+    else if (function == FUNC_DATE_SUB) {
+        struct DateTime dt1;
+        struct DateTime dt2;
+
+        if (!parseDateTime(values[0], &dt1)) {
+            return 0;
+        }
+
+        int diff = atoi(values[1]);
+
+        int julian1 = datetimeGetJulian(&dt1);
+        int julian2 = julian1 - diff;
+
+        datetimeFromJulian(&dt2, julian2);
+
+        return sprintf(output, "%04d-%02d-%02d", dt2.year, dt2.month, dt2.day);
+    }
+    else if (function == FUNC_DATE_DIFF) {
+        struct DateTime dt1;
+        struct DateTime dt2;
+
+        if (!parseDateTime(values[0], &dt1)) {
+            return 0;
+        }
+
+        if (!parseDateTime(values[1], &dt2)) {
+            return 0;
+        }
+
+        int julian1 = datetimeGetJulian(&dt1);
+        int julian2 = datetimeGetJulian(&dt2);
+
+        return sprintf(output, "%d", julian1 - julian2);
     }
     else {
         return -1;

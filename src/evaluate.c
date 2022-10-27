@@ -5,30 +5,78 @@
 #include "date.h"
 #include "function.h"
 
-int evaluateNode (struct Query * q, struct RowList *rowlist, int index, struct ColumnNode * column, char * value, int max_length) {
-    struct Field *field = column->fields;
+/**
+ * @brief
+ *
+ * @param q
+ * @param rowlist
+ * @param index
+ * @param column
+ * @param value
+ * @param max_length
+ * @return int
+ */
+int evaluateNode (struct Query * q, struct RowList *rowlist, int index, struct ColumnNode * column, char * output, __attribute__((unused)) int max_length) {
 
-    if (field->index == FIELD_ROW_INDEX) {
-        sprintf(value, "%d", index);
-        return 0;
+    char value1[MAX_VALUE_LENGTH];
+    char value2[MAX_VALUE_LENGTH];
+
+    char *values[2];
+    values[0] = value1;
+    values[1] = value2;
+
+    evaluateField(value1, q->tables, rowlist, &(column->fields[0]), index);
+
+    if (column->function == FUNC_UNITY) {
+        strcpy(output, value1);
+        return strlen(output);
     }
 
-    if (field->index == FIELD_CONSTANT) {
-        evaluateConstantNode(column, value, max_length);
-        return evaluateFunction(value, NULL, column, -1);
-    }
+    evaluateField(value2, q->tables, rowlist, &(column->fields[1]), index);
 
-    if (field->index >= 0) {
-        int row_id = getRowID(rowlist, field->table_id, index);
-        return evaluateFunction(value, q->tables, column, row_id);
-    }
-
-    fprintf(stderr, "Cannot evaluate column: %s\n", field->text);
-    exit(-1);
+    return evaluateFunction(output, column->function, values, 2);
 }
 
-int evaluateConstantNode (struct ColumnNode * column, char * value, __attribute__((unused)) int max_length) {
-    struct Field *field = column->fields;
+/**
+ * @brief
+ *
+ * @param output
+ * @param tables
+ * @param rowlist
+ * @param field
+ * @param result_index
+ * @return int number of chars written
+ */
+int evaluateField (char * output, struct Table *tables, struct RowList *rowlist, struct Field *field, int result_index) {
+
+    if (field->index == FIELD_CONSTANT) {
+        return evaluateConstantField(output, field);
+    }
+
+    if (field->table_id >= 0) {
+        int row_id = getRowID(rowlist, field->table_id, result_index);
+
+        if (field->index == FIELD_ROW_INDEX) {
+            return sprintf(output, "%d", row_id);
+        }
+
+        struct DB *db = tables[field->table_id].db;
+        return getRecordValue(db, row_id, field->index, output, MAX_VALUE_LENGTH) > 0;
+    }
+
+    output[0] = '\0';
+
+    return 0;
+}
+
+/**
+ * @brief
+ *
+ * @param value
+ * @param field
+ * @return int Number of chars written
+ */
+int evaluateConstantField (char * value, struct Field * field) {
 
     if (field->index != FIELD_CONSTANT) {
         fprintf(stderr, "Tried to evaluate non-contant value as constant: %s\n", field->text);
@@ -40,8 +88,8 @@ int evaluateConstantNode (struct ColumnNode * column, char * value, __attribute_
     {
         struct DateTime dt;
         parseDateTime("CURRENT_DATE", &dt);
-        sprintf(value, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
+        return sprintf(value, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
     }
 
-    return 0;
+    return sprintf(value, "%s", field->text);
 }

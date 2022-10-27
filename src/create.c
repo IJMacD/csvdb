@@ -108,14 +108,12 @@ int create_index_query (const char * query) {
         return -1;
     }
 
-    int length = getToken(query, &index, index_field, MAX_TABLE_LENGTH);
+    getToken(query, &index, index_field, MAX_TABLE_LENGTH);
 
-    if (index_field[length - 1] != ')') {
-        fprintf(stderr, "Expected ) got '%c'\n", index_field[length - 1]);
+    if (query[index] != ')') {
+        fprintf(stderr, "Expected ) got '%c'\n", query[index]);
         return -1;
     }
-
-    index_field[length - 1] = '\0';
 
     if (auto_name) {
         sprintf(index_name, "%s__%s", table_name, index_field);

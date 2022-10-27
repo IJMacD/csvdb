@@ -28,7 +28,7 @@ SELECT name, birth_date FROM test WHERE PK(id) = 769
 EXPLAIN SELECT id, name, birth_date FROM test WHERE PK(id) < 51
 SELECT id, name, birth_date FROM test WHERE PK(id) < 51
 SELECT id, name, birth_date FROM test WHERE 51 >= PK(id)
-SELECT EXTRACT(YEAR FROM birth_date), EXTRACT(MONTH FROM birth_date), EXTRACT(DAY FROM birth_date), EXTRACT(YEARDAY FROM birth_date) FROM test FETCH FIRST ROW ONLY
+SELECT birth_date, EXTRACT(YEAR FROM birth_date), EXTRACT(MONTH FROM birth_date), EXTRACT(DAY FROM birth_date), EXTRACT(YEARDAY FROM birth_date) FROM test FETCH FIRST ROW ONLY
 SELECT COUNT(*) FROM test
 SELECT COUNT(*) FROM test WHERE name = 'Walter KELLY'
 SELECT COUNT(*) FROM test WHERE birth_date = '2050-01-01'
@@ -46,8 +46,8 @@ FROM test WHERE birth_date > '1901-01-01' AND EXTRACT(WEEKDAY FROM birth_date) =
 FROM view FETCH FIRST 5 ROWS ONLY
 FROM suits AS s1, suits AS s2 ON s1.name < s2.name ORDER BY name
 FROM suits, ranks WHERE value > 10 ORDER BY name SELECT ranks.name || ' of ' || suits.name AS cards
-EXPLAIN SELECT TODAY(), EXTRACT(YEARDAY FROM TODAY()), EXTRACT(JULIAN FROM '1995-10-10')
-SELECT TODAY(), EXTRACT(YEARDAY FROM TODAY()), EXTRACT(JULIAN FROM '1995-10-10')
+EXPLAIN SELECT CURRENT_DATE, EXTRACT(YEARDAY FROM CURRENT_DATE), EXTRACT(JULIAN FROM '1995-10-10')
+SELECT CURRENT_DATE, EXTRACT(YEARDAY FROM CURRENT_DATE), EXTRACT(JULIAN FROM '1995-10-10')
 FROM CALENDAR WHERE date = CURRENT_DATE SELECT julian, date, yeardayString, weekdayString
 TABLE suits
 FROM suits SELECT LISTAGG(name)
@@ -65,3 +65,6 @@ FROM (VALUES ('a',1),('b',2),('c',3)) AS a WHERE a.col2 < 3 SELECT a.col2, a.col
 FROM (VALUES ('a',1),('b',2),('c',3)) AS a (first, second)
 WITH r1 AS (FROM ranks WHERE value < 8 SELECT name, symbol) FROM r1 ORDER BY name
 WITH r1 AS (FROM ranks WHERE value < 8 SELECT name, symbol), s1 AS (FROM suits SELECT name), v1 AS (VALUES ('b')) FROM r1,r1 AS r2,v1 ORDER BY r2.name, r1.name DESC FETCH FIRST 5 ROWS ONLY
+SELECT DATE_DIFF('2000-01-01', '1990-01-01')
+SELECT DATE_DIFF(CURRENT_DATE, '2000-01-01')
+FROM test SELECT birth_date, score, DATE_ADD(birth_date, score) FETCH FIRST 5 ROWS ONLY

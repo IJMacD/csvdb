@@ -44,6 +44,10 @@
 #define FUNC_EXTRACT_DECADE         0x4B
 #define FUNC_EXTRACT_QUARTER        0x4C
 
+#define FUNC_EXTRACT_HOUR           0x4D
+#define FUNC_EXTRACT_MINUTE         0x4E
+#define FUNC_EXTRACT_SECOND         0x4F
+
 #define FUNC_EXTRACT_MONTH_STRING   0x50
 #define FUNC_EXTRACT_WEEK_STRING    0x51
 #define FUNC_EXTRACT_YEARDAY_STRING 0x52
@@ -53,8 +57,12 @@
 #define FUNC_EXTRACT_TIME           0x5E
 #define FUNC_EXTRACT_DATETIME       0x5F
 
-// Family 011x (0x60) (Undefined)
-#define FUNC_FAM_UNDEF_60           0x60
+// Family 011x (0x60) (Date)
+#define FUNC_FAM_DATE_60            0x60
+
+#define FUNC_DATE_ADD               0x61
+#define FUNC_DATE_SUB               0x62
+#define FUNC_DATE_DIFF              0x63
 
 // Family 100x (0x80) (Undefined)
 #define FUNC_FAM_UNDEF_80           0x80
@@ -80,6 +88,6 @@
 #define FUNC_INDEX                  0xE3
 
 
-int evaluateFunction(char * output, struct Table *tables, struct ColumnNode *column, int record_index);
+int evaluateFunction(char * output, int function, char **values, int value_count);
 
 int evaluateAggregateFunction (char * output, struct Table *db, int table_count, struct ColumnNode *column, struct RowList * row_list);

@@ -109,6 +109,8 @@ int select_query (const char *query, int output_flags, FILE * output) {
             // We could have a constant query which will output a single row
             // Check if any of the fields are non-constant and abort
 
+            // TODO: now that there are multi-field columns we need to check
+            // *all* fields .
             for (int i = 0; i < q.column_count; i++) {
                 struct Field * field = q.columns[0].fields;
                 if (field->index != FIELD_CONSTANT) {
@@ -811,28 +813,47 @@ static int findColumn (struct Query *q, const char *text, int *table_id, int *co
  * @returns 0 on success
  */
 static int populateColumnNode (struct Query * query, struct ColumnNode * column) {
-    struct Field * field = column->fields;
+    struct Field * field1 = column->fields + 0;
+    struct Field * field2 = column->fields + 1;
 
-    if (field->index == FIELD_UNKNOWN) {
-        if (!findColumn(query, field->text, &field->table_id, &field->index)) {
-            fprintf(stderr, "Unable to find column '%s'\n", field->text);
+    if (field1->index == FIELD_UNKNOWN && field1->text[0] != '\0') {
+        if (!findColumn(query, field1->text, &field1->table_id, &field1->index)) {
+            fprintf(stderr, "Unable to find column '%s'\n", field1->text);
             return -1;
         }
     }
 
-    else if (field->index == FIELD_CONSTANT) {
-        // Fill in constant values such as CURRENT_DATE
-        // Then evaluate any functions on the column
-
-        // RANDOM() is non-pure so cannot be evaluated early
-        if (column->function == FUNC_RANDOM) {
-            return 0;
+    if (field2->index == FIELD_UNKNOWN && field2->text[0] != '\0') {
+        if (!findColumn(query, field2->text, &field2->table_id, &field2->index)) {
+            fprintf(stderr, "Unable to find column '%s'\n", field2->text);
+            return -1;
         }
-
-        evaluateConstantNode(column, field->text, MAX_FIELD_LENGTH);
-        evaluateFunction(field->text, NULL, column, -1);
-        column->function = FUNC_UNITY;
     }
+
+    // RANDOM() is non-pure so cannot be evaluated early
+    if (column->function == FUNC_RANDOM) {
+        return 0;
+    }
+
+    // Pre-populate - Is this necessary?
+    // if (field1->index == FIELD_CONSTANT) {
+    //     // Fill in constant values such as CURRENT_DATE
+
+    //     evaluateConstantNode(field1, field1->text, MAX_FIELD_LENGTH);
+    // }
+
+    // if (field2->index == FIELD_CONSTANT) {
+    //     // Fill in constant values such as CURRENT_DATE
+
+    //     evaluateConstantNode(field2, field2->text, MAX_FIELD_LENGTH);
+    // }
+
+    // if (field1->index == FIELD_CONSTANT && field2->index == FIELD_CONSTANT) {
+    //     // Evaluate any functions on the column
+
+    //     evaluateFunction(field1->text, NULL, column, -1);
+    //     column->function = FUNC_UNITY;
+    // }
 
     return 0;
 }

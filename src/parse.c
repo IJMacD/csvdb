@@ -13,9 +13,9 @@
 
 static int parseColumn (const char * query, size_t * index, struct ColumnNode *column);
 
-static int parseFunction (const char * query, size_t * index, struct ColumnNode * column, int name_length);
+static int parseFunctionParams (const char * query, size_t * index, struct ColumnNode * column);
 
-static int checkConstantColumn(struct ColumnNode * column);
+static int checkConstantColumn(struct Field * column);
 
 static struct Table *findTable (const char *table_name, struct Table *tables, int table_count);
 
@@ -115,8 +115,9 @@ int parseQuery (struct Query *q, const char *query) {
 
         int token_length = getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-        if (token_length <= 0) {
-            break;
+        if (token_length <= 0 && index < query_length) {
+            fprintf(stderr, "Unable to get next token but not at end of query. Remaining: '%s'\n", query + index);
+            return -1;
         }
 
         // printf("Token: '%s'\n", keyword);
@@ -196,9 +197,9 @@ int parseQuery (struct Query *q, const char *query) {
                     index += 3;
 
                     getQuotedToken(query, &index, column->alias, MAX_FIELD_LENGTH);
-                }
 
-                skipWhitespace(query, &index);
+                    skipWhitespace(query, &index);
+                }
 
                 if (query[index] == '|' && query[index+1] == '|') {
                     column->concat = 1;
@@ -267,12 +268,27 @@ int parseQuery (struct Query *q, const char *query) {
                 else {
                     getQuotedToken(query, &index, table->name, MAX_TABLE_LENGTH);
 
-                    // As soon as we have a name we should search for a matching CTE
-                    struct Table *cte = findTable(table->name, ctes, MAX_CTES);
-                    if (cte != NULL) {
-                        memcpy(table, cte, sizeof(*cte));
+                    if (query[index] == '(') {
+                        // we have a table-valued-function
 
-                        // TODO: CTEs can't reference CTEs
+                        int len = find_matching_parenthesis(query + index);
+                        int table_len = strlen(table->name);
+
+                        strncpy(table->name + table_len, query + index, len);
+                        table->name[table_len + len] = '\0';
+
+                        index += len;
+                    }
+                    else {
+                        // We just have a regular table identifier
+
+                        // As soon as we have a name we should search for a matching CTE
+                        struct Table *cte = findTable(table->name, ctes, MAX_CTES);
+                        if (cte != NULL) {
+                            memcpy(table, cte, sizeof(*cte));
+
+                            // TODO: CTEs can't reference CTEs
+                        }
                     }
                 }
 
@@ -298,7 +314,9 @@ int parseQuery (struct Query *q, const char *query) {
 
                         c[index - start_index] = '\0';
                     }
-                } else if (table->alias[0] == '\0') {
+                }
+                // Alias might already have been set e.g. if coming from a CTE
+                else if (table->alias[0] == '\0') {
                     strcpy(table->alias, table->name);
                 }
 
@@ -577,233 +595,145 @@ void destroyQuery (struct Query *query) {
 }
 
 static int parseColumn (const char * query, size_t * index, struct ColumnNode *column) {
+    char value[MAX_FIELD_LENGTH];
     int flags = 0;
     struct Field * field = column->fields;
 
-    field->index = FIELD_UNKNOWN;
+    // Fill in defaults
     column->function = FUNC_UNITY;
+    column->fields[0].index = FIELD_UNKNOWN;
+    column->fields[0].table_id = -1;
+    column->fields[1].index = FIELD_UNKNOWN;
+    column->fields[1].table_id = -1;
 
-    int quoted_flag = getQuotedToken(query, index, field->text, MAX_FIELD_LENGTH);
+    int quoted_flag = getQuotedToken(query, index, value, MAX_FIELD_LENGTH);
 
-    strcpy(column->alias, field->text);
+    strcpy(column->alias, value);
 
     if (quoted_flag == 2) {
         // Field is explicit
+        strcpy(column->fields[0].text, value);
+
         // Nothing else to do
+
+        return flags;
     }
-    else if (checkConstantColumn(column) < 0) {
-        return -1;
-    }
-    else if (strcmp(field->text, "COUNT(*)") == 0) {
-        field->index = FIELD_COUNT_STAR;
-        flags |= FLAG_GROUP;
-    }
-    else if (strcmp(field->text, "*") == 0) {
+
+    // if (checkConstantColumn(field) < 0) {
+    //     return -1;
+    // }
+
+    if (strcmp(value, "*") == 0) {
         field->index = FIELD_STAR;
 
         // '*' will default to ALL tables
         field->table_id = -1;
+
+        return flags;
     }
-    else if (strcmp(field->text, "ROW_NUMBER()") == 0) {
+
+    if (strcmp(value, "ROW_NUMBER") == 0) {
+        if (query[*index] != '(' && query[(*index)+1] != ')') {
+            fprintf(stderr, "Expected () after ROW_NUMBER\n");
+            return -1;
+        }
+        (*index) += 2;
+
         field->index = FIELD_ROW_NUMBER;
+
+        return flags;
     }
-    else if (strcmp(field->text, "rowid") == 0) {
+
+    if (strcmp(value, "rowid") == 0) {
         field->index = FIELD_ROW_INDEX;
 
         // default to first table
         field->table_id = 0;
+
+        return flags;
     }
-    else if (strncmp(field->text, "PK(", strlen("PK(")) == 0) {
-        column->function = FUNC_PK;
 
-        parseFunction(query, index, column, strlen("PK"));
-    }
-    else if (strncmp(field->text, "UNIQUE(", strlen("UNIQUE(")) == 0) {
-        column->function = FUNC_UNIQUE;
-
-        // If we've been given an explicit index we're going to assume that
-        // it's on the first table.
-        field->table_id = 0;
-
-        parseFunction(query, index, column, strlen("UNIQUE"));
-    }
-    else if (strncmp(field->text, "INDEX(", strlen("INDEX(")) == 0) {
-        column->function = FUNC_INDEX;
-
-        // If we've been given an explicit index we're going to assume that
-        // it's on the first table.
-        field->table_id = 0;
-
-        parseFunction(query, index, column, strlen("INDEX"));
-    }
-    else if (strncmp(field->text, "CHR(", strlen("CHR(")) == 0) {
-        column->function = FUNC_CHR;
-
-        parseFunction(query, index, column, strlen("CHR"));
-    }
-    else if (strcmp(field->text, "RANDOM()") == 0) {
-        column->function = FUNC_RANDOM;
-        field->index = FIELD_CONSTANT;
-        field->table_id = -1;
-    }
-    else if (strncmp(field->text, "TO_HEX(", strlen("TO_HEX(")) == 0) {
-        column->function = FUNC_TO_HEX;
-
-        parseFunction(query, index, column, strlen("TO_HEX"));
-    }
-    else if (strncmp(field->text, "LENGTH(", strlen("LENGTH(")) == 0) {
-        column->function = FUNC_LENGTH;
-
-        parseFunction(query, index, column, strlen("LENGTH"));
-    }
-    else if (strncmp(field->text, "LEFT(", strlen("LEFT(")) == 0) {
-        // LEFT(<field>, <count>)
-
-        column->function = FUNC_LEFT;
-
-        char field_name[MAX_FIELD_LENGTH - 5];
-        strcpy(field_name, field->text + 5);
-        strcpy(field->text, field_name);
-
-        if (checkConstantColumn(column) < 0) {
-            return -1;
-        }
-
-        // Store both field name and length in same array
-        // Transform to:
-        // <field>\0 <count>)
-
-        skipWhitespace(query, index);
-
-        if (query[*index] != ',') {
-            fprintf(stderr, "Expected ','; got %c\n", query[*index]);
-            return -1;
-        }
-
+    if (query[*index] == '(') {
         (*index)++;
+        // We have a function
 
-        skipWhitespace(query, index);
+        if (strcmp(value, "EXTRACT") == 0) {
+            char part[32];
+            getToken(query, index, part, 32);
 
-        int len = strlen(field->text);
+            if (strcmp(part, "YEAR") == 0) {
+                column->function = FUNC_EXTRACT_YEAR;
+            }
+            else if (strcmp(part, "MONTH") == 0) {
+                column->function = FUNC_EXTRACT_MONTH;
+            }
+            else if (strcmp(part, "DAY") == 0) {
+                column->function = FUNC_EXTRACT_DAY;
+            }
+            else if (strcmp(part, "WEEK") == 0) {
+                column->function = FUNC_EXTRACT_WEEK;
+            }
+            else if (strcmp(part, "WEEKYEAR") == 0) {
+                column->function = FUNC_EXTRACT_WEEKYEAR;
+            }
+            else if (strcmp(part, "WEEKDAY") == 0) {
+                column->function = FUNC_EXTRACT_WEEKDAY;
+            }
+            else if (strcmp(part, "HEYEAR") == 0) {
+                column->function = FUNC_EXTRACT_HEYEAR;
+            }
+            else if (strcmp(part, "YEARDAY") == 0) {
+                column->function = FUNC_EXTRACT_YEARDAY;
+            }
+            else if (strcmp(part, "MILLENNIUM") == 0) {
+                column->function = FUNC_EXTRACT_MILLENNIUM;
+            }
+            else if (strcmp(part, "CENTURY") == 0) {
+                column->function = FUNC_EXTRACT_CENTURY;
+            }
+            else if (strcmp(part, "DECADE") == 0) {
+                column->function = FUNC_EXTRACT_DECADE;
+            }
+            else if (strcmp(part, "QUARTER") == 0) {
+                column->function = FUNC_EXTRACT_QUARTER;
+            }
+            else if (strcmp(part, "DATE") == 0) {
+                column->function = FUNC_EXTRACT_DATE;
+            }
+            else if (strcmp(part, "DATETIME") == 0) {
+                column->function = FUNC_EXTRACT_DATETIME;
+            }
+            else if (strcmp(part, "JULIAN") == 0) {
+                column->function = FUNC_EXTRACT_JULIAN;
+            }
+            else if (strcmp(part, "MONTH_STRING") == 0) {
+                column->function = FUNC_EXTRACT_MONTH_STRING;
+            }
+            else if (strcmp(part, "WEEK_STRING") == 0) {
+                column->function = FUNC_EXTRACT_WEEK_STRING;
+            }
+            else if (strcmp(part, "YEARDAY_STRING") == 0) {
+                column->function = FUNC_EXTRACT_YEARDAY_STRING;
+            }
+            else {
+                fprintf(stderr, "expected valid extract part - got %s\n", part);
+                return -1;
+            }
 
-        getToken(query, index, field->text + len + 1, MAX_FIELD_LENGTH - len);
-    }
-    else if (strncmp(field->text, "RIGHT(", strlen("RIGHT(")) == 0) {
-        // RIGHT(<field>, <count>)
+            skipWhitespace(query, index);
 
-        column->function = FUNC_RIGHT;
+            char keyword[10];
+            getToken(query, index, keyword, 10);
 
-        char field_name[MAX_FIELD_LENGTH - 6];
-        strcpy(field_name, field->text + 6);
-        strcpy(field->text, field_name);
+            if (strcmp(keyword, "FROM") != 0) {
+                fprintf(stderr, "expected FROM\n");
+                return -1;
+            }
 
-        if (checkConstantColumn(column) < 0) {
-            return -1;
-        }
+            skipWhitespace(query, index);
 
-        // Store both field name and length in same array
-        // Transform to:
-        // <field>\0<count>)
+            getQuotedToken(query, index, field->text, MAX_FIELD_LENGTH);
 
-        skipWhitespace(query, index);
-
-        if (query[*index] != ',') {
-            fprintf(stderr, "Expected ','; got %c\n", query[*index]);
-            return -1;
-        }
-
-        (*index)++;
-
-        skipWhitespace(query, index);
-
-        int len = strlen(field->text);
-
-        getToken(query, index, field->text + len + 1, MAX_FIELD_LENGTH - len);
-
-    }
-    else if (strncmp(field->text, "EXTRACT(", strlen("EXTRACT(")) == 0) {
-        char part[MAX_FIELD_LENGTH - 8];
-        strcpy(part, field->text + 8);
-
-        if (strcmp(part, "YEAR") == 0) {
-            column->function = FUNC_EXTRACT_YEAR;
-        }
-        else if (strcmp(part, "MONTH") == 0) {
-            column->function = FUNC_EXTRACT_MONTH;
-        }
-        else if (strcmp(part, "DAY") == 0) {
-            column->function = FUNC_EXTRACT_DAY;
-        }
-        else if (strcmp(part, "WEEK") == 0) {
-            column->function = FUNC_EXTRACT_WEEK;
-        }
-        else if (strcmp(part, "WEEKYEAR") == 0) {
-            column->function = FUNC_EXTRACT_WEEKYEAR;
-        }
-        else if (strcmp(part, "WEEKDAY") == 0) {
-            column->function = FUNC_EXTRACT_WEEKDAY;
-        }
-        else if (strcmp(part, "HEYEAR") == 0) {
-            column->function = FUNC_EXTRACT_HEYEAR;
-        }
-        else if (strcmp(part, "YEARDAY") == 0) {
-            column->function = FUNC_EXTRACT_YEARDAY;
-        }
-        else if (strcmp(part, "MILLENNIUM") == 0) {
-            column->function = FUNC_EXTRACT_MILLENNIUM;
-        }
-        else if (strcmp(part, "CENTURY") == 0) {
-            column->function = FUNC_EXTRACT_CENTURY;
-        }
-        else if (strcmp(part, "DECADE") == 0) {
-            column->function = FUNC_EXTRACT_DECADE;
-        }
-        else if (strcmp(part, "QUARTER") == 0) {
-            column->function = FUNC_EXTRACT_QUARTER;
-        }
-        else if (strcmp(part, "DATE") == 0) {
-            column->function = FUNC_EXTRACT_DATE;
-        }
-        else if (strcmp(part, "DATETIME") == 0) {
-            column->function = FUNC_EXTRACT_DATETIME;
-        }
-        else if (strcmp(part, "JULIAN") == 0) {
-            column->function = FUNC_EXTRACT_JULIAN;
-        }
-        else if (strcmp(part, "MONTH_STRING") == 0) {
-            column->function = FUNC_EXTRACT_MONTH_STRING;
-        }
-        else if (strcmp(part, "WEEK_STRING") == 0) {
-            column->function = FUNC_EXTRACT_WEEK_STRING;
-        }
-        else if (strcmp(part, "YEARDAY_STRING") == 0) {
-            column->function = FUNC_EXTRACT_YEARDAY_STRING;
-        }
-        else {
-            fprintf(stderr, "expected valid extract part - got %s\n", part);
-            return -1;
-        }
-
-        skipWhitespace(query, index);
-
-        char value[10];
-        getToken(query, index, value, 10);
-
-        if (strcmp(value, "FROM") != 0) {
-            fprintf(stderr, "expected FROM\n");
-            return -1;
-        }
-
-        skipWhitespace(query, index);
-
-        getQuotedToken(query, index, field->text, MAX_FIELD_LENGTH);
-
-        size_t len = strlen(field->text);
-
-        if (field->text[len - 1] == ')') {
-            field->text[len - 1] = '\0';
-        }
-        else {
             skipWhitespace(query, index);
 
             if (query[*index] != ')') {
@@ -812,87 +742,107 @@ static int parseColumn (const char * query, size_t * index, struct ColumnNode *c
             }
 
             (*index)++;
+
+            if (strlen(part) + strlen(field->text) + 15 < MAX_FIELD_LENGTH)
+                sprintf(column->alias, "EXTRACT(%s FROM %s)", part, field->text);
+
+            if (checkConstantColumn(field) < 0) {
+                return -1;
+            }
+
+            return flags;
         }
 
-        if (strlen(part) + strlen(field->text) + 15 < MAX_FIELD_LENGTH)
-            sprintf(column->alias, "EXTRACT(%s FROM %s)", part, field->text);
+        parseFunctionParams(query, index, column);
 
-        if (checkConstantColumn(column) < 0) {
-            return -1;
+        if (strcmp(value, "PK") == 0) {
+            column->function = FUNC_PK;
+        }
+        else if (strcmp(value, "UNIQUE") == 0) {
+            column->function = FUNC_UNIQUE;
+        }
+        else if (strcmp(value, "INDEX") == 0) {
+            column->function = FUNC_INDEX;
+        }
+        else if (strcmp(value, "CHR") == 0) {
+            column->function = FUNC_CHR;
+        }
+        else if (strcmp(value, "RANDOM") == 0) {
+            column->function = FUNC_RANDOM;
+            field->index = FIELD_CONSTANT;
+            field->table_id = -1;
+        }
+        else if (strcmp(value, "TO_HEX") == 0) {
+            column->function = FUNC_TO_HEX;
+        }
+        else if (strcmp(value, "LENGTH") == 0) {
+            column->function = FUNC_LENGTH;
+        }
+        else if (strcmp(value, "LEFT") == 0) {
+            // LEFT(<field>, <count>)
+            column->function = FUNC_LEFT;
+        }
+        else if (strcmp(value, "RIGHT") == 0) {
+            // RIGHT(<field>, <count>)
+            column->function = FUNC_RIGHT;
+        }
+        else if (strcmp(value, "DATE_ADD") == 0) {
+            column->function = FUNC_DATE_ADD;
+        }
+        else if (strcmp(value, "DATE_SUB") == 0) {
+            column->function = FUNC_DATE_SUB;
+        }
+        else if (strcmp(value, "DATE_DIFF") == 0) {
+            column->function = FUNC_DATE_DIFF;
+        }
+        else if (strcmp(value, "COUNT") == 0) {
+            column->function = FUNC_AGG_COUNT;
+            flags |= FLAG_GROUP;
+
+            if (strlen(field->text) + 7 < MAX_FIELD_LENGTH)
+                sprintf(column->alias, "COUNT(%s)", field->text);
+
+            if (strcmp(field->text, "*") == 0) {
+                column->function = FUNC_UNITY;
+                column->fields[0].index = FIELD_COUNT_STAR;
+                column->fields[0].table_id = -1;
+            }
+        }
+        else if (strcmp(value, "MAX") == 0) {
+            column->function = FUNC_AGG_MAX;
+            flags |= FLAG_GROUP;
+        }
+        else if (strcmp(value, "MIN") == 0) {
+            column->function = FUNC_AGG_MIN;
+            flags |= FLAG_GROUP;
+        }
+        else if (strcmp(value, "SUM") == 0) {
+            column->function = FUNC_AGG_SUM;
+            flags |= FLAG_GROUP;
+        }
+        else if (strcmp(value, "AVG") == 0) {
+            column->function = FUNC_AGG_AVG;
+            flags |= FLAG_GROUP;
+        }
+        else if (strcmp(value, "LISTAGG") == 0) {
+            column->function = FUNC_AGG_LISTAGG;
+            flags |= FLAG_GROUP;
         }
     }
-    else if (strncmp(field->text, "COUNT(", strlen("COUNT(")) == 0) {
-        column->function = FUNC_AGG_COUNT;
-        flags |= FLAG_GROUP;
+    else {
+        // Just a regular bare field
+        strcpy(field->text, value);
 
-        if (parseFunction(query, index, column, strlen("COUNT")) < 0) {
+        if (checkConstantColumn(field) < 0) {
             return -1;
         }
-
-        if (strlen(field->text) + 7 < MAX_FIELD_LENGTH)
-            sprintf(column->alias, "COUNT(%s)", field->text);
-    }
-    else if (strncmp(field->text, "MAX(", strlen("MAX(")) == 0) {
-        column->function = FUNC_AGG_MAX;
-        flags |= FLAG_GROUP;
-
-        if (parseFunction(query, index, column, strlen("MAX")) < 0) {
-            return -1;
-        }
-
-        if (strlen(field->text) + 5 < MAX_FIELD_LENGTH)
-            sprintf(column->alias, "MAX(%s)", field->text);
-    }
-    else if (strncmp(field->text, "MIN(", strlen("MIN(")) == 0) {
-        column->function = FUNC_AGG_MIN;
-        flags |= FLAG_GROUP;
-
-        if (parseFunction(query, index, column, strlen("MIN")) < 0) {
-            return -1;
-        }
-
-        if (strlen(field->text) + 5 < MAX_FIELD_LENGTH)
-            sprintf(column->alias, "MIN(%s)", field->text);
-    }
-    else if (strncmp(field->text, "SUM(", strlen("SUM(")) == 0) {
-        column->function = FUNC_AGG_SUM;
-        flags |= FLAG_GROUP;
-
-        if (parseFunction(query, index, column, strlen("SUM")) < 0) {
-            return -1;
-        }
-
-        if (strlen(field->text) + 5 < MAX_FIELD_LENGTH)
-            sprintf(column->alias, "SUM(%s)", field->text);
-    }
-    else if (strncmp(field->text, "AVG(", strlen("AVG(")) == 0) {
-        column->function = FUNC_AGG_AVG;
-        flags |= FLAG_GROUP;
-
-        if (parseFunction(query, index, column, strlen("AVG")) < 0) {
-            return -1;
-        }
-
-        if (strlen(field->text) + 5 < MAX_FIELD_LENGTH)
-            sprintf(column->alias, "AVG(%s)", field->text);
-    }
-    else if (strncmp(field->text, "LISTAGG(", strlen("LISTAGG(")) == 0) {
-        column->function = FUNC_AGG_LISTAGG;
-        flags |= FLAG_GROUP;
-
-        if (parseFunction(query, index, column, strlen("LISTAGG")) < 0) {
-            return -1;
-        }
-
-        if (strlen(field->text) + 9 < MAX_FIELD_LENGTH)
-            sprintf(column->alias, "LISTAGG(%s)", field->text);
     }
 
     return flags;
 }
 
 /**
- * @brief Helper function to skip function name, then look for and skip closing bracket
+ * @brief Helper function to read function params from input stream
  *
  * @param query Whole query string
  * @param index Pointer to index value
@@ -900,44 +850,51 @@ static int parseColumn (const char * query, size_t * index, struct ColumnNode *c
  * @param name_length Length of function name (excluding opening bracket)
  * @return int
  */
-static int parseFunction (const char * query, size_t * index, struct ColumnNode * column, int name_length) {
-    struct Field * field = column->fields;
+static int parseFunctionParams (const char * query, size_t * index, struct ColumnNode * column) {
+    struct Field *field1 = column->fields;
 
-    char text[MAX_FIELD_LENGTH];
-    strcpy(text, field->text + name_length + 1);
-    strcpy(field->text, text);
+    getQuotedToken(query, index, field1->text, MAX_FIELD_LENGTH);
 
-    size_t len = strlen(field->text);
-
-    if (field->text[len - 1] == ')') {
-        field->text[len - 1] = '\0';
+    if (checkConstantColumn(field1) < 0) {
+        return -1;
     }
-    else {
+
+    skipWhitespace(query, index);
+
+    if (query[*index] == ',') {
+        (*index)++;
+
         skipWhitespace(query, index);
 
-        if (query[*index] != ')') {
-            fprintf(stderr, "expected ')' got '%c'\n", query[*index]);
+        struct Field *field2 = column->fields + 1;
+
+        getQuotedToken(query, index, field2->text, MAX_FIELD_LENGTH);
+
+        if (checkConstantColumn(field2) < 0) {
             return -1;
         }
 
-        (*index)++;
+        skipWhitespace(query, index);
     }
 
-    if (checkConstantColumn(column) < 0) {
+    if (query[*index] != ')') {
+        fprintf(stderr, "expected ')' got '%c'\n", query[*index]);
         return -1;
     }
+
+    (*index)++;
 
     return 0;
 }
 
-static int checkConstantColumn(struct ColumnNode * column) {
-    struct Field * field = column->fields;
+static int checkConstantColumn(struct Field * field) {
 
     if (is_numeric(field->text)) {
         // Detected numeric constant
         field->index = FIELD_CONSTANT;
         field->table_id = -1;
-    } else if (field->text[0] == '\'') {
+    }
+    else if (field->text[0] == '\'') {
         // Detected string literal
         field->index = FIELD_CONSTANT;
         field->table_id = -1;
@@ -955,7 +912,7 @@ static int checkConstantColumn(struct ColumnNode * column) {
 
         strcpy(field->text, value);
     } else if (strcmp(field->text, "CURRENT_DATE") == 0
-        || strcmp(field->text, "TODAY()") == 0)
+        || strcmp(field->text, "TODAY") == 0)
     {
         field->index = FIELD_CONSTANT;
         field->table_id = -1;

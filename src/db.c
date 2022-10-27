@@ -10,11 +10,16 @@
 #include "db-dir.h"
 #include "limits.h"
 #include "indices.h"
+#include "evaluate.h"
 #include "function.h"
 #include "query.h"
 #include "util.h"
 
 #define VFS_COUNT   10
+
+static int evaluateTableNode (char * value, struct DB *db, struct ColumnNode *column, int rowid);
+
+static int evaluateTableField (char * output, struct DB *db, struct Field *field, int row_id);
 
 struct VFS VFS_Table[VFS_COUNT] = {
     {
@@ -179,7 +184,9 @@ int findIndex(struct DB *db, const char *table_name, const char *index_name, int
 }
 
 /**
- * @return number of matched rows
+ * @brief Scan table, filtering rows
+ *
+ * @return int number of matched rows
  */
 int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value) {
     if (db->vfs == 0) {
@@ -198,6 +205,8 @@ int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *p
     char value_left[MAX_VALUE_LENGTH] = {0};
     char value_right[MAX_VALUE_LENGTH] = {0};
 
+    int result;
+
     for (int i = 0; i < db->record_count; i++) {
         int matching = 1;
 
@@ -205,13 +214,16 @@ int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *p
         for (int j = 0; j < predicate_count && matching; j++) {
             struct Predicate *predicate = predicates + j;
 
-            // Mock up a table for evaluate function to work with
-            // (it should only be accessing the db member)
-            struct Table t = {0};
-            t.db = db;
+            // All fields in predicates MUST be on this table or constant
 
-            evaluateFunction(value_left, &t, &predicate->left, i);
-            evaluateFunction(value_right, &t, &predicate->right, i);
+            result = evaluateTableNode(value_left, db, &predicate->left, i);
+            if (result < 0) {
+                return -1;
+            }
+            result = evaluateTableNode(value_right, db, &predicate->right, i);
+            if (result < 0) {
+                return -1;
+            }
 
             if (!evaluateExpression(predicate->op, value_left, value_right)) {
                 matching = 0;
@@ -431,4 +443,67 @@ int indexSearch (struct DB *db, const char *search_value, int rowid_field, int m
  */
 int uniqueIndexSearch (struct DB *db, const char * value, int rowid_field, int * output_flag) {
     return indexSearch(db, value, rowid_field, 0, output_flag);
+}
+
+/**
+ * @brief Like evaluateNode() but with the restriction that all fields must be
+ * constant or fields on this table
+ *
+ * @return int
+ */
+static int evaluateTableNode (char * output, struct DB *db, struct ColumnNode *column, int row_id) {
+    struct Field *field1 = &(column->fields[0]);
+    struct Field *field2 = &(column->fields[1]);
+
+    char value1[MAX_VALUE_LENGTH] = {0};
+    char value2[MAX_VALUE_LENGTH] = {0};
+
+    char *values[2];
+    values[0] = value1;
+    values[1] = value2;
+
+    int result;
+
+    result = evaluateTableField(value1, db, field1, row_id);
+    if (result < 0) {
+        return -1;
+    }
+
+    if (column->function == FUNC_UNITY) {
+        strcpy(output, value1);
+        return strlen(output);
+    }
+
+    result = evaluateTableField(value2, db, field2, row_id);
+    if (result < 0) {
+        return -1;
+    }
+
+    return evaluateFunction(output, column->function, values, 2);
+}
+/**
+ * @brief Like evaluateField() but only operates on a single table
+ *
+ * @param output
+ * @param tables
+ * @param rowlist
+ * @param field
+ * @param result_index
+ * @return int number of chars written
+ */
+static int evaluateTableField (char * output, struct DB *db, struct Field *field, int row_id) {
+
+    if (field->index == FIELD_CONSTANT) {
+        return evaluateConstantField(output, field);
+    }
+
+    if (field->table_id < 0) {
+        return 0;
+    }
+
+    if (field->index == FIELD_ROW_INDEX) {
+        return sprintf(output, "%d", row_id);
+    }
+
+    return getRecordValue(db, row_id, field->index, output, MAX_VALUE_LENGTH) > 0;
 }

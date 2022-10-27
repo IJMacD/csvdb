@@ -73,13 +73,14 @@ int writeUTF8(char * output, int codepoint) {
 }
 
 /**
- * @brief Given a string starting with an open parenthesis, search for a
+ * @brief Given a string *starting with an open parenthesis*, search for a
  * matching closing parenthesis and return the total length of string
  * (including the open and closing parentheses). This function allows nested
  * parentheses.
+ * First character must be '('.
  *
  * @param string
- * @return int
+ * @return int Length including opening and closing parentheses
  */
 int find_matching_parenthesis (const char *string) {
     int offset = 0;

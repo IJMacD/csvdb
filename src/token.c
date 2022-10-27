@@ -196,6 +196,8 @@ static int isTokenChar (char c) {
     return !iscntrl(c) &&
         c != ' ' &&
         c != ',' &&
+        c != '(' &&
+        c != ')' &&
         c != '|' &&
         c != '=' &&
         c != '!' &&
