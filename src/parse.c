@@ -196,8 +196,7 @@ int parseQuery (struct Query *q, const char *query) {
                 // Default alias is whole column spec (if it fits in)
                 int len = index - col_start_index;
                 if (len < MAX_FIELD_LENGTH) {
-                    strncpy(column->alias, query + col_start_index, len);
-                    column->alias[len] = '\0';
+                    whitespaceCollapse(column->alias, query + col_start_index, len);
                 }
 
                 q->flags |= result;

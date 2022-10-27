@@ -111,3 +111,33 @@ int find_matching_parenthesis (const char *string) {
 
     return -1;
 }
+
+/**
+ * @brief Copy from source string to output, collapsing consecutive whitespace
+ * characters in to a single space. Newlines and tabs are converted to spaces.
+ * Will add null terminator.
+ *
+ * @param output Result will be written here
+ * @param source Copied from here
+ * @param length length of *input* string to copy
+ * @return int length written to output
+ */
+int whitespaceCollapse (char *output, const char *source, int length) {
+    int whitespace_flag = 0;
+    int written = 0;
+    for (int i = 0; i < length; i++) {
+        if (source[i] == '\0') break;
+        if (source[i] == ' ' || source[i] == '\n' || source[i] == '\t') {
+            if (!whitespace_flag) {
+                output[written++] = ' ';
+            }
+            whitespace_flag = 1;
+        }
+        else {
+            output[written++] = source[i];
+            whitespace_flag = 0;
+        }
+    }
+    output[written] = '\0';
+    return written;
+}

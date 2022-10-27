@@ -8,3 +8,5 @@ int str_find_index (const char * string, char chr);
 int writeUTF8(char * output, int codepoint);
 
 int find_matching_parenthesis (const char *string);
+
+int whitespaceCollapse (char * output, const char *source, int length);
