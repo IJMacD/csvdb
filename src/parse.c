@@ -585,6 +585,14 @@ int parseQuery (struct Query *q, const char *query) {
 
                 getQuotedToken(query, &index, q->order_field[i], MAX_FIELD_LENGTH);
 
+                if (strcmp(q->order_field[i], "PK") == 0 && query[index] == '(') {
+                    // We've been asked to sort on primary key.
+                    // We don't actually care which column it is so we just
+                    // discard the contents of the parentheses.
+                    int len = find_matching_parenthesis(query + index);
+                    index += len;
+                }
+
                 size_t original_index = index;
 
                 getToken(query, &index, keyword, MAX_FIELD_LENGTH);

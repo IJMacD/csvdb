@@ -365,6 +365,20 @@ void addOrderStepIfRequired (struct Plan *plan, struct Query *q) {
         }
     }
 
+    // If we're sorting on rowid or PK on single table then we can optimse
+    if (q->order_count > 0 && q->table_count == 1) {
+        if (strcmp(q->order_field[0], "rowid") == 0 || strcmp(q->order_field[0], "PK") == 0) {
+            if (q->order_direction[0] == ORDER_ASC) {
+                // No op - already sorted
+            }
+            else {
+                // Just need to reverse
+                addStep(plan, PLAN_REVERSE);
+            }
+            return;
+        }
+    }
+
     // To implement better sort later
     // struct Predicate *order_predicates = malloc(sizeof(*order_predicates) * q->order_count);
 
