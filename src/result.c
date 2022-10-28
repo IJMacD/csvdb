@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "result.h"
+#include "structs.h"
 #include "util.h"
 
 int getRowID (struct RowList * row_list, int join_id, int index) {

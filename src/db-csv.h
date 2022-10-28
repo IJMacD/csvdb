@@ -1,6 +1,4 @@
-#pragma once
-
-#include <stdio.h>
+#include "structs.h"
 
 int csv_openDB (struct DB *db, const char *filename);
 

@@ -1,6 +1,7 @@
 #include <stdio.h>
 
-#include "debug.h"
+#include "structs.h"
+#include "result.h"
 
 void debugRowList (struct RowList * list, int verbosity) {
     fprintf(stderr, "RowList (%d joins x %d rows)\n", list->join_count, list->row_count);

@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <time.h>
 
+#include "structs.h"
 #include "date.h"
 
 int checkFormat(const char *input, const char *format);

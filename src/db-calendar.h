@@ -1,7 +1,4 @@
-#pragma once
-
-#include <stdio.h>
-#include "result.h"
+#include "structs.h"
 
 int calendar_openDB (struct DB *db, const char *filename);
 

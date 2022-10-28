@@ -2,10 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "structs.h"
 #include "db.h"
-#include "tree.h"
-#include "limits.h"
 #include "util.h"
+#include "tree.h"
 #include "result.h"
 
 #define MODE_ALPHA      0

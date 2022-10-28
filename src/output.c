@@ -2,27 +2,26 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "output.h"
-#include "query.h"
-#include "limits.h"
+#include "structs.h"
+#include "result.h"
 #include "evaluate.h"
-#include "function.h"
+#include "db.h"
 #include "util.h"
 
-static void printAllColumnValues (FILE *f, struct DB *db, const char *prefix, int rowid, int format);
-static void printAllHeaderNames (FILE *f, struct DB *db, const char *prefix, int format);
+static void printAllColumnValues (FILE *f, struct DB *db, const char *prefix, int rowid, enum OutputOption format);
+static void printAllHeaderNames (FILE *f, struct DB *db, const char *prefix, enum OutputOption format);
 
-static void printHeaderName (FILE *f, int format, const char *prefix, const char *name);
-static void printHeaderSeparator (FILE *f, int format);
-static void printRecordStart (FILE *f, int format, int is_first, int is_single_column);
-static void printRecordEnd (FILE *f, int format, int is_single_column);
-static void printRecordSeparator (FILE *f, int format);
-static void printColumnValue (FILE *f, int format, const char *prefix, const char *name, const char *value);
-static void printColumnValueNumber (FILE *f, int format, const char *prefix, const char *name, long value);
-static void printColumnSeparator (FILE *f, int format);
+static void printHeaderName (FILE *f, enum OutputOption format, const char *prefix, const char *name);
+static void printHeaderSeparator (FILE *f, enum OutputOption format);
+static void printRecordStart (FILE *f, enum OutputOption format, int is_first, int is_single_column);
+static void printRecordEnd (FILE *f, enum OutputOption format, int is_single_column);
+static void printRecordSeparator (FILE *f, enum OutputOption format);
+static void printColumnValue (FILE *f, enum OutputOption format, const char *prefix, const char *name, const char *value);
+static void printColumnValueNumber (FILE *f, enum OutputOption format, const char *prefix, const char *name, long value);
+static void printColumnSeparator (FILE *f, enum OutputOption format);
 
-void printResultLine (FILE *f, struct Table *tables, int table_count, struct ColumnNode columns[], int column_count, int result_index, struct RowList * row_list, int flags) {
-    int format = flags & OUTPUT_MASK_FORMAT;
+void printResultLine (FILE *f, struct Table *tables, int table_count, struct ColumnNode columns[], int column_count, int result_index, struct RowList * row_list, enum OutputOption flags) {
+    enum OutputOption format = flags & OUTPUT_MASK_FORMAT;
 
     int have_aggregate = 0;
 
@@ -131,8 +130,8 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
     }
 }
 
-void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct ColumnNode columns[], int column_count, int flags) {
-    int format = flags & OUTPUT_MASK_FORMAT;
+void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct ColumnNode columns[], int column_count, enum OutputOption flags) {
+    enum OutputOption format = flags & OUTPUT_MASK_FORMAT;
 
     /********************
      * Header Start
@@ -279,8 +278,8 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
     }
 }
 
-void printPreamble (FILE *f, __attribute__((unused)) struct Table *table, __attribute__((unused)) struct ColumnNode columns[], __attribute__((unused)) int column_count, int flags) {
-    int format = flags & OUTPUT_MASK_FORMAT;
+void printPreamble (FILE *f, __attribute__((unused)) struct Table *table, __attribute__((unused)) struct ColumnNode columns[], __attribute__((unused)) int column_count, enum OutputOption flags) {
+    enum OutputOption format = flags & OUTPUT_MASK_FORMAT;
 
     if (format == OUTPUT_FORMAT_HTML) {
         fputs("<STYLE>.csvdb{font-family:sans-serif;width:100%;border-collapse:collapse}.csvdb th{border-bottom:1px solid #333}.csvdb td{padding:.5em 0}.csvdb tr:hover td{background-color:#f8f8f8}</STYLE>\n<TABLE CLASS=\"csvdb\">\n", f);
@@ -296,9 +295,9 @@ void printPreamble (FILE *f, __attribute__((unused)) struct Table *table, __attr
     }
 }
 
-void printPostamble (FILE *f, __attribute__((unused)) struct Table *table, __attribute__((unused)) struct ColumnNode columns[], __attribute__((unused)) int column_count, __attribute__((unused)) int result_count, int flags) {
+void printPostamble (FILE *f, __attribute__((unused)) struct Table *table, __attribute__((unused)) struct ColumnNode columns[], __attribute__((unused)) int column_count, __attribute__((unused)) int result_count, enum OutputOption flags) {
 
-    int format = flags & OUTPUT_MASK_FORMAT;
+    enum OutputOption format = flags & OUTPUT_MASK_FORMAT;
 
     if (format == OUTPUT_FORMAT_HTML) {
         fprintf(f, "</TABLE>\n");
@@ -314,7 +313,7 @@ void printPostamble (FILE *f, __attribute__((unused)) struct Table *table, __att
     }
 }
 
-static void printAllColumnValues (FILE *f, struct DB *db, const char *prefix, int rowid, int format) {
+static void printAllColumnValues (FILE *f, struct DB *db, const char *prefix, int rowid, enum OutputOption format) {
     for (int k = 0; k < db->field_count; k++) {
         // Value
         char value[MAX_VALUE_LENGTH];
@@ -332,7 +331,7 @@ static void printAllColumnValues (FILE *f, struct DB *db, const char *prefix, in
     }
 }
 
-static void printAllHeaderNames (FILE *f, struct DB *db, const char *prefix, int format) {
+static void printAllHeaderNames (FILE *f, struct DB *db, const char *prefix, enum OutputOption format) {
     for (int k = 0; k < db->field_count; k++) {
         printHeaderName(f, format, prefix, getFieldName(db, k));
 
@@ -342,7 +341,7 @@ static void printAllHeaderNames (FILE *f, struct DB *db, const char *prefix, int
     }
 }
 
-static void printHeaderName (FILE *f, int format, const char *prefix, const char *name) {
+static void printHeaderName (FILE *f, enum OutputOption format, const char *prefix, const char *name) {
 
     if (format == OUTPUT_FORMAT_TABLE) {
         if (prefix) {
@@ -364,7 +363,7 @@ static void printHeaderName (FILE *f, int format, const char *prefix, const char
     }
 }
 
-static void printHeaderSeparator (FILE *f, int format) {
+static void printHeaderSeparator (FILE *f, enum OutputOption format) {
     if (format == OUTPUT_FORMAT_TAB) {
         fprintf(f, "\t");
     }
@@ -385,7 +384,7 @@ static void printHeaderSeparator (FILE *f, int format) {
     }
 }
 
-static void printRecordStart (FILE *f, int format, int is_first, int is_single_col) {
+static void printRecordStart (FILE *f, enum OutputOption format, int is_first, int is_single_col) {
     if (format == OUTPUT_FORMAT_HTML) {
         fprintf(f, "<TR>");
     }
@@ -416,7 +415,7 @@ static void printRecordStart (FILE *f, int format, int is_first, int is_single_c
 
 }
 
-static void printColumnValue (FILE *f, int format, const char *prefix, const char *name, const char *value) {
+static void printColumnValue (FILE *f, enum OutputOption format, const char *prefix, const char *name, const char *value) {
     int value_is_numeric = is_numeric(value);
 
     if (format == OUTPUT_FORMAT_JSON) {
@@ -500,13 +499,13 @@ static void printColumnValue (FILE *f, int format, const char *prefix, const cha
     }
 }
 
-static void printColumnValueNumber (FILE *f, int format, const char *prefix, const char *name, long value) {
+static void printColumnValueNumber (FILE *f, enum OutputOption format, const char *prefix, const char *name, long value) {
     char output[16];
     sprintf(output, "%ld", value);
     printColumnValue(f, format, prefix, name, output);
 }
 
-static void printColumnSeparator (FILE *f, int format) {
+static void printColumnSeparator (FILE *f, enum OutputOption format) {
     if (format == OUTPUT_FORMAT_TAB) {
         fprintf(f, "\t");
     }
@@ -527,7 +526,7 @@ static void printColumnSeparator (FILE *f, int format) {
     }
 }
 
-static void printRecordEnd (FILE *f, int format, int is_single_column) {
+static void printRecordEnd (FILE *f, enum OutputOption format, int is_single_column) {
     if (format == OUTPUT_FORMAT_TAB) {
         fprintf(f, "\n");
     }
@@ -556,7 +555,7 @@ static void printRecordEnd (FILE *f, int format, int is_single_column) {
     }
 }
 
-static void printRecordSeparator (FILE *f, int format) {
+static void printRecordSeparator (FILE *f, enum OutputOption format) {
     if (format == OUTPUT_FORMAT_JSON_ARRAY) {
         fprintf(f, ",");
     }

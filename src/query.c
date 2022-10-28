@@ -5,26 +5,23 @@
 
 #include <unistd.h>
 
+#include "structs.h"
+#include "create.h"
 #include "query.h"
+#include "parse.h"
+#include "plan.h"
+#include "explain.h"
+#include "output.h"
+#include "indices.h"
+#include "result.h"
 #include "db.h"
 #include "db-csv-mem.h"
-#include "parse.h"
-#include "predicates.h"
-#include "function.h"
-#include "indices.h"
 #include "evaluate.h"
+#include "predicates.h"
 #include "sort.h"
-#include "output.h"
-#include "limits.h"
-#include "create.h"
-#include "explain.h"
 #include "util.h"
-#include "plan.h"
-#include "result.h"
-#include "debug.h"
-#include "date.h"
 
-int basic_select_query (struct Query *q, struct Plan *plan, int output_flags, FILE * output);
+int basic_select_query (struct Query *q, struct Plan *plan, enum OutputOption output_flags, FILE * output);
 
 int information_query (const char *table, FILE * output);
 
@@ -38,7 +35,7 @@ static void checkColumnAliases (struct Table * table);
 
 extern char *process_name;
 
-int query (const char *query, int output_flags, FILE * output) {
+int query (const char *query, enum OutputOption output_flags, FILE * output) {
     #ifdef DEBUG
     fprintf(stderr, "Start Query (%d)\n", getpid());
     #endif
@@ -95,7 +92,7 @@ int query (const char *query, int output_flags, FILE * output) {
     return select_query(query, output_flags, output);
 }
 
-int select_query (const char *query, int output_flags, FILE * output) {
+int select_query (const char *query, enum OutputOption output_flags, FILE * output) {
     int result;
     struct Query q = {0};
 
@@ -216,7 +213,7 @@ int select_query (const char *query, int output_flags, FILE * output) {
 int basic_select_query (
     struct Query *q,
     struct Plan *plan,
-    int output_flags,
+    enum OutputOption output_flags,
     FILE * output
 ) {
     /*************************

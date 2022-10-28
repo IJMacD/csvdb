@@ -3,9 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "db.h"
-#include "indices.h"
-#include "limits.h"
+#include "structs.h"
 #include "util.h"
 
 static int countFields (const char *ptr);

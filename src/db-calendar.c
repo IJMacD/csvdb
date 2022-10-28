@@ -3,12 +3,10 @@
 #include <string.h>
 #include <time.h>
 
-#include "db.h"
+#include "structs.h"
 #include "date.h"
 #include "predicates.h"
-#include "indices.h"
 #include "result.h"
-#include "query.h"
 
 #define COL_JULIAN              0
 #define COL_DATE                1

@@ -2,10 +2,11 @@
 #include <string.h>
 #include <limits.h>
 
-#include "query.h"
-#include "function.h"
-#include "date.h"
+#include "structs.h"
 #include "util.h"
+#include "date.h"
+#include "result.h"
+#include "db.h"
 
 int evaluateFunction(char * output, int function, char **values, __attribute__((unused)) int value_count) {
 

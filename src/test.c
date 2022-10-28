@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#include "db.h"
+#include "structs.h"
 
 void test (const char *filename, const char *field) {
     struct DB db;

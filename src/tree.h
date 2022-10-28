@@ -1,14 +1,4 @@
-#pragma once
-
-#include "db.h"
-
-struct tree {
-    int index;
-    int rowid;
-    unsigned long value;
-    struct tree *left;
-    struct tree *right;
-};
+#include "structs.h"
 
 void insertNode (struct DB *db, int field_index, struct tree *root, struct tree *node);
 

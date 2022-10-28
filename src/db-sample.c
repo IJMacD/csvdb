@@ -3,11 +3,8 @@
 #include <string.h>
 #include <time.h>
 
+#include "structs.h"
 #include "date.h"
-#include "db.h"
-#include "db-sample.h"
-#include "predicates.h"
-#include "result.h"
 
 #define LCG_A   15961   // Chosen by fair dice roll - must be odd (if M is power of 2)
 #define LCG_C   13281   // Chosen by fair dice roll - must be 4K + 1

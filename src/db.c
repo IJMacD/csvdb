@@ -1,19 +1,20 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "db.h"
+#include "structs.h"
+
 #include "db-csv.h"
-#include "db-calendar.h"
 #include "db-csv-mem.h"
+#include "db-calendar.h"
 #include "db-sequence.h"
 #include "db-sample.h"
 #include "db-dir.h"
-#include "limits.h"
-#include "indices.h"
+#include "predicates.h"
 #include "evaluate.h"
-#include "function.h"
-#include "query.h"
+#include "result.h"
+#include "db.h"
 #include "util.h"
+#include "function.h"
 
 #define VFS_COUNT   10
 

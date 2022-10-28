@@ -1,9 +1,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "structs.h"
 #include "evaluate.h"
-#include "date.h"
 #include "function.h"
+#include "result.h"
+#include "db.h"
+#include "date.h"
 
 /**
  * @brief

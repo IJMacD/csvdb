@@ -2,15 +2,13 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "create.h"
-#include "db.h"
-#include "query.h"
+#include "structs.h"
 #include "token.h"
-#include "parse.h"
+#include "db.h"
+#include "result.h"
 #include "sort.h"
 #include "output.h"
-#include "limits.h"
-#include "result.h"
+#include "query.h"
 
 int create_table_query (const char * query);
 

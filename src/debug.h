@@ -1,5 +1,4 @@
-#include "result.h"
-#include "tree.h"
+#include "structs.h"
 
 void debugRowList (struct RowList * list, int verbosity);
 

@@ -7,11 +7,8 @@
 #include <dirent.h>
 #include <unistd.h>
 
+#include "structs.h"
 #include "date.h"
-#include "db.h"
-#include "db-dir.h"
-#include "predicates.h"
-#include "result.h"
 
 static int max_count = 1000;
 

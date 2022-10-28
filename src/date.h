@@ -1,18 +1,4 @@
-
-struct DateTime {
-    /** Year, range approx -32768 to 32767 */
-    short year;
-    /** Month, 1-based indexing */
-    unsigned char month;
-    /** Day of month */
-    unsigned char day;
-    /** Hour */
-    unsigned char hour;
-    /** Minute */
-    unsigned char minute;
-    /** Second */
-    unsigned char second;
-};
+#include "structs.h"
 
 int parseDateTime(const char *input, struct DateTime *output);
 

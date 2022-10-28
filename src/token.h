@@ -1,5 +1,3 @@
-#include <stdlib.h>
-
 void skipWhitespace (const char *string, size_t *index);
 
 int getToken (const char *string, size_t *index, char *token, int token_max_length);

@@ -1,11 +1,6 @@
 #include <string.h>
 
-#include "explain.h"
-#include "query.h"
-#include "predicates.h"
-#include "indices.h"
-#include "limits.h"
-#include "output.h"
+#include "structs.h"
 
 #define COVERING_INDEX_SUPPORT 0
 

@@ -1,12 +1,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "predicates.h"
-#include "query.h"
-#include "limits.h"
-#include "function.h"
-#include "util.h"
+#include "structs.h"
 #include "date.h"
+#include "util.h"
 
 int parseOperator (const char *input) {
     if (strcmp(input, "=") == 0)
@@ -28,7 +25,7 @@ int parseOperator (const char *input) {
     return OPERATOR_UN;
 }
 
-int evaluateExpression (int op, const char *left, const char *right) {
+int evaluateExpression (enum Operator op, const char *left, const char *right) {
     // printf("Evaluating %s OP %s\n", left, right);
 
     struct DateTime dt_left, dt_right;

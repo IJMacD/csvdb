@@ -1,19 +1,17 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "structs.h"
+#include "db.h"
+#include "result.h"
 #include "indices.h"
-#include "predicates.h"
-#include "limits.h"
-#include "query.h"
-#include "sort.h"
-#include "util.h"
 
 static int indexWalk(struct DB *db, int rowid_column, int lower_index, int upper_index, struct RowList * row_list);
 
 /**
  * Just a unique scan but we know that [index rowid] == [table rowid]
  */
-int indexPrimaryScan (struct DB *db, int predicate_op, const char *predicate_value, struct RowList * row_list, int limit) {
+enum IndexSearchResult indexPrimaryScan (struct DB *db, enum Operator predicate_op, const char *predicate_value, struct RowList * row_list, int limit) {
     return indexUniqueScan(db, FIELD_ROW_INDEX, predicate_op, predicate_value, row_list, limit);
 }
 
@@ -21,7 +19,7 @@ int indexPrimaryScan (struct DB *db, int predicate_op, const char *predicate_val
  * Pretty much duplicated from indexScan but telling the underlying DB VFS that the index is unique
  * Also: only need to do one index search, rather than two.
  */
-int indexUniqueScan (struct DB *index_db, int rowid_column, int predicate_op, const char *predicate_value, struct RowList * row_list, int limit) {
+enum IndexSearchResult indexUniqueScan (struct DB *index_db, int rowid_column, enum Operator predicate_op, const char *predicate_value, struct RowList * row_list, int limit) {
      // We can't handle LIKE with this index (yet)
     if (predicate_op == OPERATOR_LIKE) {
         return RESULT_NO_INDEX;
@@ -93,7 +91,7 @@ int indexUniqueScan (struct DB *index_db, int rowid_column, int predicate_op, co
  *
  * @return number of matched rows; RESULT_NO_INDEX if index does not exist
  */
-int indexScan (struct DB *index_db, int rowid_column, int predicate_op, const char *predicate_value, struct RowList * row_list, int limit) {
+enum IndexSearchResult indexScan (struct DB *index_db, int rowid_column, enum Operator predicate_op, const char *predicate_value, struct RowList * row_list, int limit) {
     // (inclusive)
     int lower_bound;
     // (exclusive)

@@ -1,8 +1,8 @@
 #include <string.h>
 #include <ctype.h>
+#include <stdlib.h>
 
-#include "token.h"
-
+#include "structs.h"
 
 static void skipToken (const char *string, size_t *index);
 

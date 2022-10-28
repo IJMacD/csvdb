@@ -3,10 +3,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "db.h"
-#include "db-sequence.h"
-#include "predicates.h"
-#include "result.h"
+#include "structs.h"
 
 int sequence_openDB (struct DB *db, const char *filename) {
     if (strncmp(filename, "SEQUENCE(", 9) != 0) {

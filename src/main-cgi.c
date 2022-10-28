@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include "structs.h"
 #include "query.h"
 #include "output.h"
 

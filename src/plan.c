@@ -1,11 +1,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "plan.h"
-#include "indices.h"
-#include "function.h"
-#include "sort.h"
+#include "structs.h"
 #include "util.h"
+#include "db.h"
+#include "predicates.h"
 
 void addStep (struct Plan *plan, int type);
 

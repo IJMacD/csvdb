@@ -1,31 +1,4 @@
-#pragma once
-
-#include "limits.h"
-
-struct Field {
-    char text[MAX_FIELD_LENGTH];
-    int table_id;
-    int index;
-};
-
-struct ColumnNode {
-    char alias[MAX_FIELD_LENGTH];
-    int function;
-    int concat;
-    struct Field fields[2];
-};
-
-struct RowList {
-    int row_count;
-    int join_count;
-    int * row_ids;
-};
-
-struct ResultSet {
-    int list_count;
-    struct RowList * row_lists;
-    char * list_values;
-};
+#include "structs.h"
 
 int getRowID (struct RowList * row_list, int join_id, int index);
 

@@ -1,5 +1,4 @@
-#include "query.h"
-#include "plan.h"
+#include "structs.h"
 
 int explain_select_query (
     struct Query *q,

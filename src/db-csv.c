@@ -2,9 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "structs.h"
 #include "db.h"
-#include "indices.h"
-#include "limits.h"
 #include "db-csv-mem.h"
 
 static int makeDB (struct DB *db, FILE *f);

@@ -1,8 +1,6 @@
-#pragma once
-
 #include <stdio.h>
 
-#include "db.h"
+#include "structs.h"
 
 int csvMem_openDB (struct DB *db, const char *filename);
 

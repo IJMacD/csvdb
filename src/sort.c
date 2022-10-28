@@ -1,8 +1,8 @@
 #include <stdlib.h>
-#include "sort.h"
+
+#include "structs.h"
+#include "result.h"
 #include "tree.h"
-#include "query.h"
-#include "debug.h"
 
 static void sort_walkTree (struct tree *node, struct RowList * source_list, struct RowList * target_list);
 

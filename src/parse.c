@@ -2,13 +2,11 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "structs.h"
 #include "token.h"
-#include "predicates.h"
-#include "function.h"
-#include "sort.h"
-#include "date.h"
-#include "util.h"
 #include "db-csv-mem.h"
+#include "util.h"
+#include "predicates.h"
 
 #define MAX_CTES    10
 
