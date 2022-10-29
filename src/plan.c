@@ -528,7 +528,7 @@ static void addOrderStepIfRequired (struct Plan *plan, struct Query *q) {
             addStep(plan, PLAN_REVERSE);
         }
 
-        struct Predicate *order_predicate = makePredicate(q->order_field[i], q->order_direction[i]);
+        struct Predicate *order_predicate = makePredicate(q->order_field[i], (enum Operator)q->order_direction[i]);
 
         addStepWithPredicate(plan, PLAN_SORT, order_predicate);
     }
