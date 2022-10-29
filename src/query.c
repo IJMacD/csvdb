@@ -645,7 +645,7 @@ int basic_select_query (
                 fprintf(stderr, "Q%d: PLAN_REVERSE\n", getpid());
                 #endif
                 struct RowList *row_list = popRowList(result_set);
-                reverseRowList(row_list);
+                reverseRowList(row_list, s->limit);
                 pushRowList(result_set, row_list);
                 break;
             }

@@ -16,7 +16,7 @@ void copyResultRow (struct RowList * dest_list, struct RowList * src_list, int s
 
 void destroyRowList (struct RowList * list);
 
-void reverseRowList (struct RowList * row_list);
+void reverseRowList (struct RowList * row_list, int limit);
 
 struct RowList *makeRowList (int join_count, int max_rows);
 

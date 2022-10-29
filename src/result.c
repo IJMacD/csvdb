@@ -112,7 +112,7 @@ void destroyRowList (struct RowList * list) {
     }
 }
 
-void reverseRowList (struct RowList * row_list) {
+void reverseRowList (struct RowList * row_list, int limit) {
     if (row_list->join_count == 1) {
         // quick dirty implementation
         reverse_array(row_list->row_ids, row_list->row_count);
@@ -126,7 +126,15 @@ void reverseRowList (struct RowList * row_list) {
                 writeRowID(row_list, j, i1, getRowID(row_list, j, i));
                 writeRowID(row_list, j, i, temp);
             }
+
+            if (limit > -1 && i >= limit) {
+                break;
+            }
         }
+    }
+
+    if (limit > -1 && limit < row_list->row_count) {
+        row_list->row_count = limit;
     }
 }
 

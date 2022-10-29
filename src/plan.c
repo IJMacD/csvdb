@@ -286,9 +286,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
             // In this case it's OK to apply limit optimisation to Join step
             // even though we have an ORDER BY clause.
-            // This will only work if previous step is not REVERSE
             struct PlanStep *prev = &plan->steps[plan->step_count - 1];
-            if (q->limit_value >= 0 && q->table_count <= 1 && prev->type != PLAN_REVERSE) {
+            if (q->limit_value >= 0) {
                 // Usually this can't be done with ORDER BY but in this case we
                 // can since there are no predicates
                 prev->limit = q->offset_value + q->limit_value;
@@ -466,7 +465,8 @@ void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
 
         if (join->op == OPERATOR_ALWAYS) {
             addStep(plan, PLAN_CROSS_JOIN);
-        } else {
+        }
+        else {
             if (join->left.fields[0].index == FIELD_CONSTANT ||
                 join->right.fields[0].index == FIELD_CONSTANT)
             {

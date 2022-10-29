@@ -65,10 +65,6 @@ int explain_select_query (
         if (s.type == PLAN_TABLE_ACCESS_FULL){
             operation = "TABLE ACCESS FULL";
             rows = row_estimate;
-            int l = q->limit_value + q->offset_value;
-            if (l >= 0 && l < rows && !(q->flags & FLAG_ORDER)) {
-                rows = l;
-            }
             cost = rows;
 
             for (int i = 0; i < s.predicate_count; i++) {
@@ -125,10 +121,6 @@ int explain_select_query (
             table[MAX_FIELD_LENGTH - 1] = '\0';
             rows = row_estimate / 2;
             cost = rows;
-
-            if (s.limit >= 0) {
-                rows = (s.limit < rows) ? s.limit : rows;
-            }
         }
         else if (s.type == PLAN_UNIQUE) {
             operation = "INDEX UNIQUE";
@@ -265,10 +257,6 @@ int explain_select_query (
             if (cost < rows) {
                 cost = rows;
             }
-
-            if (s.limit >= 0) {
-                rows = (s.limit < rows) ? s.limit : rows;
-            }
         }
         else if (s.type == PLAN_LOOP_JOIN) {
             operation = "LOOP JOIN";
@@ -298,10 +286,6 @@ int explain_select_query (
             if (cost < rows) {
                 cost = rows;
             }
-
-            if (s.limit >= 0) {
-                rows = (s.limit < rows) ? s.limit : rows;
-            }
         }
         else if (s.type == PLAN_UNIQUE_JOIN) {
             operation = "UNIQUE JOIN";
@@ -321,10 +305,6 @@ int explain_select_query (
             if (cost < rows) {
                 cost = rows;
             }
-
-            if (s.limit >= 0) {
-                rows = (s.limit < rows) ? s.limit : rows;
-            }
         }
         else if (s.type == PLAN_DUMMY_ROW) {
             operation = "DUMMY ROW";
@@ -333,6 +313,10 @@ int explain_select_query (
         else {
             operation = "Unknown OP code";
             sprintf(predicate, "%d\n", s.type);
+        }
+
+        if (s.limit >= 0) {
+            rows = (s.limit < rows) ? s.limit : rows;
         }
 
         fprintf(output, "%d,%s,%s,%s,%ld,%ld\n", i, operation, table, predicate, rows, cost);
