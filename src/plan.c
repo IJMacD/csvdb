@@ -28,9 +28,13 @@ int makePlan (struct Query *q, struct Plan *plan) {
     // If there's no table specified then it must be a
     // single-row-all-constant query
     if (q->table_count == 0) {
-        plan->step_count = 1;
+        plan->step_count = 2;
 
         struct PlanStep * step = plan->steps;
+        step->type = PLAN_DUMMY_ROW;
+        step->predicate_count = 0;
+
+        step = plan->steps + 1;
         step->type = PLAN_SELECT;
         step->predicate_count = 0;
 
@@ -53,7 +57,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
         if (predicatesOnFirstTable > 0) {
 
-            int step_type = 0;
+            enum PlanStepType step_type = 0;
             size_t len = strlen(field_right->text);
 
             int skip_index = 0;
@@ -106,7 +110,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
                      *******************/
 
                     // Try to find any index
-                    int find_result = findIndex(NULL, table->name, field_left->text, INDEX_ANY);
+                    enum IndexSearchType find_result = findIndex(NULL, table->name, field_left->text, INDEX_ANY);
 
                     if (find_result) {
 
@@ -150,10 +154,10 @@ int makePlan (struct Query *q, struct Plan *plan) {
                     // Reverse is never required if the plan is PLAN_PK or PLAN_UNIQUE
                 } else if (q->flags & FLAG_GROUP){
                     // Reverse is not required if we're grouping
-                } else {
+                } else if (q->flags & FLAG_ORDER) {
                     // Follow our own logic to add an order step
                     // We can avoid it if we're just going to sort on the same column we've just scanned
-                    if ((q->flags & FLAG_ORDER) && (q->order_count == 1) && strcmp(field_left->text, q->order_field[0]) == 0) {
+                    if ((q->order_count == 1) && strcmp(field_left->text, q->order_field[0]) == 0) {
 
                         // So a sort is not necessary but we might still need to reverse
                         if (q->order_direction[0] == ORDER_DESC) {
@@ -162,7 +166,9 @@ int makePlan (struct Query *q, struct Plan *plan) {
                     } else {
                         addOrderStepIfRequired(plan, q);
                     }
-
+                }
+                else {
+                    // There's no ordering or grouping, we can probably add limit optimisation
                     applyLimitOptimisation(plan, q);
                 }
 
@@ -275,13 +281,18 @@ int makePlan (struct Query *q, struct Plan *plan) {
             if (q->order_direction[0] == ORDER_DESC) {
                 addStep(plan, PLAN_REVERSE);
             }
-            else if (q->limit_value >= 0 && q->table_count <= 1) {
-                // Usually this can't be done with ORDER BY but in this case we
-                // can since there are no predicates
-                plan->steps[plan->step_count - 1].limit = q->offset_value + q->limit_value;
-            }
 
             addJoinStepsIfRequired(plan, q);
+
+            // In this case it's OK to apply limit optimisation to Join step
+            // even though we have an ORDER BY clause.
+            // This will only work if previous step is not REVERSE
+            struct PlanStep *prev = &plan->steps[plan->step_count - 1];
+            if (q->limit_value >= 0 && q->table_count <= 1 && prev->type != PLAN_REVERSE) {
+                // Usually this can't be done with ORDER BY but in this case we
+                // can since there are no predicates
+                prev->limit = q->offset_value + q->limit_value;
+            }
 
         } else {
             addStep(plan, PLAN_TABLE_ACCESS_FULL);
@@ -298,6 +309,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
         addJoinStepsIfRequired(plan, q);
 
         addOrderStepIfRequired(plan, q);
+
+        applyLimitOptimisation(plan, q);
     }
 
     /*******************
@@ -317,7 +330,9 @@ int makePlan (struct Query *q, struct Plan *plan) {
         if (prev->type == PLAN_PK || prev->type == PLAN_UNIQUE || prev->type == PLAN_GROUP) {
             // No op - don't need limit for these previous step types
         }
-        else {
+        else if (prev->limit == -1 || prev->limit > q->offset_value + q->limit_value) {
+            // Either previous step didn't have limit optimisation,
+            // or previous limit was higher than needed
             addStepWithLimit(plan, PLAN_SLICE, q->offset_value + q->limit_value);
         }
     }
@@ -541,7 +556,7 @@ static int optimisePredicates (__attribute__((unused)) struct Query *q, struct P
 
 // Optimisation: Apply limit early to latest step added
 void applyLimitOptimisation (struct Plan *plan, struct Query *query) {
-    if (query->limit_value >= 0 && query->table_count <= 1 && !(query->flags & FLAG_ORDER)) {
+    if (query->limit_value >= 0 && !(query->flags & FLAG_ORDER)) {
         plan->steps[plan->step_count - 1].limit = query->offset_value + query->limit_value;
     }
 }

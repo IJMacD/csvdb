@@ -13,7 +13,7 @@ char * getFieldName (struct DB *db, int field_index);
 
 int getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length);
 
-int findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);
+enum IndexSearchType findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);
 
 int pkSearch(struct DB *db, const char *value);
 

@@ -304,7 +304,7 @@ int calendar_getRecordValue (struct DB *db, int record_index, int field_index, c
 }
 
 // All queries go through fullTableScan but it's useful to indicate to the planner that julian and date are unique
-int calendar_findIndex(struct DB *db, __attribute__((unused)) const char *table_name, const char *index_name, __attribute__((unused)) int index_type_flags) {
+enum IndexSearchType calendar_findIndex(struct DB *db, __attribute__((unused)) const char *table_name, const char *index_name, __attribute__((unused)) int index_type_flags) {
     if (strcmp(index_name, "julian") == 0) {
         if (db != NULL) {
             calendar_openDB(db, "CALENDAR");

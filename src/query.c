@@ -233,409 +233,475 @@ int basic_select_query (
     struct ResultSet *result_set = malloc(sizeof(*result_set));
     result_set->count = 0;
 
-    // If there's no FROM clause we just add a single row
-    if (q->table_count == 0) {
-        // Just a single output row
-        struct RowList * row_list = makeRowList(0, 0);
-        row_list->row_count = 1;
-        pushRowList(result_set, row_list);
-    }
-
     int row_count = 0;
 
     for (int i = 0; i < plan->step_count; i++) {
         struct PlanStep *s = &plan->steps[i];
 
-        if (s->type == PLAN_PK || s->type == PLAN_PK_RANGE) {
-            #ifdef DEBUG
-            fprintf(stderr, "Q%d: PLAN_PK\n", getpid());
-            #endif
-
-            struct RowList *row_list = makeRowList(1, q->tables[0].db->record_count);
-            pushRowList(result_set, row_list);
-
-            // First table
-            struct Table * table = q->tables;
-            struct Predicate *p = &s->predicates[0];
-            indexPrimaryScan(table->db, p->op, p->right.fields[0].text, row_list, s->limit);
-        }
-        else if (s->type == PLAN_UNIQUE || s->type == PLAN_UNIQUE_RANGE) {
-            #ifdef DEBUG
-            fprintf(stderr, "Q%d: PLAN_UNIQUE\n", getpid());
-            #endif
-
-            struct RowList *row_list = makeRowList(1, q->tables[0].db->record_count);
-            pushRowList(result_set, row_list);
-
-            // First table
-            struct Table * table = q->tables;
-            struct Predicate *p = &s->predicates[0];
-            struct DB index_db;
-            if (findIndex(&index_db, table->name, p->left.fields[0].text, INDEX_UNIQUE) == 0) {
-                fprintf(stderr, "Unable to find unique index on column '%s' on table '%s'\n", p->left.fields[0].text, table->name);
-                return -1;
+        switch (s->type) {
+            case PLAN_DUMMY_ROW: {
+                // Just a single output row
+                struct RowList * row_list = makeRowList(0, 0);
+                row_list->row_count = 1;
+                pushRowList(result_set, row_list);
+                break;
             }
-            // Find which column in the index table contains the rowids of the primary table
-            int rowid_col = getFieldIndex(&index_db, "rowid");
-            indexUniqueScan(&index_db, rowid_col, p->op, p->right.fields[0].text, row_list, s->limit);
-        }
-        else if (s->type == PLAN_INDEX_RANGE) {
-            #ifdef DEBUG
-            fprintf(stderr, "Q%d: PLAN_INDEX_RANGE\n", getpid());
-            #endif
 
-            struct RowList *row_list = makeRowList(1, q->tables[0].db->record_count);
-            pushRowList(result_set, row_list);
+            case PLAN_PK:
+            case PLAN_PK_RANGE: {
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d: PLAN_PK\n", getpid());
+                #endif
 
-            // First table
-            struct Table * table = q->tables;
-            struct Predicate *p = &s->predicates[0];
-            struct DB index_db;
-            if (findIndex(&index_db, table->name, p->left.fields[0].text, INDEX_ANY) == 0) {
-                fprintf(stderr, "Unable to find index on column '%s' on table '%s'\n", p->left.fields[0].text, table->name);
-                return -1;
+                struct RowList *row_list = makeRowList(1, q->tables[0].db->record_count);
+                pushRowList(result_set, row_list);
+
+                // First table
+                struct Table * table = q->tables;
+                struct Predicate *p = &s->predicates[0];
+                indexPrimaryScan(table->db, p->op, p->right.fields[0].text, row_list, s->limit);
+                break;
             }
-            // Find which column in the index table contains the rowids of the primary table
-            int rowid_col = getFieldIndex(&index_db, "rowid");
-            indexScan(&index_db, rowid_col, p->op, p->right.fields[0].text, row_list, s->limit);
-        }
-        else if (s->type == PLAN_TABLE_ACCESS_FULL) {
-            #ifdef DEBUG
-            fprintf(stderr, "Q%d: PLAN_TABLE_ACCESS_FULL\n", getpid());
-            #endif
 
-            struct RowList *row_list = makeRowList(1, q->tables[0].db->record_count);
-            pushRowList(result_set, row_list);
+            case PLAN_UNIQUE:
+            case PLAN_UNIQUE_RANGE: {
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d: PLAN_UNIQUE\n", getpid());
+                #endif
 
-            // First table
-            struct Table * table = q->tables;
+                struct RowList *row_list = makeRowList(1, q->tables[0].db->record_count);
+                pushRowList(result_set, row_list);
 
-            if (s->predicate_count > 0) {
-                fullTableScan(table->db, row_list, s->predicates, s->predicate_count, s->limit);
+                // First table
+                struct Table * table = q->tables;
+                struct Predicate *p = &s->predicates[0];
+                struct DB index_db;
+                if (findIndex(&index_db, table->name, p->left.fields[0].text, INDEX_UNIQUE) == 0) {
+                    fprintf(stderr, "Unable to find unique index on column '%s' on table '%s'\n", p->left.fields[0].text, table->name);
+                    return -1;
+                }
+                // Find which column in the index table contains the rowids of the primary table
+                int rowid_col = getFieldIndex(&index_db, "rowid");
+                indexUniqueScan(&index_db, rowid_col, p->op, p->right.fields[0].text, row_list, s->limit);
+                break;
             }
-            else {
-                fullTableAccess(table->db, row_list, s->limit);
+
+            case PLAN_INDEX_RANGE: {
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d: PLAN_INDEX_RANGE\n", getpid());
+                #endif
+
+                struct RowList *row_list = makeRowList(1, q->tables[0].db->record_count);
+                pushRowList(result_set, row_list);
+
+                // First table
+                struct Table * table = q->tables;
+                struct Predicate *p = &s->predicates[0];
+                struct DB index_db;
+                if (findIndex(&index_db, table->name, p->left.fields[0].text, INDEX_ANY) == 0) {
+                    fprintf(stderr, "Unable to find index on column '%s' on table '%s'\n", p->left.fields[0].text, table->name);
+                    return -1;
+                }
+                // Find which column in the index table contains the rowids of the primary table
+                int rowid_col = getFieldIndex(&index_db, "rowid");
+                indexScan(&index_db, rowid_col, p->op, p->right.fields[0].text, row_list, s->limit);
+                break;
             }
-        }
-        else if (s->type == PLAN_TABLE_ACCESS_ROWID) {
-            #ifdef DEBUG
-            fprintf(stderr, "Q%d: PLAN_TABLE_ACCESS_ROWID\n", getpid());
-            #endif
 
-            struct RowList *row_list = popRowList(result_set);
+            case PLAN_TABLE_ACCESS_FULL: {
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d: PLAN_TABLE_ACCESS_FULL\n", getpid());
+                #endif
 
-            int source_count = row_list->row_count;
+                struct RowList *row_list = makeRowList(1, q->tables[0].db->record_count);
+                pushRowList(result_set, row_list);
 
-            row_list->row_count = 0;
+                // First table
+                struct Table * table = q->tables;
 
-            for (int i = 0; i < source_count; i++) {
-                int match = 1;
+                if (s->predicate_count > 0) {
+                    fullTableScan(table->db, row_list, s->predicates, s->predicate_count, s->limit);
+                }
+                else {
+                    fullTableAccess(table->db, row_list, s->limit);
+                }
+                break;
+            }
 
-                for (int j = 0; j < s->predicate_count; j++) {
-                    struct Predicate * p = s->predicates + j;
+            case PLAN_TABLE_ACCESS_ROWID: {
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d: PLAN_TABLE_ACCESS_ROWID\n", getpid());
+                #endif
 
-                    char value_left[MAX_VALUE_LENGTH] = {0};
-                    char value_right[MAX_VALUE_LENGTH] = {0};
+                // We'll just recycle the same RowList
+                struct RowList *row_list = popRowList(result_set);
 
-                    evaluateNode(q, row_list, i, &p->left, value_left, MAX_VALUE_LENGTH);
-                    evaluateNode(q, row_list, i, &p->right, value_right, MAX_VALUE_LENGTH);
+                int source_count = row_list->row_count;
 
-                    if (!evaluateExpression(p->op, value_left, value_right)) {
-                        match = 0;
+                row_list->row_count = 0;
+
+                for (int i = 0; i < source_count; i++) {
+                    int match = 1;
+
+                    for (int j = 0; j < s->predicate_count; j++) {
+                        struct Predicate * p = s->predicates + j;
+
+                        char value_left[MAX_VALUE_LENGTH] = {0};
+                        char value_right[MAX_VALUE_LENGTH] = {0};
+
+                        evaluateNode(q, row_list, i, &p->left, value_left, MAX_VALUE_LENGTH);
+                        evaluateNode(q, row_list, i, &p->right, value_right, MAX_VALUE_LENGTH);
+
+                        if (!evaluateExpression(p->op, value_left, value_right)) {
+                            match = 0;
+                            break;
+                        }
+                    }
+
+                    if (match) {
+                        // Add to result set
+                        copyResultRow(row_list, row_list, i);
+
+                        if (q->limit_value > -1 && row_list->row_count >= q->limit_value) {
+                            break;
+                        }
+                    }
+                }
+
+                pushRowList(result_set, row_list);
+                break;
+            }
+
+            case PLAN_CROSS_JOIN: {
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d: PLAN_CROSS_JOIN\n", getpid());
+                #endif
+
+                struct RowList *row_list = popRowList(result_set);
+
+                struct DB *next_db = q->tables[row_list->join_count].db;
+
+                int new_length = row_list->row_count * next_db->record_count;
+
+                struct RowList *new_list = makeRowList(row_list->join_count + 1, new_length);
+
+                for (int i = 0; i < row_list->row_count; i++) {
+                    int done = 0;
+
+                    for (int j = 0; j < next_db->record_count; j++) {
+                        appendJoinedRowID(new_list, row_list, i, j);
+
+                        if (q->limit_value > -1 && new_list->row_count >= q->limit_value) {
+                            done = 1;
+                            break;
+                        }
+                    }
+
+                    if (done) break;
+                }
+
+                destroyRowList(row_list);
+
+                pushRowList(result_set, new_list);
+                break;
+            }
+
+            case PLAN_CONSTANT_JOIN: {
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d: PLAN_CONSTANT_JOIN\n", getpid());
+                #endif
+
+                struct RowList *row_list = popRowList(result_set);
+
+                // Sanity check
+                struct Predicate *p = s->predicates + 0;
+                if (p->left.fields[0].table_id != row_list->join_count &&
+                    p->right.fields[0].table_id != row_list->join_count)
+                {
+                    fprintf(stderr, "Cannot perform constant join (Join Index: %d)\n", row_list->join_count);
+                    return -1;
+                }
+
+                struct DB *next_db = q->tables[row_list->join_count].db;
+
+                struct RowList *tmp_list = makeRowList(1, next_db->record_count);
+
+                // This is a constant join so we'll just populate the table once
+                // Hopefully it won't be the whole table since we have a predicate
+                fullTableScan(next_db, tmp_list, s->predicates, s->predicate_count, -1);
+
+                int new_length = row_list->row_count * tmp_list->row_count;
+
+                // Now we know how many rows are to be joined we can make the new row list
+                struct RowList *new_list = makeRowList(row_list->join_count + 1, new_length);
+
+                // For each row in the original row list, join every row of the tmp row list
+                for (int i = 0; i < row_list->row_count; i++) {
+                    int done = 0;
+
+                    for (int j = 0; j < tmp_list->row_count; j++) {
+                        int rowid = getRowID(tmp_list, 0, j);
+                        appendJoinedRowID(new_list, row_list, i, rowid);
+
+                        if (q->limit_value > -1 && new_list->row_count >= q->limit_value) {
+                            done = 1;
+                            break;
+                        }
+                    }
+                    if (done) break;
+                }
+
+                destroyRowList(row_list);
+                destroyRowList(tmp_list);
+
+                pushRowList(result_set, new_list);
+                break;
+            }
+
+            case PLAN_LOOP_JOIN: {
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d: PLAN_LOOP_JOIN\n", getpid());
+                #endif
+
+                struct RowList *row_list = popRowList(result_set);
+
+                struct Table *table = &q->tables[row_list->join_count];
+                struct DB *next_db = table->db;
+
+                int new_length = row_list->row_count * next_db->record_count;
+
+                struct RowList *new_list = makeRowList(row_list->join_count + 1, new_length);
+
+                // Prepare a temporary list that can hold every record in the table
+                struct RowList *tmp_list = makeRowList(1, next_db->record_count);
+
+                // Table ID being joined here
+                int table_id = row_list->join_count;
+
+                for (int i = 0; i < row_list->row_count; i++) {
+                    int done = 0;
+
+                    // Make a local copy of predicate
+                    struct Predicate p = s->predicates[0];
+
+                    // Fill in value as constant from outer tables
+                    if (p.left.fields[0].table_id < table_id) {
+                        evaluateNode(q, row_list, i, &p.left, p.left.fields[0].text, MAX_FIELD_LENGTH);
+                        p.left.fields[0].index = FIELD_CONSTANT;
+                        p.left.function = FUNC_UNITY;
+
+                        // We're only passing one table to fullTableScan so predicate will be on first table
+                        p.right.fields[0].table_id = 0;
+                    }
+                    // Fill in value as constant from outer tables
+                    else if (p.right.fields[0].table_id < table_id) {
+                        evaluateNode(q, row_list, i, &p.right, p.right.fields[0].text, MAX_FIELD_LENGTH);
+                        p.right.fields[0].index = FIELD_CONSTANT;
+                        p.right.function = FUNC_UNITY;
+
+                        // We're only passing one table to fullTableScan so predicate will be on first table
+                        p.left.fields[0].table_id = 0;
+                    }
+
+                    tmp_list->row_count = 0;
+
+                    // Populate the temp list with all rows which match our special predicate
+                    fullTableScan(next_db, tmp_list, &p, 1, -1);
+
+                    // Append each row we've just found to the main row_list
+                    for (int j = 0; j < tmp_list->row_count; j++) {
+                        int rowid = getRowID(tmp_list, 0, j);
+                        appendJoinedRowID(new_list, row_list, i, rowid);
+
+                        if (q->limit_value > -1 && new_list->row_count >= q->limit_value) {
+                            done = 1;
+                            break;
+                        }
+                    }
+
+                    if (done) break;
+
+                    if (table->join_type == JOIN_LEFT && tmp_list->row_count == 0) {
+                        // Add NULL to list
+                        appendJoinedRowID(new_list, row_list, i, ROWID_NULL);
+                    }
+                }
+
+                destroyRowList(row_list);
+                destroyRowList(tmp_list);
+
+                pushRowList(result_set, new_list);
+                break;
+            }
+
+            case PLAN_UNIQUE_JOIN: {
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d: PLAN_UNIQUE_JOIN\n", getpid());
+                #endif
+
+                struct RowList *row_list = popRowList(result_set);
+
+                // Table ID being joined here
+                int table_id = row_list->join_count;
+
+                struct Table *table = &q->tables[table_id];
+
+                struct RowList *new_list = makeRowList(row_list->join_count + 1, row_list->row_count);
+
+                struct RowList *tmp_list = makeRowList(1, 1);
+
+                struct Predicate * p = &s->predicates[0];
+
+                struct ColumnNode * outer;
+                struct ColumnNode * inner;
+
+                if (p->left.fields[0].table_id == table_id) {
+                    outer = &p->right;
+                    inner = &p->left;
+                } else if (p->right.fields[0].table_id == table_id) {
+                    outer = &p->left;
+                    inner = &p->right;
+                } else {
+                    fprintf(stderr, "Unable to perform UNIQUE JOIN\n");
+                    return -1;
+                }
+
+                if (outer->fields[0].table_id >= table_id) {
+                    fprintf(stderr, "Unable to perform UNIQUE JOIN\n");
+                    return -1;
+                }
+
+                struct DB index_db = {0};
+                if (findIndex(&index_db, q->tables[table_id].name, inner->fields[0].text, INDEX_UNIQUE) == 0) {
+                    fprintf(stderr, "Couldn't find unique index on '%s(%s)'\n", q->tables[table_id].name, inner->fields[0].text);
+                    return -1;
+                }
+
+                for (int i = 0; i < row_list->row_count; i++) {
+                    char value[MAX_VALUE_LENGTH];
+
+                    // Fill in value as constant from outer tables
+                    evaluateNode(q, row_list, i, outer, value, MAX_FIELD_LENGTH);
+
+                    // Hang on... won't this only work for calendar?
+                    int rowid = pkSearch(&index_db, value);
+
+                    if (rowid != RESULT_NO_ROWS) {
+                        tmp_list->row_count = 0;
+                        appendJoinedRowID(new_list, row_list, i, rowid);
+                    }
+                    else if (table->join_type == JOIN_LEFT) {
+                        // Add NULL rowid
+                        appendJoinedRowID(new_list, row_list, i, ROWID_NULL);
+                    }
+
+                    if (q->limit_value > -1 && new_list->row_count >= q->limit_value) {
                         break;
                     }
                 }
 
-                if (match) {
-                    // Add to result set
-                    copyResultRow(row_list, row_list, i);
-                }
+                destroyRowList(row_list);
+                destroyRowList(tmp_list);
+
+                pushRowList(result_set, new_list);
+                break;
             }
 
-            pushRowList(result_set, row_list);
-        }
-        else if (s->type == PLAN_CROSS_JOIN) {
-            #ifdef DEBUG
-            fprintf(stderr, "Q%d: PLAN_CROSS_JOIN\n", getpid());
-            #endif
+            case PLAN_SORT: {
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d: PLAN_SORT\n", getpid());
+                #endif
 
-            struct RowList *row_list = popRowList(result_set);
+                int table_id = -1;
+                int field_index;
 
-            struct DB *next_db = q->tables[row_list->join_count].db;
-
-            int new_length = row_list->row_count * next_db->record_count;
-
-            struct RowList *new_list = makeRowList(row_list->join_count + 1, new_length);
-
-            for (int i = 0; i < row_list->row_count; i++) {
-                for (int j = 0; j < next_db->record_count; j++) {
-                    appendJoinedRowID(new_list, row_list, i, j);
+                if (!findColumn(q, s->predicates[0].left.fields[0].text, &table_id, &field_index)) {
+                    fprintf(stderr, "Sort column not found: %s\n", s->predicates[0].left.fields[0].text);
+                    return -1;
                 }
+
+                // debugRowList(row_list, 2);
+
+                struct DB *db = q->tables[table_id].db;
+
+                struct RowList *row_list = popRowList(result_set);
+
+                struct RowList *new_list = makeRowList(row_list->join_count, row_list->row_count);
+
+                sortResultRows(db, table_id, field_index, s->predicates[0].op, row_list, new_list);
+                // To implement better sort later
+                // sortResultRows(db, order_fields, s->predicate_count, row_list, new_list);
+
+                destroyRowList(row_list);
+
+                pushRowList(result_set, new_list);
+
+                // debugRowList(row_list, 2);
+                break;
             }
 
-            destroyRowList(row_list);
+            case PLAN_REVERSE: {
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d: PLAN_REVERSE\n", getpid());
+                #endif
+                struct RowList *row_list = popRowList(result_set);
+                reverseRowList(row_list);
+                pushRowList(result_set, row_list);
+                break;
+            }
 
-            pushRowList(result_set, new_list);
-        }
-        else if (s->type == PLAN_CONSTANT_JOIN) {
-            #ifdef DEBUG
-            fprintf(stderr, "Q%d: PLAN_CONSTANT_JOIN\n", getpid());
-            #endif
+            case PLAN_SLICE: {
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d: PLAN_SLICE\n", getpid());
+                #endif
+                // Offset is taken care of in PLAN_SELECT
 
-            struct RowList *row_list = popRowList(result_set);
+                struct RowList *row_list = popRowList(result_set);
 
-            // Sanity check
-            struct Predicate *p = s->predicates + 0;
-            if (p->left.fields[0].table_id != row_list->join_count &&
-                p->right.fields[0].table_id != row_list->join_count)
-            {
-                fprintf(stderr, "Cannot perform constant join (Join Index: %d)\n", row_list->join_count);
+                // Apply limit (including offset rows - which will be omitted later)
+                if (s->limit >= 0 && s->limit < row_list->row_count) {
+                    row_list->row_count = s->limit;
+                }
+
+                pushRowList(result_set, row_list);
+                break;
+            }
+
+            case PLAN_GROUP: {
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d: PLAN_GROUP\n", getpid());
+                #endif
+                // NOP
+                break;
+            }
+
+            case PLAN_SELECT: {
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d: PLAN_SELECT\n", getpid());
+                #endif
+                /*******************
+                 * Output result set
+                 *******************/
+
+                struct RowList *row_list = popRowList(result_set);
+
+                // Aggregate functions will print just one row
+                if (q->flags & FLAG_GROUP) {
+                    printResultLine(output, q->tables, q->table_count, q->columns, q->column_count, row_list->row_count > 0 ? q->offset_value : RESULT_NO_ROWS, row_list, output_flags);
+                    row_count++;
+                }
+                else for (int i = q->offset_value; i < row_list->row_count; i++) {
+                    printResultLine(output, q->tables, q->table_count, q->columns, q->column_count, i, row_list, output_flags);
+                    row_count++;
+                }
+
+                destroyRowList(row_list);
+
+                break;
+            }
+            default:
+                fprintf(stderr, "Unimplemented OP code: %d\n", s->type);
                 return -1;
-            }
-
-            struct DB *next_db = q->tables[row_list->join_count].db;
-
-            struct RowList *tmp_list = makeRowList(1, next_db->record_count);
-
-            // This is a constant join so we'll just populate the table once
-            // Hopefully it won't be the whole table since we have a predicate
-            fullTableScan(next_db, tmp_list, s->predicates, s->predicate_count, -1);
-
-            int new_length = row_list->row_count * tmp_list->row_count;
-
-            // Now we know how many rows are to be joined we can make the new row list
-            struct RowList *new_list = makeRowList(row_list->join_count + 1, new_length);
-
-            // For each row in the original row list, join every row of the tmp row list
-            for (int i = 0; i < row_list->row_count; i++) {
-                for (int j = 0; j < tmp_list->row_count; j++) {
-                    int rowid = getRowID(tmp_list, 0, j);
-                    appendJoinedRowID(new_list, row_list, i, rowid);
-                }
-            }
-
-            destroyRowList(row_list);
-            destroyRowList(tmp_list);
-
-            pushRowList(result_set, new_list);
-        }
-        else if (s->type == PLAN_LOOP_JOIN) {
-            #ifdef DEBUG
-            fprintf(stderr, "Q%d: PLAN_LOOP_JOIN\n", getpid());
-            #endif
-
-            struct RowList *row_list = popRowList(result_set);
-
-            struct Table *table = &q->tables[row_list->join_count];
-            struct DB *next_db = table->db;
-
-            int new_length = row_list->row_count * next_db->record_count;
-
-            struct RowList *new_list = makeRowList(row_list->join_count + 1, new_length);
-
-            // Prepare a temporary list that can hold every record in the table
-            struct RowList *tmp_list = makeRowList(1, next_db->record_count);
-
-            // Table ID being joined here
-            int table_id = row_list->join_count;
-
-            for (int i = 0; i < row_list->row_count; i++) {
-                // Make a local copy of predicate
-                struct Predicate p = s->predicates[0];
-
-                // Fill in value as constant from outer tables
-                if (p.left.fields[0].table_id < table_id) {
-                    evaluateNode(q, row_list, i, &p.left, p.left.fields[0].text, MAX_FIELD_LENGTH);
-                    p.left.fields[0].index = FIELD_CONSTANT;
-                    p.left.function = FUNC_UNITY;
-
-                    // We're only passing one table to fullTableScan so predicate will be on first table
-                    p.right.fields[0].table_id = 0;
-                }
-                // Fill in value as constant from outer tables
-                else if (p.right.fields[0].table_id < table_id) {
-                    evaluateNode(q, row_list, i, &p.right, p.right.fields[0].text, MAX_FIELD_LENGTH);
-                    p.right.fields[0].index = FIELD_CONSTANT;
-                    p.right.function = FUNC_UNITY;
-
-                    // We're only passing one table to fullTableScan so predicate will be on first table
-                    p.left.fields[0].table_id = 0;
-                }
-
-                tmp_list->row_count = 0;
-
-                // Populate the temp list with all rows which match our special predicate
-                fullTableScan(next_db, tmp_list, &p, 1, -1);
-
-                // Append each row we've just found to the main row_list
-                for (int j = 0; j < tmp_list->row_count; j++) {
-                    int rowid = getRowID(tmp_list, 0, j);
-                    appendJoinedRowID(new_list, row_list, i, rowid);
-                }
-
-                if (table->join_type == JOIN_LEFT && tmp_list->row_count == 0) {
-                    // Add NULL to list
-                    appendJoinedRowID(new_list, row_list, i, ROWID_NULL);
-                }
-            }
-
-            destroyRowList(row_list);
-            destroyRowList(tmp_list);
-
-            pushRowList(result_set, new_list);
-        }
-        else if (s->type == PLAN_UNIQUE_JOIN) {
-            #ifdef DEBUG
-            fprintf(stderr, "Q%d: PLAN_UNIQUE_JOIN\n", getpid());
-            #endif
-
-            struct RowList *row_list = popRowList(result_set);
-
-            // Table ID being joined here
-            int table_id = row_list->join_count;
-
-            struct Table *table = &q->tables[table_id];
-
-            struct RowList *new_list = makeRowList(row_list->join_count + 1, row_list->row_count);
-
-            struct RowList *tmp_list = makeRowList(1, 1);
-
-            struct Predicate * p = &s->predicates[0];
-
-            struct ColumnNode * outer;
-            struct ColumnNode * inner;
-
-            if (p->left.fields[0].table_id == table_id) {
-                outer = &p->right;
-                inner = &p->left;
-            } else if (p->right.fields[0].table_id == table_id) {
-                outer = &p->left;
-                inner = &p->right;
-            } else {
-                fprintf(stderr, "Unable to perform UNIQUE JOIN\n");
-                return -1;
-            }
-
-            if (outer->fields[0].table_id >= table_id) {
-                fprintf(stderr, "Unable to perform UNIQUE JOIN\n");
-                return -1;
-            }
-
-            struct DB index_db = {0};
-            if (findIndex(&index_db, q->tables[table_id].name, inner->fields[0].text, INDEX_UNIQUE) == 0) {
-                fprintf(stderr, "Couldn't find unique index on '%s(%s)'\n", q->tables[table_id].name, inner->fields[0].text);
-                return -1;
-            }
-
-            for (int i = 0; i < row_list->row_count; i++) {
-                char value[MAX_VALUE_LENGTH];
-
-                // Fill in value as constant from outer tables
-                evaluateNode(q, row_list, i, outer, value, MAX_FIELD_LENGTH);
-
-                // Hang on... won't this only work for calendar?
-                int rowid = pkSearch(&index_db, value);
-
-                if (rowid != RESULT_NO_ROWS) {
-                    tmp_list->row_count = 0;
-                    appendJoinedRowID(new_list, row_list, i, rowid);
-                }
-                else if (table->join_type == JOIN_LEFT) {
-                    // Add NULL rowid
-                    appendJoinedRowID(new_list, row_list, i, ROWID_NULL);
-                }
-            }
-
-            destroyRowList(row_list);
-            destroyRowList(tmp_list);
-
-            pushRowList(result_set, new_list);
-        }
-        else if (s->type == PLAN_SORT) {
-            #ifdef DEBUG
-            fprintf(stderr, "Q%d: PLAN_SORT\n", getpid());
-            #endif
-
-            int table_id = -1;
-            int field_index;
-
-            if (!findColumn(q, s->predicates[0].left.fields[0].text, &table_id, &field_index)) {
-                fprintf(stderr, "Sort column not found: %s\n", s->predicates[0].left.fields[0].text);
-                return -1;
-            }
-
-            // debugRowList(row_list, 2);
-
-            struct DB *db = q->tables[table_id].db;
-
-            struct RowList *row_list = popRowList(result_set);
-
-            struct RowList *new_list = makeRowList(row_list->join_count, row_list->row_count);
-
-            sortResultRows(db, table_id, field_index, s->predicates[0].op, row_list, new_list);
-            // To implement better sort later
-            // sortResultRows(db, order_fields, s->predicate_count, row_list, new_list);
-
-            destroyRowList(row_list);
-
-            pushRowList(result_set, new_list);
-
-            // debugRowList(row_list, 2);
-        }
-        else if (s->type == PLAN_REVERSE) {
-            #ifdef DEBUG
-            fprintf(stderr, "Q%d: PLAN_REVERSE\n", getpid());
-            #endif
-            struct RowList *row_list = popRowList(result_set);
-            reverseRowList(row_list);
-            pushRowList(result_set, row_list);
-        }
-        else if (s->type == PLAN_SLICE) {
-            #ifdef DEBUG
-            fprintf(stderr, "Q%d: PLAN_SLICE\n", getpid());
-            #endif
-            // Offset is taken care of in PLAN_SELECT
-
-            struct RowList *row_list = popRowList(result_set);
-
-            // Apply limit (including offset rows - which will be omitted later)
-            if (s->limit >= 0 && s->limit < row_list->row_count) {
-                row_list->row_count = s->limit;
-            }
-
-            pushRowList(result_set, row_list);
-        }
-        else if (s->type == PLAN_GROUP) {
-            #ifdef DEBUG
-            fprintf(stderr, "Q%d: PLAN_GROUP\n", getpid());
-            #endif
-            // NOP
-        }
-        else if (s->type == PLAN_SELECT) {
-            #ifdef DEBUG
-            fprintf(stderr, "Q%d: PLAN_SELECT\n", getpid());
-            #endif
-            /*******************
-             * Output result set
-             *******************/
-
-            struct RowList *row_list = popRowList(result_set);
-
-            // Aggregate functions will print just one row
-            if (q->flags & FLAG_GROUP) {
-                printResultLine(output, q->tables, q->table_count, q->columns, q->column_count, row_list->row_count > 0 ? q->offset_value : RESULT_NO_ROWS, row_list, output_flags);
-                row_count++;
-            }
-            else for (int i = q->offset_value; i < row_list->row_count; i++) {
-                printResultLine(output, q->tables, q->table_count, q->columns, q->column_count, i, row_list, output_flags);
-                row_count++;
-            }
-
-            destroyRowList(row_list);
-        }
-        else {
-            fprintf(stderr, "Unimplemented OP code: %d\n", s->type);
-            return -1;
         }
 
         #ifdef DEBUG

@@ -223,7 +223,7 @@ enum IndexScanMode {
     MODE_UPPER_BOUND =   2,
 };
 
-enum PlanType {
+enum PlanStepType {
     NO_PLAN =                   0,
 
     PLAN_TABLE_ACCESS_FULL =    1,
@@ -251,10 +251,11 @@ enum PlanType {
     PLAN_INTERSECT =           41,
 
     PLAN_SELECT =              50,
+    PLAN_DUMMY_ROW =           51,
 };
 
 struct PlanStep {
-    enum PlanType type;
+    enum PlanStepType type;
     int limit;
     int predicate_count;
     struct Predicate *predicates;
@@ -353,7 +354,7 @@ struct VFS {
     int (* getFieldIndex)(struct DB *db, const char *field);
     char *(* getFieldName)(struct DB *db, int field_index);
     int (* getRecordValue)(struct DB *db, int record_index, int field_index, char *value, size_t value_max_length);
-    int (* findIndex)(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);
+    enum IndexSearchType (* findIndex)(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);
     int (* fullTableScan)(struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value);
     int (* fullTableAccess)(struct DB *db, struct RowList * row_list, int limit_value);
     int (* indexSearch)(struct DB *db, const char *value, int rowid_field, int mode, int * output_flag);

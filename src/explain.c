@@ -79,6 +79,10 @@ int explain_select_query (
                 }
             }
 
+            if (s.limit >= 0) {
+                rows = (s.limit < rows) ? s.limit : rows;
+            }
+
             strncpy(table, q->tables[join_count].name, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
         }
@@ -95,6 +99,10 @@ int explain_select_query (
                 } else {
                     rows = rows / 2;
                 }
+            }
+
+            if (s.limit >= 0) {
+                rows = (s.limit < rows) ? s.limit : rows;
             }
 
             if (s.predicate_count > 0) {
@@ -117,6 +125,10 @@ int explain_select_query (
             table[MAX_FIELD_LENGTH - 1] = '\0';
             rows = row_estimate / 2;
             cost = rows;
+
+            if (s.limit >= 0) {
+                rows = (s.limit < rows) ? s.limit : rows;
+            }
         }
         else if (s.type == PLAN_UNIQUE) {
             operation = "INDEX UNIQUE";
@@ -137,10 +149,12 @@ int explain_select_query (
                 else if (s.predicates[0].op == OPERATOR_EQ) {
                     rows = row_estimate / 1000;
                     cost = log_rows * 2;
-                } else if (s.predicates[0].op == OPERATOR_UN) {
+                }
+                else if (s.predicates[0].op == OPERATOR_UN) {
                     rows = row_estimate;
                     cost = rows;
-                } else {
+                }
+                else {
                     rows = row_estimate / 2;
                     cost = rows;
                 }
@@ -161,10 +175,12 @@ int explain_select_query (
                 else if (s.predicates[0].op == OPERATOR_EQ) {
                     rows = row_estimate / 1000;
                     cost = log_rows * 2;
-                } else if (s.predicates[0].op == OPERATOR_UN) {
+                }
+                else if (s.predicates[0].op == OPERATOR_UN) {
                     rows = row_estimate;
                     cost = rows;
-                } else {
+                }
+                else {
                     rows = row_estimate / 2;
                     cost = rows;
                 }
@@ -249,6 +265,10 @@ int explain_select_query (
             if (cost < rows) {
                 cost = rows;
             }
+
+            if (s.limit >= 0) {
+                rows = (s.limit < rows) ? s.limit : rows;
+            }
         }
         else if (s.type == PLAN_LOOP_JOIN) {
             operation = "LOOP JOIN";
@@ -278,6 +298,10 @@ int explain_select_query (
             if (cost < rows) {
                 cost = rows;
             }
+
+            if (s.limit >= 0) {
+                rows = (s.limit < rows) ? s.limit : rows;
+            }
         }
         else if (s.type == PLAN_UNIQUE_JOIN) {
             operation = "UNIQUE JOIN";
@@ -297,6 +321,14 @@ int explain_select_query (
             if (cost < rows) {
                 cost = rows;
             }
+
+            if (s.limit >= 0) {
+                rows = (s.limit < rows) ? s.limit : rows;
+            }
+        }
+        else if (s.type == PLAN_DUMMY_ROW) {
+            operation = "DUMMY ROW";
+            rows = 1;
         }
         else {
             operation = "Unknown OP code";

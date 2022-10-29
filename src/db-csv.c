@@ -444,7 +444,7 @@ static void prepareHeaders (struct DB *db) {
  *
  * @param db struct DB * OUT - Database to populate with index
  */
-int csv_findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags) {
+enum IndexSearchType csv_findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags) {
     char index_filename[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12];
     size_t len = strlen(index_name);
 
