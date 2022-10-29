@@ -308,7 +308,8 @@ int basic_select_query (
                 break;
             }
 
-            case PLAN_TABLE_ACCESS_FULL: {
+            case PLAN_TABLE_SCAN:
+            {
                 #ifdef DEBUG
                 fprintf(stderr, "Q%d: PLAN_TABLE_ACCESS_FULL\n", getpid());
                 #endif
@@ -362,7 +363,7 @@ int basic_select_query (
                         // Add to result set
                         copyResultRow(row_list, row_list, i);
 
-                        if (q->limit_value > -1 && row_list->row_count >= q->limit_value) {
+                        if (s->limit > -1 && row_list->row_count >= s->limit) {
                             break;
                         }
                     }
@@ -391,7 +392,7 @@ int basic_select_query (
                     for (int j = 0; j < next_db->record_count; j++) {
                         appendJoinedRowID(new_list, row_list, i, j);
 
-                        if (q->limit_value > -1 && new_list->row_count >= q->limit_value) {
+                        if (s->limit > -1 && new_list->row_count >= s->limit) {
                             done = 1;
                             break;
                         }
@@ -443,7 +444,7 @@ int basic_select_query (
                         int rowid = getRowID(tmp_list, 0, j);
                         appendJoinedRowID(new_list, row_list, i, rowid);
 
-                        if (q->limit_value > -1 && new_list->row_count >= q->limit_value) {
+                        if (s->limit > -1 && new_list->row_count >= s->limit) {
                             done = 1;
                             break;
                         }
@@ -513,7 +514,7 @@ int basic_select_query (
                         int rowid = getRowID(tmp_list, 0, j);
                         appendJoinedRowID(new_list, row_list, i, rowid);
 
-                        if (q->limit_value > -1 && new_list->row_count >= q->limit_value) {
+                        if (s->limit > -1 && new_list->row_count >= s->limit) {
                             done = 1;
                             break;
                         }
@@ -595,7 +596,7 @@ int basic_select_query (
                         appendJoinedRowID(new_list, row_list, i, ROWID_NULL);
                     }
 
-                    if (q->limit_value > -1 && new_list->row_count >= q->limit_value) {
+                    if (s->limit > -1 && new_list->row_count >= s->limit) {
                         break;
                     }
                 }
@@ -612,23 +613,22 @@ int basic_select_query (
                 fprintf(stderr, "Q%d: PLAN_SORT\n", getpid());
                 #endif
 
-                int table_id = -1;
-                int field_index;
+                struct ColumnNode *col = &s->predicates[0].left;
 
-                if (!findColumn(q, s->predicates[0].left.fields[0].text, &table_id, &field_index)) {
+                if (populateColumnNode(q, col) != 0) {
                     fprintf(stderr, "Sort column not found: %s\n", s->predicates[0].left.fields[0].text);
                     return -1;
                 }
 
                 // debugRowList(row_list, 2);
 
-                struct DB *db = q->tables[table_id].db;
+                struct DB *db = q->tables[col->fields[0].table_id].db;
 
                 struct RowList *row_list = popRowList(result_set);
 
                 struct RowList *new_list = makeRowList(row_list->join_count, row_list->row_count);
 
-                sortResultRows(db, table_id, field_index, s->predicates[0].op, row_list, new_list);
+                sortResultRows(db, col->fields[0].table_id, col->fields[0].index, s->predicates[0].op, row_list, new_list);
                 // To implement better sort later
                 // sortResultRows(db, order_fields, s->predicate_count, row_list, new_list);
 
@@ -671,7 +671,49 @@ int basic_select_query (
                 #ifdef DEBUG
                 fprintf(stderr, "Q%d: PLAN_GROUP\n", getpid());
                 #endif
-                // NOP
+
+                // Important! PLAN_GROUP assumes rows are already sorted in
+                // GROUP BY order
+
+                if (populateColumnNode(q, &s->predicates[0].left) != 0) {
+                    fprintf(stderr, "GROUP BY column not found: %s\n", s->predicates[0].left.fields[0].text);
+                    return -1;
+                }
+
+                char values[2][MAX_VALUE_LENGTH] = {0};
+
+                struct RowList *row_list = popRowList(result_set);
+
+                int limit = row_list->row_count;
+                if (s->limit > -1 && s->limit < limit) {
+                    limit = s->limit;
+                }
+
+                int count = 0;
+
+                struct RowList *curr_list = NULL;
+
+                for (int i = 0; i < row_list->row_count; i++) {
+                    char *curr_value = values[i%2];
+                    char *prev_value = values[(i+1)%2];
+
+                    evaluateNode(q, row_list, i, &s->predicates[0].left, curr_value, MAX_VALUE_LENGTH);
+
+                    if (strcmp(prev_value, curr_value)) {
+                        if (count >= limit) {
+                            break;
+                        }
+
+                        curr_list = makeRowList(row_list->join_count, row_list->row_count - i);
+                        pushRowList(result_set, curr_list);
+                        count++;
+                    }
+
+                    copyResultRow(curr_list, row_list, i);
+                }
+
+                destroyRowList(row_list);
+
                 break;
             }
 
@@ -683,19 +725,22 @@ int basic_select_query (
                  * Output result set
                  *******************/
 
-                struct RowList *row_list = popRowList(result_set);
+                struct RowList *row_list;
 
-                // Aggregate functions will print just one row
-                if (q->flags & FLAG_GROUP) {
-                    printResultLine(output, q->tables, q->table_count, q->columns, q->column_count, row_list->row_count > 0 ? q->offset_value : RESULT_NO_ROWS, row_list, output_flags);
-                    row_count++;
-                }
-                else for (int i = q->offset_value; i < row_list->row_count; i++) {
-                    printResultLine(output, q->tables, q->table_count, q->columns, q->column_count, i, row_list, output_flags);
-                    row_count++;
-                }
+                while ((row_list = popRowList(result_set))) {
 
-                destroyRowList(row_list);
+                    // Aggregate functions will print just one row
+                    if (q->flags & FLAG_GROUP) {
+                        printResultLine(output, q->tables, q->table_count, q->columns, q->column_count, row_list->row_count > 0 ? q->offset_value : RESULT_NO_ROWS, row_list, output_flags);
+                        row_count++;
+                    }
+                    else for (int i = q->offset_value; i < row_list->row_count; i++) {
+                        printResultLine(output, q->tables, q->table_count, q->columns, q->column_count, i, row_list, output_flags);
+                        row_count++;
+                    }
+
+                    destroyRowList(row_list);
+                }
 
                 break;
             }
@@ -938,11 +983,8 @@ static int findColumn (struct Query *q, const char *text, int *table_id, int *co
 }
 
 /**
- * Flesh out column nodes in SELECT clause and WHERE clause
- *
- * Will resolve a column name to a table_id and column_id
- *
- * Will also pre-fill constant values so they can be used in comparisons later
+ * Will resolve a column name to a table_id and column_id.
+ * Safe to call multiple times on same column.
  *
  * @returns 0 on success
  */
@@ -963,31 +1005,6 @@ static int populateColumnNode (struct Query * query, struct ColumnNode * column)
             return -1;
         }
     }
-
-    // RANDOM() is non-pure so cannot be evaluated early
-    if (column->function == FUNC_RANDOM) {
-        return 0;
-    }
-
-    // Pre-populate - Is this necessary?
-    // if (field1->index == FIELD_CONSTANT) {
-    //     // Fill in constant values such as CURRENT_DATE
-
-    //     evaluateConstantNode(field1, field1->text, MAX_FIELD_LENGTH);
-    // }
-
-    // if (field2->index == FIELD_CONSTANT) {
-    //     // Fill in constant values such as CURRENT_DATE
-
-    //     evaluateConstantNode(field2, field2->text, MAX_FIELD_LENGTH);
-    // }
-
-    // if (field1->index == FIELD_CONSTANT && field2->index == FIELD_CONSTANT) {
-    //     // Evaluate any functions on the column
-
-    //     evaluateFunction(field1->text, NULL, column, -1);
-    //     column->function = FUNC_UNITY;
-    // }
 
     return 0;
 }

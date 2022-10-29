@@ -67,7 +67,7 @@ void appendJoinedRowID (struct RowList * dest_list, struct RowList * src_list, i
  */
 void copyResultRow (struct RowList * dest_list, struct RowList * src_list, int src_index) {
     if (dest_list->join_count != src_list->join_count) {
-        fprintf(stderr, "Cannot copy source result row to destination with differnce size (%d vs %d)\n", src_list->join_count, dest_list->join_count);
+        fprintf(stderr, "Cannot copy source result row to destination with different size (%d vs %d)\n", src_list->join_count, dest_list->join_count);
         exit(-1);
     }
 
@@ -140,7 +140,7 @@ void reverseRowList (struct RowList * row_list, int limit) {
 
 struct RowList *makeRowList (int join_count, int max_rows) {
     // Limits number of groups/working space
-    static int max_size = 100;
+    static int max_size = MAX_ROWLIST_COUNT;
     static int count = 0;
     static struct RowList *row_list_pool = NULL;
 
@@ -149,27 +149,29 @@ struct RowList *makeRowList (int join_count, int max_rows) {
     }
 
     if (count == max_size) {
-        // We cannot realloc() row_list_pool to a new location because it would
-        // invalidate all row_list pointers in use out in the wild.
-        // We'll try to reallocate and check what location we're given. If our
-        // previous allocation was enlarged then we can continue. Otherwise we
-        // must terminate.
+        // Hard coded in structs.h
 
-        max_size *= 2;
-        int size = sizeof(*row_list_pool) * max_size;
-        void *ptr = realloc(row_list_pool, size);
-        if (ptr == NULL) {
-            fprintf(stderr, "Unable to allocate %d bytes for a RowList\n", size);
-            exit(-1);
-        }
+        // // We cannot realloc() row_list_pool to a new location because it would
+        // // invalidate all row_list pointers in use out in the wild.
+        // // We'll try to reallocate and check what location we're given. If our
+        // // previous allocation was enlarged then we can continue. Otherwise we
+        // // must terminate.
+
+        // max_size *= 2;
+        // int size = sizeof(*row_list_pool) * max_size;
+        // void *ptr = realloc(row_list_pool, size);
+        // if (ptr == NULL) {
+        //     fprintf(stderr, "Unable to allocate %d bytes for a RowList\n", size);
+        //     exit(-1);
+        // }
 
         // Were we given a larger allocation at the same location?
-        if (ptr != row_list_pool) {
+        // if (ptr != row_list_pool) {
             fprintf(stderr, "Exhausted size of row_list pool: %d\n", max_size);
             exit(-1);
-        }
+        // }
 
-        row_list_pool = ptr;
+        // row_list_pool = ptr;
     }
 
     struct RowList *row_list = &row_list_pool[count++];
@@ -180,6 +182,9 @@ struct RowList *makeRowList (int join_count, int max_rows) {
 }
 
 void pushRowList(struct ResultSet *result_set, struct RowList *row_list) {
+    if (result_set->count >= MAX_ROWLIST_COUNT) {
+        fprintf(stderr, "Unable to track more than %d RowLists\n", MAX_ROWLIST_COUNT);
+    }
     // fprintf(stderr, "pushRowList()\n");
     // fprintf(stderr, "result_set: { row_lists @ %p, count = %d }\n", result_set->row_lists, result_set->count);
     result_set->row_lists[result_set->count++] = row_list;

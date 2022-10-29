@@ -123,7 +123,7 @@ enum IndexSearchResult indexScan (struct DB *index_db, int rowid_column, enum Op
         int search_status1;
         int search_status2;
 
-        int lower_index_rowid = indexSearch(index_db, value, FIELD_ROW_INDEX, MODE_LOWER_BOUND, &search_status1);
+        enum IndexSearchResult lower_index_rowid = indexSearch(index_db, value, FIELD_ROW_INDEX, MODE_LOWER_BOUND, &search_status1);
 
         if (predicate_op == OPERATOR_EQ && search_status1) {
             // We want an exact match but value is not in index
@@ -137,15 +137,25 @@ enum IndexSearchResult indexScan (struct DB *index_db, int rowid_column, enum Op
             value[len - 2]++;
         }
 
-        int upper_index_rowid = indexSearch(index_db, value, FIELD_ROW_INDEX, MODE_UPPER_BOUND, &search_status2);
+        enum IndexSearchResult upper_index_rowid = indexSearch(index_db, value, FIELD_ROW_INDEX, MODE_UPPER_BOUND, &search_status2);
 
         if (predicate_op == OPERATOR_EQ) {
             lower_bound = lower_index_rowid;
             upper_bound = upper_index_rowid + 1;
         }
         else if (predicate_op == OPERATOR_LIKE) {
-            lower_bound = lower_index_rowid;
-            upper_bound = upper_index_rowid;
+            if (search_status1 == RESULT_BELOW_MIN) {
+                lower_bound = 0;
+            } else {
+                lower_bound = lower_index_rowid;
+            }
+
+            if (search_status2 == RESULT_ABOVE_MAX) {
+                upper_bound = index_db->record_count;
+            }
+            else {
+                upper_bound = upper_index_rowid;
+            }
         }
         else if (predicate_op == OPERATOR_LT) {
             lower_bound = 0;
@@ -218,7 +228,11 @@ int indexWalk(struct DB *db, int rowid_column, int lower_index, int upper_index,
         if (rowid_column == FIELD_ROW_INDEX) {
             appendRowID(row_list, i);
         } else {
-            getRecordValue(db, i, rowid_column, value, MAX_VALUE_LENGTH);
+            int result = getRecordValue(db, i, rowid_column, value, MAX_VALUE_LENGTH);
+            if (result < 0) {
+                fprintf(stderr, "unable to get value for rowid %d\n", i);
+                exit(-1);
+            }
             appendRowID(row_list, atoi(value));
         }
     }

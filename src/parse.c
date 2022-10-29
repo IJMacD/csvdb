@@ -616,8 +616,41 @@ int parseQuery (struct Query *q, const char *query) {
             }
 
         }
+        else if (strcmp(keyword, "GROUP") == 0) {
+            getToken(query, &index, keyword, MAX_FIELD_LENGTH);
+
+            if (strcmp(keyword, "BY") != 0) {
+                fprintf(stderr, "expected BY\n");
+                return -1;
+            }
+
+            q->flags |= FLAG_GROUP;
+
+            while (index < query_length) {
+                int i = q->group_count++;
+
+                getQuotedToken(query, &index, q->group_field[i], MAX_FIELD_LENGTH);
+
+                if (strcmp(q->group_field[i], "PK") == 0 && query[index] == '(') {
+                    // We've been asked to sort on primary key.
+                    // We don't actually care which column it is so we just
+                    // discard the contents of the parentheses.
+                    int len = find_matching_parenthesis(query + index);
+                    index += len;
+                }
+
+                skipWhitespace(query, &index);
+
+                if (query[index] != ',') {
+                    break;
+                }
+
+                index++;
+            }
+
+        }
         else {
-            fprintf(stderr, "expected SELECT|FROM|WHERE|OFFSET|FETCH FIRST|LIMIT\n");
+            fprintf(stderr, "expected WITH|SELECT|FROM|WHERE|OFFSET|FETCH FIRST|LIMIT|ORDER|GROUP\n");
             fprintf(stderr, "Found '%s'\n", keyword);
             return -1;
         }
@@ -629,6 +662,7 @@ int parseQuery (struct Query *q, const char *query) {
 void destroyQuery (struct Query *query) {
     if (query->predicate_count > 0) {
         free(query->predicates);
+        query->predicates = NULL;
     }
 
     if (query->table_count > 0) {

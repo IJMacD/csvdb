@@ -318,6 +318,8 @@ struct Query {
     char order_field[MAX_FIELD_LENGTH][MAX_FIELD_COUNT];
     enum Order order_direction[MAX_FIELD_COUNT];
     int order_count;
+    char group_field[MAX_FIELD_LENGTH][MAX_FIELD_COUNT];
+    int group_count;
 };
 
 
@@ -329,7 +331,7 @@ struct RowList {
 
 struct ResultSet {
     int count;
-    struct RowList * row_lists[100];
+    struct RowList * row_lists[MAX_ROWLIST_COUNT];
 };
 
 struct DateTime {
