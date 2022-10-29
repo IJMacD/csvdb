@@ -14,10 +14,12 @@ void appendJoinedRowID (struct RowList * dest_list, struct RowList * src_list, i
 
 void copyResultRow (struct RowList * dest_list, struct RowList * src_list, int src_index);
 
-void makeRowList (struct RowList * list, int join_count, int max_rows);
-
 void destroyRowList (struct RowList * list);
 
-void overwriteRowList (struct RowList * dest, struct RowList * src);
-
 void reverseRowList (struct RowList * row_list);
+
+struct RowList *makeRowList (int join_count, int max_rows);
+
+void pushRowList(struct ResultSet *result_set, struct RowList *row_list);
+
+struct RowList *popRowList(struct ResultSet *result_set);

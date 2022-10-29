@@ -4,6 +4,8 @@
 #include "structs.h"
 #include "util.h"
 
+static void prepareRowList (struct RowList * list, int join_count, int max_rows);
+
 int getRowID (struct RowList * row_list, int join_id, int index) {
     return row_list->row_ids[index * row_list->join_count + join_id];
 }
@@ -19,6 +21,7 @@ void appendRowID (struct RowList * row_list, int value) {
     }
     row_list->row_ids[row_list->row_count * row_list->join_count] = value;
     row_list->row_count++;
+    // fprintf(stderr, "Append row %d @ idx %d\n", row_list->row_count, row_list->row_count * row_list->join_count);
 }
 
 void appendRowID2 (struct RowList * row_list, int value1, int value2) {
@@ -75,7 +78,7 @@ void copyResultRow (struct RowList * dest_list, struct RowList * src_list, int s
     dest_list->row_count++;
 }
 
-void makeRowList (struct RowList * list, int join_count, int max_rows) {
+static void prepareRowList (struct RowList * list, int join_count, int max_rows) {
     list->join_count = join_count;
     list->row_count = 0;
 
@@ -98,6 +101,8 @@ void makeRowList (struct RowList * list, int join_count, int max_rows) {
         fprintf(stderr, "Cannot allocate space for %d rows\n", max_rows);
         exit(-1);
     }
+
+    // fprintf(stderr, "Allocated %d bytes for list->row_ids @ %p\n", size, list->row_ids);
 }
 
 void destroyRowList (struct RowList * list) {
@@ -105,22 +110,6 @@ void destroyRowList (struct RowList * list) {
         free(list->row_ids);
         list->row_ids = NULL;
     }
-}
-
-/**
- * @brief Copy contents of one row list to another
- *
- * Will destroy destination list first
- *
- * @param dest
- * @param src
- */
-void overwriteRowList (struct RowList * dest, struct RowList * src) {
-    destroyRowList(dest);
-
-    dest->join_count = src->join_count;
-    dest->row_count = src->row_count;
-    dest->row_ids = src->row_ids;
 }
 
 void reverseRowList (struct RowList * row_list) {
@@ -139,4 +128,59 @@ void reverseRowList (struct RowList * row_list) {
             }
         }
     }
+}
+
+struct RowList *makeRowList (int join_count, int max_rows) {
+    // Limits number of groups/working space
+    static int max_size = 100;
+    static int count = 0;
+    static struct RowList *row_list_pool = NULL;
+
+    if (row_list_pool == NULL) {
+        row_list_pool = malloc(sizeof(*row_list_pool) * max_size);
+    }
+
+    if (count == max_size) {
+        // We cannot realloc() row_list_pool to a new location because it would
+        // invalidate all row_list pointers in use out in the wild.
+        // We'll try to reallocate and check what location we're given. If our
+        // previous allocation was enlarged then we can continue. Otherwise we
+        // must terminate.
+
+        max_size *= 2;
+        int size = sizeof(*row_list_pool) * max_size;
+        void *ptr = realloc(row_list_pool, size);
+        if (ptr == NULL) {
+            fprintf(stderr, "Unable to allocate %d bytes for a RowList\n", size);
+            exit(-1);
+        }
+
+        // Were we given a larger allocation at the same location?
+        if (ptr != row_list_pool) {
+            fprintf(stderr, "Exhausted size of row_list pool: %d\n", max_size);
+            exit(-1);
+        }
+
+        row_list_pool = ptr;
+    }
+
+    struct RowList *row_list = &row_list_pool[count++];
+
+    prepareRowList(row_list, join_count, max_rows);
+
+    return row_list;
+}
+
+void pushRowList(struct ResultSet *result_set, struct RowList *row_list) {
+    // fprintf(stderr, "pushRowList()\n");
+    // fprintf(stderr, "result_set: { row_lists @ %p, count = %d }\n", result_set->row_lists, result_set->count);
+    result_set->row_lists[result_set->count++] = row_list;
+}
+
+struct RowList *popRowList(struct ResultSet *result_set) {
+    if (result_set->count == 0) {
+        return NULL;
+    }
+
+    return result_set->row_lists[--result_set->count];
 }

@@ -328,9 +328,8 @@ struct RowList {
 };
 
 struct ResultSet {
-    int list_count;
-    struct RowList * row_lists;
-    char * list_values;
+    int count;
+    struct RowList * row_lists[100];
 };
 
 struct DateTime {
