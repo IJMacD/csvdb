@@ -305,9 +305,9 @@ static void consumeStream (struct DB *db, FILE *stream) {
     int read_size = -1;
     int block_count = 0;
 
-    do {
-        int offset = block_count * block_size;
+    int offset = 0;
 
+    do {
         block_count++;
 
         if (db->data == NULL) {
@@ -323,8 +323,14 @@ static void consumeStream (struct DB *db, FILE *stream) {
             db->data = ptr;
         }
 
-        read_size = fread(db->data + offset, block_size, 1, stream);
+        read_size = fread(db->data + offset, 1, block_size, stream);
+
+        offset += read_size;
     } while (read_size > 0);
+
+    // Add null terminator to end of stream.
+    // Necessary when more than one query is executed in same process.
+    db->data[offset] = '\0';
 }
 
 /**

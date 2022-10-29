@@ -25,6 +25,8 @@ static int findColumn (struct Query *q, const char *text, int *table_id, int *co
 
 static void checkColumnAliases (struct Table * table);
 
+static int process_query (struct Query *q, enum OutputOption output_flags, FILE * output);
+
 extern char *process_name;
 
 int query (const char *query, enum OutputOption output_flags, FILE * output) {
@@ -85,7 +87,6 @@ int query (const char *query, enum OutputOption output_flags, FILE * output) {
 }
 
 int select_query (const char *query, enum OutputOption output_flags, FILE * output) {
-    int result;
     struct Query q = {0};
 
     if (parseQuery(&q, query) < 0) {
@@ -107,21 +108,62 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
         return select_query(query2, output_flags, output);
     }
 
+    // Cannot group and sort in the same query.
+    if (q.flags & FLAG_GROUP && q.flags & FLAG_ORDER)
+    {
+        char tmpfile_name[255];
+        sprintf(tmpfile_name, "/tmp/csvdb.%d-%d.csv", getpid(), rand());
+        FILE *tmpfile = fopen(tmpfile_name, "w");
+
+        struct Query q2 = q;
+        q2.flags &= ~FLAG_ORDER;
+        q2.order_count = 0;
+
+        int result = process_query(&q2, OUTPUT_OPTION_HEADERS | OUTPUT_FORMAT_COMMA, tmpfile);
+
+        fclose(tmpfile);
+
+        if (result < 0) {
+            return -1;
+        }
+
+        char query2[1024];
+        int len = sprintf(query2, "FROM \"%s\" ORDER BY %s %s", tmpfile_name, q.order_field[0], q.order_direction[0] == ORDER_ASC ? "ASC" : "DESC");
+        char *c = query2 + len;
+        for (int i = 1; i < q.order_count; i++) {
+            len = sprintf(c, ", %s %s", q.order_field[i], q.order_direction[i] == ORDER_ASC ? "ASC" : "DESC");
+            c += len;
+        }
+
+        result = select_query(query2, output_flags, output);
+
+        remove(tmpfile_name);
+
+        return result;
+    }
+
+    return process_query(&q, output_flags, output);
+}
+
+static int process_query (struct Query *q, enum OutputOption output_flags, FILE * output)
+{
+    int result;
+
     // Explain can be specified on the command line so copy that value in jsut
     // in case.
     if (output_flags & FLAG_EXPLAIN) {
-        q.flags |= FLAG_EXPLAIN;
+        q->flags |= FLAG_EXPLAIN;
     }
 
-    if (q.table_count == 0) {
+    if (q->table_count == 0) {
         // No table was specified.
         // However, if stdin is something more than a tty (i.e pipe or redirected file)
         // then we can default to it.
         if (!isatty(fileno(stdin))) {
-            q.tables = calloc(1, sizeof (struct Table));
-            q.table_count = 1;
-            strcpy(q.tables[0].name, "stdin");
-            strcpy(q.tables[0].alias, "stdin");
+            q->tables = calloc(1, sizeof (struct Table));
+            q->table_count = 1;
+            strcpy(q->tables[0].name, "stdin");
+            strcpy(q->tables[0].alias, "stdin");
         }
         else {
             // We could have a constant query which will output a single row
@@ -129,8 +171,8 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
 
             // TODO: now that there are multi-field columns we need to check
             // *all* fields .
-            for (int i = 0; i < q.column_count; i++) {
-                struct Field * field = q.columns[0].fields;
+            for (int i = 0; i < q->column_count; i++) {
+                struct Field * field = q->columns[0].fields;
                 if (field->index != FIELD_CONSTANT) {
                     fprintf(stderr, "No Tables specified\n");
                     return -1;
@@ -138,15 +180,15 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
             }
         }
     }
-    else if (strcmp(q.tables[0].name, "INFORMATION") == 0) {
-        if (q.predicate_count < 1) {
+    else if (strcmp(q->tables[0].name, "INFORMATION") == 0) {
+        if (q->predicate_count < 1) {
             return -1;
         }
 
-        q.tables[0].db = NULL;
+        q->tables[0].db = NULL;
 
-        result = information_query(q.predicates[0].right.fields[0].text, output);
-        destroyQuery(&q);
+        result = information_query(q->predicates[0].right.fields[0].text, output);
+        destroyQuery(q);
         return result;
     }
 
@@ -159,26 +201,26 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
 
     // Populate Tables
     // (including JOIN predicate columns)
-    result = populateTables(&q, dbs);
+    result = populateTables(q, dbs);
     if (result < 0) {
         return result;
     }
 
     // Populate SELECT Columns
-    for (int i = 0; i < q.column_count; i++) {
-        result = populateColumnNode(&q, &q.columns[i]);
+    for (int i = 0; i < q->column_count; i++) {
+        result = populateColumnNode(q, &q->columns[i]);
         if (result < 0) {
             return result;
         }
     }
 
     // Populate WHERE columns
-    for (int i = 0; i < q.predicate_count; i++) {
-        result = populateColumnNode(&q, &q.predicates[i].left);
+    for (int i = 0; i < q->predicate_count; i++) {
+        result = populateColumnNode(q, &q->predicates[i].left);
         if (result < 0) {
             return result;
         }
-        result = populateColumnNode(&q, &q.predicates[i].right);
+        result = populateColumnNode(q, &q->predicates[i].right);
         if (result < 0) {
             return result;
         }
@@ -189,17 +231,17 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
      **********************/
     struct Plan plan;
 
-    makePlan(&q, &plan);
+    makePlan(q, &plan);
 
-    if (q.flags & FLAG_EXPLAIN) {
-        result =  explain_select_query(&q, &plan, output_flags, output);
-        destroyQuery(&q);
+    if (q->flags & FLAG_EXPLAIN) {
+        result =  explain_select_query(q, &plan, output_flags, output);
+        destroyQuery(q);
         destroyPlan(&plan);
         return result;
     }
 
-    result = executeQueryPlan(&q, &plan, output_flags, output);
-    destroyQuery(&q);
+    result = executeQueryPlan(q, &plan, output_flags, output);
+    destroyQuery(q);
     destroyPlan(&plan);
     return result;
 }
