@@ -45,12 +45,11 @@ struct SortField {
     enum Order order_direction;
 };
 
-struct tree {
-    int index;
-    int rowid;
-    unsigned long value;
-    struct tree *left;
-    struct tree *right;
+struct TreeNode {
+    int key;
+    char value[MAX_TABLE_LENGTH];
+    struct TreeNode *left;
+    struct TreeNode *right;
 };
 
 // Operator bitmap

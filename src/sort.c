@@ -3,10 +3,12 @@
 #include "structs.h"
 #include "result.h"
 #include "tree.h"
+#include "db.h"
+#include "util.h"
 
-static void sort_walkTree (struct tree *node, struct RowList * source_list, struct RowList * target_list);
+static void sort_walkTree (struct TreeNode *node, struct RowList * source_list, struct RowList * target_list);
 
-static void sort_walkTreeBackwards (struct tree *node, struct RowList * source_list, struct RowList * target_list);
+static void sort_walkTreeBackwards (struct TreeNode *node, struct RowList * source_list, struct RowList * target_list);
 
 /**
  * @param db
@@ -31,18 +33,26 @@ void sortResultRows (struct DB *db, int table_id, int field_index, int direction
         return;
     }
 
-    struct tree *pool = malloc(sizeof (struct tree) * source_list->row_count);
-    struct tree *root = NULL;
+    struct TreeNode *pool = malloc(sizeof (*pool) * source_list->row_count);
+    struct TreeNode *root = NULL;
 
     for (int i = 0; i < source_list->row_count; i++) {
-        struct tree *node = pool++;
-        node->index = i;
+        struct TreeNode *node = pool++;
+        node->key = i;
 
-        node->rowid = getRowID(source_list, table_id, i);
+        int rowid = getRowID(source_list, table_id, i);
+        getRecordValue(db, rowid, field_index, node->value, sizeof(node->value));
+
+        // Must be fixed width to compare numerically.
+        // Yes slower than comparing as native long, but how much?
+        if (is_numeric(node->value)) {
+            long value = atol(node->value);
+            sprintf(node->value, "%32ld", value);
+        }
 
         // For first (root) node we do a dummy insert to make sure struct
         // has been initialised properly
-        insertNode(db, field_index, root, node);
+        insertNode(root, node);
 
         if (i == 0) {
             // Now set the root node to the first position in the pool
@@ -63,7 +73,7 @@ void sortResultRows (struct DB *db, int table_id, int field_index, int direction
     free(root);
 }
 
-static void sort_walkTree (struct tree *node, struct RowList * source_list, struct RowList * target_list) {
+static void sort_walkTree (struct TreeNode *node, struct RowList * source_list, struct RowList * target_list) {
 
     if (node->left != NULL) {
         sort_walkTree(node->left, source_list, target_list);
@@ -71,19 +81,19 @@ static void sort_walkTree (struct tree *node, struct RowList * source_list, stru
 
     // fprintf(stderr, "Write row %d (rowid: %d)\n", node->index, node->rowid);
 
-    copyResultRow(target_list, source_list, node->index);
+    copyResultRow(target_list, source_list, node->key);
 
     if (node->right != NULL) {
         sort_walkTree(node->right, source_list, target_list);
     }
 }
 
-static void sort_walkTreeBackwards (struct tree *node, struct RowList * source_list, struct RowList * target_list) {
+static void sort_walkTreeBackwards (struct TreeNode *node, struct RowList * source_list, struct RowList * target_list) {
     if (node->right != NULL) {
         sort_walkTreeBackwards(node->right, source_list, target_list);
     }
 
-    copyResultRow(target_list, source_list, node->index);
+    copyResultRow(target_list, source_list, node->key);
 
     if (node->left != NULL) {
         sort_walkTreeBackwards(node->left, source_list, target_list);
