@@ -18,8 +18,14 @@ void destroyRowList (struct RowList * list);
 
 void reverseRowList (struct RowList * row_list, int limit);
 
-struct RowList *makeRowList (int join_count, int max_rows);
+int createRowList (int join_count, int max_rows);
 
-void pushRowList(struct ResultSet *result_set, struct RowList *row_list);
+void pushRowList (struct ResultSet *result_set, int row_list);
 
-struct RowList *popRowList(struct ResultSet *result_set);
+int popRowList (struct ResultSet *result_set);
+
+struct RowList *getRowList (int index);
+
+struct ResultSet *createResultSet ();
+
+void destroyResultSet (struct ResultSet *results);

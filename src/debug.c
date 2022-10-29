@@ -42,3 +42,11 @@ void debugTree (struct TreeNode * node) {
 
     printf(" }");
 }
+
+void debugResultSet (struct ResultSet *results) {
+    fprintf(stderr, "ResultSet (count = %d): ", results->count);
+    for (int i = 0; i < results->count; i++) {
+        fprintf(stderr, "%d, ", results->row_list_indices[i]);
+    }
+    fprintf(stderr, "\n");
+}

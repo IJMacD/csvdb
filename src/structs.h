@@ -330,8 +330,9 @@ struct RowList {
 };
 
 struct ResultSet {
+    int size;
     int count;
-    struct RowList * row_lists[MAX_ROWLIST_COUNT];
+    int *row_list_indices;
 };
 
 struct DateTime {

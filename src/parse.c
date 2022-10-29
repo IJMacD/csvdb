@@ -42,7 +42,7 @@ int parseQuery (struct Query *q, const char *query) {
     q->offset_value = 0;
     q->limit_value = -1;
 
-    struct Table ctes[MAX_CTES];
+    struct Table ctes[MAX_CTES] = {0};
     int cte_count = 0;
 
     skipWhitespace(query, &index);

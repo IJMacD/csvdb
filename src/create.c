@@ -157,14 +157,14 @@ int create_index (const char *index_name, const char *table_name, const char *in
     columns[1].fields[0].table_id = 0;
     columns[1].fields[0].index = FIELD_ROW_INDEX;
 
-    struct RowList *row_list = makeRowList(1, db.record_count);
+    int row_list = createRowList(1, db.record_count);
 
     // Fill row list with every sequential rowid
-    fullTableAccess(&db, row_list, -1);
+    fullTableAccess(&db, getRowList(row_list), -1);
 
-    struct RowList *sort_list = makeRowList(row_list->join_count, row_list->row_count);
+    int sort_list = createRowList(getRowList(row_list)->join_count, getRowList(row_list)->row_count);
 
-    sortResultRows(&db, 0, index_field_index, ORDER_ASC, row_list, sort_list);
+    sortResultRows(&db, 0, index_field_index, ORDER_ASC, getRowList(row_list), getRowList(sort_list));
 
     // Output functions assume array of DBs
     printHeaderLine(f, &table, 1, columns, 2, OUTPUT_FORMAT_COMMA);
@@ -174,7 +174,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
     for (int i = 0; i < db.record_count; i++) {
         // Check for UNIQUE
         if (unique_flag) {
-            int row_id = getRowID(sort_list, 0, i);
+            int row_id = getRowID(getRowList(sort_list), 0, i);
             getRecordValue(&db, row_id, index_field_index, values[i % 2], MAX_VALUE_LENGTH);
 
             if (i > 0 && strcmp(values[0], values[1]) == 0) {
@@ -185,11 +185,11 @@ int create_index (const char *index_name, const char *table_name, const char *in
             }
         }
 
-        printResultLine(f, &table, 1, columns, 2, i, sort_list, OUTPUT_FORMAT_COMMA);
+        printResultLine(f, &table, 1, columns, 2, i, getRowList(sort_list), OUTPUT_FORMAT_COMMA);
     }
 
-    destroyRowList(row_list);
-    destroyRowList(sort_list);
+    destroyRowList(getRowList(row_list));
+    destroyRowList(getRowList(sort_list));
 
     return 0;
 }

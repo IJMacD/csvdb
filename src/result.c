@@ -6,6 +6,8 @@
 
 static void prepareRowList (struct RowList * list, int join_count, int max_rows);
 
+static struct RowList *row_list_pool = NULL;
+
 int getRowID (struct RowList * row_list, int join_id, int index) {
     return row_list->row_ids[index * row_list->join_count + join_id];
 }
@@ -138,62 +140,102 @@ void reverseRowList (struct RowList * row_list, int limit) {
     }
 }
 
-struct RowList *makeRowList (int join_count, int max_rows) {
+/**
+ * @brief Create a Row List object in the pool on the heap and return an index
+ *
+ * @param join_count
+ * @param max_rows
+ * @return int index in pool
+ */
+int createRowList (int join_count, int max_rows) {
     // Limits number of groups/working space
-    static int max_size = MAX_ROWLIST_COUNT;
+    static int max_size = 10;
     static int count = 0;
-    static struct RowList *row_list_pool = NULL;
 
     if (row_list_pool == NULL) {
         row_list_pool = malloc(sizeof(*row_list_pool) * max_size);
     }
 
     if (count == max_size) {
-        // Hard coded in structs.h
-
-        // // We cannot realloc() row_list_pool to a new location because it would
-        // // invalidate all row_list pointers in use out in the wild.
-        // // We'll try to reallocate and check what location we're given. If our
-        // // previous allocation was enlarged then we can continue. Otherwise we
-        // // must terminate.
-
-        // max_size *= 2;
-        // int size = sizeof(*row_list_pool) * max_size;
-        // void *ptr = realloc(row_list_pool, size);
-        // if (ptr == NULL) {
-        //     fprintf(stderr, "Unable to allocate %d bytes for a RowList\n", size);
-        //     exit(-1);
-        // }
-
-        // Were we given a larger allocation at the same location?
-        // if (ptr != row_list_pool) {
-            fprintf(stderr, "Exhausted size of row_list pool: %d\n", max_size);
+        max_size *= 2;
+        int size = sizeof(*row_list_pool) * max_size;
+        void *ptr = realloc(row_list_pool, size);
+        if (ptr == NULL) {
+            fprintf(stderr, "Unable to allocate %d bytes for a RowList\n", size);
             exit(-1);
-        // }
+        }
 
-        // row_list_pool = ptr;
+        row_list_pool = ptr;
+
+        // #ifdef DEBUG
+        // fprintf(stderr, "Expanded RowList Pool: %d\n", max_size);
+        // #endif
     }
 
     struct RowList *row_list = &row_list_pool[count++];
 
     prepareRowList(row_list, join_count, max_rows);
 
-    return row_list;
+    return count - 1;
 }
 
-void pushRowList(struct ResultSet *result_set, struct RowList *row_list) {
-    if (result_set->count >= MAX_ROWLIST_COUNT) {
-        fprintf(stderr, "Unable to track more than %d RowLists\n", MAX_ROWLIST_COUNT);
+/**
+ * @brief Get the Row List object from the pool by index.
+ * Important: DO NOT hold on to this pointer for long.
+ * More specifically do not hold on to it after a createRowList() call.
+ *
+ * @param index
+ * @return struct RowList*
+ */
+struct RowList *getRowList (int index) {
+    if (index < 0) return NULL;
+    return row_list_pool + index;
+}
+
+void pushRowList(struct ResultSet *result_set, int row_list_index) {
+    if (result_set->count == result_set->size) {
+        int size = result_set->size * 2;
+        void *ptr = realloc(result_set->row_list_indices, sizeof(int) * size);
+        if (ptr == NULL) {
+            fprintf(stderr, "Unable to reallocate memory for RowList. New size: %d\n", size);
+            exit(-1);
+        }
+        result_set->row_list_indices = ptr;
+        result_set->size = size;
     }
+
     // fprintf(stderr, "pushRowList()\n");
     // fprintf(stderr, "result_set: { row_lists @ %p, count = %d }\n", result_set->row_lists, result_set->count);
-    result_set->row_lists[result_set->count++] = row_list;
+    result_set->row_list_indices[result_set->count++] = row_list_index;
 }
 
-struct RowList *popRowList(struct ResultSet *result_set) {
+int popRowList(struct ResultSet *result_set) {
     if (result_set->count == 0) {
-        return NULL;
+        return -1;
     }
 
-    return result_set->row_lists[--result_set->count];
+    return result_set->row_list_indices[--result_set->count];
+}
+
+/**
+ * @brief Create a Result Set object
+ *
+ * @return struct ResultSet*
+ */
+struct ResultSet *createResultSet () {
+    int default_size = 10;
+    struct ResultSet *results = malloc(sizeof(results));
+    results->count = 0;
+    results->size = default_size;
+    results->row_list_indices = malloc(sizeof(int) * default_size);
+    return results;
+}
+
+/**
+ * @brief
+ *
+ * @param results
+ */
+void destroyResultSet (struct ResultSet *results) {
+    free(results);
 }
