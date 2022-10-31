@@ -8,7 +8,7 @@
 
 static void addStep (struct Plan *plan, int type);
 
-static void addOrderStepIfRequired (struct Plan *plan, struct Query *q);
+static void addOrderStepsIfRequired (struct Plan *plan, struct Query *q);
 
 static void addStepWithPredicate (struct Plan *plan, int type, struct Predicate *p);
 
@@ -172,7 +172,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
                             addStep(plan, PLAN_REVERSE);
                         }
                     } else {
-                        addOrderStepIfRequired(plan, q);
+                        addOrderStepsIfRequired(plan, q);
                     }
                 }
                 else {
@@ -297,7 +297,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
                 }
 
-                addOrderStepIfRequired(plan, q);
+                addOrderStepsIfRequired(plan, q);
 
                 applyLimitOptimisation(plan, q);
             }
@@ -311,7 +311,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
             addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates, q->predicate_count);
 
-            addOrderStepIfRequired(plan, q);
+            addOrderStepsIfRequired(plan, q);
 
             applyLimitOptimisation(plan, q);
         }
@@ -352,7 +352,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
             addJoinStepsIfRequired(plan, q);
 
-            addOrderStepIfRequired(plan, q);
+            addOrderStepsIfRequired(plan, q);
 
             applyLimitOptimisation(plan, q);
         }
@@ -396,7 +396,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
         addJoinStepsIfRequired(plan, q);
 
-        addOrderStepIfRequired(plan, q);
+        addOrderStepsIfRequired(plan, q);
 
         applyLimitOptimisation(plan, q);
     }
@@ -486,32 +486,15 @@ static void addStep (struct Plan *plan, int type) {
  * Will not necessarily add order step.
  * Will check if it's necessary
  */
-static void addOrderStepIfRequired (struct Plan *plan, struct Query *q) {
+static void addOrderStepsIfRequired (struct Plan *plan, struct Query *q) {
     // Check if there's an order by clause
     if (!(q->flags & FLAG_ORDER)) {
         return;
     }
 
-    // At the moment grouping always results in a single row so sorting
-    // is never neccessary.
+    // At the moment grouping queries cannot be sorted in the same process
     if (q->flags & FLAG_GROUP) {
         return;
-    }
-
-    // Don't need to sort if the order field has an equality predicate on it
-    // Comment: This assumes we followed a specific path above
-    //
-    // Comment: should properly check both sides for functions/constants etc.
-    if (q->order_count == 1) {
-        for (int j = 0; j < q->predicate_count; j++) {
-            if (
-                strcmp(q->predicates[j].left.fields[0].text, q->order_node[0].fields[0].text) == 0
-                && q->predicates[j].op == OPERATOR_EQ
-                && q->predicates[j].left.function == q->order_node[0].function
-            ) {
-                return;
-            }
-        }
     }
 
     // If we're sorting on rowid or PK on single table then we can optimse
@@ -525,31 +508,97 @@ static void addOrderStepIfRequired (struct Plan *plan, struct Query *q) {
                 q->order_node[0].function == FUNC_UNITY
                 && (strcmp(q->order_node[0].fields[0].text, "rowid") == 0 || strcmp(q->order_node[0].fields[0].text, "PK") == 0)
             ) {
-                if (q->order_direction[0] == ORDER_ASC) {
-                    // No op - already sorted
-                }
-                else {
+                // No need to sort
+
+                if (q->order_direction[0] == ORDER_DESC) {
                     // Just need to reverse
                     addStep(plan, PLAN_REVERSE);
                 }
+
                 return;
             }
         }
     }
 
-    // To implement better sort later
-    // struct Predicate *order_predicates = malloc(sizeof(*order_predicates) * q->order_count);
+    // Iterate the ORDER BY steps in reverse order.
+    // Columns with equality predicates don't need sorting.
+    //
+    // e.g. a query like this:
+    //      ORDER BY A, B, C, D WHERE B = 0
+    //
+    // will add the following steps:
+    //      * SORT D
+    //      * SORT C
+    //      * SORT A
+    //
+    // This results in A being the primary sort key, then C and finally D.
+    // Yes, it is inefficient to sort the whole list three times, but it is
+    // simple.
+
+    int sorts_added = 0;
 
     for (int i = q->order_count - 1; i >= 0 ; i--) {
-        if (i < (q->order_count - 1) && q->order_direction[i] == ORDER_DESC) {
-            // If there are previous sort steps and this one is DESC then the
-            // results need to be flipped first.
-            addStep(plan, PLAN_REVERSE);
+        int sort_needed = 1;
+
+        // If there is an equality predicate on this column then there is no
+        // need to ever sort by it.
+        for (int j = 0; j < q->predicate_count; j++) {
+            if (
+                q->predicates[j].op == OPERATOR_EQ
+                && strcmp(q->predicates[j].left.fields[0].text, q->order_node[i].fields[0].text) == 0
+                && q->predicates[j].left.function == q->order_node[i].function
+            ) {
+                // OK we don't need to sort by this field
+
+                sort_needed = 0;
+                break;
+            }
         }
 
-        struct Predicate *order_predicate = makePredicate(&q->order_node[i], (enum Operator)q->order_direction[i]);
+        // If this is the first sort to add, we might not need to sort if the
+        // results are already in the right order.
+        if (sort_needed && sorts_added == 0) {
+            struct PlanStep *first = plan->steps;
 
-        addStepWithPredicate(plan, PLAN_SORT, order_predicate);
+            if (first->type == PLAN_INDEX_RANGE || first->type == PLAN_UNIQUE_RANGE) {
+                if (
+                    first->predicates[0].left.function == q->order_node[i].function
+                    && strcmp(first->predicates[0].left.fields[0].text, q->order_node[i].fields[0].text) == 0
+                ) {
+                    sort_needed = 0;
+
+                    // We don't need to sort, but we might need to reverse
+                    if (q->order_direction[i] == ORDER_DESC) {
+                        addStep(plan, PLAN_REVERSE);
+                    }
+
+                    // This still counts as sorting as far as multi-step sorting goes
+                    sorts_added++;
+                }
+            }
+        }
+
+        if (sort_needed) {
+            if (sorts_added > 0 && q->order_direction[i] == ORDER_DESC) {
+                // If there are sort steps lower in precedence, and this one is
+                // DESC then the results need to be flipped first.
+
+                struct PlanStep *prev = &plan->steps[plan->step_count - 1];
+                if (prev->type == PLAN_REVERSE) {
+                    // No need to reverse twice in a row
+                    plan->step_count--;
+                }
+                else {
+                    addStep(plan, PLAN_REVERSE);
+                }
+            }
+
+            struct Predicate *order_predicate = makePredicate(&q->order_node[i], (enum Operator)q->order_direction[i]);
+
+            addStepWithPredicate(plan, PLAN_SORT, order_predicate);
+
+            sorts_added++;
+        }
     }
 
     // To implement better sort later

@@ -103,3 +103,6 @@ SELECT name FROM test WHERE name < 'Adam' ORDER BY LENGTH(name) FETCH FIRST 2 RO
 EXPLAIN SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' AND score > 95 ORDER BY LENGTH(name), birth_date FETCH FIRST 5 ROWS ONLY
 SELECT name, birth_date, score FROM test WHERE birth_date > '2050-01-01' AND score > 95 ORDER BY LENGTH(name), birth_date FETCH FIRST 5 ROWS ONLY
 EXPLAIN SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' AND score > 95 AND LENGTH(name) < 10 ORDER BY LENGTH(name) DESC, birth_date FETCH FIRST 5 ROWS ONLY
+SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' AND score > 95 AND LENGTH(name) < 10 ORDER BY LENGTH(name) DESC, birth_date FETCH FIRST 5 ROWS ONLY
+EXPLAIN SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' AND score > 95 AND LENGTH(name) = 10 ORDER BY LENGTH(name) DESC, birth_date FETCH FIRST 5 ROWS ONLY
+SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' AND score > 95 AND LENGTH(name) = 10 ORDER BY LENGTH(name) DESC, birth_date FETCH FIRST 5 ROWS ONLY
