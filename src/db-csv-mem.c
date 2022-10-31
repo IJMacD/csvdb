@@ -28,11 +28,6 @@ int csvMem_makeDB (struct DB *db, FILE *f) {
     // realistically possible. We will just read the entire stream into memory.
     consumeStream(db, f);
 
-    if (db->file != NULL) {
-        fclose(db->file);
-        db->file = NULL;
-    }
-
     prepareHeaders(db);
 
     int line_count = countLines(db);
@@ -48,7 +43,11 @@ int csvMem_makeDB (struct DB *db, FILE *f) {
 }
 
 /**
- * Returns 0 on success; -1 on failure
+ * @brief Opens, consumes, and closes file specified by filename
+ *
+ * @param db
+ * @param filename can also be "stdin"
+ * @returns int 0 on success; -1 on failure
  */
 int csvMem_openDB (struct DB *db, const char *filename) {
     FILE *f;
@@ -70,7 +69,11 @@ int csvMem_openDB (struct DB *db, const char *filename) {
         }
     }
 
-    return csvMem_makeDB(db, f);
+    int result = csvMem_makeDB(db, f);
+
+    fclose(f);
+
+    return result;
 }
 
 void csvMem_closeDB (struct DB *db) {

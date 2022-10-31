@@ -2,44 +2,51 @@
 #include <stdlib.h>
 
 #include "structs.h"
+#include "query.h"
 #include "db-csv-mem.h"
 
 extern char *process_name;
 
 int view_openDB (struct DB *db, const char *filename) {
-    char buffer[FILENAME_MAX] = {0};
+    char filename_buffer[FILENAME_MAX] = {0};
+    char query_buffer[FILENAME_MAX] = {0};
+    FILE *f;
 
     int len = strlen(filename);
     if (strcmp(filename + len - 4, ".sql") == 0) {
-        sprintf(buffer, "%s -0 -H -F csv -f %s", process_name, filename);
+        f = fopen(filename, "r");
     } else {
-        sprintf(buffer, "%s.sql", filename);
-        FILE *f = fopen(buffer, "r");
-        if (f) {
-            fclose(f);
-            sprintf(buffer, "%s -0 -H -F csv -f %s.sql", process_name, filename);
-        }
-        else {
-            buffer[0] = '\0';
-        }
+        sprintf(filename_buffer, "%s.sql", filename);
+        f = fopen(filename_buffer, "r");
     }
 
-    if (buffer[0] == '\0') {
+    if (f == NULL) {
         return -1;
     }
 
-    FILE *f = popen(buffer, "r");
+    size_t count = fread(query_buffer, 1, 1024, f);
 
-    if (f == NULL) {
-        fprintf(stderr, "Unable to open process\n");
-        exit(-1);
+    fclose(f);
+
+    if (count == 0) {
+        fprintf(stderr, "File '%s' was empty\n", filename);
+        return -1;
     }
 
-    db->file = NULL;
+    query_buffer[count] = '\0';
 
-    int result = csvMem_makeDB(db, f);
+    // select_subquery() execute the view, write the results to a temp file and
+    // write the tmp filename to filename_buffer.
+    int result = select_subquery(query_buffer, filename_buffer);
+    if (result < 0) {
+        return -1;
+    }
 
-    pclose(f);
+    // Pass the temp filename to CSV VFS
+    result = csvMem_openDB(db, filename_buffer);
+
+    // Delete the temp file from disk
+    remove(filename_buffer);
 
     return result;
 }

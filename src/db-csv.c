@@ -29,7 +29,9 @@ static int makeDB (struct DB *db, FILE *f) {
     if (fseek(db->file, 0, SEEK_SET)) {
         // File is not seekable
         // Fallback to VFS_CSV_MEM
-        return csvMem_makeDB(db, f);
+        int result = csvMem_makeDB(db, f);
+        fclose(f);
+        return result;
     }
 
     // OK so we don't have a stream but memory access could still be 20x faster
@@ -40,7 +42,9 @@ static int makeDB (struct DB *db, FILE *f) {
     rewind(db->file);
     if (size < MEMORY_FILE_LIMIT) {
         // Use faster VFS_CSV_MEM
-        return csvMem_makeDB(db, f);
+        int result = csvMem_makeDB(db, f);
+        fclose(f);
+        return result;
     }
 
     prepareHeaders(db);

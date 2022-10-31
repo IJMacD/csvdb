@@ -28,8 +28,6 @@ static void checkColumnAliases (struct Table * table);
 
 static int process_query (struct Query *q, enum OutputOption output_flags, FILE * output);
 
-static int select_subquery(const char *query, char *filename);
-
 extern char *process_name;
 
 int query (const char *query, enum OutputOption output_flags, FILE * output) {
@@ -345,7 +343,17 @@ static int process_query (struct Query *q, enum OutputOption output_flags, FILE 
     return result;
 }
 
-static int select_subquery(const char *query, char *filename) {
+/**
+ * @brief Execute the query, write the results to a temp file and write the tmp
+ * filename to the char pointer provieded as `filename`.
+ *
+ * @param query Query string to process.
+ * @param filename Char buffer to write temp filename to. Must be at least 32
+ * chars. Consumer is responsible for deleting file from disk when no longer
+ * needed.
+ * @return int 0 for success; -1 for failure
+ */
+int select_subquery(const char *query, char *filename) {
     sprintf(filename, "/tmp/csvdb.%d-%d.csv", getpid(), rand());
     FILE *f = fopen(filename, "w");
 
@@ -453,6 +461,8 @@ static int populateTables (struct Query *q, struct DB *dbs) {
 
             // hand off to CSV Mem
             result = csvMem_openDB(db, filename);
+
+            remove(filename);
 
             if (result < 0) {
                 return -1;
