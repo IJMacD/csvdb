@@ -14,7 +14,7 @@ static void printAllHeaderNames (FILE *f, struct DB *db, const char *prefix, enu
 static void printHeaderName (FILE *f, enum OutputOption format, const char *prefix, const char *name);
 static void printHeaderSeparator (FILE *f, enum OutputOption format);
 static void printRecordStart (FILE *f, enum OutputOption format, int is_first, int is_single_column);
-static void printRecordEnd (FILE *f, enum OutputOption format, int is_single_column);
+static void printRecordEnd (FILE *f, enum OutputOption format, int is_last, int is_single_column);
 static void printRecordSeparator (FILE *f, enum OutputOption format);
 static void printColumnValue (FILE *f, enum OutputOption format, const char *prefix, const char *name, const char *value);
 static void printColumnValueNumber (FILE *f, enum OutputOption format, const char *prefix, const char *name, long value);
@@ -122,9 +122,10 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
 
     }
 
-    printRecordEnd(f, format, is_single_column);
-
     int is_last = result_index == row_list->row_count - 1 || have_aggregate == 1;
+
+    printRecordEnd(f, format, is_last, is_single_column);
+
     if (!is_last) {
         printRecordSeparator(f, format);
     }
@@ -138,7 +139,7 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
      ********************/
 
     if (format == OUTPUT_FORMAT_HTML) {
-        fprintf(f, "<TR><TH>");
+        fprintf(f, "<THEAD><TR><TH>");
     }
     else if (format == OUTPUT_FORMAT_JSON_ARRAY) {
         // For JSON Array output a single column with an alias of "_" means
@@ -239,7 +240,7 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
         fprintf(f, "\n");
     }
     else if (format == OUTPUT_FORMAT_HTML) {
-        fprintf(f, "</TH></TR>\n");
+        fprintf(f, "</TH></TR></THEAD>\n");
     }
     else if (format == OUTPUT_FORMAT_JSON_ARRAY) {
         fprintf(f, "\"],");
@@ -386,6 +387,9 @@ static void printHeaderSeparator (FILE *f, enum OutputOption format) {
 
 static void printRecordStart (FILE *f, enum OutputOption format, int is_first, int is_single_col) {
     if (format == OUTPUT_FORMAT_HTML) {
+        if (is_first) {
+            fprintf(f, "<TBODY>\n");
+        }
         fprintf(f, "<TR>");
     }
     else if (format == OUTPUT_FORMAT_JSON_ARRAY) {
@@ -526,7 +530,7 @@ static void printColumnSeparator (FILE *f, enum OutputOption format) {
     }
 }
 
-static void printRecordEnd (FILE *f, enum OutputOption format, int is_single_column) {
+static void printRecordEnd (FILE *f, enum OutputOption format, int is_last, int is_single_column) {
     if (format == OUTPUT_FORMAT_TAB) {
         fprintf(f, "\n");
     }
@@ -535,6 +539,9 @@ static void printRecordEnd (FILE *f, enum OutputOption format, int is_single_col
     }
     else if (format == OUTPUT_FORMAT_HTML) {
         fprintf(f, "</TR>\n");
+        if (is_last) {
+            fprintf(f, "</TBODY>\n");
+        }
     }
     else if (format == OUTPUT_FORMAT_JSON_ARRAY) {
         if (!is_single_column) {
