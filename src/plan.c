@@ -35,10 +35,12 @@ int makePlan (struct Query *q, struct Plan *plan) {
         struct PlanStep * step = plan->steps;
         step->type = PLAN_DUMMY_ROW;
         step->predicate_count = 0;
+        step->predicates = NULL;
 
         step = plan->steps + 1;
         step->type = PLAN_SELECT;
         step->predicate_count = 0;
+        step->predicates = NULL;
 
         return plan->step_count;
     }
@@ -464,6 +466,7 @@ static void addStep (struct Plan *plan, int type) {
     int i = plan->step_count;
 
     plan->steps[i].predicate_count = 0;
+    plan->steps[i].predicates = NULL;
     plan->steps[i].type = type;
     plan->steps[i].limit = -1;
 
@@ -556,6 +559,7 @@ static void addStepWithLimit (struct Plan *plan, int type, int limit) {
     int i = plan->step_count;
 
     plan->steps[i].predicate_count = 0;
+    plan->steps[i].predicates = NULL;
     plan->steps[i].type = type;
     plan->steps[i].limit = limit;
 

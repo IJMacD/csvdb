@@ -224,7 +224,7 @@ int popRowList(struct ResultSet *result_set) {
  */
 struct ResultSet *createResultSet () {
     int default_size = 10;
-    struct ResultSet *results = malloc(sizeof(results));
+    struct ResultSet *results = malloc(sizeof(*results));
     results->count = 0;
     results->size = default_size;
     results->row_list_indices = malloc(sizeof(int) * default_size);

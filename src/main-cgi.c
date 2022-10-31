@@ -37,7 +37,7 @@ int main () {
 
     char query_buffer[1024];
     int flags = OUTPUT_OPTION_HEADERS;
-    int format = 0;
+    int format = OUTPUT_FORMAT_TABLE;
 
     FILE * output = stdout;
 
@@ -56,26 +56,25 @@ int main () {
 
     char *accept_env = getenv("HTTP_ACCEPT");
 
-    if (strstr(accept_env, "text/html") != NULL) {
-        format = OUTPUT_FORMAT_HTML;
-    }
-    else if (strstr(accept_env, "application/json") != NULL) {
-        format = OUTPUT_FORMAT_JSON;
-    }
-    else if (strstr(accept_env, "text/csv") != NULL) {
-        format = OUTPUT_FORMAT_COMMA;
-    }
-    else if (strstr(accept_env, "text/tab-separated-values") != NULL) {
-        format = OUTPUT_FORMAT_TAB;
-    }
-    else if (strstr(accept_env, "application/sql") != NULL) {
-        format = OUTPUT_FORMAT_SQL_INSERT;
-    }
-    else if (strstr(accept_env, "application/xml") != NULL) {
-        format = OUTPUT_FORMAT_XML;
-    }
-    else {
-        format = OUTPUT_FORMAT_TABLE;
+    if (accept_env != NULL) {
+        if (strstr(accept_env, "text/html") != NULL) {
+            format = OUTPUT_FORMAT_HTML;
+        }
+        else if (strstr(accept_env, "application/json") != NULL) {
+            format = OUTPUT_FORMAT_JSON;
+        }
+        else if (strstr(accept_env, "text/csv") != NULL) {
+            format = OUTPUT_FORMAT_COMMA;
+        }
+        else if (strstr(accept_env, "text/tab-separated-values") != NULL) {
+            format = OUTPUT_FORMAT_TAB;
+        }
+        else if (strstr(accept_env, "application/sql") != NULL) {
+            format = OUTPUT_FORMAT_SQL_INSERT;
+        }
+        else if (strstr(accept_env, "application/xml") != NULL) {
+            format = OUTPUT_FORMAT_XML;
+        }
     }
 
     // Don't modify char * returned from getenv

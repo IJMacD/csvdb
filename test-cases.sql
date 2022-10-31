@@ -94,4 +94,6 @@ FROM ranks SELECT MUL(value, 4) FETCH FIRST 5 ROWS ONLY
 FROM ranks SELECT DIV(36, value) FETCH FIRST 5 ROWS ONLY
 FROM ranks SELECT MOD(19, value) FETCH FIRST 5 ROWS ONLY
 FROM ranks SELECT POW(value, 2) FETCH FIRST 5 ROWS ONLY
+-- Test Grouping
 FROM test WHERE name LIKE 'Adam WE%' GROUP BY name SELECT name, COUNT(*)
+FROM test WHERE name LIKE 'Adam K%' GROUP BY name ORDER BY score DESC SELECT name, COUNT(*), SUM(score) AS score
