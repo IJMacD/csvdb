@@ -39,6 +39,7 @@ int view_openDB (struct DB *db, const char *filename) {
     // write the tmp filename to filename_buffer.
     int result = select_subquery(query_buffer, filename_buffer);
     if (result < 0) {
+        remove(filename_buffer);
         return -1;
     }
 

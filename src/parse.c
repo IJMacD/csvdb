@@ -27,9 +27,13 @@ int parseQuery (struct Query *q, const char *query) {
 
     size_t query_length = strlen(query);
 
+    q->table_count = 0;
+
     // printf("Query length: %ld\n", query_length);
 
     // Allow SELECT to be optional and default to SELECT *
+    q->columns[0].function = FUNC_UNITY;
+    q->columns[0].concat = 0;
     q->columns[0].fields[0].index = FIELD_STAR;
     q->columns[0].fields[0].table_id = -1;
     q->column_count = 1;
@@ -37,6 +41,8 @@ int parseQuery (struct Query *q, const char *query) {
     q->predicate_count = 0;
 
     q->order_count = 0;
+
+    q->group_count = 0;
 
     q->flags = 0;
     q->offset_value = 0;
@@ -176,6 +182,8 @@ int parseQuery (struct Query *q, const char *query) {
             int curr_index = 0;
             while (index < query_length) {
                 struct ColumnNode *column = &(q->columns[curr_index++]);
+
+                column->concat = 0;
 
                 if (curr_index >= MAX_FIELD_COUNT + 1) {
                     fprintf(stderr, "Too many columns\n");

@@ -160,11 +160,13 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
         fclose(tmpfile);
 
         if (result < 0) {
+            remove(tmpfile_name);
             return -1;
         }
 
         if (q.order_node[0].function != FUNC_UNITY) {
             fprintf(stderr, "Cannot do ORDER BY and GROUP BY when ORDER BY uses a function\n");
+            remove(tmpfile_name);
             return -1;
         }
 
@@ -174,6 +176,7 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
         for (int i = 1; i < q.order_count; i++) {
             if (q.order_node[i].function != FUNC_UNITY) {
                 fprintf(stderr, "Cannot do ORDER BY and GROUP BY when ORDER BY uses a function\n");
+                remove(tmpfile_name);
                 return -1;
             }
             len = sprintf(c, ", %s %s", q.order_node[i].fields[0].text, q.order_direction[i] == ORDER_ASC ? "ASC" : "DESC");
@@ -454,6 +457,7 @@ static int populateTables (struct Query *q, struct DB *dbs) {
 
             int result = select_subquery(table->name, filename);
             if (result < 0) {
+                remove(filename);
                 return -1;
             }
 
