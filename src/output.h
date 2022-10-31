@@ -1,9 +1,5 @@
 #include "structs.h"
 
-// hxxx aaaa
-// h         - headers
-//      aaaa - format
-
 void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct ColumnNode columns[], int column_count, enum OutputOption flags);
 
 void printResultLine (FILE *f, struct Table *tables, int table_count, struct ColumnNode columns[], int column_count, int result_index, struct RowList * row_list, enum OutputOption flags);

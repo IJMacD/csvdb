@@ -99,6 +99,9 @@ int main (int argc, char * argv[]) {
         else if (strncmp(arg, "--output=", 9) == 0) {
             output_name = arg + 9;
         }
+        else if (strcmp(arg, "--stats") == 0) {
+            flags |= OUTPUT_OPTION_STATS;
+        }
         else if (strcmp(arg, "-f") == 0) {
             if (argi + 1 >= argc) {
                 fprintf(stderr, "Expected file to be specified after -f\n");

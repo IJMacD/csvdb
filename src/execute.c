@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <sys/time.h>
 #include <unistd.h>
 
 #include "structs.h"
@@ -33,6 +34,15 @@ int executeQueryPlan (
     // struct ResultSet results;
 
     // results.list_count = 1;
+
+    FILE *fstats = NULL;
+    struct timeval stop, start;
+
+    if (output_flags & OUTPUT_OPTION_STATS) {
+        fstats = fopen("stats.csv", "a");
+
+        gettimeofday(&start, NULL);
+    }
 
     struct ResultSet *result_set = createResultSet();
 
@@ -550,6 +560,14 @@ int executeQueryPlan (
                 return -1;
         }
 
+        if (output_flags & OUTPUT_OPTION_STATS) {
+            gettimeofday(&stop, NULL);
+
+            fprintf(fstats, "STEP %d,%ld\n", i, dt(stop, start));
+
+            start = stop;
+        }
+
         #ifdef DEBUG
             debugResultSet(result_set);
 
@@ -557,6 +575,10 @@ int executeQueryPlan (
             debugRowList(getRowList(row_list), 1);
             pushRowList(result_set, row_list);
         #endif
+    }
+
+    if (output_flags & OUTPUT_OPTION_STATS) {
+        fclose(fstats);
     }
 
     printPostamble(output, NULL, q->columns, q->column_count, row_count, output_flags);

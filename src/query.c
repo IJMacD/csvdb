@@ -3,6 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 
+#include <sys/time.h>
 #include <unistd.h>
 
 #include "query.h"
@@ -88,12 +89,29 @@ int query (const char *query, enum OutputOption output_flags, FILE * output) {
 
 int select_query (const char *query, enum OutputOption output_flags, FILE * output) {
     struct Query q = {0};
+    FILE *fstats = NULL;
+    struct timeval stop, start;
 
-    // fprintf(stderr, "sizeof(struct Query) = %ld\n", sizeof(q));
+    if (output_flags & OUTPUT_OPTION_STATS) {
+        fstats = fopen("stats.csv", "w");
+        fputs("operation,duration\n",fstats);
+
+        gettimeofday(&start, NULL);
+    }
 
     if (parseQuery(&q, query) < 0) {
         fprintf(stderr, "Parsing query\n");
         return -1;
+    }
+
+    if (output_flags & OUTPUT_OPTION_STATS) {
+        gettimeofday(&stop, NULL);
+
+        fprintf(fstats, "PARSE,%ld\n", dt(stop, start));
+
+        // Will be opened again with a fresh handle in processQuery() and
+        // executeQueryPlan()
+        fclose(fstats);
     }
 
     int format = output_flags & OUTPUT_MASK_FORMAT;
@@ -106,6 +124,9 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
         sprintf(query2, "FROM (%s)", query);
 
         output_flags &= ~FLAG_EXPLAIN;
+
+        // Don't measure stats for sub-process queries
+        output_flags &= ~OUTPUT_OPTION_STATS;
 
         return select_query(query2, output_flags, output);
     }
@@ -147,6 +168,9 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
             len = sprintf(c, ", %s %s", q.order_node[i].fields[0].text, q.order_direction[i] == ORDER_ASC ? "ASC" : "DESC");
             c += len;
         }
+
+        // Don't measure stats for sub-process queries
+        output_flags &= ~OUTPUT_OPTION_STATS;
 
         result = select_query(query2, output_flags, output);
 
@@ -219,6 +243,14 @@ static int process_query (struct Query *q, enum OutputOption output_flags, FILE 
     /*************************
      * Begin Query processing
      *************************/
+    FILE *fstats = NULL;
+    struct timeval stop, start;
+
+    if (output_flags & OUTPUT_OPTION_STATS) {
+        fstats = fopen("stats.csv", "a");
+
+        gettimeofday(&start, NULL);
+    }
 
     // Create array on stack to hold DB structs
     struct DB dbs[MAX_TABLE_COUNT];
@@ -250,12 +282,45 @@ static int process_query (struct Query *q, enum OutputOption output_flags, FILE 
         }
     }
 
+    // Populate ORDER BY columns
+    for (int i = 0; i < q->order_count; i++) {
+        result = populateColumnNode(q, &q->order_node[i]);
+        if (result < 0) {
+            return result;
+        }
+    }
+
+    // Populate GROUP BY columns
+    for (int i = 0; i < q->group_count; i++) {
+        result = populateColumnNode(q, &q->group_node[i]);
+        if (result < 0) {
+            return result;
+        }
+    }
+
+    if (output_flags & OUTPUT_OPTION_STATS) {
+        gettimeofday(&stop, NULL);
+
+        fprintf(fstats, "LOCATE TABLES,%ld\n", dt(stop, start));
+
+        start = stop;
+    }
+
     /**********************
      * Make Plan
      **********************/
     struct Plan plan;
 
     makePlan(q, &plan);
+
+    if (output_flags & OUTPUT_OPTION_STATS) {
+        gettimeofday(&stop, NULL);
+
+        fprintf(fstats, "MAKE PLAN,%ld\n", dt(stop, start));
+
+        // Will be opened again with a fresh handle in executeQueryPlan()
+        fclose(fstats);
+    }
 
     if (q->flags & FLAG_EXPLAIN) {
         result =  explain_select_query(q, &plan, output_flags, output);

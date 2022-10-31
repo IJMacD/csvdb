@@ -13,6 +13,8 @@
 #define STREAM_PIPE     (void *)2
 #define STREAM_PROC     (void *)3
 
+#define dt(stop,start)  (stop.tv_sec - start.tv_sec) * 1000000 + stop.tv_usec - start.tv_usec
+
 enum VFSType {
     VFS_NULL =      0,
     VFS_CSV =       1,
@@ -265,21 +267,27 @@ struct Plan {
     struct PlanStep steps[MAX_PLAN_STEPS];
 };
 
+// hsxx aaaa
+// h         - headers
+//  s        - stats
+//      aaaa - format
+
 enum OutputOption {
     OUTPUT_OPTION_HEADERS =     1 << 7,
+    OUTPUT_OPTION_STATS =       1 << 6,
 
     OUTPUT_MASK_FORMAT =        0x0F,
 
-    OUTPUT_FORMAT_TAB =         1,
-    OUTPUT_FORMAT_COMMA =       2,
-    OUTPUT_FORMAT_JSON =        3,
-    OUTPUT_FORMAT_HTML =        4,
-    OUTPUT_FORMAT_JSON_ARRAY =  5,
-    OUTPUT_FORMAT_SQL_INSERT =  6,
-    OUTPUT_FORMAT_TABLE =       7,
-    OUTPUT_FORMAT_INFO_SEP =    8,
-    OUTPUT_FORMAT_XML =         9,
-    OUTPUT_FORMAT_SQL_VALUES = 10,
+    OUTPUT_FORMAT_TAB =            1,
+    OUTPUT_FORMAT_COMMA =          2,
+    OUTPUT_FORMAT_JSON =           3,
+    OUTPUT_FORMAT_HTML =           4,
+    OUTPUT_FORMAT_JSON_ARRAY =     5,
+    OUTPUT_FORMAT_SQL_INSERT =     6,
+    OUTPUT_FORMAT_TABLE =          7,
+    OUTPUT_FORMAT_INFO_SEP =       8,
+    OUTPUT_FORMAT_XML =            9,
+    OUTPUT_FORMAT_SQL_VALUES =    10,
 };
 
 enum QueryFlag {
