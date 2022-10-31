@@ -8,11 +8,7 @@ void printUsage (const char* name) {
     printf("Usage:\n\t%s n [out.csv]\n\tGenerate n records and store in out.csv or write to stdout\n", name);
 }
 
-char *process_name;
-
 int main (int argc, char * argv[]) {
-    process_name = argv[0];
-
     if (argc < 2) {
         printUsage(argv[0]);
         exit(-1);

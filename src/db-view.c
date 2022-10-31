@@ -5,8 +5,6 @@
 #include "query.h"
 #include "db-csv-mem.h"
 
-extern char *process_name;
-
 int view_openDB (struct DB *db, const char *filename) {
     char filename_buffer[FILENAME_MAX] = {0};
     char query_buffer[FILENAME_MAX] = {0};

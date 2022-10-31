@@ -23,10 +23,6 @@
  * POST data: stdin
  */
 
-// Process name for VIEWs/subqueries
-// Hardcoded in Dockerfile
-char *process_name = "/bin/csvdb";
-
 static void urldecode2(char *dst, const char *src);
 
 static void setDataDir (const char * datadir);

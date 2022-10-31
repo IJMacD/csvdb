@@ -9,8 +9,6 @@
 #include "query.h"
 #include "output.h"
 
-char *process_name;
-
 void printUsage (const char* name) {
     printf(
         "Usage:\n"
@@ -42,8 +40,6 @@ void printUsage (const char* name) {
 }
 
 int main (int argc, char * argv[]) {
-    process_name = argv[0];
-
     srand((unsigned) time(NULL) * getpid());
 
     int flags = 0;

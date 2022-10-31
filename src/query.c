@@ -28,8 +28,6 @@ static void checkColumnAliases (struct Table * table);
 
 static int process_query (struct Query *q, enum OutputOption output_flags, FILE * output);
 
-extern char *process_name;
-
 int query (const char *query, enum OutputOption output_flags, FILE * output) {
     #ifdef DEBUG
     fprintf(stderr, "Start Query (%d)\n", getpid());
