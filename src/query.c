@@ -53,6 +53,12 @@ int query (const char *query, enum OutputOption output_flags, FILE * output) {
         return insert_query(query);
     }
 
+    // If we're querying the stats table then we must have stats turned off
+    // for this query otherwise they would get overwritten.
+    if (strcmp(query, "TABLE stats") == 0 || strncmp(query, "FROM stats", 10) == 0) {
+        output_flags &= ~OUTPUT_OPTION_STATS;
+    }
+
     int format = output_flags & OUTPUT_MASK_FORMAT;
     int is_escaped_output = format == OUTPUT_FORMAT_JSON
         || format == OUTPUT_FORMAT_JSON_ARRAY
@@ -84,18 +90,21 @@ int query (const char *query, enum OutputOption output_flags, FILE * output) {
         return select_query(query2, output_flags, output);
     }
 
+    if (output_flags & OUTPUT_OPTION_STATS) {
+        // start stats file
+        FILE *fstats = fopen("stats.csv", "w");
+        fputs("operation,duration\n",fstats);
+        fclose(fstats);
+    }
+
     return select_query(query, output_flags, output);
 }
 
 int select_query (const char *query, enum OutputOption output_flags, FILE * output) {
     struct Query q = {0};
-    FILE *fstats = NULL;
     struct timeval stop, start;
 
     if (output_flags & OUTPUT_OPTION_STATS) {
-        fstats = fopen("stats.csv", "w");
-        fputs("operation,duration\n",fstats);
-
         gettimeofday(&start, NULL);
     }
 
@@ -105,6 +114,8 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
     }
 
     if (output_flags & OUTPUT_OPTION_STATS) {
+        FILE *fstats = fopen("stats.csv", "a");
+
         gettimeofday(&stop, NULL);
 
         fprintf(fstats, "PARSE,%ld\n", dt(stop, start));
@@ -144,7 +155,7 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
         q2.flags &= ~FLAG_ORDER;
         q2.order_count = 0;
 
-        int result = process_query(&q2, OUTPUT_OPTION_HEADERS | OUTPUT_FORMAT_COMMA, tmpfile);
+        int result = process_query(&q2, OUTPUT_OPTION_HEADERS | OUTPUT_FORMAT_COMMA | (output_flags & OUTPUT_OPTION_STATS), tmpfile);
 
         fclose(tmpfile);
 
@@ -153,7 +164,7 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
         }
 
         if (q.order_node[0].function != FUNC_UNITY) {
-            fprintf(stderr, "Cannot do ORDER BY when GROUP BY uses a function\n");
+            fprintf(stderr, "Cannot do ORDER BY and GROUP BY when ORDER BY uses a function\n");
             return -1;
         }
 
@@ -162,15 +173,12 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
         char *c = query2 + len;
         for (int i = 1; i < q.order_count; i++) {
             if (q.order_node[i].function != FUNC_UNITY) {
-                fprintf(stderr, "Cannot do ORDER BY when GROUP BY uses a function\n");
+                fprintf(stderr, "Cannot do ORDER BY and GROUP BY when ORDER BY uses a function\n");
                 return -1;
             }
             len = sprintf(c, ", %s %s", q.order_node[i].fields[0].text, q.order_direction[i] == ORDER_ASC ? "ASC" : "DESC");
             c += len;
         }
-
-        // Don't measure stats for sub-process queries
-        output_flags &= ~OUTPUT_OPTION_STATS;
 
         result = select_query(query2, output_flags, output);
 
@@ -301,7 +309,7 @@ static int process_query (struct Query *q, enum OutputOption output_flags, FILE 
     if (output_flags & OUTPUT_OPTION_STATS) {
         gettimeofday(&stop, NULL);
 
-        fprintf(fstats, "LOCATE TABLES,%ld\n", dt(stop, start));
+        fprintf(fstats, "LOAD TABLES,%ld\n", dt(stop, start));
 
         start = stop;
     }

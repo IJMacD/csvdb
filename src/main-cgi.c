@@ -36,7 +36,7 @@ static void printError (int format, FILE *error);
 int main () {
 
     char query_buffer[1024];
-    int flags = OUTPUT_OPTION_HEADERS;
+    int flags = OUTPUT_OPTION_HEADERS | OUTPUT_OPTION_STATS;
     int format = OUTPUT_FORMAT_TABLE;
 
     FILE * output = stdout;
