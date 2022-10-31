@@ -315,10 +315,10 @@ struct Query {
     int limit_value;
     struct Predicate *predicates;
     int predicate_count;
-    char order_field[MAX_FIELD_LENGTH][MAX_FIELD_COUNT];
+    struct ColumnNode order_node[MAX_FIELD_COUNT];
     enum Order order_direction[MAX_FIELD_COUNT];
     int order_count;
-    char group_field[MAX_FIELD_LENGTH][MAX_FIELD_COUNT];
+    struct ColumnNode group_node[MAX_FIELD_COUNT];
     int group_count;
 };
 

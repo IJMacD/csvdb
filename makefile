@@ -107,7 +107,7 @@ prep:
 remake: clean all
 
 clean:
-	rm -f $(RELEXE) $(RELOBJS) $(DBGEXE) $(DBGOBJS) $(CGIEXE) ${CGIOBJS}
+	rm -f $(RELEXE) $(RELOBJS) $(DBGEXE) $(DBGOBJS) $(CGIEXE) ${CGIOBJS} ${GENOBJS} ${GENEXE}
 
 install: release
 	cp $(RELEXE) $(INSTALL_DIR)

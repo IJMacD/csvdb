@@ -1,6 +1,7 @@
 #include <stdlib.h>
 
 #include "structs.h"
+#include "evaluate.h"
 #include "result.h"
 #include "tree.h"
 #include "db.h"
@@ -28,7 +29,7 @@ static void sort_walkTreeBackwards (struct TreeNode *node, struct RowList * sour
  * @param source_list
  * @param target_list
  */
-void sortResultRows (struct DB *db, int table_id, int field_index, int direction, struct RowList * source_list, struct RowList * target_list) {
+void sortResultRows (struct Query *q, struct ColumnNode *column, int direction, struct RowList * source_list, struct RowList * target_list) {
     if (source_list->row_count <= 0) {
         return;
     }
@@ -40,8 +41,7 @@ void sortResultRows (struct DB *db, int table_id, int field_index, int direction
         struct TreeNode *node = pool++;
         node->key = i;
 
-        int rowid = getRowID(source_list, table_id, i);
-        getRecordValue(db, rowid, field_index, node->value, sizeof(node->value));
+        evaluateNode(q, source_list, i, column, node->value, sizeof(node->value));
 
         // Must be fixed width to compare numerically.
         // Yes slower than comparing as native long, but how much?

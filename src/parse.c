@@ -581,9 +581,14 @@ int parseQuery (struct Query *q, const char *query) {
             while (index < query_length) {
                 int i = q->order_count++;
 
-                getQuotedToken(query, &index, q->order_field[i], MAX_FIELD_LENGTH);
+                skipWhitespace(query, &index);
 
-                if (strcmp(q->order_field[i], "PK") == 0 && query[index] == '(') {
+                int result = parseColumn(query, &index, &q->order_node[i]);
+                if (result < 0) {
+                    return -1;
+                }
+
+                if (strcmp(q->order_node->fields[0].text, "PK") == 0 && query[index] == '(') {
                     // We've been asked to sort on primary key.
                     // We don't actually care which column it is so we just
                     // discard the contents of the parentheses.
@@ -629,14 +634,11 @@ int parseQuery (struct Query *q, const char *query) {
             while (index < query_length) {
                 int i = q->group_count++;
 
-                getQuotedToken(query, &index, q->group_field[i], MAX_FIELD_LENGTH);
+                skipWhitespace(query, &index);
 
-                if (strcmp(q->group_field[i], "PK") == 0 && query[index] == '(') {
-                    // We've been asked to sort on primary key.
-                    // We don't actually care which column it is so we just
-                    // discard the contents of the parentheses.
-                    int len = find_matching_parenthesis(query + index);
-                    index += len;
+                int result = parseColumn(query, &index, &q->group_node[i]);
+                if (result < 0) {
+                    return -1;
                 }
 
                 skipWhitespace(query, &index);
@@ -657,17 +659,6 @@ int parseQuery (struct Query *q, const char *query) {
     }
 
     return 0;
-}
-
-void destroyQuery (struct Query *query) {
-    if (query->predicate_count > 0) {
-        free(query->predicates);
-        query->predicates = NULL;
-    }
-
-    if (query->table_count > 0) {
-        free(query->tables);
-    }
 }
 
 static int parseColumn (const char * query, size_t * index, struct ColumnNode *column) {

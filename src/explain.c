@@ -40,23 +40,22 @@ int explain_select_query (
         if (s.predicate_count == 0) {
             predicate[0] = '\0';
         }
-        else if (s.predicate_count == 1) {
-            strcpy(predicate, s.predicates[0].left.fields[0].text);
-        }
         else {
             char *ptr = predicate;
             for (int i = 0; i < s.predicate_count; i++) {
-                size_t l = strlen(s.predicates[i].left.fields[0].text);
-
-                if (ptr + l > predicate + MAX_FIELD_LENGTH) break;
+                size_t remaining = MAX_FIELD_LENGTH - (ptr - predicate);
 
                 if (i > 0) {
                     *(ptr++) = ';';
+                    *(ptr++) = ' ';
                 }
 
-                strcpy(ptr, s.predicates[i].left.fields[0].text);
-
-                ptr += l;
+                if (s.predicates[i].left.function == FUNC_UNITY) {
+                    ptr += snprintf(ptr, remaining, "%s", s.predicates[i].left.fields[0].text);
+                }
+                else {
+                    ptr += snprintf(ptr, remaining, "FN(%s)", s.predicates[i].left.fields[0].text);
+                }
 
                 *ptr = '\0';
             }

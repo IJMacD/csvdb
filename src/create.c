@@ -125,6 +125,8 @@ int create_index_query (const char * query) {
 int create_index (const char *index_name, const char *table_name, const char *index_field, int unique_flag) {
     struct DB db;
     struct Table table = {0};
+    struct Query q = {0};
+    q.tables = &table;
     table.db = &db;
     strcpy(table.name, table_name);
 
@@ -164,7 +166,12 @@ int create_index (const char *index_name, const char *table_name, const char *in
 
     int sort_list = createRowList(getRowList(row_list)->join_count, getRowList(row_list)->row_count);
 
-    sortResultRows(&db, 0, index_field_index, ORDER_ASC, getRowList(row_list), getRowList(sort_list));
+    struct ColumnNode col = {0};
+    col.function = FUNC_UNITY;
+    col.fields[0].table_id = 0;
+    col.fields[0].index = index_field_index;
+
+    sortResultRows(&q, &col, ORDER_ASC, getRowList(row_list), getRowList(sort_list));
 
     // Output functions assume array of DBs
     printHeaderLine(f, &table, 1, columns, 2, OUTPUT_FORMAT_COMMA);

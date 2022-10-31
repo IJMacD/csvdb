@@ -89,6 +89,8 @@ int query (const char *query, enum OutputOption output_flags, FILE * output) {
 int select_query (const char *query, enum OutputOption output_flags, FILE * output) {
     struct Query q = {0};
 
+    // fprintf(stderr, "sizeof(struct Query) = %ld\n", sizeof(q));
+
     if (parseQuery(&q, query) < 0) {
         fprintf(stderr, "Parsing query\n");
         return -1;
@@ -111,6 +113,8 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
     // Cannot group and sort in the same query.
     if (q.flags & FLAG_GROUP && q.flags & FLAG_ORDER)
     {
+        // We will materialise the GROUP'd query to disk then sort that
+
         char tmpfile_name[255];
         sprintf(tmpfile_name, "/tmp/csvdb.%d-%d.csv", getpid(), rand());
         FILE *tmpfile = fopen(tmpfile_name, "w");
@@ -127,11 +131,20 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
             return -1;
         }
 
+        if (q.order_node[0].function != FUNC_UNITY) {
+            fprintf(stderr, "Cannot do ORDER BY when GROUP BY uses a function\n");
+            return -1;
+        }
+
         char query2[1024];
-        int len = sprintf(query2, "FROM \"%s\" ORDER BY %s %s", tmpfile_name, q.order_field[0], q.order_direction[0] == ORDER_ASC ? "ASC" : "DESC");
+        int len = sprintf(query2, "FROM \"%s\" ORDER BY %s %s", tmpfile_name, q.order_node[0].fields[0].text, q.order_direction[0] == ORDER_ASC ? "ASC" : "DESC");
         char *c = query2 + len;
         for (int i = 1; i < q.order_count; i++) {
-            len = sprintf(c, ", %s %s", q.order_field[i], q.order_direction[i] == ORDER_ASC ? "ASC" : "DESC");
+            if (q.order_node[i].function != FUNC_UNITY) {
+                fprintf(stderr, "Cannot do ORDER BY when GROUP BY uses a function\n");
+                return -1;
+            }
+            len = sprintf(c, ", %s %s", q.order_node[i].fields[0].text, q.order_direction[i] == ORDER_ASC ? "ASC" : "DESC");
             c += len;
         }
 
@@ -143,6 +156,17 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
     }
 
     return process_query(&q, output_flags, output);
+}
+
+void destroyQuery (struct Query *query) {
+    if (query->predicate_count > 0) {
+        free(query->predicates);
+        query->predicates = NULL;
+    }
+
+    if (query->table_count > 0) {
+        free(query->tables);
+    }
 }
 
 static int process_query (struct Query *q, enum OutputOption output_flags, FILE * output)

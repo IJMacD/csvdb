@@ -425,15 +425,13 @@ int executeQueryPlan (
 
                 // debugRowList(row_list, 2);
 
-                struct DB *db = q->tables[col->fields[0].table_id].db;
-
                 int row_list = popRowList(result_set);
 
                 int new_list = createRowList(getRowList(row_list)->join_count, getRowList(row_list)->row_count);
 
-                sortResultRows(db, col->fields[0].table_id, col->fields[0].index, s->predicates[0].op, getRowList(row_list), getRowList(new_list));
+                sortResultRows(q, col, s->predicates[0].op, getRowList(row_list), getRowList(new_list));
                 // To implement better sort later
-                // sortResultRows(db, order_fields, s->predicate_count, getRowList(row_list), getRowList(new_list));
+                // sortResultRows(db, order_node, s->predicate_count, getRowList(row_list), getRowList(new_list));
 
                 destroyRowList(getRowList(row_list));
 
