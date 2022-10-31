@@ -9,6 +9,7 @@
 #include "db-sequence.h"
 #include "db-sample.h"
 #include "db-dir.h"
+#include "db-view.h"
 #include "predicates.h"
 #include "evaluate.h"
 #include "result.h"
@@ -42,7 +43,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordValue = &csvMem_getRecordValue,
     },
     {
-        0
+        .openDB = &view_openDB,
     },
     {
         .openDB = &calendar_openDB,
@@ -89,7 +90,7 @@ int openDB (struct DB *db, const char *filename) {
     // Need to skip CSV and CSV_MEM for now because they are not very picky and
     // will attempt to find files with the same name, which might not be what
     // we want.
-    for (int i = VFS_INTERNAL; i < VFS_COUNT; i++) {
+    for (int i = VFS_VIEW; i < VFS_COUNT; i++) {
         int (*vfs_openDB) (struct DB *, const char *filename) = VFS_Table[i].openDB;
 
         if (vfs_openDB != NULL) {

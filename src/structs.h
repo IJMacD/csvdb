@@ -8,18 +8,13 @@
 
 #define DB_SUBQUERY (void *)-1
 
-#define STREAM_NULL     (void *)0
-#define STREAM_FILE     (void *)1
-#define STREAM_PIPE     (void *)2
-#define STREAM_PROC     (void *)3
-
 #define dt(stop,start)  (stop.tv_sec - start.tv_sec) * 1000000 + stop.tv_usec - start.tv_usec
 
 enum VFSType {
     VFS_NULL =      0,
     VFS_CSV =       1,
     VFS_CSV_MEM =   2,
-    VFS_INTERNAL =  3,
+    VFS_VIEW =      3,
     VFS_CALENDAR =  4,
     VFS_SEQUENCE =  5,
     VFS_SAMPLE =    6,

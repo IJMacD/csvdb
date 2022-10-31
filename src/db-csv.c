@@ -16,8 +16,6 @@ static int measureLine (FILE *f, size_t byte_offset);
 
 static void prepareHeaders (struct DB *db);
 
-extern char *process_name;
-
 /**
  * Indices must point to enough memory to contain all the indices
  */
@@ -72,53 +70,12 @@ int csv_openDB (struct DB *db, const char *filename) {
         f = fopen(filename, "r");
     }
 
-    if (f) {
-        // We found a file with the explicit name but now check if it is a SQL
-        // file (or otherwise we'll assume csv)
-        int len = strlen(filename);
-        if (strcmp(filename + len - 4, ".sql") == 0) {
-            fclose(f);
-            sprintf(buffer, "%s -0 -H -F csv -f %s", process_name, filename);
-            f = popen(buffer, "r");
-
-            if (f == NULL) {
-                fprintf(stderr, "Unable to open process\n");
-                exit(-1);
-            }
-
-            // Leave a note for csvMem to close the stream
-            db->file = STREAM_PROC;
-
-            return csvMem_makeDB(db, f);
-        }
-    }
-    else {
+    if (!f) {
         sprintf(buffer, "%s.csv", filename);
         f = fopen(buffer, "r");
 
         if (!f) {
-            // Try sql file as a "VIEW"
-            sprintf(buffer, "%s.sql", filename);
-            f = fopen(buffer, "r");
-
-            if (f) {
-                fclose(f);
-                sprintf(buffer, "%s -0 -H -F csv -f %s.sql", process_name, filename);
-                f = popen(buffer, "r");
-
-                if (f == NULL) {
-                    fprintf(stderr, "Unable to open process\n");
-                    exit(-1);
-                }
-
-                // Leave a note for csvMem to close the stream
-                db->file = STREAM_PROC;
-
-                return csvMem_makeDB(db, f);
-            }
-            else {
-                return -1;
-            }
+            return -1;
         }
     }
 

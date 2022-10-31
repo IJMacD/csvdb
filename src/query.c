@@ -28,6 +28,8 @@ static void checkColumnAliases (struct Table * table);
 
 static int process_query (struct Query *q, enum OutputOption output_flags, FILE * output);
 
+static int select_subquery(const char *query, char *filename);
+
 extern char *process_name;
 
 int query (const char *query, enum OutputOption output_flags, FILE * output) {
@@ -261,7 +263,7 @@ static int process_query (struct Query *q, enum OutputOption output_flags, FILE 
     }
 
     // Create array on stack to hold DB structs
-    struct DB dbs[MAX_TABLE_COUNT];
+    struct DB dbs[MAX_TABLE_COUNT] = {0};
 
     // Populate Tables
     // (including JOIN predicate columns)
@@ -343,6 +345,28 @@ static int process_query (struct Query *q, enum OutputOption output_flags, FILE 
     return result;
 }
 
+static int select_subquery(const char *query, char *filename) {
+    sprintf(filename, "/tmp/csvdb.%d-%d.csv", getpid(), rand());
+    FILE *f = fopen(filename, "w");
+
+    struct Query *q = malloc(sizeof(*q));
+
+    int result = parseQuery(q, query);
+    if (result < 0) {
+        return -1;
+    }
+
+    result = process_query(q, OUTPUT_OPTION_HEADERS | OUTPUT_FORMAT_COMMA, f);
+
+    fclose(f);
+
+    if (result < 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
 int information_query (const char *table, FILE * output) {
     struct DB db;
 
@@ -416,33 +440,27 @@ static int populateTables (struct Query *q, struct DB *dbs) {
 
         // Handle special kinds of table, info provided by parser
 
-        if (found == 0) {
-            // Check for subquery first
-            if (table->db == DB_SUBQUERY) {
-                char *cmd = malloc(MAX_TABLE_LENGTH * 2);
+        // Check for subquery first
+        if (found == 0 && table->db == DB_SUBQUERY) {
+            char filename[MAX_TABLE_LENGTH];
 
-                // Construct command line for sub-process
-                sprintf(cmd, "%s -0 -H -F csv \"%s\"", process_name, table->name);
-
-                FILE *f = popen(cmd, "r");
-                free(cmd);
-
-                struct DB *db = &dbs[i];
-
-                // Leave a note for csvMem to close the stream
-                db->file = STREAM_PROC;
-
-                // hand off to CSV Mem
-                int result = csvMem_makeDB(db, f);
-
-                if (result < 0) {
-                    return -1;
-                }
-
-                table->db = &dbs[i];
-
-                found = 1;
+            int result = select_subquery(table->name, filename);
+            if (result < 0) {
+                return -1;
             }
+
+            struct DB *db = &dbs[i];
+
+            // hand off to CSV Mem
+            result = csvMem_openDB(db, filename);
+
+            if (result < 0) {
+                return -1;
+            }
+
+            table->db = &dbs[i];
+
+            found = 1;
         }
 
         // Must be a regular table

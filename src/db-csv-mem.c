@@ -28,15 +28,7 @@ int csvMem_makeDB (struct DB *db, FILE *f) {
     // realistically possible. We will just read the entire stream into memory.
     consumeStream(db, f);
 
-    // Check if we've been told that the stream is actually a sub-process.
-    if (db->file == STREAM_PROC) {
-        int result = pclose(f);
-
-        if (result) {
-            fprintf(stderr, "Sub-process failed\n");
-            return -1;
-        }
-    } else {
+    if (db->file != NULL) {
         fclose(db->file);
         db->file = NULL;
     }
