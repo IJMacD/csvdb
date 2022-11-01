@@ -14,7 +14,9 @@ static int parseColumn (const char * query, size_t * index, struct ColumnNode *c
 
 static int parseFunctionParams (const char * query, size_t * index, struct ColumnNode * column);
 
-static int checkConstantColumn(struct Field * column);
+static int checkConstantField (struct Field * field);
+
+static int checkSimpleArithmeticOperator (const char *query, size_t *index, struct ColumnNode *column);
 
 static struct Table *findTable (const char *table_name, struct Table *tables, int table_count);
 
@@ -672,31 +674,33 @@ int parseQuery (struct Query *q, const char *query) {
 static int parseColumn (const char * query, size_t * index, struct ColumnNode *column) {
     char value[MAX_FIELD_LENGTH];
     int flags = 0;
-    struct Field * field = column->fields;
 
     // Fill in defaults
     column->function = FUNC_UNITY;
     column->fields[0].index = FIELD_UNKNOWN;
     column->fields[0].table_id = -1;
+    column->fields[0].text[0] = '\0';
     column->fields[1].index = FIELD_UNKNOWN;
     column->fields[1].table_id = -1;
+    column->fields[1].text[0] = '\0';
+
+    // First field
+    struct Field * field = &column->fields[0];
 
     int quoted_flag = getQuotedToken(query, index, value, MAX_FIELD_LENGTH);
 
     strcpy(column->alias, value);
 
     if (quoted_flag == 2) {
-        // Field is explicit
+        // Field is explicit, it can't be a function or special column name
         strcpy(column->fields[0].text, value);
 
-        // Nothing else to do
+        checkSimpleArithmeticOperator(query, index, column);
+
+        // Whether we found a simple operator or not, we're done here
 
         return flags;
     }
-
-    // if (checkConstantColumn(field) < 0) {
-    //     return -1;
-    // }
 
     if (strcmp(value, "*") == 0) {
         field->index = FIELD_STAR;
@@ -821,7 +825,7 @@ static int parseColumn (const char * query, size_t * index, struct ColumnNode *c
             if (strlen(part) + strlen(field->text) + 15 < MAX_FIELD_LENGTH)
                 sprintf(column->alias, "EXTRACT(%s FROM %s)", part, field->text);
 
-            if (checkConstantColumn(field) < 0) {
+            if (checkConstantField(field) < 0) {
                 return -1;
             }
 
@@ -921,15 +925,20 @@ static int parseColumn (const char * query, size_t * index, struct ColumnNode *c
             column->function = FUNC_AGG_LISTAGG;
             flags |= FLAG_GROUP;
         }
-    }
-    else {
-        // Just a regular bare field
-        strcpy(field->text, value);
 
-        if (checkConstantColumn(field) < 0) {
-            return -1;
-        }
+        return flags;
     }
+
+    // Just a regular bare field
+    strcpy(column->fields[0].text, value);
+
+    // The bare field could be number literal, string literal or named
+    // constant.
+    if (checkConstantField(field) < 0) {
+        return -1;
+    }
+
+    checkSimpleArithmeticOperator(query, index, column);
 
     return flags;
 }
@@ -948,7 +957,7 @@ static int parseFunctionParams (const char * query, size_t * index, struct Colum
 
     getQuotedToken(query, index, field1->text, MAX_FIELD_LENGTH);
 
-    if (checkConstantColumn(field1) < 0) {
+    if (checkConstantField(field1) < 0) {
         return -1;
     }
 
@@ -963,7 +972,7 @@ static int parseFunctionParams (const char * query, size_t * index, struct Colum
 
         getQuotedToken(query, index, field2->text, MAX_FIELD_LENGTH);
 
-        if (checkConstantColumn(field2) < 0) {
+        if (checkConstantField(field2) < 0) {
             return -1;
         }
 
@@ -980,7 +989,7 @@ static int parseFunctionParams (const char * query, size_t * index, struct Colum
     return 0;
 }
 
-static int checkConstantColumn(struct Field * field) {
+static int checkConstantField (struct Field * field) {
 
     if (is_numeric(field->text)) {
         // Detected numeric constant
@@ -1015,6 +1024,46 @@ static int checkConstantColumn(struct Field * field) {
     else {
         field->index = FIELD_UNKNOWN;
         field->table_id = -1;
+    }
+
+    return 0;
+}
+
+static int checkSimpleArithmeticOperator(const char *query, size_t *index, struct ColumnNode *column) {
+    skipWhitespace(query, index);
+
+    char c = query[*index];
+
+    if (c == '+' || c == '-' || c == '*' || c == '/' || c == '%') {
+        switch (c)
+        {
+        case '+':
+            column->function = FUNC_ADD;
+            break;
+        case '-':
+            column->function = FUNC_SUB;
+            break;
+        case '*':
+            column->function = FUNC_MUL;
+            break;
+        case '/':
+            column->function = FUNC_DIV;
+            break;
+        case '%':
+            column->function = FUNC_MOD;
+            break;
+
+        default:
+            break;
+        }
+
+        (*index)++;
+
+        skipWhitespace(query, index);
+
+        getQuotedToken(query, index, column->fields[1].text, MAX_FIELD_LENGTH);
+
+        checkConstantField(&column->fields[1]);
     }
 
     return 0;
