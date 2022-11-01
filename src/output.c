@@ -324,7 +324,12 @@ static void printAllColumnValues (FILE *f, struct DB *db, const char *prefix, in
             value[0] = '\0';
         }
 
-        printColumnValue(f, format, prefix, getFieldName(db, k), value);
+        char *field_name = NULL;
+        if (format == OUTPUT_FORMAT_JSON || format == OUTPUT_FORMAT_XML) {
+            field_name = getFieldName(db, k);
+        }
+
+        printColumnValue(f, format, prefix, field_name, value);
 
         if (k < db->field_count - 1) {
             printColumnSeparator(f, format);

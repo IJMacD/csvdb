@@ -5,6 +5,7 @@
 
 #include "db-csv.h"
 #include "db-csv-mem.h"
+#include "db-csv-mmap.h"
 #include "db-calendar.h"
 #include "db-sequence.h"
 #include "db-sample.h"
@@ -16,8 +17,6 @@
 #include "db.h"
 #include "util.h"
 #include "function.h"
-
-#define VFS_COUNT   10
 
 static int evaluateTableNode (char * value, struct DB *db, struct ColumnNode *column, int rowid);
 
@@ -73,6 +72,13 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getFieldIndex = &dir_getFieldIndex,
         .getFieldName = &dir_getFieldName,
         .getRecordValue = &dir_getRecordValue,
+    },
+    {
+        .openDB = &csvMmap_openDB,
+        .closeDB = &csvMmap_closeDB,
+        .getFieldIndex = &csvMmap_getFieldIndex,
+        .getFieldName = &csvMmap_getFieldName,
+        .getRecordValue = &csvMmap_getRecordValue,
     },
 };
 

@@ -8,16 +8,9 @@
 
 static int countFields (const char *ptr);
 
-static int countLines (struct DB *db);
-
-static int measureLine (struct DB *db, size_t byte_offset);
-
 static void prepareHeaders (struct DB *db);
 
-/**
- * Indices must point to enough memory to contain all the indices
- */
-static int indexLines (struct DB *db, long *indices);
+static int indexLines (struct DB *db);
 
 static void consumeStream (struct DB *db, FILE *stream);
 
@@ -30,14 +23,7 @@ int csvMem_makeDB (struct DB *db, FILE *f) {
 
     prepareHeaders(db);
 
-    int line_count = countLines(db);
-
-    // Include extra slot for end of file
-    db->line_indices = malloc((sizeof db->line_indices[0]) * (line_count + 1));
-
-    indexLines(db, db->line_indices);
-
-    db->record_count = line_count;
+    indexLines(db);
 
     return 0;
 }
@@ -87,83 +73,6 @@ void csvMem_closeDB (struct DB *db) {
         free(db->fields);
         db->fields = NULL;
     }
-}
-
-static int countLines (struct DB *db) {
-    int count = 0;
-    size_t i = 0;
-
-    while (db->data[i] != '\0') {
-        if (db->data[i] == '\n'){
-            count++;
-        }
-        i++;
-    }
-
-    // Check the last byte.
-    // If the file ends in a new line, then fine
-    // If it doesn't then we have one more line to count
-    if (db->data[i-1] != '\n') count++;
-
-    return count;
-}
-
-static int countFields (const char *ptr) {
-    int count = 1;
-
-    // Note: abritrary line limit
-    while (*ptr != '\0') {
-        if (*ptr == '\n'){
-            return count;
-        }
-
-        if (*ptr == ','){
-            count++;
-        }
-
-        ptr++;
-    }
-
-    return count;
-}
-
-/**
- * Including \n
- */
-static int measureLine (struct DB *db, size_t byte_offset) {
-    size_t i = byte_offset;
-
-    while (db->data[i] != '\0') {
-        if (db->data[i] == '\n'){
-            return i;
-        }
-
-        i++;
-    }
-
-    return i;
-}
-
-/**
- * Indices must point to enough memory to contain all the indices
- */
-static int indexLines (struct DB *db, long *indices) {
-    int count = 0;
-    size_t i = 0;
-
-    indices[count] = i;
-
-    while (db->data[i] != '\0') {
-        if (db->data[i] == '\n'){
-            indices[++count] = i + 1;
-        }
-
-        i++;
-    }
-
-    if (db->data[i] != '\n') count++;
-
-    return count;
 }
 
 int csvMem_getFieldIndex (struct DB *db, const char *field) {
@@ -268,23 +177,66 @@ int csvMem_getRecordValue (struct DB *db, int record_index, int field_index, cha
 }
 
 static void prepareHeaders (struct DB *db) {
-
-    db->field_count = countFields(db->data);
-
-    int header_length = measureLine(db, 0);
+    db->field_count = 1;
 
     db->fields = db->data;
 
-    db->data += header_length + 1;
+    int i = 0;
 
-    for (int i = 0; i < header_length; i++) {
-        if(db->fields[i] == ',' || db->fields[i] == '\n' || db->fields[i] == '\r') {
+    while (db->data[i] != '\n') {
+        if (db->data[i] == ',') {
             db->fields[i] = '\0';
+            db->field_count++;
         }
+
+        i++;
     }
 
-    db->fields[header_length] = '\0';
+    db->fields[i] = '\0';
+
+    db->data += i + 1;
 }
+
+static int indexLines (struct DB *db) {
+    int count = 0;
+    size_t i = 0;
+
+    int max_size = 32;
+
+    db->line_indices = malloc(sizeof(*db->line_indices) * max_size);
+
+    db->line_indices[count++] = i;
+
+    while (db->data[i] != '\0') {
+        if (db->data[i] == '\n'){
+            db->line_indices[count++] = i + 1;
+        }
+
+        if (count == max_size) {
+            max_size *= 2;
+            void *ptr = realloc(db->line_indices, sizeof(*db->line_indices) * max_size);
+            if (ptr == NULL) {
+                fprintf(stderr, "Unable to allocate memory for %d line_indices\n", max_size);
+                exit(-1);
+            }
+            db->line_indices = ptr;
+        }
+
+        i++;
+    }
+
+    if (db->data[i-1] == '\n') {
+        count--;
+    }
+
+    // Add final count to track file size
+    db->line_indices[count] = i;
+
+    db->record_count = count;
+
+    return count;
+}
+
 
 // No Indexes on memory table
 int csvMem_findIndex(__attribute__((unused)) struct DB *db, __attribute__((unused)) const char *table_name, __attribute__((unused)) const char *index_name, __attribute__((unused)) int index_type_flags) {
@@ -434,4 +386,23 @@ void csvMem_fromValues(struct DB *db, const char *input, int length) {
     db->field_count = countFields(db->data + db->line_indices[0]);
 
     db->record_count = line_index;
+}
+
+static int countFields (const char *ptr) {
+    int count = 1;
+
+    // Note: abritrary line limit
+    while (*ptr != '\0') {
+        if (*ptr == '\n'){
+            return count;
+        }
+
+        if (*ptr == ','){
+            count++;
+        }
+
+        ptr++;
+    }
+
+    return count;
 }

@@ -10,6 +10,8 @@
 
 #define dt(stop,start)  (stop.tv_sec - start.tv_sec) * 1000000 + stop.tv_usec - start.tv_usec
 
+#define VFS_COUNT   9
+
 enum VFSType {
     VFS_NULL =      0,
     VFS_CSV =       1,
@@ -19,6 +21,7 @@ enum VFSType {
     VFS_SEQUENCE =  5,
     VFS_SAMPLE =    6,
     VFS_DIR =       7,
+    VFS_CSV_MMAP =  8,
 };
 
 struct DB {

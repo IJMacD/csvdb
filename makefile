@@ -7,7 +7,7 @@ CFLAGS = -Wall -Werror -Wextra -Wno-format-overflow
 #
 # Project files
 #
-SRCS = main.c db.c db-csv.c db-calendar.c db-csv-mem.c db-sequence.c db-sample.c db-dir.c db-view.c query.c execute.c token.c parse.c predicates.c evaluate.c sort.c tree.c output.c create.c util.c explain.c indices.c plan.c function.c date.c result.c debug.c
+SRCS = main.c db.c db-csv.c db-calendar.c db-csv-mem.c db-csv-mmap.c db-sequence.c db-sample.c db-dir.c db-view.c query.c execute.c token.c parse.c predicates.c evaluate.c sort.c tree.c output.c create.c util.c explain.c indices.c plan.c function.c date.c result.c debug.c
 SRCDIR = src
 OBJS = $(SRCS:.c=.o)
 EXE  = csvdb
