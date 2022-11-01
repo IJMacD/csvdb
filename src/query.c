@@ -22,7 +22,7 @@ int information_query (const char *table, FILE * output);
 
 static int populateTables (struct Query *q, struct DB * dbs);
 
-static int findColumn (struct Query *q, const char *text, int *table_id, int *column_id);
+static int findField (struct Query *q, const char *text, int *table_id, int *column_id);
 
 static void checkColumnAliases (struct Table * table);
 
@@ -505,7 +505,7 @@ static int populateTables (struct Query *q, struct DB *dbs) {
     return 0;
 }
 
-static int findColumn (struct Query *q, const char *text, int *table_id, int *column_id) {
+static int findField (struct Query *q, const char *text, int *table_id, int *column_id) {
 
     int dot_index = str_find_index(text, '.');
 
@@ -594,15 +594,25 @@ int populateColumnNode (struct Query * query, struct ColumnNode * column) {
     struct Field * field1 = column->fields + 0;
     struct Field * field2 = column->fields + 1;
 
+    // Check for aliases first
+    if (column->function == FUNC_UNITY && field1->index == FIELD_UNKNOWN && field1->text[0] != '\0') {
+        for (int i = 0; i < query->column_count; i++) {
+            if (column != &query->columns[i] && strcmp(field1->text, query->columns[i].alias) == 0) {
+                memcpy(column, &query->columns[i], sizeof(*column));
+                return 0;
+            }
+        }
+    }
+
     if (field1->index == FIELD_UNKNOWN && field1->text[0] != '\0') {
-        if (!findColumn(query, field1->text, &field1->table_id, &field1->index)) {
+        if (!findField(query, field1->text, &field1->table_id, &field1->index)) {
             fprintf(stderr, "Unable to find column '%s'\n", field1->text);
             return -1;
         }
     }
 
     if (field2->index == FIELD_UNKNOWN && field2->text[0] != '\0') {
-        if (!findColumn(query, field2->text, &field2->table_id, &field2->index)) {
+        if (!findField(query, field2->text, &field2->table_id, &field2->index)) {
             fprintf(stderr, "Unable to find column '%s'\n", field2->text);
             return -1;
         }
