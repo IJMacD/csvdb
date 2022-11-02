@@ -18,9 +18,11 @@ static void addStepWithLimit (struct Plan *plan, int type, int limit);
 
 static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q);
 
-static int optimisePredicates (struct Query *q, struct Predicate * predicates, int count);
+static void addGroupStepIfRequired (struct Plan *plan, struct Query *query);
 
-static void applyLimitOptimisation (struct Plan *plan, struct Query *query);
+static void addLimitStepIfRequired (struct Plan *plan, struct Query *query);
+
+static int optimisePredicates (struct Query *q, struct Predicate * predicates, int count);
 
 static struct Predicate *makePredicate (struct ColumnNode *column, enum Operator op);
 
@@ -175,11 +177,6 @@ int makePlan (struct Query *q, struct Plan *plan) {
                         addOrderStepsIfRequired(plan, q);
                     }
                 }
-                else {
-                    // There's no ordering or grouping, we can probably add limit optimisation
-                    applyLimitOptimisation(plan, q);
-                }
-
             }
             // Before we do a full table scan... we have one more opportunity to use an index
             // To save a sort later, see if we can use an index for ordering now
@@ -229,8 +226,6 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 if (q->predicate_count > skip_predicates) {
                     addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + skip_predicates, q->predicate_count - skip_predicates);
                 }
-
-                applyLimitOptimisation(plan, q);
             }
             else if ((q->flags & FLAG_GROUP) && q->group_node[0].function == FUNC_UNITY) {
                 // Before we do a full table scan... we have one more opportunity to use an index
@@ -269,8 +264,6 @@ int makePlan (struct Query *q, struct Plan *plan) {
                         // Add the rest of the predicates after the join
                         addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates + predicatesOnFirstTable, q->predicate_count - predicatesOnFirstTable);
                     }
-
-                    applyLimitOptimisation(plan, q);
                 }
             }
             /********************
@@ -295,8 +288,6 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 }
 
                 addOrderStepsIfRequired(plan, q);
-
-                applyLimitOptimisation(plan, q);
             }
         } else {
 
@@ -309,8 +300,6 @@ int makePlan (struct Query *q, struct Plan *plan) {
             addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates, q->predicate_count);
 
             addOrderStepsIfRequired(plan, q);
-
-            applyLimitOptimisation(plan, q);
         }
     }
     else if (
@@ -349,8 +338,6 @@ int makePlan (struct Query *q, struct Plan *plan) {
             addJoinStepsIfRequired(plan, q);
 
             addOrderStepsIfRequired(plan, q);
-
-            applyLimitOptimisation(plan, q);
         }
     }
     else if (
@@ -382,8 +369,6 @@ int makePlan (struct Query *q, struct Plan *plan) {
             addStep(plan, PLAN_TABLE_SCAN);
 
             addJoinStepsIfRequired(plan, q);
-
-            applyLimitOptimisation(plan, q);
         }
     }
     else {
@@ -392,63 +377,11 @@ int makePlan (struct Query *q, struct Plan *plan) {
         addJoinStepsIfRequired(plan, q);
 
         addOrderStepsIfRequired(plan, q);
-
-        applyLimitOptimisation(plan, q);
     }
 
-    /*******************
-     * Grouping
-     *******************/
-    if (q->flags & FLAG_GROUP && q->group_count > 0) {
-        struct Predicate *group_predicate = makePredicate(&q->group_node[0], OPERATOR_UN);
+    addGroupStepIfRequired(plan, q);
 
-        // Grouping *requires* sorting
-        // We'll check if we can get away without sorting explicitly.
-        // This check is less than perfect.
-        int sort_required = 1;
-
-        if (q->group_node[0].function == FUNC_UNITY) {
-            struct PlanStep *first = &plan->steps[0];
-            char *first_predicate_value = first->predicates[0].left.fields[0].text;
-
-            if (
-                (first->type == PLAN_INDEX_RANGE || first->type == PLAN_UNIQUE_RANGE)
-                && strcmp(first_predicate_value, q->group_node[0].fields[0].text) == 0
-            ) {
-                // Already sorted on our field
-                sort_required = 0;
-            }
-        }
-
-        if (sort_required) {
-            addStepWithPredicate(plan, PLAN_SORT, group_predicate);
-        }
-
-        addStepWithPredicate(plan, PLAN_GROUP, group_predicate);
-
-        if (q->limit_value >= 0) {
-            struct PlanStep *prev = &plan->steps[plan->step_count - 1];
-
-            prev->limit = q->limit_value;
-        }
-    }
-
-    /********************
-     * OFFSET/FETCH FIRST
-     ********************/
-
-    if (q->limit_value >= 0) {
-        struct PlanStep *prev = &plan->steps[plan->step_count - 1];
-
-        if (prev->type == PLAN_PK || prev->type == PLAN_UNIQUE || prev->type == PLAN_GROUP) {
-            // No op - don't need limit for these previous step types
-        }
-        else if (prev->limit == -1 || prev->limit > q->offset_value + q->limit_value) {
-            // Either previous step didn't have limit optimisation,
-            // or previous limit was higher than needed
-            addStepWithLimit(plan, PLAN_SLICE, q->offset_value + q->limit_value);
-        }
-    }
+    addLimitStepIfRequired(plan, q);
 
     addStep(plan, PLAN_SELECT);
 
@@ -550,8 +483,8 @@ static void addOrderStepsIfRequired (struct Plan *plan, struct Query *q) {
             }
         }
 
-        // If this is the first sort to add, we might not need to sort if the
-        // results are already in the right order.
+        // If this is the first sort to add (last in list), we might not need
+        // to sort if the results are already in the right order.
         if (sort_needed && sorts_added == 0) {
             struct PlanStep *first = plan->steps;
 
@@ -667,6 +600,80 @@ static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
     }
 }
 
+static void addGroupStepIfRequired (struct Plan *plan, struct Query *q) {
+
+    /*******************
+     * Grouping
+     *******************/
+    if (q->flags & FLAG_GROUP && q->group_count > 0) {
+        struct Predicate *group_predicate = makePredicate(&q->group_node[0], OPERATOR_UN);
+
+        // Grouping *requires* sorting
+        // We'll check if we can get away without sorting explicitly.
+        // This check is less than perfect.
+        int sort_required = 1;
+
+        if (q->group_node[0].function == FUNC_UNITY) {
+            struct PlanStep *first = &plan->steps[0];
+            char *first_predicate_value = first->predicates[0].left.fields[0].text;
+
+            if (
+                (first->type == PLAN_INDEX_RANGE || first->type == PLAN_UNIQUE_RANGE)
+                && strcmp(first_predicate_value, q->group_node[0].fields[0].text) == 0
+            ) {
+                // Already sorted on our field
+                sort_required = 0;
+            }
+        }
+
+        if (sort_required) {
+            addStepWithPredicate(plan, PLAN_SORT, group_predicate);
+        }
+
+        addStepWithPredicate(plan, PLAN_GROUP, group_predicate);
+
+        if (q->limit_value >= 0) {
+            struct PlanStep *prev = &plan->steps[plan->step_count - 1];
+
+            prev->limit = q->limit_value;
+        }
+    }
+}
+
+static void addLimitStepIfRequired (struct Plan *plan, struct Query *query) {
+    /********************
+     * OFFSET/FETCH FIRST
+     ********************/
+
+    if (query->limit_value >= 0) {
+        int limit = query->offset_value + query->limit_value;
+
+        struct PlanStep *prev = &plan->steps[plan->step_count - 1];
+
+        // Optimisation: Apply limit to previous step if possible instead of
+        // adding explicit SLICE step.
+
+        if (prev->type == PLAN_PK || prev->type == PLAN_UNIQUE) {
+            // These steps never need a limit applied
+            return;
+        }
+
+        // PLAN_SORT is incapable of self limiting
+        if (prev->type != PLAN_SORT)
+        {
+            // If there's no previous limit or the limit was higher than
+            // necessary we'll set our limit.
+            if (prev->limit == -1 || prev->limit > limit) {
+                prev->limit = limit;
+            }
+            return;
+        }
+
+        // We need to add explicit step
+        addStepWithLimit(plan, PLAN_SLICE, limit);
+    }
+}
+
 /**
  * @brief Re-order predicates so first N predicates only include first table and constants
  *
@@ -723,13 +730,6 @@ static int optimisePredicates (__attribute__((unused)) struct Query *q, struct P
     }
 
     return 0;
-}
-
-// Optimisation: Apply limit early to latest step added
-static void applyLimitOptimisation (struct Plan *plan, struct Query *query) {
-    if (query->limit_value >= 0 && !(query->flags & FLAG_ORDER) && !(query->flags & FLAG_GROUP)) {
-        plan->steps[plan->step_count - 1].limit = query->offset_value + query->limit_value;
-    }
 }
 
 static struct Predicate *makePredicate (struct ColumnNode *column, enum Operator op) {
