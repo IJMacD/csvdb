@@ -88,7 +88,7 @@ enum Function {
     // (00 function is usable in each family)
 
     // Family 000x (0x00) Basic
-    FUNC_FAM_BASIC =                0x00,
+    // FUNC_FAM_BASIC =             0x00,
 
     FUNC_UNITY =                    0x00,
     FUNC_CHR =                      0x01,
@@ -234,6 +234,7 @@ enum PlanStepType {
     PLAN_UNIQUE =               6,
     PLAN_UNIQUE_RANGE =         7,
     PLAN_INDEX_RANGE =          8,
+    PLAN_INDEX_SCAN =           9,
 
     PLAN_CROSS_JOIN =          10,
     PLAN_CONSTANT_JOIN =       11,
@@ -328,6 +329,7 @@ struct Query {
     int group_count;
 };
 
+typedef int RowListIndex;
 
 struct RowList {
     int row_count;

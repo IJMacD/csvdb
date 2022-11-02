@@ -10,11 +10,12 @@
 
 static void prepareHeaders (struct DB *db);
 
-static int indexLines (struct DB *db);
+static int indexLines (struct DB *db, int max_rows);
 
 int csvMmap_makeDB (struct DB *db, FILE *f) {
     db->vfs = VFS_CSV_MMAP;
     db->file = NULL;
+    db->line_indices = NULL;
 
     if (fseek(f, 0, SEEK_END)) {
         // Can only mmap a seekable file
@@ -64,12 +65,16 @@ int csvMmap_openDB (struct DB *db, const char *filename) {
 
 void csvMmap_closeDB (struct DB *db) {
     if (db->line_indices != NULL) {
-        // Rough size, and rough start location
-        // Exact values aren't required
-        int file_size = db->line_indices[db->_record_count];
+        // Rough size, and rough start location.
+        // Exact values aren't required.
+        // We'll do our best, especially if we've only done a partial index
+        int final_index = db->_record_count < 0 ? -db->_record_count - 1 : db->_record_count;
+        int file_size = db->line_indices[final_index];
         munmap(db->data, file_size);
 
-        free(db->line_indices);
+        // max_size of allocation is stored at start of real block
+        void *ptr = db->line_indices;
+        free(ptr - sizeof(int));
         db->line_indices = NULL;
     }
 
@@ -110,7 +115,7 @@ char *csvMmap_getFieldName (struct DB *db, int field_index) {
 
 int csvMmap_getRecordCount (struct DB *db) {
     if (db->_record_count == -1) {
-        indexLines(db);
+        indexLines(db, -1);
     }
 
     return db->_record_count;
@@ -119,12 +124,8 @@ int csvMmap_getRecordCount (struct DB *db) {
 /**
  * Returns the number of bytes read, or -1 on error
  */
-int csvMmap_getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
-    if (db->_record_count == -1) {
-        indexLines(db);
-    }
-
-    if (record_index < 0 || record_index >= db->_record_count) {
+int csvMmap_getRecordValue (struct DB *db, int rowid, int field_index, char *value, size_t value_max_length) {
+    if (rowid < 0) {
         return -1;
     }
 
@@ -132,7 +133,19 @@ int csvMmap_getRecordValue (struct DB *db, int record_index, int field_index, ch
         return -1;
     }
 
-    long file_offset = db->line_indices[record_index];
+    if (db->_record_count < 0) {
+        // Just index as many rows as we need
+        if (indexLines(db, rowid + 1) < 0) {
+            return -1;
+        }
+    }
+    else {
+        if (rowid >= db->_record_count) {
+            return -1;
+        }
+    }
+
+    long file_offset = db->line_indices[rowid];
 
     int current_field_index = 0;
     size_t char_index = 0;
@@ -221,29 +234,74 @@ static void prepareHeaders (struct DB *db) {
     db->data += i + 1;
 }
 
-static int indexLines (struct DB *db) {
+/**
+ * @brief Index all, or some lines in the file
+ *
+ * @param db
+ * @param max_rows -1 for all rows
+ * @return int return number of lines found
+ */
+static int indexLines (struct DB *db, int max_rows) {
     int count = 0;
     size_t i = 0;
 
-    int max_size = 32;
+    // max_size is current size of allocation
+    // max_size is stored at start of allocation
+    int *max_size = NULL;
 
-    db->line_indices = malloc(sizeof(*db->line_indices) * max_size);
+    if (db->line_indices == NULL) {
+        max_size = malloc(sizeof(*db->line_indices) * (32 + 1));
+        // Save current size at start of allocation
+        *max_size = 32;
+        // False start
+        db->line_indices = (void *)max_size + sizeof(*max_size);
+    }
+    else {
+        void *ptr = db->line_indices;
+        max_size = ptr - sizeof(*max_size);
+    }
+
+    // Check if we've already done a partial index
+    if (db->_record_count < -1) {
+        count = -db->_record_count - 1;
+
+        if (max_rows <= count) {
+            // We've already indexed as much as we need to
+            return count;
+        }
+
+        // Jump ahead in file to avoid unnecessary repetition
+        i = db->line_indices[count];
+    }
 
     db->line_indices[count++] = i;
 
     while (db->data[i] != '\0') {
         if (db->data[i] == '\n'){
             db->line_indices[count++] = i + 1;
-        }
 
-        if (count == max_size) {
-            max_size *= 2;
-            void *ptr = realloc(db->line_indices, sizeof(*db->line_indices) * max_size);
-            if (ptr == NULL) {
-                fprintf(stderr, "Unable to allocate memory for %d line_indices\n", max_size);
-                exit(-1);
+            if (count == *max_size) {
+                *max_size *= 2;
+                // max_size is the real location of the allocation
+                void *ptr = realloc(max_size, sizeof(*db->line_indices) * *max_size);
+                if (ptr == NULL) {
+                    fprintf(stderr, "Unable to allocate memory for %d line_indices\n", *max_size);
+                    exit(-1);
+                }
+                // save new memory addresses
+                max_size = ptr;
+                db->line_indices = ptr + sizeof(*max_size);
             }
-            db->line_indices = ptr;
+
+            if (max_rows > -1 && count >= max_rows) {
+                count--;
+
+                // Save count as negative number to indicate full scan has not yet
+                // taken place.
+                db->_record_count = -count - 1;
+
+                return count;
+            }
         }
 
         i++;

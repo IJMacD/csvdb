@@ -147,7 +147,7 @@ void reverseRowList (struct RowList * row_list, int limit) {
  * @param max_rows
  * @return int index in pool
  */
-int createRowList (int join_count, int max_rows) {
+RowListIndex createRowList (int join_count, int max_rows) {
     // Limits number of groups/working space
     static int max_size = 10;
     static int count = 0;
@@ -187,12 +187,12 @@ int createRowList (int join_count, int max_rows) {
  * @param index
  * @return struct RowList*
  */
-struct RowList *getRowList (int index) {
+struct RowList *getRowList (RowListIndex index) {
     if (index < 0) return NULL;
     return row_list_pool + index;
 }
 
-void pushRowList(struct ResultSet *result_set, int row_list_index) {
+void pushRowList(struct ResultSet *result_set, RowListIndex row_list_index) {
     if (result_set->count == result_set->size) {
         int size = result_set->size * 2;
         void *ptr = realloc(result_set->row_list_indices, sizeof(int) * size);
@@ -209,7 +209,7 @@ void pushRowList(struct ResultSet *result_set, int row_list_index) {
     result_set->row_list_indices[result_set->count++] = row_list_index;
 }
 
-int popRowList(struct ResultSet *result_set) {
+RowListIndex popRowList(struct ResultSet *result_set) {
     if (result_set->count == 0) {
         return -1;
     }

@@ -54,7 +54,7 @@ int executeQueryPlan (
         switch (s->type) {
             case PLAN_DUMMY_ROW: {
                 // Just a single output row
-                int row_list = createRowList(0, 0);
+                RowListIndex row_list = createRowList(0, 0);
                 getRowList(row_list)->row_count = 1;
                 pushRowList(result_set, row_list);
                 break;
@@ -66,14 +66,15 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d: PLAN_PK\n", getpid());
                 #endif
 
-                int record_count = getRecordCount(q->tables[0].db);
-                int row_list = createRowList(1, record_count);
+                int record_count = (s->limit > -1) ? s->limit : getRecordCount(q->tables[0].db);
+
+                RowListIndex row_list = createRowList(1, record_count);
                 pushRowList(result_set, row_list);
 
                 // First table
                 struct Table * table = q->tables;
                 struct Predicate *p = &s->predicates[0];
-                indexPrimaryScan(table->db, p->op, p->right.fields[0].text, getRowList(row_list), s->limit);
+                indexPrimarySeek(table->db, p->op, p->right.fields[0].text, getRowList(row_list), s->limit);
                 break;
             }
 
@@ -93,12 +94,14 @@ int executeQueryPlan (
                     return -1;
                 }
 
-                int row_list = createRowList(1, getRecordCount(&index_db));
+                int record_count = (s->limit > -1) ? s->limit : getRecordCount(&index_db);
+
+                RowListIndex row_list = createRowList(1, record_count);
                 pushRowList(result_set, row_list);
 
                 // Find which column in the index table contains the rowids of the primary table
                 int rowid_col = getFieldIndex(&index_db, "rowid");
-                indexUniqueScan(&index_db, rowid_col, p->op, p->right.fields[0].text, getRowList(row_list), s->limit);
+                indexUniqueSeek(&index_db, rowid_col, p->op, p->right.fields[0].text, getRowList(row_list), s->limit);
 
                 break;
             }
@@ -118,12 +121,41 @@ int executeQueryPlan (
                     return -1;
                 }
 
-                int row_list = createRowList(1, getRecordCount(&index_db));
+                int record_count = (s->limit > -1) ? s->limit : getRecordCount(&index_db);
+
+                RowListIndex row_list = createRowList(1, record_count);
                 pushRowList(result_set, row_list);
 
                 // Find which column in the index table contains the rowids of the primary table
                 int rowid_col = getFieldIndex(&index_db, "rowid");
-                indexScan(&index_db, rowid_col, p->op, p->right.fields[0].text, getRowList(row_list), s->limit);
+                indexSeek(&index_db, rowid_col, p->op, p->right.fields[0].text, getRowList(row_list), s->limit);
+
+                break;
+            }
+
+            case PLAN_INDEX_SCAN: {
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d: PLAN_INDEX_SCAN\n", getpid());
+                #endif
+
+                // First table
+                struct Table * table = q->tables;
+                struct Predicate *p = &s->predicates[0];
+                struct DB index_db;
+
+                if (findIndex(&index_db, table->name, p->left.fields[0].text, INDEX_ANY) == 0) {
+                    fprintf(stderr, "Unable to find index on column '%s' on table '%s'\n", p->left.fields[0].text, table->name);
+                    return -1;
+                }
+
+                int record_count = (s->limit > -1) ? s->limit : getRecordCount(&index_db);
+
+                RowListIndex row_list = createRowList(1, record_count);
+                pushRowList(result_set, row_list);
+
+                // Find which column in the index table contains the rowids of the primary table
+                int rowid_col = getFieldIndex(&index_db, "rowid");
+                indexScan(&index_db, rowid_col, getRowList(row_list), s->limit);
 
                 break;
             }
@@ -134,8 +166,9 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d: PLAN_TABLE_ACCESS_FULL\n", getpid());
                 #endif
 
-                int record_count = getRecordCount(q->tables[0].db);
-                int row_list = createRowList(1, record_count);
+                int record_count = (s->limit >= 0) ? s->limit : getRecordCount(q->tables[0].db);
+
+                RowListIndex row_list = createRowList(1, record_count);
                 pushRowList(result_set, row_list);
 
                 // First table
@@ -156,7 +189,7 @@ int executeQueryPlan (
                 #endif
 
                 // We'll just recycle the same RowList
-                int row_list = popRowList(result_set);
+                RowListIndex row_list = popRowList(result_set);
 
                 int source_count = getRowList(row_list)->row_count;
 
@@ -199,7 +232,7 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d: PLAN_CROSS_JOIN\n", getpid());
                 #endif
 
-                int row_list = popRowList(result_set);
+                RowListIndex row_list = popRowList(result_set);
 
                 struct DB *next_db = q->tables[getRowList(row_list)->join_count].db;
 
@@ -207,7 +240,7 @@ int executeQueryPlan (
 
                 int new_length = getRowList(row_list)->row_count * record_count;
 
-                int new_list = createRowList(getRowList(row_list)->join_count + 1, new_length);
+                RowListIndex new_list = createRowList(getRowList(row_list)->join_count + 1, new_length);
 
                 for (int i = 0; i < getRowList(row_list)->row_count; i++) {
                     int done = 0;
@@ -235,7 +268,7 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d: PLAN_CONSTANT_JOIN\n", getpid());
                 #endif
 
-                int row_list = popRowList(result_set);
+                RowListIndex row_list = popRowList(result_set);
 
                 // Sanity check
                 struct Predicate *p = s->predicates + 0;
@@ -249,7 +282,7 @@ int executeQueryPlan (
                 struct DB *next_db = q->tables[getRowList(row_list)->join_count].db;
 
                 int record_count = getRecordCount(next_db);
-                int tmp_list = createRowList(1, record_count);
+                RowListIndex tmp_list = createRowList(1, record_count);
 
                 // This is a constant join so we'll just populate the table once
                 // Hopefully it won't be the whole table since we have a predicate
@@ -258,7 +291,7 @@ int executeQueryPlan (
                 int new_length = getRowList(row_list)->row_count * getRowList(tmp_list)->row_count;
 
                 // Now we know how many rows are to be joined we can make the new row list
-                int new_list = createRowList(getRowList(row_list)->join_count + 1, new_length);
+                RowListIndex new_list = createRowList(getRowList(row_list)->join_count + 1, new_length);
 
                 // For each row in the original row list, join every row of the tmp row list
                 for (int i = 0; i < getRowList(row_list)->row_count; i++) {
@@ -288,7 +321,7 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d: PLAN_LOOP_JOIN\n", getpid());
                 #endif
 
-                int row_list = popRowList(result_set);
+                RowListIndex row_list = popRowList(result_set);
 
                 struct Table *table = &q->tables[getRowList(row_list)->join_count];
                 struct DB *next_db = table->db;
@@ -297,10 +330,10 @@ int executeQueryPlan (
 
                 int new_length = getRowList(row_list)->row_count * record_count;
 
-                int new_list = createRowList(getRowList(row_list)->join_count + 1, new_length);
+                RowListIndex new_list = createRowList(getRowList(row_list)->join_count + 1, new_length);
 
                 // Prepare a temporary list that can hold every record in the table
-                int tmp_list = createRowList(1, record_count);
+                RowListIndex tmp_list = createRowList(1, record_count);
 
                 // Table ID being joined here
                 int table_id = getRowList(row_list)->join_count;
@@ -366,16 +399,16 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d: PLAN_UNIQUE_JOIN\n", getpid());
                 #endif
 
-                int row_list = popRowList(result_set);
+                RowListIndex row_list = popRowList(result_set);
 
                 // Table ID being joined here
                 int table_id = getRowList(row_list)->join_count;
 
                 struct Table *table = &q->tables[table_id];
 
-                int new_list = createRowList(getRowList(row_list)->join_count + 1, getRowList(row_list)->row_count);
+                RowListIndex new_list = createRowList(getRowList(row_list)->join_count + 1, getRowList(row_list)->row_count);
 
-                int tmp_list = createRowList(1, 1);
+                RowListIndex tmp_list = createRowList(1, 1);
 
                 struct Predicate * p = &s->predicates[0];
 
@@ -448,9 +481,9 @@ int executeQueryPlan (
 
                 // debugRowList(row_list, 2);
 
-                int row_list = popRowList(result_set);
+                RowListIndex row_list = popRowList(result_set);
 
-                int new_list = createRowList(getRowList(row_list)->join_count, getRowList(row_list)->row_count);
+                RowListIndex new_list = createRowList(getRowList(row_list)->join_count, getRowList(row_list)->row_count);
 
                 sortResultRows(q, col, s->predicates[0].op, getRowList(row_list), getRowList(new_list));
                 // To implement better sort later
@@ -468,7 +501,7 @@ int executeQueryPlan (
                 #ifdef DEBUG
                 fprintf(stderr, "Q%d: PLAN_REVERSE\n", getpid());
                 #endif
-                int row_list = popRowList(result_set);
+                RowListIndex row_list = popRowList(result_set);
                 reverseRowList(getRowList(row_list), s->limit);
                 pushRowList(result_set, row_list);
                 break;
@@ -480,7 +513,7 @@ int executeQueryPlan (
                 #endif
                 // Offset is taken care of in PLAN_SELECT
 
-                int row_list = popRowList(result_set);
+                RowListIndex row_list = popRowList(result_set);
 
                 // Apply limit (including offset rows - which will be omitted later)
                 if (s->limit >= 0 && s->limit < getRowList(row_list)->row_count) {
@@ -506,7 +539,7 @@ int executeQueryPlan (
 
                 char values[2][MAX_VALUE_LENGTH] = {0};
 
-                int row_list = popRowList(result_set);
+                RowListIndex row_list = popRowList(result_set);
 
                 int limit = getRowList(row_list)->row_count;
                 if (s->limit > -1 && s->limit < limit) {
@@ -515,7 +548,7 @@ int executeQueryPlan (
 
                 int count = 0;
 
-                int curr_list = -1;
+                RowListIndex curr_list = -1;
 
                 for (int i = 0; i < getRowList(row_list)->row_count; i++) {
                     char *curr_value = values[i%2];
@@ -584,7 +617,7 @@ int executeQueryPlan (
         #ifdef DEBUG
             debugResultSet(result_set);
 
-            int row_list = popRowList(result_set);
+            RowListIndex row_list = popRowList(result_set);
             debugRowList(getRowList(row_list), 1);
             pushRowList(result_set, row_list);
         #endif

@@ -286,10 +286,9 @@ int fullTableAccess (struct DB *db, struct RowList * row_list, int limit_value) 
 
     // VFS-agnostic implementation
 
-    int record_count = getRecordCount(db);
-    int l = record_count;
-    if (limit_value >= 0 && limit_value < l) {
-        l = limit_value;
+    int l = limit_value;
+    if (l < 0) {
+        l = getRecordCount(db);
     }
 
     for (int i = 0; i < l; i++) {
@@ -345,23 +344,31 @@ int indexSearch (struct DB *db, const char *search_value, int rowid_field, int m
 
     // By definition
     int index_column = 0;
-    int record_count = getRecordCount(db);
 
     int index_a = 0;
-    int index_b = record_count - 1;
+    int index_b = getRecordCount(db) - 1;
     int index_match = -1;
     int numeric_mode = is_numeric(search_value);
 
-    // Just in case we're in numeric mode
-    long number_value = atol(search_value);
+    long search_as_number;
+
+    if (numeric_mode) {
+        search_as_number = atol(search_value);
+    }
 
     char record_value[MAX_VALUE_LENGTH] = {0};
+
+    int res;
 
     // Check boundary cases before commencing search
 
     // Check lower boundary (index_a = 0)
     getRecordValue(db, index_a, index_column, record_value, MAX_VALUE_LENGTH);
-    int res = compare(numeric_mode, search_value, number_value, record_value);
+    if (numeric_mode) {
+        res = search_as_number - atol(record_value);
+    } else {
+        res = strcmp(search_value, record_value);
+    }
 
     // Search value is below minimum
     if (res < 0) {
@@ -376,7 +383,11 @@ int indexSearch (struct DB *db, const char *search_value, int rowid_field, int m
     else {
         // Check upper boundary (index_b = record_count - 1)
         getRecordValue(db, index_b, index_column, record_value, MAX_VALUE_LENGTH);
-        res = compare(numeric_mode, search_value, number_value, record_value);
+        if (numeric_mode) {
+            res = search_as_number - atol(record_value);
+        } else {
+            res = strcmp(search_value, record_value);
+        }
 
         // Search value is above maximum
         if (res > 0) {
@@ -393,7 +404,11 @@ int indexSearch (struct DB *db, const char *search_value, int rowid_field, int m
             int index_curr = (index_a + index_b) / 2;
 
             getRecordValue(db, index_curr, index_column, record_value, MAX_VALUE_LENGTH);
-            res = compare(numeric_mode, search_value, number_value, record_value);
+            if (numeric_mode) {
+                res = search_as_number - atol(record_value);
+            } else {
+                res = strcmp(search_value, record_value);
+            }
 
             if (res == 0) {
                 // printf("pk_search [%d   <%d>   %d]: %s\n", index_a, index_curr, index_b, val);

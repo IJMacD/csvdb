@@ -176,6 +176,10 @@ int explain_select_query (
                 cost = rows;
             }
         }
+        else if (s.type == PLAN_INDEX_SCAN) {
+            operation = "INDEX SCAN";
+            sprintf(table, "%s__%s", q->tables[join_count].name, s.predicates[0].left.alias);
+        }
         else if (s.type == PLAN_SORT) {
             operation = "SORT";
             long new_cost = rows * rows;

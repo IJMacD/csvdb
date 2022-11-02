@@ -197,12 +197,10 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 && q->order_node[0].function == FUNC_UNITY
                 && findIndex(NULL, table->name, q->order_node[0].fields[0].text, INDEX_ANY)
             ) {
-
-                // OPERATOR_ALWAYS on index range means the entire range;
                 struct Predicate *order_p = makePredicate(&q->order_node[0], OPERATOR_ALWAYS);
 
                 // Add step for Sorted index access
-                addStepWithPredicate(plan, PLAN_INDEX_RANGE, order_p);
+                addStepWithPredicate(plan, PLAN_INDEX_SCAN, order_p);
 
                 // Optimisation: filter before join
                 int skip_predicates = 0;
@@ -240,10 +238,9 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 struct Table *table = &q->tables[0];
                 if (findIndex(NULL, table->name, q->group_node[0].fields[0].text, INDEX_ANY)) {
 
-                    // OPERATOR_ALWAYS means scan full index
                     struct Predicate *group_p = makePredicate(&q->group_node[0], OPERATOR_ALWAYS);
 
-                    addStepWithPredicate(plan, PLAN_INDEX_RANGE, group_p);
+                    addStepWithPredicate(plan, PLAN_INDEX_SCAN, group_p);
 
                     addStepWithPredicates(plan, PLAN_TABLE_ACCESS_ROWID, q->predicates, predicatesOnFirstTable);
 
@@ -327,10 +324,9 @@ int makePlan (struct Query *q, struct Plan *plan) {
         struct Table *table = &q->tables[0];
         if (findIndex(NULL, table->name, q->order_node[0].fields[0].text, INDEX_ANY)) {
 
-            // OPERATOR_ALWAYS means scan full index
             struct Predicate *order_p = makePredicate(&q->order_node[0], OPERATOR_ALWAYS);
 
-            addStepWithPredicate(plan, PLAN_INDEX_RANGE, order_p);
+            addStepWithPredicate(plan, PLAN_INDEX_SCAN, order_p);
 
             if (q->order_direction[0] == ORDER_DESC) {
                 addStep(plan, PLAN_REVERSE);
@@ -367,10 +363,9 @@ int makePlan (struct Query *q, struct Plan *plan) {
         struct Table *table = &q->tables[0];
         if (findIndex(NULL, table->name, q->group_node[0].fields[0].text, INDEX_ANY)) {
 
-            // OPERATOR_ALWAYS means scan full index
             struct Predicate *group_p = makePredicate(&q->group_node[0], OPERATOR_ALWAYS);
 
-            addStepWithPredicate(plan, PLAN_INDEX_RANGE, group_p);
+            addStepWithPredicate(plan, PLAN_INDEX_SCAN, group_p);
 
             addJoinStepsIfRequired(plan, q);
 

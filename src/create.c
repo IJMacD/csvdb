@@ -161,12 +161,12 @@ int create_index (const char *index_name, const char *table_name, const char *in
 
     int record_count = getRecordCount(&db);
 
-    int row_list = createRowList(1, record_count);
+    RowListIndex row_list = createRowList(1, record_count);
 
     // Fill row list with every sequential rowid
     fullTableAccess(&db, getRowList(row_list), -1);
 
-    int sort_list = createRowList(getRowList(row_list)->join_count, getRowList(row_list)->row_count);
+    RowListIndex sort_list = createRowList(getRowList(row_list)->join_count, getRowList(row_list)->row_count);
 
     struct ColumnNode col = {0};
     col.function = FUNC_UNITY;
