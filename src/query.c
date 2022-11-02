@@ -595,9 +595,17 @@ int populateColumnNode (struct Query * query, struct ColumnNode * column) {
     struct Field * field2 = column->fields + 1;
 
     // Check for aliases first
-    if (column->function == FUNC_UNITY && field1->index == FIELD_UNKNOWN && field1->text[0] != '\0') {
+    if (
+        column->function == FUNC_UNITY
+        && field1->index == FIELD_UNKNOWN
+        && field1->text[0] != '\0'
+    ) {
         for (int i = 0; i < query->column_count; i++) {
-            if (column != &query->columns[i] && strcmp(field1->text, query->columns[i].alias) == 0) {
+            if (
+                column != &query->columns[i]
+                && query->columns[i].fields[0].index != FIELD_UNKNOWN
+                && strcmp(field1->text, query->columns[i].alias) == 0
+            ) {
                 memcpy(column, &query->columns[i], sizeof(*column));
                 return 0;
             }
