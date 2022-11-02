@@ -83,21 +83,23 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d: PLAN_UNIQUE\n", getpid());
                 #endif
 
-                int record_count = getRecordCount(q->tables[0].db);
-                int row_list = createRowList(1, record_count);
-                pushRowList(result_set, row_list);
-
                 // First table
                 struct Table * table = q->tables;
                 struct Predicate *p = &s->predicates[0];
                 struct DB index_db;
+
                 if (findIndex(&index_db, table->name, p->left.fields[0].text, INDEX_UNIQUE) == 0) {
                     fprintf(stderr, "Unable to find unique index on column '%s' on table '%s'\n", p->left.fields[0].text, table->name);
                     return -1;
                 }
+
+                int row_list = createRowList(1, getRecordCount(&index_db));
+                pushRowList(result_set, row_list);
+
                 // Find which column in the index table contains the rowids of the primary table
                 int rowid_col = getFieldIndex(&index_db, "rowid");
                 indexUniqueScan(&index_db, rowid_col, p->op, p->right.fields[0].text, getRowList(row_list), s->limit);
+
                 break;
             }
 
@@ -106,21 +108,23 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d: PLAN_INDEX_RANGE\n", getpid());
                 #endif
 
-                int record_count = getRecordCount(q->tables[0].db);
-                int row_list = createRowList(1, record_count);
-                pushRowList(result_set, row_list);
-
                 // First table
                 struct Table * table = q->tables;
                 struct Predicate *p = &s->predicates[0];
                 struct DB index_db;
+
                 if (findIndex(&index_db, table->name, p->left.fields[0].text, INDEX_ANY) == 0) {
                     fprintf(stderr, "Unable to find index on column '%s' on table '%s'\n", p->left.fields[0].text, table->name);
                     return -1;
                 }
+
+                int row_list = createRowList(1, getRecordCount(&index_db));
+                pushRowList(result_set, row_list);
+
                 // Find which column in the index table contains the rowids of the primary table
                 int rowid_col = getFieldIndex(&index_db, "rowid");
                 indexScan(&index_db, rowid_col, p->op, p->right.fields[0].text, getRowList(row_list), s->limit);
+
                 break;
             }
 

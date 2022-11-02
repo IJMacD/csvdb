@@ -9,7 +9,11 @@ readarray -t lines < ./test-cases.sql
 
 OUTFILE=/tmp/test.out
 
+STATFILE=test-cases-stats.csv
+
 errors=0
+
+echo "duration" > $STATFILE
 
 for sql in "${lines[@]}"; do
     if [[ "$sql" == --* ]]; then
@@ -32,6 +36,8 @@ for sql in "${lines[@]}"; do
         else
             printf " -- ${ORANGE}NO OUTPUT${NC} Time: $runtime ms --\n\n";
         fi
+
+        echo $runtime >> $STATFILE
     else
         printf " -- ${RED}ERROR${NC} --\n\n";
         ((errors=errors+1))

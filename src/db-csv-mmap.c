@@ -30,7 +30,7 @@ int csvMmap_makeDB (struct DB *db, FILE *f) {
 
     prepareHeaders(db);
 
-    indexLines(db);
+    db->_record_count = -1;
 
     return 0;
 }
@@ -109,6 +109,10 @@ char *csvMmap_getFieldName (struct DB *db, int field_index) {
 
 
 int csvMmap_getRecordCount (struct DB *db) {
+    if (db->_record_count == -1) {
+        indexLines(db);
+    }
+
     return db->_record_count;
 }
 
@@ -116,6 +120,10 @@ int csvMmap_getRecordCount (struct DB *db) {
  * Returns the number of bytes read, or -1 on error
  */
 int csvMmap_getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
+    if (db->_record_count == -1) {
+        indexLines(db);
+    }
+
     if (record_index < 0 || record_index >= db->_record_count) {
         return -1;
     }

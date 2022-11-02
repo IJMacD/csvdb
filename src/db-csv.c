@@ -16,10 +16,7 @@ static int measureLine (FILE *f, size_t byte_offset);
 
 static void prepareHeaders (struct DB *db);
 
-/**
- * Indices must point to enough memory to contain all the indices
- */
-static int indexLines (FILE *f, long *indices);
+static int indexLines (struct DB *db);
 
 static int makeDB (struct DB *db, FILE *f) {
     db->vfs = VFS_CSV;
@@ -49,13 +46,7 @@ static int makeDB (struct DB *db, FILE *f) {
 
     prepareHeaders(db);
 
-    int line_count = countLines(f);
-
-    db->line_indices = malloc((sizeof db->line_indices[0]) * (line_count + 1));
-
-    indexLines(f, db->line_indices);
-
-    db->_record_count = line_count - 1;
+    db->_record_count = -1;
 
     return 0;
 }
@@ -104,6 +95,10 @@ void csv_closeDB (struct DB *db) {
 }
 
 int csv_getRecordCount (struct DB *db) {
+    if (db->_record_count == -1) {
+        indexLines(db);
+    }
+
     return db->_record_count;
 }
 
@@ -193,23 +188,29 @@ static int measureLine (FILE *f, size_t byte_offset) {
 /**
  * Indices must point to enough memory to contain all the indices
  */
-static int indexLines (FILE *f, long *indices) {
+static int indexLines (struct DB *db) {
+    int line_count = countLines(db->file);
+
+    db->_record_count = line_count - 1;
+
+    db->line_indices = malloc((sizeof db->line_indices[0]) * (line_count + 1));
+
     size_t buffer_size = 1024;
     int count = 0;
     char buffer[buffer_size];
     size_t read_size;
     long pos = 0;
 
-    fseek(f, 0, SEEK_SET);
+    fseek(db->file, 0, SEEK_SET);
 
-    indices[count] = pos;
+    db->line_indices[count] = pos;
 
     do {
-        read_size = fread(buffer, 1, buffer_size, f);
+        read_size = fread(buffer, 1, buffer_size, db->file);
 
         for (size_t i = 0; i < read_size; i++) {
             if (buffer[i] == '\n'){
-                indices[++count] = pos + i + 1;
+                db->line_indices[++count] = pos + i + 1;
             }
         }
 
@@ -219,9 +220,9 @@ static int indexLines (FILE *f, long *indices) {
     // Check the last byte.
     // If the file ends in a new line, then fine
     // If it soesn't then we have one more line to count
-    fseek(f, -1, SEEK_END);
+    fseek(db->file, -1, SEEK_END);
 
-    size_t result = fread(buffer, 1, 1, f);
+    size_t result = fread(buffer, 1, 1, db->file);
     if (result == 0)
         return -1;
 
@@ -294,6 +295,10 @@ char *csv_getFieldName (struct DB *db, int field_index) {
  * Returns the number of bytes read, or -1 on error
  */
 int csv_getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
+    if (db->_record_count == -1) {
+        indexLines(db);
+    }
+
     if (record_index < 0 || record_index >= db->_record_count) {
         return -1;
     }
