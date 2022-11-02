@@ -6,6 +6,7 @@
 #include "tree.h"
 #include "db.h"
 #include "util.h"
+#include "debug.h"
 
 static void sort_walkTree (struct TreeNode *node, struct RowList * source_list, struct RowList * target_list);
 
@@ -37,17 +38,25 @@ void sortResultRows (struct Query *q, struct ColumnNode *column, int direction, 
     struct TreeNode *pool = malloc(sizeof (*pool) * source_list->row_count);
     struct TreeNode *root = NULL;
 
+    int numeric_mode = 0;
+
     for (int i = 0; i < source_list->row_count; i++) {
-        struct TreeNode *node = pool++;
+        struct TreeNode *node = &pool[i];
         node->key = i;
 
         evaluateNode(q, source_list, i, column, node->value, sizeof(node->value));
 
-        // Must be fixed width to compare numerically.
-        // Yes slower than comparing as native long, but how much?
-        if (is_numeric(node->value)) {
-            long value = atol(node->value);
-            sprintf(node->value, "%32ld", value);
+        // First value determines whether we're in numeric mode or not
+        if (i == 0) {
+            numeric_mode = is_numeric(node->value);
+        }
+
+        // Numeric values need to be fixed width for comparison.
+        // After testing it make no difference whether numeric values are
+        // compared or strings are compared. (There are other slower steps).
+        if (numeric_mode) {
+            long number = atol(node->value);
+            sprintf(node->value, "%020ld", number);
         }
 
         // For first (root) node we do a dummy insert to make sure struct
@@ -57,6 +66,12 @@ void sortResultRows (struct Query *q, struct ColumnNode *column, int direction, 
         if (i == 0) {
             // Now set the root node to the first position in the pool
             root = node;
+        }
+        // When the range of sort values is small the tree becomes unbalanced
+        // resulting in *increadibly* slow sorts.
+        // We'll periodically rebalance just in case.
+        else if (i % 10000 == 0) {
+            root = rebalanceTree(root, i + 1);
         }
     }
 
@@ -70,7 +85,7 @@ void sortResultRows (struct Query *q, struct ColumnNode *column, int direction, 
         sort_walkTreeBackwards(root, source_list, target_list);
     }
 
-    free(root);
+    free(pool);
 }
 
 static void sort_walkTree (struct TreeNode *node, struct RowList * source_list, struct RowList * target_list) {

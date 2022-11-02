@@ -26,7 +26,7 @@ void debugRowList (struct RowList * list, int verbosity) {
 }
 
 void debugTree (struct TreeNode * node) {
-    printf("{ \"key\": %d, \"value\": '%s', \"left\": ", node->key, node->value);
+    printf("{ \"key\": %d, \"value\": \"%s\", \"left\": ", node->key, node->value);
 
     if (node->left != NULL) {
         debugTree(node->left);
