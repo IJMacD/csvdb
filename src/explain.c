@@ -54,7 +54,7 @@ int explain_select_query (
                     ptr += snprintf(ptr, remaining, "%s", s.predicates[i].left.fields[0].text);
                 }
                 else {
-                    ptr += snprintf(ptr, remaining, "FN(%s)", s.predicates[i].left.fields[0].text);
+                    ptr += snprintf(ptr, remaining, "F(%s)", s.predicates[i].left.fields[0].text);
                 }
 
                 *ptr = '\0';
@@ -109,29 +109,25 @@ int explain_select_query (
         }
         else if (s.type == PLAN_PK) {
             operation = "PRIMARY KEY UNIQUE";
-            strncpy(table, q->tables[join_count].name, MAX_FIELD_LENGTH);
-            table[MAX_FIELD_LENGTH - 1] = '\0';
+            sprintf(table, "%s__%s", q->tables[join_count].name, s.predicates[0].left.alias);
             rows = 1;
             cost = log_rows;
         }
         else if (s.type == PLAN_PK_RANGE) {
             operation = "PRIMARY KEY RANGE";
-            strncpy(table, q->tables[join_count].name, MAX_FIELD_LENGTH);
-            table[MAX_FIELD_LENGTH - 1] = '\0';
+            sprintf(table, "%s__%s", q->tables[join_count].name, s.predicates[0].left.alias);
             rows = row_estimate / 2;
             cost = rows;
         }
         else if (s.type == PLAN_UNIQUE) {
             operation = "INDEX UNIQUE";
-            strncpy(table, q->tables[join_count].name, MAX_FIELD_LENGTH);
-            table[MAX_FIELD_LENGTH - 1] = '\0';
+            sprintf(table, "%s__%s", q->tables[join_count].name, s.predicates[0].left.alias);
             rows = 1;
             cost = log_rows;
         }
         else if (s.type == PLAN_UNIQUE_RANGE) {
             operation = "INDEX UNIQUE RANGE";
-            strncpy(table, q->tables[join_count].name, MAX_FIELD_LENGTH);
-            table[MAX_FIELD_LENGTH - 1] = '\0';
+            sprintf(table, "%s__%s", q->tables[join_count].name, s.predicates[0].left.alias);
             if (s.predicate_count > 0) {
                 if (s.limit >= 0) {
                     rows = (s.limit < row_estimate) ? s.limit : row_estimate;
@@ -156,8 +152,7 @@ int explain_select_query (
         }
         else if (s.type == PLAN_INDEX_RANGE) {
             operation = "INDEX RANGE";
-            strncpy(table, q->tables[join_count].name, MAX_FIELD_LENGTH);
-            table[MAX_FIELD_LENGTH - 1] = '\0';
+            sprintf(table, "%s__%s", q->tables[join_count].name, s.predicates[0].left.alias);
             if (s.predicate_count > 0) {
                 if (s.limit >= 0) {
                     rows = (s.limit < row_estimate) ? s.limit : row_estimate;
