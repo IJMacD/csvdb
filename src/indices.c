@@ -54,7 +54,7 @@ enum IndexSearchResult indexUniqueScan (struct DB *index_db, int rowid_column, e
     }
     else if (predicate_op == OPERATOR_GT || predicate_op == OPERATOR_GE) {
         lower_bound = index_rowid;
-        upper_bound = index_db->record_count;
+        upper_bound = getRecordCount(index_db);
 
         if (predicate_op == OPERATOR_GT && search_status == RESULT_FOUND) {
             lower_bound++;
@@ -62,8 +62,10 @@ enum IndexSearchResult indexUniqueScan (struct DB *index_db, int rowid_column, e
     }
     // Special treatment for NOT EQUAL; do the two halves separately
     else if (predicate_op == OPERATOR_NE) {
+        int record_count = getRecordCount(index_db);
+
         int a = indexWalk(index_db, rowid_column, 0, index_rowid, row_list);
-        int b = indexWalk(index_db, rowid_column, index_rowid + 1, index_db->record_count, row_list);
+        int b = indexWalk(index_db, rowid_column, index_rowid + 1, record_count, row_list);
 
         return a + b;
     }
@@ -112,7 +114,7 @@ enum IndexSearchResult indexScan (struct DB *index_db, int rowid_column, enum Op
     // OPERATOR_ALWAYS means scan the entire index
     if (predicate_op == OPERATOR_ALWAYS) {
         lower_bound = 0;
-        upper_bound = index_db->record_count;
+        upper_bound = getRecordCount(index_db);
     }
     else
     {
@@ -151,7 +153,7 @@ enum IndexSearchResult indexScan (struct DB *index_db, int rowid_column, enum Op
             }
 
             if (search_status2 == RESULT_ABOVE_MAX) {
-                upper_bound = index_db->record_count;
+                upper_bound = getRecordCount(index_db);
             }
             else {
                 upper_bound = upper_index_rowid;
@@ -176,16 +178,17 @@ enum IndexSearchResult indexScan (struct DB *index_db, int rowid_column, enum Op
                 lower_bound++;
             }
 
-            upper_bound = index_db->record_count;
+            upper_bound = getRecordCount(index_db);
         }
         else if (predicate_op == OPERATOR_GE) {
             lower_bound = lower_index_rowid;
-            upper_bound = index_db->record_count;
+            upper_bound = getRecordCount(index_db);
         }
         // Special treatment for NOT EQUAL; do the two halves separately
         else if (predicate_op == OPERATOR_NE) {
+            int record_count = getRecordCount(index_db);
             int a = indexWalk(index_db, rowid_column, 0, lower_index_rowid, row_list);
-            int b = indexWalk(index_db, rowid_column, upper_index_rowid, index_db->record_count, row_list);
+            int b = indexWalk(index_db, rowid_column, upper_index_rowid, record_count, row_list);
 
             return a + b;
         }

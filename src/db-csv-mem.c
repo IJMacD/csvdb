@@ -103,11 +103,15 @@ char *csvMem_getFieldName (struct DB *db, int field_index) {
     return "\0";
 }
 
+int csvMem_getRecordCount (struct DB *db) {
+    return db->_record_count;
+}
+
 /**
  * Returns the number of bytes read, or -1 on error
  */
 int csvMem_getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
-    if (record_index < 0 || record_index >= db->record_count) {
+    if (record_index < 0 || record_index >= db->_record_count) {
         return -1;
     }
 
@@ -232,7 +236,7 @@ static int indexLines (struct DB *db) {
     // Add final count to track file size
     db->line_indices[count] = i;
 
-    db->record_count = count;
+    db->_record_count = count;
 
     return count;
 }
@@ -385,7 +389,7 @@ void csvMem_fromValues(struct DB *db, const char *input, int length) {
 
     db->field_count = countFields(db->data + db->line_indices[0]);
 
-    db->record_count = line_index;
+    db->_record_count = line_index;
 }
 
 static int countFields (const char *ptr) {

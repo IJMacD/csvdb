@@ -10,7 +10,9 @@ void test (const char *filename, const char *field) {
         exit(-1);
     }
 
-    printf("%d records\n", db.record_count);
+    int record_count = getRecordCount(&db);
+
+    printf("%d records\n", record_count);
 
     printf("'age' found at %d\n", getFieldIndex(&db, "age"));
     printf("'classes' found at %d\n", getFieldIndex(&db, "classes"));
@@ -26,7 +28,7 @@ void test (const char *filename, const char *field) {
             return -1;
         }
 
-        for (int i = 0; i < db.record_count; i++) {
+        for (int i = 0; i < record_count; i++) {
             char value[255];
             if (getRecordValue(&db, i, field_index, value, 255) == 0) {
                 printf("%s\n", value);

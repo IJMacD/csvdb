@@ -65,6 +65,10 @@ char *dir_getFieldName (__attribute__((unused)) struct DB *db, int field_index) 
     return field_names[field_index];
 }
 
+int dir_getRecordCount (struct DB *db) {
+    return db->_record_count;
+}
+
 int dir_getRecordValue (struct DB *db, int record_index, int field_index, char *value, __attribute__((unused)) size_t value_max_length) {
 
     struct dirent *dp = getDirectoryEntry(db, record_index);
@@ -137,7 +141,7 @@ int dir_findIndex(__attribute__((unused)) struct DB *db, __attribute__((unused))
 }
 
 static int makeDB(struct DB *db, const char * path) {
-    db->record_count = 0;
+    db->_record_count = 0;
     db->data = NULL;
 
     DIR *dfd = opendir(path);
@@ -158,11 +162,11 @@ static int makeDB(struct DB *db, const char * path) {
     db->data[len + 1] = '\0';
 
     while((dp = readdir(dfd)) != NULL) {
-        memcpy(getDirectoryEntry(db, db->record_count), dp, sizeof(*dp));
+        memcpy(getDirectoryEntry(db, db->_record_count), dp, sizeof(*dp));
 
-        db->record_count++;
+        db->_record_count++;
 
-        if (db->record_count >= max_count) {
+        if (db->_record_count >= max_count) {
             break;
         }
     }

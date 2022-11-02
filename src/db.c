@@ -31,6 +31,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .closeDB = &csv_closeDB,
         .getFieldIndex = &csv_getFieldIndex,
         .getFieldName = &csv_getFieldName,
+        .getRecordCount = &csv_getRecordCount,
         .getRecordValue = &csv_getRecordValue,
         .findIndex = &csv_findIndex,
     },
@@ -39,6 +40,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .closeDB = &csvMem_closeDB,
         .getFieldIndex = &csvMem_getFieldIndex,
         .getFieldName = &csvMem_getFieldName,
+        .getRecordCount = &csvMem_getRecordCount,
         .getRecordValue = &csvMem_getRecordValue,
     },
     {
@@ -49,6 +51,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .closeDB = &calendar_closeDB,
         .getFieldIndex = &calendar_getFieldIndex,
         .getFieldName = &calendar_getFieldName,
+        .getRecordCount = &calendar_getRecordCount,
         .getRecordValue = &calendar_getRecordValue,
         .findIndex = &calendar_findIndex,
         .fullTableScan = &calendar_fullTableScan,
@@ -58,12 +61,14 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .openDB = &sequence_openDB,
         .getFieldIndex = &sequence_getFieldIndex,
         .getFieldName = &sequence_getFieldName,
+        .getRecordCount = &sequence_getRecordCount,
         .getRecordValue = &sequence_getRecordValue,
     },
     {
         .openDB = &sample_openDB,
         .getFieldIndex = &sample_getFieldIndex,
         .getFieldName = &sample_getFieldName,
+        .getRecordCount = &sample_getRecordCount,
         .getRecordValue = &sample_getRecordValue,
     },
     {
@@ -71,6 +76,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .closeDB = &dir_closeDB,
         .getFieldIndex = &dir_getFieldIndex,
         .getFieldName = &dir_getFieldName,
+        .getRecordCount = &dir_getRecordCount,
         .getRecordValue = &dir_getRecordValue,
     },
     {
@@ -78,6 +84,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .closeDB = &csvMmap_closeDB,
         .getFieldIndex = &csvMmap_getFieldIndex,
         .getFieldName = &csvMmap_getFieldName,
+        .getRecordCount = &csvMmap_getRecordCount,
         .getRecordValue = &csvMmap_getRecordValue,
     },
 };
@@ -143,6 +150,17 @@ char *getFieldName (struct DB *db, int field_index) {
     }
 
     return NULL;
+}
+
+int getRecordCount (struct DB *db) {
+    int (*vfs_getRecordCount) (struct DB *) = VFS_Table[db->vfs].getRecordCount;
+
+    if (vfs_getRecordCount != NULL) {
+        return vfs_getRecordCount(db);
+    }
+
+    // Should we return -1 to indicate an error; or 0 to avoid breaking things?
+    return 0;
 }
 
 /**
@@ -214,8 +232,9 @@ int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *p
     char value_right[MAX_VALUE_LENGTH] = {0};
 
     int result;
+    int record_count = getRecordCount(db);
 
-    for (int i = 0; i < db->record_count; i++) {
+    for (int i = 0; i < record_count; i++) {
         int matching = 1;
 
         // Perform filtering if necessary
@@ -267,7 +286,8 @@ int fullTableAccess (struct DB *db, struct RowList * row_list, int limit_value) 
 
     // VFS-agnostic implementation
 
-    int l = db->record_count;
+    int record_count = getRecordCount(db);
+    int l = record_count;
     if (limit_value >= 0 && limit_value < l) {
         l = limit_value;
     }
@@ -325,9 +345,10 @@ int indexSearch (struct DB *db, const char *search_value, int rowid_field, int m
 
     // By definition
     int index_column = 0;
+    int record_count = getRecordCount(db);
 
     int index_a = 0;
-    int index_b = db->record_count - 1;
+    int index_b = record_count - 1;
     int index_match = -1;
     int numeric_mode = is_numeric(search_value);
 
@@ -422,8 +443,10 @@ int indexSearch (struct DB *db, const char *search_value, int rowid_field, int m
 
     // Should we walk forwards to last instance of value?
     if (mode == MODE_UPPER_BOUND) {
+        int record_count = getRecordCount(db);
+
         // Forward-track until we find the last value
-        while (index_match < db->record_count) {
+        while (index_match < record_count) {
             getRecordValue(db, ++index_match, index_column, record_value, MAX_VALUE_LENGTH);
 
             if (strcmp(record_value, search_value) > 0) {

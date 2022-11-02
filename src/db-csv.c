@@ -55,7 +55,7 @@ static int makeDB (struct DB *db, FILE *f) {
 
     indexLines(f, db->line_indices);
 
-    db->record_count = line_count - 1;
+    db->_record_count = line_count - 1;
 
     return 0;
 }
@@ -101,6 +101,10 @@ void csv_closeDB (struct DB *db) {
         fclose(db->file);
         db->file = NULL;
     }
+}
+
+int csv_getRecordCount (struct DB *db) {
+    return db->_record_count;
 }
 
 static int countLines (FILE *f) {
@@ -290,7 +294,7 @@ char *csv_getFieldName (struct DB *db, int field_index) {
  * Returns the number of bytes read, or -1 on error
  */
 int csv_getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
-    if (record_index < 0 || record_index >= db->record_count) {
+    if (record_index < 0 || record_index >= db->_record_count) {
         return -1;
     }
 

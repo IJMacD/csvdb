@@ -11,7 +11,7 @@ int sequence_openDB (struct DB *db, const char *filename) {
     }
 
     db->vfs = VFS_SEQUENCE;
-    db->record_count = atoi(filename + 9);
+    db->_record_count = atoi(filename + 9);
     db->line_indices = NULL;
     db->field_count = 1;
 
@@ -32,6 +32,10 @@ char *sequence_getFieldName (__attribute__((unused)) struct DB *db, int field_in
     if (field_index == 0)
         return "value";
     return "";
+}
+
+int sequence_getRecordCount (struct DB *db) {
+    return db->_record_count;
 }
 
 int sequence_getRecordValue (__attribute__((unused)) struct DB *db, int record_index, __attribute__((unused)) int field_index, char *value, __attribute__((unused)) size_t value_max_length) {

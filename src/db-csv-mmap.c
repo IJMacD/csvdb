@@ -66,7 +66,7 @@ void csvMmap_closeDB (struct DB *db) {
     if (db->line_indices != NULL) {
         // Rough size, and rough start location
         // Exact values aren't required
-        int file_size = db->line_indices[db->record_count];
+        int file_size = db->line_indices[db->_record_count];
         munmap(db->data, file_size);
 
         free(db->line_indices);
@@ -107,11 +107,16 @@ char *csvMmap_getFieldName (struct DB *db, int field_index) {
     return "\0";
 }
 
+
+int csvMmap_getRecordCount (struct DB *db) {
+    return db->_record_count;
+}
+
 /**
  * Returns the number of bytes read, or -1 on error
  */
 int csvMmap_getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
-    if (record_index < 0 || record_index >= db->record_count) {
+    if (record_index < 0 || record_index >= db->_record_count) {
         return -1;
     }
 
@@ -243,7 +248,7 @@ static int indexLines (struct DB *db) {
     // Add final count to track file size
     db->line_indices[count] = i;
 
-    db->record_count = count;
+    db->_record_count = count;
 
     return count;
 }

@@ -11,6 +11,8 @@ int getFieldIndex (struct DB *db, const char *field);
 
 char * getFieldName (struct DB *db, int field_index);
 
+int getRecordCount (struct DB *db);
+
 int getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length);
 
 enum IndexSearchType findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);

@@ -66,7 +66,8 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d: PLAN_PK\n", getpid());
                 #endif
 
-                int row_list = createRowList(1, q->tables[0].db->record_count);
+                int record_count = getRecordCount(q->tables[0].db);
+                int row_list = createRowList(1, record_count);
                 pushRowList(result_set, row_list);
 
                 // First table
@@ -82,7 +83,8 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d: PLAN_UNIQUE\n", getpid());
                 #endif
 
-                int row_list = createRowList(1, q->tables[0].db->record_count);
+                int record_count = getRecordCount(q->tables[0].db);
+                int row_list = createRowList(1, record_count);
                 pushRowList(result_set, row_list);
 
                 // First table
@@ -104,7 +106,8 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d: PLAN_INDEX_RANGE\n", getpid());
                 #endif
 
-                int row_list = createRowList(1, q->tables[0].db->record_count);
+                int record_count = getRecordCount(q->tables[0].db);
+                int row_list = createRowList(1, record_count);
                 pushRowList(result_set, row_list);
 
                 // First table
@@ -127,7 +130,8 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d: PLAN_TABLE_ACCESS_FULL\n", getpid());
                 #endif
 
-                int row_list = createRowList(1, q->tables[0].db->record_count);
+                int record_count = getRecordCount(q->tables[0].db);
+                int row_list = createRowList(1, record_count);
                 pushRowList(result_set, row_list);
 
                 // First table
@@ -195,14 +199,16 @@ int executeQueryPlan (
 
                 struct DB *next_db = q->tables[getRowList(row_list)->join_count].db;
 
-                int new_length = getRowList(row_list)->row_count * next_db->record_count;
+                int record_count = getRecordCount(next_db);
+
+                int new_length = getRowList(row_list)->row_count * record_count;
 
                 int new_list = createRowList(getRowList(row_list)->join_count + 1, new_length);
 
                 for (int i = 0; i < getRowList(row_list)->row_count; i++) {
                     int done = 0;
 
-                    for (int j = 0; j < next_db->record_count; j++) {
+                    for (int j = 0; j < record_count; j++) {
                         appendJoinedRowID(getRowList(new_list), getRowList(row_list), i, j);
 
                         if (s->limit > -1 && getRowList(new_list)->row_count >= s->limit) {
@@ -238,7 +244,8 @@ int executeQueryPlan (
 
                 struct DB *next_db = q->tables[getRowList(row_list)->join_count].db;
 
-                int tmp_list = createRowList(1, next_db->record_count);
+                int record_count = getRecordCount(next_db);
+                int tmp_list = createRowList(1, record_count);
 
                 // This is a constant join so we'll just populate the table once
                 // Hopefully it won't be the whole table since we have a predicate
@@ -282,12 +289,14 @@ int executeQueryPlan (
                 struct Table *table = &q->tables[getRowList(row_list)->join_count];
                 struct DB *next_db = table->db;
 
-                int new_length = getRowList(row_list)->row_count * next_db->record_count;
+                int record_count = getRecordCount(next_db);
+
+                int new_length = getRowList(row_list)->row_count * record_count;
 
                 int new_list = createRowList(getRowList(row_list)->join_count + 1, new_length);
 
                 // Prepare a temporary list that can hold every record in the table
-                int tmp_list = createRowList(1, next_db->record_count);
+                int tmp_list = createRowList(1, record_count);
 
                 // Table ID being joined here
                 int table_id = getRowList(row_list)->join_count;

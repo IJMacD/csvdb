@@ -159,7 +159,9 @@ int create_index (const char *index_name, const char *table_name, const char *in
     columns[1].fields[0].table_id = 0;
     columns[1].fields[0].index = FIELD_ROW_INDEX;
 
-    int row_list = createRowList(1, db.record_count);
+    int record_count = getRecordCount(&db);
+
+    int row_list = createRowList(1, record_count);
 
     // Fill row list with every sequential rowid
     fullTableAccess(&db, getRowList(row_list), -1);
@@ -178,7 +180,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
 
     char values[2][MAX_VALUE_LENGTH];
 
-    for (int i = 0; i < db.record_count; i++) {
+    for (int i = 0; i < record_count; i++) {
         // Check for UNIQUE
         if (unique_flag) {
             int row_id = getRowID(getRowList(sort_list), 0, i);

@@ -32,7 +32,7 @@ int sample_openDB (struct DB *db, const char *filename) {
     }
 
     db->vfs = VFS_SAMPLE;
-    db->record_count = 1e8;
+    db->_record_count = 1e8;
     db->line_indices = NULL;
     db->field_count = sizeof(field_names) / sizeof(field_names[0]);
 
@@ -55,6 +55,10 @@ int sample_getFieldIndex (struct DB *db, const char *field) {
 
 char *sample_getFieldName (__attribute__((unused)) struct DB *db, int field_index) {
     return field_names[field_index];
+}
+
+int sample_getRecordCount (struct DB *db) {
+    return db->_record_count;
 }
 
 int sample_getRecordValue (__attribute__((unused)) struct DB *db, __attribute__((unused)) int record_index, int field_index, char *value, __attribute__((unused)) size_t value_max_length) {

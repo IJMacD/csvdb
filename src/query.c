@@ -386,7 +386,7 @@ int information_query (const char *table, FILE * output) {
 
     fprintf(output, "Table:\t%s\n", table);
     fprintf(output, "Fields:\t%d\n", db.field_count);
-    fprintf(output, "Records:\t%d\n", db.record_count);
+    fprintf(output, "Records:\t%d\n", getRecordCount(&db));
 
     fprintf(output, "\n");
 

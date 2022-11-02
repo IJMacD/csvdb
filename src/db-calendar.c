@@ -82,7 +82,7 @@ int calendar_openDB (struct DB *db, const char *filename) {
     }
 
     db->vfs = VFS_CALENDAR;
-    db->record_count = 10000000;
+    db->_record_count = 10000000;
     db->line_indices = NULL;
     db->field_count = sizeof(field_names) / sizeof(field_names[0]);
     db->data = NULL;
@@ -114,6 +114,10 @@ int calendar_getFieldIndex (__attribute__((unused)) struct DB *db, const char *f
 
 char *calendar_getFieldName (__attribute__((unused)) struct DB *db, int field_index) {
     return field_names[field_index];
+}
+
+int calendar_getRecordCount (struct DB *db) {
+    return db->_record_count;
 }
 
 int calendar_getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
@@ -347,13 +351,13 @@ int calendar_fullTableScan (struct DB *db, struct RowList *row_list, struct Pred
         julian = 0;
     }
     if (max_julian < 0) {
-        max_julian = db->record_count;
+        max_julian = db->_record_count;
     }
 
     // No limit means we'll use the limit defined for the VFS
     // (hopefully there are enough predicates that we won't have that many results though)
     if (limit_value < 0) {
-        limit_value = db->record_count;
+        limit_value = db->_record_count;
     }
 
     int count = 0;

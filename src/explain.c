@@ -1,6 +1,7 @@
 #include <string.h>
 
 #include "structs.h"
+#include "db.h"
 
 #define COVERING_INDEX_SUPPORT 0
 
@@ -24,7 +25,7 @@ int explain_select_query (
     int row_estimate = 1;
 
     if (q->table_count > 0) {
-        row_estimate = q->tables[join_count].db->record_count;
+        row_estimate = getRecordCount(q->tables[join_count].db);
     }
 
     int log_rows = log_10(row_estimate);
@@ -218,7 +219,8 @@ int explain_select_query (
             strncpy(table, t->name, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
 
-            rows *= t->db->record_count;
+            int record_count = getRecordCount(t->db);
+            rows *= record_count;
             if (cost < rows) {
                 cost = rows;
             }
@@ -233,11 +235,13 @@ int explain_select_query (
             strncpy(table, t->name, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
 
+            int record_count = getRecordCount(t->db);
+
             if (s.predicate_count > 0) {
                 if (s.predicates[0].op == OPERATOR_EQ) {
-                    rows += t->db->record_count / 1000;
+                    rows += record_count / 1000;
                 } else {
-                    rows += t->db->record_count / 10;
+                    rows += record_count / 10;
                 }
 
                 // We might have been too hasty copying predicate name
@@ -245,7 +249,7 @@ int explain_select_query (
                     strcpy(predicate, s.predicates[0].right.fields[0].text);
                 }
             } else {
-                rows += t->db->record_count;
+                rows += record_count;
             }
 
             if (cost < rows) {
@@ -262,11 +266,13 @@ int explain_select_query (
             strncpy(table, t->name, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
 
+            int record_count = getRecordCount(t->db);
+
             if (s.predicate_count > 0) {
                 if (s.predicates[0].op == OPERATOR_EQ) {
-                    rows *= t->db->record_count / 1000;
+                    rows *= record_count / 1000;
                 } else {
-                    rows *= t->db->record_count / 10;
+                    rows *= record_count / 10;
                 }
 
                 // We might have been too hasty copying predicate name
@@ -274,7 +280,7 @@ int explain_select_query (
                     strcpy(predicate, s.predicates[0].right.fields[0].text);
                 }
             } else {
-                rows *= t->db->record_count;
+                rows *= record_count;
             }
 
             if (cost < rows) {
