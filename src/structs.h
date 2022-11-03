@@ -35,8 +35,9 @@ struct DB {
 };
 
 enum Order {
-    ORDER_ASC =     0,
-    ORDER_DESC =    1,
+    ORDER_UN =      0,
+    ORDER_ASC =     1,
+    ORDER_DESC =    2,
 };
 
 struct SortField {

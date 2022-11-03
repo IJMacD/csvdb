@@ -472,22 +472,36 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d: PLAN_SORT\n", getpid());
                 #endif
 
-                struct ColumnNode *col = &s->predicates[0].left;
-
-                if (populateColumnNode(q, col) != 0) {
-                    fprintf(stderr, "Sort column not found: %s\n", s->predicates[0].left.fields[0].text);
-                    return -1;
-                }
-
                 // debugRowList(row_list, 2);
 
                 RowListIndex row_list = popRowList(result_set);
 
                 RowListIndex new_list = createRowList(getRowList(row_list)->join_count, getRowList(row_list)->row_count);
 
-                sortResultRows(q, col, s->predicates[0].op, getRowList(row_list), getRowList(new_list));
-                // To implement better sort later
-                // sortResultRows(db, order_node, s->predicate_count, getRowList(row_list), getRowList(new_list));
+
+                if (s->predicate_count > 1) {
+                    struct ColumnNode *columns = malloc(sizeof(*columns) * s->predicate_count);
+                    int sort_directions[10];
+
+                    for (int i = 0; i < s->predicate_count && i < 10; i++) {
+                        memcpy(columns + i, &s->predicates[i].left, sizeof(*columns));
+                        sort_directions[i] = s->predicates[i].op;
+
+                        // Implementation limitation
+                        // Planner shouldn't plan this
+                        if (sort_directions[i] != sort_directions[0]) {
+                            fprintf(stderr, "Implementation limitation: all sorts must be in the same direction for multi column sort.\n");
+                            exit(-1);
+                        }
+                    }
+
+                    sortResultRowsMultiple(q, columns, s->predicate_count, sort_directions, row_list, new_list);
+
+                    free(columns);
+                }
+                else {
+                    sortResultRows(q, &s->predicates[0].left, s->predicates[0].op, getRowList(row_list), getRowList(new_list));
+                }
 
                 destroyRowList(getRowList(row_list));
 

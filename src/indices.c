@@ -40,7 +40,12 @@ enum IndexSearchResult indexUniqueSeek (struct DB *index_db, int rowid_column, e
     // (exclusive)
     int upper_bound;
 
-    if (predicate_op == OPERATOR_EQ) {
+    if (predicate_op == OPERATOR_ALWAYS) {
+        // Should be a SCAN not a SEEK but we can deal with it anyway
+        lower_bound = 0;
+        upper_bound = getRecordCount(index_db);
+    }
+    else if (predicate_op == OPERATOR_EQ) {
         lower_bound = index_rowid;
         upper_bound = index_rowid + 1;
     }

@@ -93,6 +93,7 @@ void sortResultRows (struct Query *q, struct ColumnNode *column, int direction, 
 
 /**
  * @brief Sort row_list based on multiple columns.
+ * Warning! All sort directions must be the same.
  *
  * @param q
  * @param columns
