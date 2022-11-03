@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 
 #include "structs.h"
 #include "evaluate.h"
@@ -92,7 +93,6 @@ void sortResultRows (struct Query *q, struct ColumnNode *column, int direction, 
 
 /**
  * @brief Sort row_list based on multiple columns.
- * Still a naive implementation
  *
  * @param q
  * @param columns
@@ -101,28 +101,63 @@ void sortResultRows (struct Query *q, struct ColumnNode *column, int direction, 
  * @param source_list
  * @param target_list
  */
-void sortResultRowsMultiple (struct Query *q, struct ColumnNode *columns, int column_count, int *sort_directions, RowListIndex source_list, RowListIndex target_list) {
-    int join_count = getRowList(source_list)->join_count;
-    int row_count = getRowList(source_list)->row_count;
+void sortResultRowsMultiple (struct Query *q, struct ColumnNode *columns, int column_count, int *sort_directions, RowListIndex source_list_id, RowListIndex target_list_id) {
+    struct RowList *source_list = getRowList(source_list_id);
 
-    RowListIndex row_lists[2];
-    row_lists[0] = createRowList(join_count, row_count);
-    row_lists[1] = createRowList(join_count, row_count);
+    struct TreeNode *pool = malloc(sizeof (*pool) * source_list->row_count);
+    struct TreeNode *root = NULL;
 
-    for (int i = column_count - 1; i >= 0 ; i--) {
+    for (int i = 0; i < source_list->row_count; i++) {
+        struct TreeNode *node = &pool[i];
+        node->key = i;
 
-        if (i < column_count - 1 && sort_directions[i] == ORDER_DESC) {
-            // If there are sort steps lower in precedence, and this one is
-            // DESC then the results need to be flipped first.
+        char *target = node->value;
+        char value[MAX_VALUE_LENGTH];
 
-            reverseRowList(getRowList(target_list), -1);
+        for (int j = 0; j < column_count; j++) {
+            int count = evaluateNode(q, source_list, i, &columns[j], value, sizeof(value));
+
+            // Numeric values need to be fixed width for comparison.
+            // After testing it make no difference whether numeric values are
+            // compared or strings are compared. (There are other slower steps).
+            if (is_numeric(value)) {
+                count = sprintf(target, "%020ld", atol(value));
+            }
+            else {
+                strcpy(target, value);
+            }
+
+            target += count;
+            *(target++) = '\x1f'; // Field separator
         }
 
-        RowListIndex from = (i == column_count - 1) ? source_list : row_lists[i%2];
-        RowListIndex to = (i == 0) ? target_list : row_lists[(i+1)%2];
+        // For first (root) node we do a dummy insert to make sure struct
+        // has been initialised properly
+        insertNode(root, node);
 
-        sortResultRows(q, &columns[i], sort_directions[i], getRowList(from), getRowList(to));
+        if (i == 0) {
+            // Now set the root node to the first position in the pool
+            root = node;
+        }
+        // When the range of sort values is small the tree becomes unbalanced
+        // resulting in *increadibly* slow sorts.
+        // We'll periodically rebalance just in case.
+        else if (i % 10000 == 0) {
+            root = rebalanceTree(root, i + 1);
+        }
     }
+
+    // debugTree(root);
+
+    // Walk tree writing result_rowids array
+    if (sort_directions[0] == ORDER_ASC) {
+        sort_walkTree(root, source_list, getRowList(target_list_id));
+    }
+    else {
+        sort_walkTreeBackwards(root, source_list, getRowList(target_list_id));
+    }
+
+    free(pool);
 }
 
 static void sort_walkTree (struct TreeNode *node, struct RowList * source_list, struct RowList * target_list) {
