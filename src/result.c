@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "structs.h"
 #include "util.h"
@@ -114,6 +115,12 @@ void destroyRowList (struct RowList * list) {
     }
 }
 
+/**
+ * @brief
+ *
+ * @param row_list
+ * @param limit -1 for no limit
+ */
 void reverseRowList (struct RowList * row_list, int limit) {
     if (row_list->join_count == 1) {
         // quick dirty implementation
@@ -137,6 +144,26 @@ void reverseRowList (struct RowList * row_list, int limit) {
 
     if (limit > -1 && limit < row_list->row_count) {
         row_list->row_count = limit;
+    }
+}
+
+void copyRowList (struct RowList *dest_list, struct RowList *src_list) {
+    if (src_list->join_count != dest_list->join_count) {
+        fprintf(stderr, "copyRowList src_list and dest_list have different join counts (%d vs %d)\n", src_list->join_count, dest_list->join_count);
+        exit(-1);
+    }
+
+    if (src_list->join_count == 1) {
+        // quick dirty implementation
+        memcpy(dest_list->row_ids, src_list->row_ids, src_list->row_count);
+    }
+    else {
+        for (int i = 0; i < src_list->row_count; i++) {
+
+            for (int j = 0; j < src_list->join_count; j++) {
+                writeRowID(dest_list, j, i, getRowID(src_list, j, i));
+            }
+        }
     }
 }
 

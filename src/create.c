@@ -10,13 +10,13 @@
 #include "output.h"
 #include "query.h"
 
-int create_table_query (const char * query);
+static int create_table_query (const char * query);
 
-int create_view_query (const char * query);
+static int create_view_query (const char * query);
 
-int create_index_query (const char * query);
+static int create_index_query (const char * query);
 
-int create_index (const char *index_name, const char *table_name, const char *index_field, int unique_flag);
+static int create_index (const char *index_name, const char *table_name, const char (*index_field)[32], int field_count, int unique_flag);
 
 int create_query (const char *query) {
     size_t index = 0;
@@ -68,7 +68,8 @@ int create_index_query (const char * query) {
     char index_name[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 2] = {0};
     char table_name[MAX_TABLE_LENGTH] = {0};
 
-    char index_field[MAX_FIELD_LENGTH] = {0};
+    char index_field[10][MAX_FIELD_LENGTH] = {0};
+    int field_count = 0;
 
     if (strcmp(keyword, "UNIQUE") == 0) {
         unique_flag = 1;
@@ -106,23 +107,35 @@ int create_index_query (const char * query) {
         return -1;
     }
 
-    getToken(query, &index, index_field, MAX_TABLE_LENGTH);
+    while (query[index] != '\0') {
+        skipWhitespace(query, &index);
 
-    if (query[index] != ')') {
+        getQuotedToken(query, &index, index_field[field_count++], MAX_TABLE_LENGTH);
+
+        skipWhitespace(query, &index);
+
+        if (query[index] != ',') {
+            break;
+        }
+
+        index++;
+    }
+
+    if (query[index++] != ')') {
         fprintf(stderr, "Expected ) got '%c'\n", query[index]);
         return -1;
     }
 
     if (auto_name) {
-        sprintf(index_name, "%s__%s", table_name, index_field);
+        sprintf(index_name, "%s__%s", table_name, index_field[0]);
     }
 
-    create_index(index_name, table_name, index_field, unique_flag);
+    create_index(index_name, table_name, index_field, field_count, unique_flag);
 
     return 0;
 }
 
-int create_index (const char *index_name, const char *table_name, const char *index_field, int unique_flag) {
+static int create_index (const char *index_name, const char *table_name, const char (*index_field)[32], int field_count, int unique_flag) {
     struct DB db;
     struct Table table = {0};
     struct Query q = {0};
@@ -135,12 +148,33 @@ int create_index (const char *index_name, const char *table_name, const char *in
         return -1;
     }
 
-    int index_field_index = getFieldIndex(&db, index_field);
-
-    if (index_field_index < 0) {
-        fprintf(stderr, "Field does not exist: '%s'\n", index_field);
+    if (unique_flag && field_count > 1) {
+        fprintf(stderr, "Unable to create unique index on multiple columns.\n");
         return -1;
     }
+
+    struct ColumnNode *columns = malloc(sizeof(*columns) * (field_count + 1));
+
+    for (int i = 0; i < field_count; i++) {
+        int index_field_index = getFieldIndex(&db, index_field[i]);
+
+        if (index_field_index < 0) {
+            fprintf(stderr, "Field does not exist: '%s'\n", index_field[i]);
+            return -1;
+        }
+
+        columns[i].function = FUNC_UNITY;
+        strcpy(columns[i].alias, index_field[i]);
+        columns[i].fields[0].table_id = 0;
+        columns[i].fields[0].index = index_field_index;
+        columns[i].concat = 0;
+    }
+
+    columns[field_count].concat = 0;
+    columns[field_count].function = FUNC_UNITY;
+    strcpy(columns[field_count].alias, "rowid");
+    columns[field_count].fields[0].table_id = 0;
+    columns[field_count].fields[0].index = FIELD_ROW_INDEX;
 
     char file_name[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12];
     sprintf(file_name, "%s.%s.csv", index_name, unique_flag ? "unique" : "index");
@@ -152,13 +186,6 @@ int create_index (const char *index_name, const char *table_name, const char *in
         return -1;
     }
 
-    struct ColumnNode columns[2] = {0};
-    columns[0].fields[0].table_id = 0;
-    columns[0].fields[0].index = index_field_index;
-    strcpy(columns[0].alias, index_field);
-    columns[1].fields[0].table_id = 0;
-    columns[1].fields[0].index = FIELD_ROW_INDEX;
-
     int record_count = getRecordCount(&db);
 
     RowListIndex row_list = createRowList(1, record_count);
@@ -168,15 +195,20 @@ int create_index (const char *index_name, const char *table_name, const char *in
 
     RowListIndex sort_list = createRowList(getRowList(row_list)->join_count, getRowList(row_list)->row_count);
 
-    struct ColumnNode col = {0};
-    col.function = FUNC_UNITY;
-    col.fields[0].table_id = 0;
-    col.fields[0].index = index_field_index;
+    if (field_count == 1) {
+        sortResultRows(&q, columns, ORDER_ASC, getRowList(row_list), getRowList(sort_list));
+    }
+    else {
+        int order_directions[] = {
+            ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC,
+            ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC,
+        };
 
-    sortResultRows(&q, &col, ORDER_ASC, getRowList(row_list), getRowList(sort_list));
+        sortResultRowsMultiple(&q, columns, field_count, order_directions, row_list, sort_list);
+    }
 
     // Output functions assume array of DBs
-    printHeaderLine(f, &table, 1, columns, 2, OUTPUT_FORMAT_COMMA);
+    printHeaderLine(f, &table, 1, columns, field_count + 1, OUTPUT_FORMAT_COMMA);
 
     char values[2][MAX_VALUE_LENGTH];
 
@@ -184,7 +216,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
         // Check for UNIQUE
         if (unique_flag) {
             int row_id = getRowID(getRowList(sort_list), 0, i);
-            getRecordValue(&db, row_id, index_field_index, values[i % 2], MAX_VALUE_LENGTH);
+            getRecordValue(&db, row_id, columns[0].fields[0].index, values[i % 2], MAX_VALUE_LENGTH);
 
             if (i > 0 && strcmp(values[0], values[1]) == 0) {
                 fprintf(stderr, "UNIQUE constraint failed. Multiple values for: '%s'\n", values[0]);
@@ -194,7 +226,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
             }
         }
 
-        printResultLine(f, &table, 1, columns, 2, i, getRowList(sort_list), OUTPUT_FORMAT_COMMA);
+        printResultLine(f, &table, 1, columns, field_count + 1, i, getRowList(sort_list), OUTPUT_FORMAT_COMMA);
     }
 
     destroyRowList(getRowList(row_list));
@@ -203,7 +235,7 @@ int create_index (const char *index_name, const char *table_name, const char *in
     return 0;
 }
 
-int create_table_query (const char * query) {
+static int create_table_query (const char * query) {
 
     size_t index = 0;
 
@@ -253,7 +285,7 @@ int create_table_query (const char * query) {
     return select_query(query + index, flags, f);
 }
 
-int create_view_query (const char * query) {
+static int create_view_query (const char * query) {
     size_t index = 0;
 
     char keyword[MAX_FIELD_LENGTH] = {0};
