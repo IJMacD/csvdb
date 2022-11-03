@@ -26,7 +26,7 @@ static int optimisePredicates (struct Query *q, struct Predicate * predicates, i
 
 static struct Predicate *makePredicate (struct ColumnNode *column, enum Operator op);
 
-static int applySortLogic (struct Query *q, struct Plan *plan, int *sorts_needed, enum Order *sort_direction);
+static int applySortLogic (struct Query *q, struct Plan *plan, int *sorts_needed);
 
 int makePlan (struct Query *q, struct Plan *plan) {
     plan->step_count = 0;
@@ -422,17 +422,24 @@ static void addOrderStepsIfRequired (struct Plan *plan, struct Query *q) {
         return;
     }
 
-    // 0 = no sort, 1 = sort, 2 = reverse, 3 = reverse + sort
+    // indices of sort columns required
     int sorts_needed[10] = {0};
 
-    // Used to check if they're all the same
-    // 0 = different, ORDER_ASC = asc, ORDER_DESC = desc
-    enum Order sort_direction = 0;
-
-    int sorts_added = applySortLogic(q, plan, sorts_needed, &sort_direction);
+    int sorts_added = applySortLogic(q, plan, sorts_needed);
 
     if (sorts_added == 0) {
         return;
+    }
+
+    // Used to check if they're all the same
+    // 0 = different, ORDER_ASC = asc, ORDER_DESC = desc
+    enum Order sort_direction = q->order_direction[sorts_needed[0]];
+
+    for (int i = 1; i < sorts_added; i++) {
+        if (sort_direction != q->order_direction[sorts_needed[i]]) {
+            sort_direction = 0;
+            break;
+        }
     }
 
     if (
@@ -444,12 +451,19 @@ static void addOrderStepsIfRequired (struct Plan *plan, struct Query *q) {
         struct Predicate *predicates = malloc(sizeof(*predicates) * sorts_added);
         struct Predicate *p = predicates;
 
-        for (int i = 0; i < q->order_count; i++) {
-            if (sorts_needed[i]) {
-                memcpy(&p->left, &q->order_node[i], sizeof(p->left));
-                p->op = q->order_direction[i];
-                p++;
-            }
+        // The last one might be REVERSE
+        if (sorts_needed[sorts_added - 1] == -1) {
+            addStep(plan, PLAN_REVERSE);
+
+            sorts_added--;
+        }
+
+        for (int i = 0; i < sorts_added; i++) {
+            int idx = sorts_needed[i];
+
+            memcpy(&p->left, &q->order_node[idx], sizeof(p->left));
+            p->op = q->order_direction[idx];
+            p++;
         }
 
         addStepWithPredicates(plan, PLAN_SORT, predicates, sorts_added);
@@ -474,39 +488,24 @@ static void addOrderStepsIfRequired (struct Plan *plan, struct Query *q) {
         // Yes, it is inefficient to sort the whole list three times, but it is
         // simple.
 
-        struct PlanStep *first = plan->steps;
-        int j = 0;
-        for (int i = q->order_count - 1; i >= 0; i--) {
-            int sort_needed = sorts_needed[i];
+        for (int i = sorts_added - 1; i >= 0; i--) {
+            int idx = sorts_needed[i];
 
-            // If it's the last sort operation (the first to be added) we might
-            // be able to avoid it if the results are already in the correct
-            // order.
-            if (
-                j == 0
-                && (first->type == PLAN_INDEX_RANGE || first->type == PLAN_UNIQUE_RANGE)
-                && first->predicates[0].left.function == q->order_node[i].function
-                && first->predicates[0].left.fields[0].table_id == q->order_node[i].fields[0].table_id
-                && first->predicates[0].left.fields[0].index == q->order_node[i].fields[0].index
-            ) {
-                if (sort_needed & 2) {
-                    addStep(plan, PLAN_REVERSE);
-                }
-
-                continue;
-            }
-
-            if (sort_needed & 2) {
+            if (idx == -1) {
                 addStep(plan, PLAN_REVERSE);
             }
+            else {
+                enum Order dir = q->order_direction[idx];
 
-            if (sort_needed & 1) {
-                struct Predicate *p = makePredicate(&q->order_node[i], q->order_direction[i]);
+                struct Predicate *p = makePredicate(&q->order_node[idx], dir);
                 addStepWithPredicate(plan, PLAN_SORT, p);
-            }
 
-            if (sort_needed) {
-                j++;
+                if (i > 0) {
+                    int next_idx = sorts_needed[i-1];
+                    if (dir == ORDER_ASC && q->order_direction[next_idx] == ORDER_DESC) {
+                        addStep(plan, PLAN_REVERSE);
+                    }
+                }
             }
         }
     }
@@ -734,15 +733,10 @@ static struct Predicate *makePredicate (struct ColumnNode *column, enum Operator
  *
  * @param q
  * @param plan
- * @param sorts_needed OUT array mapping query->order_node to required
- * operation. 0 = no operation, 1 = sort, 2 = reverse, 3 = reverse + sort
- * @param sort_direction OUT -1 = not same direction, 0 = unknown, 1 = asc,
- * 2 = desc
+ * @param sorts_needed OUT array listing query order node indices required, -1 = reverse
  * @return int
  */
-static int applySortLogic (struct Query *q, struct Plan *plan, int *sorts_needed, enum Order *sort_direction) {
-    int sorts_added = 0;
-
+static int applySortLogic (struct Query *q, struct Plan *plan, int *sorts_needed) {
     int non_unique_joins = 0;
     for (int i = 0; i < plan->step_count; i++) {
         enum PlanStepType type = plan->steps[i].type;
@@ -766,11 +760,10 @@ static int applySortLogic (struct Query *q, struct Plan *plan, int *sorts_needed
                 && (strcmp(q->order_node[0].fields[0].text, "rowid") == 0 || strcmp(q->order_node[0].fields[0].text, "PK") == 0)
             ) {
                 // No need to sort
-                *sort_direction = q->order_direction[0];
 
                 if (q->order_direction[0] == ORDER_DESC) {
                     // Just need to reverse
-                    sorts_needed[0] = 2;
+                    sorts_needed[0] = -1;
                     return 1;
                 }
 
@@ -790,11 +783,9 @@ static int applySortLogic (struct Query *q, struct Plan *plan, int *sorts_needed
             // row returned for the first sort column so,
             // we never need to sort.
 
-            *sort_direction = q->order_direction[0];
-
             if (q->order_direction[0] == ORDER_DESC) {
                 // Just need to reverse
-                sorts_needed[0] = 2;
+                sorts_needed[0] = -1;
 
                 return 1;
             }
@@ -814,11 +805,9 @@ static int applySortLogic (struct Query *q, struct Plan *plan, int *sorts_needed
             // row returned for the first sort column so,
             // we never need to sort.
 
-            *sort_direction = q->order_direction[0];
-
             if (q->order_direction[0] == ORDER_DESC) {
                 // Just need to reverse
-                sorts_needed[0] = 2;
+                sorts_needed[0] = -1;
 
                 return 1;
             }
@@ -829,9 +818,10 @@ static int applySortLogic (struct Query *q, struct Plan *plan, int *sorts_needed
 
     // Now start to iterate the sort columns to
     // decide which sorts are actually needed
+    int sorts_added = 0;
 
     for (int i = 0; i < q->order_count; i++) {
-        sorts_needed[i] = 1;
+        int sort_needed = 1;
 
         // If there is an equality predicate on this column then there is no
         // need to ever sort by it.
@@ -843,27 +833,58 @@ static int applySortLogic (struct Query *q, struct Plan *plan, int *sorts_needed
             ) {
                 // OK we don't need to sort by this field
 
-                sorts_needed[i] = 0;
+                sort_needed = 0;
                 break;
             }
         }
 
-        if (sorts_needed[i]) {
-            if (sorts_added > 0 && q->order_direction[i] == ORDER_DESC) {
-                // If there are sort steps lower in precedence, and this one is
-                // DESC then the results need to be flipped first.
+        if (sort_needed) {
+            sorts_needed[sorts_added++] = i;
+        }
+    }
 
-                sorts_needed[i] = 3;
-            }
+    if (sorts_added > 0) {
+        int last_idx = sorts_needed[sorts_added - 1];
+        struct ColumnNode *last_node = &q->order_node[last_idx];
+        enum Order last_direction = q->order_direction[last_idx];
 
-            if (*sort_direction == 0) {
-                *sort_direction = q->order_direction[i];
-            }
-            else if (*sort_direction != q->order_direction[i]) {
-                *sort_direction = -1;
-            }
+        struct PlanStep *first = plan->steps;
+        struct ColumnNode *first_node = &first->predicates[0].left;
 
-            sorts_added++;
+
+        // If it's the last sort operation (the first to be added) we might
+        // be able to avoid it if the results are already in the correct
+        // order.
+        if (
+            (first->type == PLAN_INDEX_RANGE || first->type == PLAN_UNIQUE_RANGE)
+            && first_node->function == last_node->function
+            && first_node->fields[0].table_id == last_node->fields[0].table_id
+            && first_node->fields[0].index == last_node->fields[0].index
+        ) {
+            // Before the sort phase starts the results are in ascending order
+            // of the least significant sort column
+
+            if (sorts_added == 1) {
+                // No sort needed
+                if (last_direction == ORDER_DESC) {
+                    // replace sort with REVERSE
+                    sorts_needed[last_idx] = -1;
+                } else {
+                    sorts_added--;
+                }
+            }
+            else {
+                int penul_idx = sorts_needed[sorts_added - 2];
+                enum Order penul_direction = q->order_direction[penul_idx];
+
+                if (penul_direction != last_direction) {
+                    // Replace with REVERSE
+                    sorts_needed[last_idx] = -1;
+                }
+                else {
+                    sorts_added--;
+                }
+            }
         }
     }
 
