@@ -210,7 +210,7 @@ enum IndexSearchResult indexSeek (struct DB *index_db, int rowid_column, enum Op
         return a + b;
     }
     else {
-        fprintf(stderr, "Not Implemented: Index range scan for operator: %d\n", predicate_op);
+        fprintf(stderr, "Not Implemented: Index seek for operator: %d\n", predicate_op);
         exit(-1);
     }
 
@@ -220,13 +220,6 @@ enum IndexSearchResult indexSeek (struct DB *index_db, int rowid_column, enum Op
 
     return indexWalk(index_db, rowid_column, lower_bound, upper_bound, row_list);
 }
-
-// /**
-//  * TODO: implement
-//  */
-// int indexRangeScan (struct DB *index_db, int rowid_column, int predicate_op1, const char *predicate_value1, int predicate_op2, const char *predicate_value2, struct RowList * row_list, int limit){
-
-// }
 
 /**
  * @brief Walk from lower to upper (exclusive) bounds adding rowids to a RowList
