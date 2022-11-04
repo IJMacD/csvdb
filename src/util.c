@@ -147,3 +147,21 @@ int whitespaceCollapse (char *output, const char *source, int length) {
     output[written] = '\0';
     return written;
 }
+
+/**
+ * @brief strcpy that can cope with overlapping strings as long as the dest is
+ * after the src.
+ *
+ * @param dest
+ * @param src
+ */
+void strcpy_overlap (char *dest, const char *src) {
+    if (src == dest) return;
+
+    char c;
+    while((c = *(src++)) != '\0') {
+        *(dest++) = c;
+    }
+
+    *dest = '\0';
+}

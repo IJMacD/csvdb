@@ -22,7 +22,7 @@ int information_query (const char *table, FILE * output);
 
 static int populateTables (struct Query *q, struct DB * dbs);
 
-static int findField (struct Query *q, const char *text, int *table_id, int *column_id);
+static int findField (struct Query *q, const char *text, int *table_id, int *column_id, char *name);
 
 static void checkColumnAliases (struct Table * table);
 
@@ -513,7 +513,22 @@ static int populateTables (struct Query *q, struct DB *dbs) {
     return 0;
 }
 
-static int findField (struct Query *q, const char *text, int *table_id, int *column_id) {
+/**
+ * @brief given a text string (e.g. name, table.name, *, rowid, table.*,
+ * table.rowid) this function will search for a matching field in all tables in
+ * the query and write the table_id and index into the `table_id` and
+ * `column_id` pointers. If the `name` pointer is not NULL and the input text
+ * has a prefix then the suffix (without prefix or dot) will be written to
+ * `name`.
+ *
+ * @param q
+ * @param text IN
+ * @param table_id OUT
+ * @param column_id OUT
+ * @param name OUT
+ * @return int
+ */
+static int findField (struct Query *q, const char *text, int *table_id, int *column_id, char *name) {
 
     int dot_index = str_find_index(text, '.');
 
@@ -558,6 +573,11 @@ static int findField (struct Query *q, const char *text, int *table_id, int *col
                     struct DB *db = q->tables[i].db;
 
                     *column_id = getFieldIndex(db, text + dot_index + 1);
+
+                    if (*column_id != -1 && name != NULL) {
+                        // could use getFieldName() but probably not necessary
+                        strcpy_overlap(name, text + dot_index + 1);
+                    }
                 }
 
                 return 1;
@@ -621,14 +641,14 @@ int populateColumnNode (struct Query * query, struct ColumnNode * column) {
     }
 
     if (field1->index == FIELD_UNKNOWN && field1->text[0] != '\0') {
-        if (!findField(query, field1->text, &field1->table_id, &field1->index)) {
+        if (!findField(query, field1->text, &field1->table_id, &field1->index, field1->text)) {
             fprintf(stderr, "Unable to find column '%s'\n", field1->text);
             return -1;
         }
     }
 
     if (field2->index == FIELD_UNKNOWN && field2->text[0] != '\0') {
-        if (!findField(query, field2->text, &field2->table_id, &field2->index)) {
+        if (!findField(query, field2->text, &field2->table_id, &field2->index, field2->text)) {
             fprintf(stderr, "Unable to find column '%s'\n", field2->text);
             return -1;
         }

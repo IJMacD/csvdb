@@ -521,12 +521,8 @@ static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
 
                 if (join->op == OPERATOR_EQ) {
                     int join_result_left = findIndex(NULL, table->name, join->left.fields[0].text, INDEX_UNIQUE);
-                    int join_result_right = findIndex(NULL, table->name, join->right.fields[0].text, INDEX_UNIQUE);
 
-                    if (
-                        join_result_left == INDEX_UNIQUE || join_result_left == INDEX_PRIMARY ||
-                        join_result_right == INDEX_UNIQUE || join_result_right == INDEX_PRIMARY
-                    ) {
+                    if (join_result_left == INDEX_UNIQUE || join_result_left == INDEX_PRIMARY) {
                         addStepWithPredicate(plan, PLAN_UNIQUE_JOIN, join);
                     }
                     else {
