@@ -5,6 +5,15 @@
 #include "db.h"
 #include "evaluate.h"
 
+/**
+ * @brief Every row of left table is unconditionally joined to every
+ * row of right table.
+ *
+ * @param query
+ * @param step
+ * @param result_set
+ * @return int
+ */
 int executeCrossJoin (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
 
     RowListIndex row_list = popRowList(result_set);
@@ -35,7 +44,7 @@ int executeCrossJoin (struct Query *query, struct PlanStep *step, struct ResultS
         if (done) break;
     }
 
-    destroyRowList(getRowList(row_list));
+    destroyRowList(row_list);
 
     pushRowList(result_set, new_list);
 
@@ -119,22 +128,24 @@ int executeConstantJoin (struct Query *query, struct PlanStep *step, struct Resu
         if (done) break;
     }
 
-    destroyRowList(getRowList(row_list));
-    destroyRowList(getRowList(tmp_list));
+    destroyRowList(row_list);
+    destroyRowList(tmp_list);
 
     pushRowList(result_set, new_list);
 
     return 0;
 }
 
+
 /**
- * @brief Join type where each row on left is joined to exactly 0 or 1
- * row on the right table using a unique index.
+ * @brief Every row of left table is tested with predicates against
+ * every row of right table and only added to the result set
+ * if all predicates compare true.
  *
  * @param query
  * @param step
  * @param result_set
- * @return int 0 on success
+ * @return int
  */
 int executeLoopJoin (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
 
@@ -199,14 +210,23 @@ int executeLoopJoin (struct Query *query, struct PlanStep *step, struct ResultSe
         }
     }
 
-    destroyRowList(getRowList(row_list));
-    destroyRowList(getRowList(tmp_list));
+    destroyRowList(row_list);
+    destroyRowList(tmp_list);
 
     pushRowList(result_set, new_list);
 
     return 0;
 }
 
+/**
+ * @brief Join type where each row on left is joined to exactly 0 or 1
+ * row on the right table using a unique index.
+ *
+ * @param query
+ * @param step
+ * @param result_set
+ * @return int 0 on success
+ */
 int executeUniqueJoin (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
 
     RowListIndex row_list = popRowList(result_set);
@@ -267,8 +287,8 @@ int executeUniqueJoin (struct Query *query, struct PlanStep *step, struct Result
         }
     }
 
-    destroyRowList(getRowList(row_list));
-    destroyRowList(getRowList(tmp_list));
+    destroyRowList(tmp_list);
+    destroyRowList(row_list);
 
     pushRowList(result_set, new_list);
 

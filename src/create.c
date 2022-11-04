@@ -222,7 +222,7 @@ static int create_index (const char *index_name, const char *table_name, const c
         printResultLine(f, &table, 1, columns, field_count + 1, i, getRowList(row_list), OUTPUT_FORMAT_COMMA);
     }
 
-    destroyRowList(getRowList(row_list));
+    destroyRowList(row_list);
 
     return 0;
 }

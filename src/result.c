@@ -5,10 +5,6 @@
 #include "structs.h"
 #include "util.h"
 
-static void prepareRowList (struct RowList * list, int join_count, int max_rows);
-
-static struct RowList *row_list_pool = NULL;
-
 int getRowID (struct RowList * row_list, int join_id, int index) {
     return row_list->row_ids[index * row_list->join_count + join_id];
 }
@@ -48,6 +44,15 @@ void appendRowID3 (struct RowList * row_list, int value1, int value2, int value3
     row_list->row_count++;
 }
 
+/**
+ * @brief Copy N rowids from source list and 1 new rowid, and append to
+ * dest_list which must have a width of N+1
+ *
+ * @param dest_list
+ * @param src_list
+ * @param src_index
+ * @param value
+ */
 void appendJoinedRowID (struct RowList * dest_list, struct RowList * src_list, int src_index, int value) {
     if (dest_list->join_count != src_list->join_count + 1) {
         fprintf(stderr, "Cannot append joined rowid from list with size %d to size %d\n", src_list->join_count, dest_list->join_count);
@@ -66,7 +71,11 @@ void appendJoinedRowID (struct RowList * dest_list, struct RowList * src_list, i
 }
 
 /**
- * src and dest can be same RowList
+ * @brief Copy all N rowids in a result row from src_list and append to dest_list
+ *
+ * @param dest_list
+ * @param src_list
+ * @param src_index
  */
 void copyResultRow (struct RowList * dest_list, struct RowList * src_list, int src_index) {
     if (dest_list->join_count != src_list->join_count) {
@@ -81,42 +90,8 @@ void copyResultRow (struct RowList * dest_list, struct RowList * src_list, int s
     dest_list->row_count++;
 }
 
-static void prepareRowList (struct RowList * list, int join_count, int max_rows) {
-    list->join_count = join_count;
-    list->row_count = 0;
-
-    if (join_count == 0) {
-        // Special case for constant-only table-less query
-        join_count = 1;
-        // OK it wasn't that special...
-    }
-
-    int size = (sizeof (int *)) * join_count * max_rows;
-
-    if (size < 0) {
-        fprintf(stderr, "Not trying to allocate space for %d rows\n", max_rows);
-        exit(-1);
-    }
-
-    list->row_ids = malloc(size);
-
-    if (list->row_ids == NULL) {
-        fprintf(stderr, "Cannot allocate space for %d rows\n", max_rows);
-        exit(-1);
-    }
-
-    // fprintf(stderr, "Allocated %d bytes for list->row_ids @ %p\n", size, list->row_ids);
-}
-
-void destroyRowList (struct RowList * list) {
-    if (list->row_ids != NULL) {
-        free(list->row_ids);
-        list->row_ids = NULL;
-    }
-}
-
 /**
- * @brief
+ * @brief Flip all ros in a RowList. First row becomes last and vice-versa.
  *
  * @param row_list
  * @param limit -1 for no limit
@@ -147,6 +122,12 @@ void reverseRowList (struct RowList * row_list, int limit) {
     }
 }
 
+/**
+ * @brief Copy all rows from one RowList to another RowList
+ *
+ * @param dest_list
+ * @param src_list
+ */
 void copyRowList (struct RowList *dest_list, struct RowList *src_list) {
     if (src_list->join_count != dest_list->join_count) {
         fprintf(stderr, "copyRowList src_list and dest_list have different join counts (%d vs %d)\n", src_list->join_count, dest_list->join_count);
@@ -167,12 +148,36 @@ void copyRowList (struct RowList *dest_list, struct RowList *src_list) {
     }
 }
 
+/**
+ * @brief Swap a row at index_a with the row at index_b within the same RowList
+ *
+ * @param row_list
+ * @param index_a
+ * @param index_b
+ */
 void swapRows (struct RowList *row_list, int index_a, int index_b) {
     for (int i = 0; i < row_list->join_count; i++) {
         int tmp = getRowID(row_list, i, index_b);
         writeRowID(row_list, i, index_b, getRowID(row_list, i, index_a));
         writeRowID(row_list, i, index_a, tmp);
     }
+}
+
+static struct RowList *row_list_pool = NULL;
+
+static int pool_count = 0;
+
+/**
+ * @brief Get the RowList object from the pool by index.
+ * Important: DO NOT hold on to this pointer for long.
+ * More specifically do not hold on to it after a createRowList() call.
+ *
+ * @param index
+ * @return struct RowList*
+ */
+struct RowList *getRowList (RowListIndex index) {
+    if (index < 0) return NULL;
+    return row_list_pool + index;
 }
 
 /**
@@ -183,15 +188,14 @@ void swapRows (struct RowList *row_list, int index_a, int index_b) {
  * @return int index in pool
  */
 RowListIndex createRowList (int join_count, int max_rows) {
-    // Limits number of groups/working space
+    // Initial pool size
     static int max_size = 10;
-    static int count = 0;
 
     if (row_list_pool == NULL) {
         row_list_pool = malloc(sizeof(*row_list_pool) * max_size);
     }
 
-    if (count == max_size) {
+    if (pool_count == max_size) {
         max_size *= 2;
         int size = sizeof(*row_list_pool) * max_size;
         void *ptr = realloc(row_list_pool, size);
@@ -207,24 +211,52 @@ RowListIndex createRowList (int join_count, int max_rows) {
         // #endif
     }
 
-    struct RowList *row_list = &row_list_pool[count++];
+    struct RowList *row_list = &row_list_pool[pool_count++];
 
-    prepareRowList(row_list, join_count, max_rows);
+    // Prepare RowList for use.
+    row_list->join_count = join_count;
+    row_list->row_count = 0;
 
-    return count - 1;
+    if (join_count == 0) {
+        // Special case for constant-only table-less query
+        join_count = 1;
+        // OK it wasn't that special...
+    }
+
+    int size = (sizeof (int *)) * join_count * max_rows;
+
+    if (size < 0) {
+        fprintf(stderr, "Not trying to allocate space for %d rows\n", max_rows);
+        exit(-1);
+    }
+
+    row_list->row_ids = malloc(size);
+
+    if (row_list->row_ids == NULL) {
+        fprintf(stderr, "Cannot allocate space for %d rows\n", max_rows);
+        exit(-1);
+    }
+
+    // fprintf(stderr, "Created RowList %d. Pool use: %d/%d\n", pool_count - 1, pool_count, max_size);
+
+    return pool_count - 1;
 }
 
-/**
- * @brief Get the Row List object from the pool by index.
- * Important: DO NOT hold on to this pointer for long.
- * More specifically do not hold on to it after a createRowList() call.
- *
- * @param index
- * @return struct RowList*
- */
-struct RowList *getRowList (RowListIndex index) {
-    if (index < 0) return NULL;
-    return row_list_pool + index;
+void destroyRowList (RowListIndex row_list) {
+    struct RowList *list = getRowList(row_list);
+
+    if (list->row_ids != NULL) {
+        free(list->row_ids);
+        list->row_ids = NULL;
+    }
+
+    // If we're destroying the most recent row_list in the pool we can "return"
+    // it to the pool;
+    if (row_list == pool_count - 1) {
+        pool_count--;
+    }
+
+    // fprintf(stderr, "Destroyed RowList %d. Pool use: %d\n", row_list, pool_count);
 }
 
 void pushRowList(struct ResultSet *result_set, RowListIndex row_list_index) {

@@ -3,7 +3,16 @@
 #include "evaluate.h"
 #include "predicates.h"
 
-int executeTableAccessFull (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
+/**
+ * @brief Every row of result set is checked against predicates and
+ * those which pass are added to the output result set.
+ *
+ * @param query
+ * @param step
+ * @param result_set
+ * @return int
+ */
+int executeTableAccessRowid (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
     // We'll just recycle the same RowList
     RowListIndex row_list = popRowList(result_set);
 

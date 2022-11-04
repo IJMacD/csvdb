@@ -132,6 +132,13 @@ void closeDB (struct DB *db) {
     }
 }
 
+/**
+ * @brief Get the Field Index of a field in this table
+ *
+ * @param db
+ * @param field
+ * @return int -1 if not found
+ */
 int getFieldIndex (struct DB *db, const char *field) {
     int (*vfs_getFieldIndex) (struct DB *, const char *) = VFS_Table[db->vfs].getFieldIndex;
 

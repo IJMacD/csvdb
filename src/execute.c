@@ -136,16 +136,26 @@ int executeQueryPlan (
             }
 
             case PLAN_TABLE_ACCESS_ROWID: {
+                /*************************************************************
+                 * Every row of result set is checked against predicates and
+                 * those which pass are added to the output result set.
+                 *************************************************************/
+
                 #ifdef DEBUG
                 fprintf(stderr, "Q%d: PLAN_TABLE_ACCESS_ROWID\n", getpid());
                 #endif
 
-                result = executeTableAccessFull(q, s, result_set);
+                result = executeTableAccessRowid(q, s, result_set);
 
                 break;
             }
 
             case PLAN_CROSS_JOIN: {
+                /*************************************************************
+                 * Every row of left table is unconditionally joined to every
+                 * row of right table.
+                 *************************************************************/
+
                 #ifdef DEBUG
                 fprintf(stderr, "Q%d: PLAN_CROSS_JOIN\n", getpid());
                 #endif
@@ -172,6 +182,11 @@ int executeQueryPlan (
             }
 
             case PLAN_LOOP_JOIN: {
+                /*************************************************************
+                 * Every row of left table is tested with predicates against
+                 * every row of right table and only added to the result set
+                 * if all predicates compare true.
+                 *************************************************************/
                 #ifdef DEBUG
                 fprintf(stderr, "Q%d: PLAN_LOOP_JOIN\n", getpid());
                 #endif
@@ -244,9 +259,11 @@ int executeQueryPlan (
                  * Output result set
                  *******************/
 
-                struct RowList *row_list;
 
-                while ((row_list = getRowList(popRowList(result_set)))) {
+                RowListIndex list_id;
+
+                while ((list_id = popRowList(result_set)) >= 0) {
+                    struct RowList *row_list = getRowList(list_id);
 
                     // Aggregate functions will print just one row
                     if (q->flags & FLAG_GROUP) {
@@ -258,7 +275,7 @@ int executeQueryPlan (
                         row_count++;
                     }
 
-                    destroyRowList(row_list);
+                    destroyRowList(list_id);
                 }
 
                 break;

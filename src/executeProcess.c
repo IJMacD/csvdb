@@ -81,7 +81,7 @@ int executeGroup (struct Query *query, struct PlanStep *step, struct ResultSet *
         copyResultRow(getRowList(curr_list), getRowList(row_list), i);
     }
 
-    destroyRowList(getRowList(row_list));
+    destroyRowList(row_list);
 
     return 0;
 }
