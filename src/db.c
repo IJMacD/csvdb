@@ -203,8 +203,9 @@ int getRecordValue (struct DB *db, int record_index, int field_index, char *valu
  * @param table_name
  * @param index_name
  * @param index_type_flags INDEX_ANY|INDEX_REGULAR|INDEX_UNIQUE|INDEX_PRIMARY
+ * @returns int INDEX_REGULAR|INDEX_UNIQUE|INDEX_PRIMARY
  */
-enum IndexSearchType findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags) {
+enum IndexSearchType findIndex(struct DB *db, const char *table_name, const char *index_name, enum IndexSearchType index_type_flags) {
     if (strcmp(table_name, "CALENDAR") == 0) {
         return calendar_findIndex(db, table_name, index_name, index_type_flags);
     }

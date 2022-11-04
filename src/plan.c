@@ -518,19 +518,26 @@ static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
                 addStepWithPredicate(plan, PLAN_CONSTANT_JOIN, join);
             }
             else {
+                int index_result = findIndex(NULL, table->name, join->left.fields[0].text, INDEX_ANY);
 
                 if (join->op == OPERATOR_EQ) {
-                    int join_result_left = findIndex(NULL, table->name, join->left.fields[0].text, INDEX_UNIQUE);
-
-                    if (join_result_left == INDEX_UNIQUE || join_result_left == INDEX_PRIMARY) {
+                    if (index_result == INDEX_UNIQUE || index_result == INDEX_PRIMARY) {
                         addStepWithPredicate(plan, PLAN_UNIQUE_JOIN, join);
+                    }
+                    else if (index_result == INDEX_REGULAR) {
+                        addStepWithPredicate(plan, PLAN_INDEX_JOIN, join);
                     }
                     else {
                         addStepWithPredicate(plan, PLAN_LOOP_JOIN, join);
                     }
                 }
                 else {
-                    addStepWithPredicate(plan, PLAN_LOOP_JOIN, join);
+                    if (index_result != INDEX_NONE) {
+                        addStepWithPredicate(plan, PLAN_INDEX_JOIN, join);
+                    }
+                    else {
+                        addStepWithPredicate(plan, PLAN_LOOP_JOIN, join);
+                    }
                 }
             }
         }
@@ -594,12 +601,13 @@ static void addLimitStepIfRequired (struct Plan *plan, struct Query *query) {
                     plan->steps[i].type == PLAN_CONSTANT_JOIN
                     || plan->steps[i].type == PLAN_LOOP_JOIN
                     || plan->steps[i].type == PLAN_CROSS_JOIN
+                    || plan->steps[i].type == PLAN_INDEX_JOIN
                 ) {
                     all_left_unique = 0;
                     break;
                 }
 
-                if (plan->steps[0].type == PLAN_UNIQUE) {
+                if (plan->steps[i].type == PLAN_UNIQUE_JOIN) {
                     // Defined to be this table join ID on left
                     int table_id = plan->steps[i].predicates[0].left.fields[0].table_id;
 

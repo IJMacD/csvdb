@@ -481,5 +481,5 @@ enum IndexSearchType csv_findIndex(struct DB *db, const char *table_name, const 
         return INDEX_REGULAR;
     }
 
-    return 0;
+    return INDEX_NONE;
 }

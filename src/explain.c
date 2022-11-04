@@ -321,10 +321,19 @@ int explain_select_query (
             strncpy(table, t->alias, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
 
-            // We might have been too hasty copying predicate name
-            if (s.predicates[0].left.fields[0].table_id != join_count) {
-                strcpy(predicate, s.predicates[0].right.fields[0].text);
+            if (cost < rows) {
+                cost = rows;
             }
+        }
+        else if (s.type == PLAN_INDEX_JOIN) {
+            operation = "INDEX JOIN";
+
+            join_count++;
+
+            struct Table *t = &q->tables[join_count];
+
+            strncpy(table, t->alias, MAX_FIELD_LENGTH);
+            table[MAX_FIELD_LENGTH - 1] = '\0';
 
             if (cost < rows) {
                 cost = rows;
@@ -336,7 +345,7 @@ int explain_select_query (
         }
         else {
             operation = "Unknown OP code";
-            sprintf(predicate, "%d\n", s.type);
+            sprintf(table, "%d", s.type);
         }
 
         if (s.limit >= 0) {

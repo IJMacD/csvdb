@@ -247,6 +247,7 @@ enum PlanStepType {
     PLAN_CONSTANT_JOIN =        0x22,
     PLAN_LOOP_JOIN =            0x23,
     PLAN_UNIQUE_JOIN =          0x24,
+    PLAN_INDEX_JOIN =           0x25,
 
     // POP = 1, PUSH = 1
     PLAN_SORT =                 0x30,

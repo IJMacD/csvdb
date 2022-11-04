@@ -7,3 +7,5 @@ int executeConstantJoin (struct Query *query, struct PlanStep *step, struct Resu
 int executeLoopJoin (struct Query *query, struct PlanStep *step, struct ResultSet *result_set);
 
 int executeUniqueJoin (struct Query *query, struct PlanStep *step, struct ResultSet *result_set);
+
+int executeIndexJoin (struct Query *query, struct PlanStep *step, struct ResultSet *result_set);

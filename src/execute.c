@@ -211,6 +211,23 @@ int executeQueryPlan (
                 break;
             }
 
+
+            case PLAN_INDEX_JOIN: {
+                /*************************************************************
+                 * Join type where each row on left is joined to 0 or more
+                 * rows on the right table using an index to search for
+                 * matching rows.
+                 *************************************************************/
+
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d: PLAN_INDEX_JOIN\n", getpid());
+                #endif
+
+                result = executeIndexJoin(q, s, result_set);
+
+                break;
+            }
+
             case PLAN_SORT: {
                 #ifdef DEBUG
                 fprintf(stderr, "Q%d: PLAN_SORT\n", getpid());
