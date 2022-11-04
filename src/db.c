@@ -321,7 +321,7 @@ int fullTableScan (struct DB *db, struct RowList * row_list, int start_rowid, in
 int pkSearch (struct DB *db, const char * value) {
     int output_flag;
 
-    int rowid = uniqueIndexSearch(db, value, -1, &output_flag);
+    int rowid = uniqueIndexSearch(db, value, &output_flag);
 
     if (output_flag) {
         return RESULT_NO_ROWS;
@@ -333,26 +333,23 @@ int pkSearch (struct DB *db, const char * value) {
 /**
  * @brief (Binary) Search a sorted table for a value and return associated rowid
  *
- * TODO: Just ignores rowid_field at the moment and assumes -1
- *
  * @param db must be an index with sorted column 0
  * @param value value to search for in cilumn 0 of db
- * @param rowid_field which column contains the rowid? (FIELD_ROW_INDEX means index rowid is returned)
  * @param mode MODE_UNIQUE: index is unique; MODE_LOWER_BOUND: return first matching rowid; MODE_UPPER_BOUND: return last matching rowid
  * @param output_flag 0: value found; RESULT_BETWEEN: value not found but would appear just before returned rowid; RESULT_BELOW_MIN: value below minimum; RESULT_ABOVE_MAX: value above maximum
  *
- * @returns rowid of match (or closest match); or RESULT_NO_ROWS (-1) if out of bounds;
+ * @returns rowid of match (or closest match) in index; or RESULT_NO_ROWS (-1) if out of bounds;
  */
-int indexSearch (struct DB *db, const char *search_value, int rowid_field, int mode, int * output_flag) {
+int indexSearch (struct DB *db, const char *search_value, int mode, int * output_flag) {
     if (db->vfs == 0) {
         fprintf(stderr, "Trying to perform index search on unititialised DB\n");
         exit(-1);
     }
 
-    int (*vfs_indexSearch) (struct DB *, const char *, int, int, int *) = VFS_Table[db->vfs].indexSearch;
+    int (*vfs_indexSearch) (struct DB *, const char *, int, int *) = VFS_Table[db->vfs].indexSearch;
 
     if (vfs_indexSearch != NULL) {
-        return vfs_indexSearch(db, search_value, rowid_field, mode, output_flag);
+        return vfs_indexSearch(db, search_value, mode, output_flag);
     }
 
     // VFS-Agnostic implementation
@@ -494,16 +491,15 @@ int indexSearch (struct DB *db, const char *search_value, int rowid_field, int m
 
 
 /**
- * @brief Search a sorted table for a value and return associated rowid
+ * @brief Search a sorted table for a value and return rowid
  *
  * @param db must be an index with sorted column 0
  * @param value value to search for in column 0 of db
- * @param rowid_field which column contains the rowid? (-1 means index rowid is returned)
  * @param output_flag 0: value found; 1: value not found but just before returned rowid; 2: value below minimum; 3: value above maximum
- * @returns 0.. rowid of match; -1 if not found;
+ * @returns 0.. rowid of match in index; -1 if not found;
  */
-int uniqueIndexSearch (struct DB *db, const char * value, int rowid_field, int * output_flag) {
-    return indexSearch(db, value, rowid_field, 0, output_flag);
+int uniqueIndexSearch (struct DB *db, const char * value, int * output_flag) {
+    return indexSearch(db, value, 0, output_flag);
 }
 
 /**

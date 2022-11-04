@@ -19,9 +19,9 @@ enum IndexSearchType findIndex(struct DB *db, const char *table_name, const char
 
 int pkSearch(struct DB *db, const char *value);
 
-int indexSearch(struct DB *db, const char *value, int rowid_field, int mode, int * output_flag);
+int indexSearch(struct DB *db, const char *value, int mode, int * output_flag);
 
-int uniqueIndexSearch(struct DB *db, const char *value, int rowid_field, int * output_flag);
+int uniqueIndexSearch(struct DB *db, const char *value, int * output_flag);
 
 int fullTableAccess (struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value);
 

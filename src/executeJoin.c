@@ -265,14 +265,18 @@ int executeUniqueJoin (struct Query *query, struct PlanStep *step, struct Result
         return -1;
     }
 
+    int rowid_field = getFieldIndex(&index_db, "rowid");
+
     for (int i = 0; i < getRowList(row_list)->row_count; i++) {
         char value[MAX_VALUE_LENGTH];
+        int output_status;
 
         // Fill in value as constant from outer tables
         evaluateNode(query, getRowList(row_list), i, outer, value, MAX_FIELD_LENGTH);
 
-        // Hang on... won't this only work for calendar?
-        int rowid = pkSearch(&index_db, value);
+        int index_rowid = uniqueIndexSearch(&index_db, value, &output_status);
+        getRecordValue(&index_db, index_rowid, rowid_field, value, MAX_VALUE_LENGTH);
+        int rowid = atoi(value);
 
         if (rowid != RESULT_NO_ROWS) {
             getRowList(tmp_list)->row_count = 0;

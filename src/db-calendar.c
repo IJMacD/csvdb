@@ -578,7 +578,7 @@ static int calendar_evaluateNode(struct DB *db, struct ColumnNode *column, int r
 /**
  * Calendar can do super efficient index searches
  */
-int calendar_indexSearch(struct DB *db, const char *value,  int rowid_field,  __attribute__((unused)) int mode, int * output_flag){
+int calendar_indexSearch(struct DB *db, const char *value, __attribute__((unused)) int mode, int * output_flag){
     if (db->field_count == 2) {
         // Dealing with an "index"
 
@@ -599,11 +599,8 @@ int calendar_indexSearch(struct DB *db, const char *value,  int rowid_field,  __
         return RESULT_NO_ROWS;
     }
 
-    if (rowid_field == FIELD_ROW_INDEX){
-        // A "Primary key" search with a julian value
-        *output_flag = RESULT_FOUND;
-        return atol(value);
-    }
-
-    return RESULT_NO_INDEX;
+    // If we're doing an index search on the "real" table then is must be
+    // a "Primary key" search with a julian value
+    *output_flag = RESULT_FOUND;
+    return atol(value);
 }

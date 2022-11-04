@@ -380,5 +380,5 @@ struct VFS {
     enum IndexSearchType (* findIndex)(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);
     int (* fullTableAccess)(struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value);
     int (* fullTableScan)(struct DB *db, struct RowList * row_list, int start_rowid, int limit_value);
-    int (* indexSearch)(struct DB *db, const char *value, int rowid_field, int mode, int * output_flag);
+    int (* indexSearch)(struct DB *db, const char *value, int mode, int * output_flag);
 };

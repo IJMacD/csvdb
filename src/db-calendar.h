@@ -19,4 +19,4 @@ enum IndexSearchType calendar_findIndex(struct DB *db, const char *table_name, c
 
 int calendar_fullTableAccess (struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value);
 
-int calendar_indexSearch(struct DB *db, const char *value, int rowid_field, int mode, int * output_flag);
+int calendar_indexSearch(struct DB *db, const char *value, int mode, int * output_flag);

@@ -28,7 +28,7 @@ enum IndexSearchResult indexUniqueSeek (struct DB *index_db, int rowid_column, e
     // Output Flag: 0: value found; RESULT_BETWEEN: value not found but just before returned rowid; RESULT_BELOW_MIN: value below minimum; RESULT_ABOVE_MAX: value above maximum
     int search_status;
 
-    int index_rowid = indexSearch(index_db, predicate_value, FIELD_ROW_INDEX, MODE_UNIQUE, &search_status);
+    int index_rowid = indexSearch(index_db, predicate_value, MODE_UNIQUE, &search_status);
 
     if (predicate_op == OPERATOR_EQ && search_status) {
         // We want an exact match but value is not in index
@@ -142,7 +142,7 @@ enum IndexSearchResult indexSeek (struct DB *index_db, int rowid_column, enum Op
     int search_status1;
     int search_status2;
 
-    enum IndexSearchResult lower_index_rowid = indexSearch(index_db, value, FIELD_ROW_INDEX, MODE_LOWER_BOUND, &search_status1);
+    enum IndexSearchResult lower_index_rowid = indexSearch(index_db, value, MODE_LOWER_BOUND, &search_status1);
 
     if (predicate_op == OPERATOR_EQ && search_status1) {
         // We want an exact match but value is not in index
@@ -156,7 +156,7 @@ enum IndexSearchResult indexSeek (struct DB *index_db, int rowid_column, enum Op
         value[len - 2]++;
     }
 
-    enum IndexSearchResult upper_index_rowid = indexSearch(index_db, value, FIELD_ROW_INDEX, MODE_UPPER_BOUND, &search_status2);
+    enum IndexSearchResult upper_index_rowid = indexSearch(index_db, value, MODE_UPPER_BOUND, &search_status2);
 
     if (predicate_op == OPERATOR_EQ) {
         lower_bound = lower_index_rowid;
