@@ -107,13 +107,13 @@ int evaluateExpression (enum Operator op, const char *left, const char *right) {
  */
 void normalisePredicate (struct Predicate *p) {
     if (p->left.fields[0].index == FIELD_CONSTANT && p->right.fields[0].index >= 0) {
-        swapPredicate(p);
+        flipPredicate(p);
     } else if (p->left.function != FUNC_PK && p->right.function == FUNC_PK) {
-        swapPredicate(p);
+        flipPredicate(p);
     }
 }
 
-int swapPredicate (struct Predicate *p) {
+int flipPredicate (struct Predicate *p) {
     // copy struct automatically
     struct ColumnNode tmp = p->left;
 

@@ -446,7 +446,7 @@ static void addOrderStepsIfRequired (struct Plan *plan, struct Query *q) {
             int idx = sorts_needed[i];
 
             memcpy(&p->left, &q->order_node[idx], sizeof(p->left));
-            p->op = q->order_direction[idx];
+            p->op = (enum Operator)q->order_direction[idx];
             p++;
         }
 
@@ -504,7 +504,7 @@ static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
 
                 // Swap left and right so that preciate looks like this:
                 //  A JOIN B ON B.field = A.field
-                swapPredicate(join);
+                flipPredicate(join);
             }
 
             // Constant must be on right if there is one
@@ -547,7 +547,7 @@ static void addGroupStepIfRequired (struct Plan *plan, struct Query *q) {
      * Grouping
      *******************/
     if (q->flags & FLAG_GROUP && q->group_count > 0) {
-        struct Predicate *group_predicate = makePredicate(&q->group_node[0], ORDER_ASC);
+        struct Predicate *group_predicate = makePredicate(&q->group_node[0], (enum Operator)ORDER_ASC);
 
         // Grouping *requires* sorting
         // We'll check if we can get away without sorting explicitly.

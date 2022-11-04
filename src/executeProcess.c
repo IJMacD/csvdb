@@ -16,7 +16,7 @@ int executeSort (struct Query *query, struct PlanStep *step, struct ResultSet *r
 
     for (int i = 0; i < step->predicate_count && i < 10; i++) {
         memcpy(columns + i, &step->predicates[i].left, sizeof(*columns));
-        sort_directions[i] = step->predicates[i].op;
+        sort_directions[i] = (enum Order)step->predicates[i].op;
     }
 
     sortQuick(query, columns, step->predicate_count, sort_directions, getRowList(row_list));
