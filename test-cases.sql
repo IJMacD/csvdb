@@ -6,30 +6,19 @@ SELECT name, score FROM test OFFSET 2 ROWS FETCH NEXT 5 ROWS ONLY
 CREATE INDEX ON test (name)
 CREATE UNIQUE INDEX ON test (birth_date)
 -- Test indexes
-EXPLAIN SELECT name FROM test ORDER BY name FETCH FIRST 5 ROWS ONLY
 SELECT name FROM test ORDER BY name FETCH FIRST 5 ROWS ONLY
-EXPLAIN SELECT name FROM test ORDER BY name DESC FETCH FIRST 5 ROWS ONLY
 SELECT name FROM test ORDER BY name DESC FETCH FIRST 5 ROWS ONLY
 SELECT name, score FROM test WHERE score = 42 FETCH FIRST 5 ROWS ONLY
-EXPLAIN SELECT name, birth_date FROM test WHERE name = 'Walter KELLY'
 SELECT name, birth_date FROM test WHERE name = 'Walter KELLY'
 SELECT name, birth_date FROM test WHERE name > 'Walter KELLY' FETCH FIRST 5 ROWS ONLY
-EXPLAIN SELECT name, birth_date FROM test WHERE name LIKE 'Walter M%' FETCH FIRST 5 ROWS ONLY
 SELECT name, birth_date FROM test WHERE name LIKE 'Walter M%' FETCH FIRST 5 ROWS ONLY
-EXPLAIN SELECT name, SUM(score) FROM test WHERE name = 'Walter KELLY'
 SELECT name, SUM(score) FROM test WHERE name = 'Walter KELLY'
-EXPLAIN SELECT name, birth_date FROM test WHERE birth_date = '2050-01-01'
 SELECT name, birth_date FROM test WHERE birth_date = '2050-01-01'
 SELECT name, birth_date FROM test WHERE birth_date = '2050-01-02'
-EXPLAIN SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' FETCH FIRST 5 ROWS ONLY
 SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' FETCH FIRST 5 ROWS ONLY
-EXPLAIN SELECT name, birth_date FROM test WHERE '2050-01-01' < birth_date  FETCH FIRST 5 ROWS ONLY
 SELECT name, birth_date FROM test WHERE '2050-01-01' < birth_date  FETCH FIRST 5 ROWS ONLY
-EXPLAIN SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' AND score > 95 ORDER BY name FETCH FIRST 5 ROWS ONLY
 SELECT name, birth_date, score FROM test WHERE birth_date > '2050-01-01' AND score > 95 ORDER BY name FETCH FIRST 5 ROWS ONLY
-EXPLAIN SELECT name, birth_date FROM test WHERE PK(id) = 769
 SELECT name, birth_date FROM test WHERE PK(id) = 769
-EXPLAIN SELECT id, name, birth_date FROM test WHERE PK(id) < 51
 SELECT id, name, birth_date FROM test WHERE PK(id) < 51
 SELECT id, name, birth_date FROM test WHERE 51 >= PK(id)
 -- Test EXTRACT
@@ -41,14 +30,10 @@ SELECT COUNT(*) FROM test WHERE birth_date = '2050-01-01'
 SELECT COUNT(*) FROM test WHERE score = 42
 FROM test WHERE name < 'Bob' AND score > 50 FETCH FIRST 5 ROWS ONLY
 -- Test Join to CALENDAR
-EXPLAIN FROM test, CALENDAR ON date = birth_date WHERE name LIKE 'Walter M%' SELECT name, yearday, birth_date, date FETCH FIRST 5 ROWS ONLY
 FROM test, CALENDAR ON date = birth_date WHERE name LIKE 'Walter M%' SELECT name, birth_date, yearday FETCH FIRST 5 ROWS ONLY
 FROM test, CALENDAR ON birth_date = date WHERE name < 'Aaron Z' SELECT name, date, yearday ORDER BY yearday FETCH FIRST 5 ROWS ONLY
-EXPLAIN FROM test WHERE EXTRACT(WEEKDAY FROM birth_date) = 5 FETCH FIRST 5 ROWS ONLY
 FROM test WHERE EXTRACT(WEEKDAY FROM birth_date) = 5 FETCH FIRST 5 ROWS ONLY
-EXPLAIN FROM test WHERE EXTRACT(WEEKDAY FROM birth_date) = 5 ORDER BY birth_date FETCH FIRST 5 ROWS ONLY
 FROM test WHERE EXTRACT(WEEKDAY FROM birth_date) = 5 ORDER BY birth_date FETCH FIRST 5 ROWS ONLY
-EXPLAIN FROM test WHERE birth_date > '1901-01-01' AND EXTRACT(WEEKDAY FROM birth_date) = 5 FETCH FIRST 5 ROWS ONLY
 FROM test WHERE birth_date > '1901-01-01' AND EXTRACT(WEEKDAY FROM birth_date) = 5 FETCH FIRST 5 ROWS ONLY
 -- Test View
 FROM view FETCH FIRST 5 ROWS ONLY
@@ -57,7 +42,6 @@ FROM suits AS s1, suits AS s2 ON s1.name < s2.name ORDER BY name
 -- Test concat operator
 FROM suits, ranks WHERE value > 10 ORDER BY name SELECT ranks.name || ' of ' || suits.name AS cards
 -- Test query with no Table
-EXPLAIN SELECT CURRENT_DATE, EXTRACT(YEARDAY FROM CURRENT_DATE), EXTRACT(JULIAN FROM '1995-10-10')
 SELECT CURRENT_DATE, EXTRACT(YEARDAY FROM CURRENT_DATE), EXTRACT(JULIAN FROM '1995-10-10')
 FROM CALENDAR WHERE date = CURRENT_DATE SELECT julian, date, yeardayString, weekdayString
 -- Test TABLE clause
@@ -99,13 +83,9 @@ FROM ranks SELECT POW(value, 2) FETCH FIRST 5 ROWS ONLY
 FROM test WHERE name LIKE 'Adam WE%' GROUP BY name SELECT name, COUNT(*)
 FROM test WHERE name LIKE 'Adam K%' GROUP BY name ORDER BY score DESC SELECT name, COUNT(*), SUM(score) AS score
 -- Functions on ORDER BY columns
-EXPLAIN SELECT name FROM test WHERE name < 'Adam' ORDER BY LENGTH(name) FETCH FIRST 2 ROWS ONLY
 SELECT name FROM test WHERE name < 'Adam' ORDER BY LENGTH(name) FETCH FIRST 2 ROWS ONLY
-EXPLAIN SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' AND score > 95 ORDER BY LENGTH(name), birth_date FETCH FIRST 5 ROWS ONLY
 SELECT name, birth_date, score FROM test WHERE birth_date > '2050-01-01' AND score > 95 ORDER BY LENGTH(name), birth_date FETCH FIRST 5 ROWS ONLY
-EXPLAIN SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' AND score > 95 AND LENGTH(name) < 10 ORDER BY LENGTH(name) DESC, birth_date FETCH FIRST 5 ROWS ONLY
 SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' AND score > 95 AND LENGTH(name) < 10 ORDER BY LENGTH(name) DESC, birth_date FETCH FIRST 5 ROWS ONLY
-EXPLAIN SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' AND score > 95 AND LENGTH(name) = 10 ORDER BY LENGTH(name) DESC, birth_date FETCH FIRST 5 ROWS ONLY
 SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' AND score > 95 AND LENGTH(name) = 10 ORDER BY LENGTH(name) DESC, birth_date FETCH FIRST 5 ROWS ONLY
 -- Simple arithmetic operators
 SELECT 9 * 5

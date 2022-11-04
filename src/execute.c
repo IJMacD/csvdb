@@ -13,7 +13,7 @@
 #include "db.h"
 #include "evaluate.h"
 #include "predicates.h"
-#include "sort.h"
+#include "sort-quick.h"
 #include "debug.h"
 
 int executeQueryPlan (
@@ -476,36 +476,17 @@ int executeQueryPlan (
 
                 RowListIndex row_list = popRowList(result_set);
 
-                RowListIndex new_list = createRowList(getRowList(row_list)->join_count, getRowList(row_list)->row_count);
+                enum Order sort_directions[10];
+                struct ColumnNode *columns = malloc(sizeof(*columns) * s->predicate_count);
 
-
-                if (s->predicate_count > 1) {
-                    struct ColumnNode *columns = malloc(sizeof(*columns) * s->predicate_count);
-                    int sort_directions[10];
-
-                    for (int i = 0; i < s->predicate_count && i < 10; i++) {
-                        memcpy(columns + i, &s->predicates[i].left, sizeof(*columns));
-                        sort_directions[i] = s->predicates[i].op;
-
-                        // Implementation limitation
-                        // Planner shouldn't plan this
-                        if (sort_directions[i] != sort_directions[0]) {
-                            fprintf(stderr, "Implementation limitation: all sorts must be in the same direction for multi column sort.\n");
-                            exit(-1);
-                        }
-                    }
-
-                    sortResultRowsMultiple(q, columns, s->predicate_count, sort_directions, row_list, new_list);
-
-                    free(columns);
-                }
-                else {
-                    sortResultRows(q, &s->predicates[0].left, s->predicates[0].op, getRowList(row_list), getRowList(new_list));
+                for (int i = 0; i < s->predicate_count && i < 10; i++) {
+                    memcpy(columns + i, &s->predicates[i].left, sizeof(*columns));
+                    sort_directions[i] = s->predicates[i].op;
                 }
 
-                destroyRowList(getRowList(row_list));
+                sortQuick(q, columns, s->predicate_count, sort_directions, getRowList(row_list));
 
-                pushRowList(result_set, new_list);
+                pushRowList(result_set, row_list);
 
                 // debugRowList(getRowList(row_list), 2);
                 break;
@@ -543,13 +524,8 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d: PLAN_GROUP\n", getpid());
                 #endif
 
-                // Important! PLAN_GROUP assumes rows are already sorted in
+                // Important! PLAN_GROUP requires rows are already sorted in
                 // GROUP BY order
-
-                if (populateColumnNode(q, &s->predicates[0].left) != 0) {
-                    fprintf(stderr, "GROUP BY column not found: %s\n", s->predicates[0].left.fields[0].text);
-                    return -1;
-                }
 
                 char values[2][MAX_VALUE_LENGTH] = {0};
 
@@ -564,18 +540,25 @@ int executeQueryPlan (
 
                 RowListIndex curr_list = -1;
 
+                struct ColumnNode *col = &s->predicates[0].left;
+
+                int join_count = getRowList(row_list)->join_count;
+                int row_count = getRowList(row_list)->row_count;
+
+                // debugRowList(getRowList(row_list), 2);
+
                 for (int i = 0; i < getRowList(row_list)->row_count; i++) {
                     char *curr_value = values[i%2];
                     char *prev_value = values[(i+1)%2];
 
-                    evaluateNode(q, getRowList(row_list), i, &s->predicates[0].left, curr_value, MAX_VALUE_LENGTH);
+                    evaluateNode(q, getRowList(row_list), i, col, curr_value, MAX_VALUE_LENGTH);
 
                     if (strcmp(prev_value, curr_value)) {
                         if (count >= limit) {
                             break;
                         }
 
-                        curr_list = createRowList(getRowList(row_list)->join_count, getRowList(row_list)->row_count - i);
+                        curr_list = createRowList(join_count, row_count - i);
                         pushRowList(result_set, curr_list);
                         count++;
                     }

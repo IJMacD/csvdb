@@ -37,8 +37,12 @@ int query (const char *query, enum OutputOption output_flags, FILE * output) {
         if (output_flags & FLAG_READ_ONLY) {
             fprintf(stderr, "Tried to CREATE while in read-only mode\n");
             return -1;
-
         }
+
+        if (output_flags & FLAG_EXPLAIN) {
+            return 0;
+        }
+
         return create_query(query);
     }
 
@@ -46,6 +50,10 @@ int query (const char *query, enum OutputOption output_flags, FILE * output) {
         if (output_flags & FLAG_READ_ONLY) {
             fprintf(stderr, "Tried to INSERT while in read-only mode\n");
             return -1;
+        }
+
+        if (output_flags & FLAG_EXPLAIN) {
+            return 0;
         }
 
         return insert_query(query);

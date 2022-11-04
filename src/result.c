@@ -167,6 +167,14 @@ void copyRowList (struct RowList *dest_list, struct RowList *src_list) {
     }
 }
 
+void swapRows (struct RowList *row_list, int index_a, int index_b) {
+    for (int i = 0; i < row_list->join_count; i++) {
+        int tmp = getRowID(row_list, i, index_b);
+        writeRowID(row_list, i, index_b, getRowID(row_list, i, index_a));
+        writeRowID(row_list, i, index_a, tmp);
+    }
+}
+
 /**
  * @brief Create a Row List object in the pool on the heap and return an index
  *

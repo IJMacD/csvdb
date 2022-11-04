@@ -22,8 +22,14 @@ for sql in "${lines[@]}"; do
 
     printf ' -- SQL: %s --\n' "$sql";
 
+    printf " -- Plan: --\n"
+
+    ./release/csvdb -E "$sql"
+
+    printf " -- Results: --\n"
+
     start=`date +%s%N`
-    ./release/csvdb -o $OUTFILE "$sql";
+    ./release/csvdb -o $OUTFILE "$sql"
     result=$?
     end=`date +%s%N`
 
@@ -39,7 +45,7 @@ for sql in "${lines[@]}"; do
 
         echo $runtime >> $STATFILE
     else
-        printf " -- ${RED}ERROR${NC} --\n\n";
+        printf " -- ${RED}ERROR${NC} --\n\n\n";
         ((errors=errors+1))
     fi
 

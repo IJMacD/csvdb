@@ -6,7 +6,7 @@
 #include "token.h"
 #include "db.h"
 #include "result.h"
-#include "sort.h"
+#include "sort-quick.h"
 #include "output.h"
 #include "query.h"
 
@@ -193,19 +193,12 @@ static int create_index (const char *index_name, const char *table_name, const c
     // Fill row list with every sequential rowid
     fullTableAccess(&db, getRowList(row_list), -1);
 
-    RowListIndex sort_list = createRowList(getRowList(row_list)->join_count, getRowList(row_list)->row_count);
+    enum Order order_directions[] = {
+        ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC,
+        ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC,
+    };
 
-    if (field_count == 1) {
-        sortResultRows(&q, columns, ORDER_ASC, getRowList(row_list), getRowList(sort_list));
-    }
-    else {
-        int order_directions[] = {
-            ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC,
-            ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC,
-        };
-
-        sortResultRowsMultiple(&q, columns, field_count, order_directions, row_list, sort_list);
-    }
+    sortQuick(&q, columns, field_count, order_directions, getRowList(row_list));
 
     // Output functions assume array of DBs
     printHeaderLine(f, &table, 1, columns, field_count + 1, OUTPUT_FORMAT_COMMA);
@@ -215,7 +208,7 @@ static int create_index (const char *index_name, const char *table_name, const c
     for (int i = 0; i < record_count; i++) {
         // Check for UNIQUE
         if (unique_flag) {
-            int row_id = getRowID(getRowList(sort_list), 0, i);
+            int row_id = getRowID(getRowList(row_list), 0, i);
             getRecordValue(&db, row_id, columns[0].fields[0].index, values[i % 2], MAX_VALUE_LENGTH);
 
             if (i > 0 && strcmp(values[0], values[1]) == 0) {
@@ -226,11 +219,10 @@ static int create_index (const char *index_name, const char *table_name, const c
             }
         }
 
-        printResultLine(f, &table, 1, columns, field_count + 1, i, getRowList(sort_list), OUTPUT_FORMAT_COMMA);
+        printResultLine(f, &table, 1, columns, field_count + 1, i, getRowList(row_list), OUTPUT_FORMAT_COMMA);
     }
 
     destroyRowList(getRowList(row_list));
-    destroyRowList(getRowList(sort_list));
 
     return 0;
 }

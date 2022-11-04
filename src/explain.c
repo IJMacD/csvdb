@@ -79,7 +79,7 @@ int explain_select_query (
                 rows = (s.limit < rows) ? s.limit : rows;
             }
 
-            strncpy(table, q->tables[join_count].name, MAX_FIELD_LENGTH);
+            strncpy(table, q->tables[join_count].alias, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
         }
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
@@ -104,7 +104,7 @@ int explain_select_query (
             if (s.predicate_count > 0) {
                 int table_id = s.predicates->left.fields[0].table_id;
 
-                strncpy(table, q->tables[table_id].name, MAX_FIELD_LENGTH);
+                strncpy(table, q->tables[table_id].alias, MAX_FIELD_LENGTH);
                 table[MAX_FIELD_LENGTH - 1] = '\0';
             }
         }
@@ -220,7 +220,7 @@ int explain_select_query (
 
             struct Table *t = &q->tables[join_count];
 
-            strncpy(table, t->name, MAX_FIELD_LENGTH);
+            strncpy(table, t->alias, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
 
             int record_count = getRecordCount(t->db);
@@ -236,7 +236,7 @@ int explain_select_query (
 
             struct Table *t = &q->tables[join_count];
 
-            strncpy(table, t->name, MAX_FIELD_LENGTH);
+            strncpy(table, t->alias, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
 
             int record_count = getRecordCount(t->db);
@@ -267,7 +267,7 @@ int explain_select_query (
 
             struct Table *t = &q->tables[join_count];
 
-            strncpy(table, t->name, MAX_FIELD_LENGTH);
+            strncpy(table, t->alias, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
 
             int record_count = getRecordCount(t->db);
@@ -298,7 +298,7 @@ int explain_select_query (
 
             struct Table *t = &q->tables[join_count];
 
-            strncpy(table, t->name, MAX_FIELD_LENGTH);
+            strncpy(table, t->alias, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
 
             // We might have been too hasty copying predicate name

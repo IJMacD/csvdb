@@ -20,6 +20,8 @@ void reverseRowList (struct RowList * row_list, int limit);
 
 void copyRowList (struct RowList *dest_list, struct RowList *src_list);
 
+void swapRows (struct RowList *row_list, int index_a, int index_b);
+
 RowListIndex createRowList (int join_count, int max_rows);
 
 void pushRowList (struct ResultSet *result_set, RowListIndex row_list);

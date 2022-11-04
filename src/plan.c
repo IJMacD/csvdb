@@ -431,32 +431,13 @@ static void addOrderStepsIfRequired (struct Plan *plan, struct Query *q) {
         return;
     }
 
-    // Used to check if they're all the same
-    // 0 = different, ORDER_ASC = asc, ORDER_DESC = desc
-    enum Order sort_direction = q->order_direction[sorts_needed[0]];
-
-    for (int i = 1; i < sorts_added; i++) {
-        if (sort_direction != q->order_direction[sorts_needed[i]]) {
-            sort_direction = 0;
-            break;
-        }
+    // We might just need a REVERSE
+    if (sorts_added == -1) {
+        addStep(plan, PLAN_REVERSE);
     }
-
-    if (
-        sorts_added > 1
-        && (sort_direction == ORDER_ASC || sort_direction == ORDER_DESC)
-    ) {
-        // All sorts are the same direction
-        // We can do multi-column sort
+    else {
         struct Predicate *predicates = malloc(sizeof(*predicates) * sorts_added);
         struct Predicate *p = predicates;
-
-        // The last one might be REVERSE
-        if (sorts_needed[sorts_added - 1] == -1) {
-            addStep(plan, PLAN_REVERSE);
-
-            sorts_added--;
-        }
 
         for (int i = 0; i < sorts_added; i++) {
             int idx = sorts_needed[i];
@@ -467,47 +448,6 @@ static void addOrderStepsIfRequired (struct Plan *plan, struct Query *q) {
         }
 
         addStepWithPredicates(plan, PLAN_SORT, predicates, sorts_added);
-    }
-    else {
-        // Sorts are not all the same direction
-        // Multiple plan steps are required
-        // Iterate backwards
-
-        // Iterate the ORDER BY steps in reverse order.
-        // Columns with equality predicates don't need sorting.
-        //
-        // e.g. a query like this:
-        //      ORDER BY A, B, C, D WHERE B = 0
-        //
-        // will add the following steps:
-        //      * SORT D
-        //      * SORT C
-        //      * SORT A
-        //
-        // This results in A being the primary sort key, then C and finally D.
-        // Yes, it is inefficient to sort the whole list three times, but it is
-        // simple.
-
-        for (int i = sorts_added - 1; i >= 0; i--) {
-            int idx = sorts_needed[i];
-
-            if (idx == -1) {
-                addStep(plan, PLAN_REVERSE);
-            }
-            else {
-                enum Order dir = q->order_direction[idx];
-
-                struct Predicate *p = makePredicate(&q->order_node[idx], dir);
-                addStepWithPredicate(plan, PLAN_SORT, p);
-
-                if (i > 0) {
-                    int next_idx = sorts_needed[i-1];
-                    if (dir == ORDER_ASC && q->order_direction[next_idx] == ORDER_DESC) {
-                        addStep(plan, PLAN_REVERSE);
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -584,7 +524,7 @@ static void addGroupStepIfRequired (struct Plan *plan, struct Query *q) {
      * Grouping
      *******************/
     if (q->flags & FLAG_GROUP && q->group_count > 0) {
-        struct Predicate *group_predicate = makePredicate(&q->group_node[0], OPERATOR_UN);
+        struct Predicate *group_predicate = makePredicate(&q->group_node[0], ORDER_ASC);
 
         // Grouping *requires* sorting
         // We'll check if we can get away without sorting explicitly.
@@ -613,7 +553,7 @@ static void addGroupStepIfRequired (struct Plan *plan, struct Query *q) {
         if (q->limit_value >= 0) {
             struct PlanStep *prev = &plan->steps[plan->step_count - 1];
 
-            prev->limit = q->limit_value;
+            prev->limit = q->offset_value + q->limit_value;
         }
     }
 }
@@ -733,8 +673,8 @@ static struct Predicate *makePredicate (struct ColumnNode *column, enum Operator
  *
  * @param q
  * @param plan
- * @param sorts_needed OUT array listing query order node indices required, -1 = reverse
- * @return int
+ * @param sorts_needed OUT array listing query order node indices required
+ * @return int count of sort steps added, or -1 for a single reverse
  */
 static int applySortLogic (struct Query *q, struct Plan *plan, int *sorts_needed) {
     int non_unique_joins = 0;
@@ -742,77 +682,6 @@ static int applySortLogic (struct Query *q, struct Plan *plan, int *sorts_needed
         enum PlanStepType type = plan->steps[i].type;
         if (type == PLAN_LOOP_JOIN || type == PLAN_CONSTANT_JOIN || type == PLAN_CROSS_JOIN) {
             non_unique_joins++;
-        }
-    }
-
-    // These assumptions work if the rows are from exactly one table, they can
-    // however be from additional tables if they are uniquely joined to the
-    // first table.
-    if (non_unique_joins == 0) {
-        struct PlanStep *first = &plan->steps[0];
-
-        // If we're sorting on rowid or PK on single table then we can optimse
-        // Only works if results were retrieved in table order
-        if (first->type == PLAN_TABLE_SCAN || first->type == PLAN_TABLE_SCAN) {
-
-            if (
-                q->order_node[0].function == FUNC_UNITY
-                && (strcmp(q->order_node[0].fields[0].text, "rowid") == 0 || strcmp(q->order_node[0].fields[0].text, "PK") == 0)
-            ) {
-                // No need to sort
-
-                if (q->order_direction[0] == ORDER_DESC) {
-                    // Just need to reverse
-                    sorts_needed[0] = -1;
-                    return 1;
-                }
-
-                return 0;
-            }
-        }
-
-        struct ColumnNode *n = &first->predicates[0].left;
-        if (
-            (first->type == PLAN_UNIQUE || first->type == PLAN_UNIQUE_RANGE)
-            && n->function == FUNC_UNITY
-            && n->fields[0].index == q->order_node[0].fields[0].index
-        ) {
-            // Rows were returned in INDEX order.
-            // The first order column is the index column,
-            // and since it is a UNIQUE index there can never be more than one
-            // row returned for the first sort column so,
-            // we never need to sort.
-
-            if (q->order_direction[0] == ORDER_DESC) {
-                // Just need to reverse
-                sorts_needed[0] = -1;
-
-                return 1;
-            }
-
-            return 0;
-        }
-
-        if (
-            (first->type == PLAN_INDEX_RANGE || first->type == PLAN_INDEX_SCAN)
-            && q->order_count == 1
-            && n->function == FUNC_UNITY
-            && n->fields[0].index == q->order_node[0].fields[0].index
-        ) {
-            // Rows were returned in INDEX order.
-            // The first order column is the index column,
-            // and since it is a UNIQUE index there can never be more than one
-            // row returned for the first sort column so,
-            // we never need to sort.
-
-            if (q->order_direction[0] == ORDER_DESC) {
-                // Just need to reverse
-                sorts_needed[0] = -1;
-
-                return 1;
-            }
-
-            return 0;
         }
     }
 
@@ -828,8 +697,9 @@ static int applySortLogic (struct Query *q, struct Plan *plan, int *sorts_needed
         for (int j = 0; j < q->predicate_count; j++) {
             if (
                 q->predicates[j].op == OPERATOR_EQ
-                && strcmp(q->predicates[j].left.fields[0].text, q->order_node[i].fields[0].text) == 0
                 && q->predicates[j].left.function == q->order_node[i].function
+                && q->predicates[j].left.fields[0].table_id == q->order_node[i].fields[0].table_id
+                && q->predicates[j].left.fields[0].index == q->order_node[i].fields[0].index
             ) {
                 // OK we don't need to sort by this field
 
@@ -843,48 +713,74 @@ static int applySortLogic (struct Query *q, struct Plan *plan, int *sorts_needed
         }
     }
 
-    if (sorts_added > 0) {
-        int last_idx = sorts_needed[sorts_added - 1];
-        struct ColumnNode *last_node = &q->order_node[last_idx];
-        enum Order last_direction = q->order_direction[last_idx];
+    // These assumptions work if the rows are from exactly one table, they can
+    // however be from additional tables if they are uniquely joined to the
+    // first table.
+    if (sorts_added > 0 && non_unique_joins == 0) {
+        int primary_sort_idx = sorts_needed[0];
+        struct ColumnNode *primary_sort_col = &q->order_node[primary_sort_idx];
+        enum Order primary_sort_dir = q->order_direction[primary_sort_idx];
 
-        struct PlanStep *first = plan->steps;
+        struct PlanStep *first = &plan->steps[0];
         struct ColumnNode *first_node = &first->predicates[0].left;
 
+        // If we're sorting on rowid or PK on single table then we can optimse
+        // Only works if results were retrieved in table order
+        if (first->type == PLAN_TABLE_SCAN || first->type == PLAN_TABLE_SCAN) {
 
-        // If it's the last sort operation (the first to be added) we might
-        // be able to avoid it if the results are already in the correct
-        // order.
+            if (
+                primary_sort_col->function == FUNC_UNITY
+                && primary_sort_col->fields[0].index == FIELD_ROW_INDEX
+            ) {
+                // No need to sort
+
+                if (primary_sort_dir == ORDER_DESC) {
+                    // Just need to reverse
+                    return -1;
+                }
+
+                return 0;
+            }
+        }
+
         if (
-            (first->type == PLAN_INDEX_RANGE || first->type == PLAN_UNIQUE_RANGE)
-            && first_node->function == last_node->function
-            && first_node->fields[0].table_id == last_node->fields[0].table_id
-            && first_node->fields[0].index == last_node->fields[0].index
+            (first->type == PLAN_UNIQUE || first->type == PLAN_UNIQUE_RANGE)
+            && first_node->function == FUNC_UNITY
+            && first_node->fields[0].table_id == primary_sort_col->fields[0].table_id
+            && first_node->fields[0].index == primary_sort_col->fields[0].index
         ) {
-            // Before the sort phase starts the results are in ascending order
-            // of the least significant sort column
+            // Rows were returned in INDEX order.
+            // The first order column is the index column,
+            // and since it is a UNIQUE index there can never be more than one
+            // row returned for the first sort column so,
+            // we never need to sort.
 
-            if (sorts_added == 1) {
-                // No sort needed
-                if (last_direction == ORDER_DESC) {
-                    // replace sort with REVERSE
-                    sorts_needed[last_idx] = -1;
-                } else {
-                    sorts_added--;
-                }
+            if (primary_sort_dir == ORDER_DESC) {
+                // Just need to reverse
+                return -1;
             }
-            else {
-                int penul_idx = sorts_needed[sorts_added - 2];
-                enum Order penul_direction = q->order_direction[penul_idx];
 
-                if (penul_direction != last_direction) {
-                    // Replace with REVERSE
-                    sorts_needed[last_idx] = -1;
-                }
-                else {
-                    sorts_added--;
-                }
+            return 0;
+        }
+
+        if (
+            (first->type == PLAN_INDEX_RANGE || first->type == PLAN_INDEX_SCAN)
+            && sorts_added == 1
+            && first_node->function == primary_sort_col->function
+            && first_node->fields[0].table_id == primary_sort_col->fields[0].table_id
+            && first_node->fields[0].index == primary_sort_col->fields[0].index
+        ) {
+            // Rows were returned in INDEX order.
+            // The first order column is the index column,
+            // and since it is only one sort column,
+            // we never need to sort.
+
+            if (primary_sort_dir == ORDER_DESC) {
+                // Just need to reverse
+                return -1;
             }
+
+            return 0;
         }
     }
 
