@@ -305,7 +305,10 @@ int executeQueryPlan (
 
                 RowListIndex row_list = popRowList(result_set);
 
-                struct DB *next_db = q->tables[getRowList(row_list)->join_count].db;
+                // Defined to be this table join ID on left
+                int table_id = s->predicates[0].left.fields[0].table_id;
+
+                struct DB *next_db = q->tables[table_id].db;
 
                 int record_count = getRecordCount(next_db);
 
@@ -335,22 +338,31 @@ int executeQueryPlan (
             }
 
             case PLAN_CONSTANT_JOIN: {
+                /*************************************************************
+                 * Join type where each row on left is joined to an identical
+                 * set of rows from right table. The right hand table only
+                 * needs to be evaulated once.
+                 *************************************************************/
+
                 #ifdef DEBUG
                 fprintf(stderr, "Q%d: PLAN_CONSTANT_JOIN\n", getpid());
                 #endif
 
                 RowListIndex row_list = popRowList(result_set);
 
+                // Defined to be this table join ID on left
+                int table_id = s->predicates[0].left.fields[0].table_id;
+
                 // Sanity check
                 struct Predicate *p = s->predicates + 0;
-                if (p->left.fields[0].table_id != getRowList(row_list)->join_count &&
-                    p->right.fields[0].table_id != getRowList(row_list)->join_count)
+                if (p->left.fields[0].table_id != table_id &&
+                    p->right.fields[0].table_id != table_id)
                 {
-                    fprintf(stderr, "Cannot perform constant join (Join Index: %d)\n", getRowList(row_list)->join_count);
+                    fprintf(stderr, "Cannot perform constant join (Join Index: %d)\n", table_id);
                     return -1;
                 }
 
-                struct DB *next_db = q->tables[getRowList(row_list)->join_count].db;
+                struct DB *next_db = q->tables[table_id].db;
 
                 int record_count = getRecordCount(next_db);
                 RowListIndex tmp_list = createRowList(1, record_count);
@@ -359,16 +371,37 @@ int executeQueryPlan (
                 // Hopefully it won't be the whole table since we have a predicate
                 fullTableAccess(next_db, getRowList(tmp_list), s->predicates, s->predicate_count, -1);
 
-                int new_length = getRowList(row_list)->row_count * getRowList(tmp_list)->row_count;
+                int old_count = getRowList(row_list)->row_count;
+                int tmp_count = getRowList(tmp_list)->row_count;
 
-                // Now we know how many rows are to be joined we can make the new row list
+                int new_length = old_count * tmp_count;
+
+                // Check for LEFT JOIN
+                if (tmp_count == 0 && q->tables[table_id].join_type == JOIN_LEFT) {
+                    new_length = old_count;
+                }
+
+                // Now we know how many rows are to be joined we can make the
+                // new row list.
                 RowListIndex new_list = createRowList(getRowList(row_list)->join_count + 1, new_length);
 
-                // For each row in the original row list, join every row of the tmp row list
-                for (int i = 0; i < getRowList(row_list)->row_count; i++) {
+                // For each row in the original row list, join every row of the
+                // tmp row list.
+                for (int i = 0; i < old_count; i++) {
                     int done = 0;
 
-                    for (int j = 0; j < getRowList(tmp_list)->row_count; j++) {
+                    // If it's a LEFT JOIN and the right table was empty we
+                    // need to add each row to the new row list with NULLs for
+                    // the right table
+                    if (tmp_count == 0 && q->tables[table_id].join_type == JOIN_LEFT) {
+                        appendJoinedRowID(getRowList(new_list), getRowList(row_list), i, ROWID_NULL);
+
+                        if (s->limit > -1 && getRowList(new_list)->row_count >= s->limit) {
+                            done = 1;
+                            break;
+                        }
+                    }
+                    else for (int j = 0; j < tmp_count; j++) {
                         int rowid = getRowID(getRowList(tmp_list), 0, j);
                         appendJoinedRowID(getRowList(new_list), getRowList(row_list), i, rowid);
 
@@ -394,7 +427,10 @@ int executeQueryPlan (
 
                 RowListIndex row_list = popRowList(result_set);
 
-                struct Table *table = &q->tables[getRowList(row_list)->join_count];
+                // Defined to be this table join ID on left
+                int table_id = s->predicates[0].left.fields[0].table_id;
+
+                struct Table *table = &q->tables[table_id];
                 struct DB *next_db = table->db;
 
                 int record_count = getRecordCount(next_db);
@@ -406,32 +442,24 @@ int executeQueryPlan (
                 // Prepare a temporary list that can hold every record in the table
                 RowListIndex tmp_list = createRowList(1, record_count);
 
-                // Table ID being joined here
-                int table_id = getRowList(row_list)->join_count;
-
                 for (int i = 0; i < getRowList(row_list)->row_count; i++) {
                     int done = 0;
 
                     // Make a local copy of predicate
                     struct Predicate p = s->predicates[0];
 
-                    // Fill in value as constant from outer tables
-                    if (p.left.fields[0].table_id < table_id) {
-                        evaluateNode(q, getRowList(row_list), i, &p.left, p.left.fields[0].text, MAX_FIELD_LENGTH);
-                        p.left.fields[0].index = FIELD_CONSTANT;
-                        p.left.function = FUNC_UNITY;
-
-                        // We're only passing one table to fullTableScan so predicate will be on first table
-                        p.right.fields[0].table_id = 0;
-                    }
-                    // Fill in value as constant from outer tables
-                    else if (p.right.fields[0].table_id < table_id) {
+                    // Fill in right value as constant from outer tables
+                    if (p.right.fields[0].table_id < table_id) {
                         evaluateNode(q, getRowList(row_list), i, &p.right, p.right.fields[0].text, MAX_FIELD_LENGTH);
                         p.right.fields[0].index = FIELD_CONSTANT;
                         p.right.function = FUNC_UNITY;
 
                         // We're only passing one table to fullTableScan so predicate will be on first table
                         p.left.fields[0].table_id = 0;
+                    }
+                    else {
+                        fprintf(stderr, "Limitation of RowList: tables must be joined in order specified.\n");
+                        exit(-1);
                     }
 
                     getRowList(tmp_list)->row_count = 0;
@@ -466,14 +494,19 @@ int executeQueryPlan (
             }
 
             case PLAN_UNIQUE_JOIN: {
+                /*************************************************************
+                 * Join type where each row on left is joined to exactly 0 or 1
+                 * row on the right table using a unique index.
+                 *************************************************************/
+
                 #ifdef DEBUG
                 fprintf(stderr, "Q%d: PLAN_UNIQUE_JOIN\n", getpid());
                 #endif
 
                 RowListIndex row_list = popRowList(result_set);
 
-                // Table ID being joined here
-                int table_id = getRowList(row_list)->join_count;
+                // Defined to be this table join ID on left
+                int table_id = s->predicates[0].left.fields[0].table_id;
 
                 struct Table *table = &q->tables[table_id];
 
@@ -489,11 +522,8 @@ int executeQueryPlan (
                 if (p->left.fields[0].table_id == table_id) {
                     outer = &p->right;
                     inner = &p->left;
-                } else if (p->right.fields[0].table_id == table_id) {
-                    outer = &p->left;
-                    inner = &p->right;
                 } else {
-                    fprintf(stderr, "Unable to perform UNIQUE JOIN\n");
+                    fprintf(stderr, "UNIQUE JOIN table must be on left\n");
                     return -1;
                 }
 

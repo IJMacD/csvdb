@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "structs.h"
+#include "predicates.h"
 #include "date.h"
 #include "util.h"
 
@@ -105,31 +106,36 @@ int evaluateExpression (enum Operator op, const char *left, const char *right) {
  * @param p
  */
 void normalisePredicate (struct Predicate *p) {
-    int required = 0;
-
     if (p->left.fields[0].index == FIELD_CONSTANT && p->right.fields[0].index >= 0) {
-        required = 1;
+        swapPredicate(p);
     } else if (p->left.function != FUNC_PK && p->right.function == FUNC_PK) {
-        required = 1;
+        swapPredicate(p);
+    }
+}
+
+int swapPredicate (struct Predicate *p) {
+    // copy struct automatically
+    struct ColumnNode tmp = p->left;
+
+    // swap
+    memcpy(&p->left, &p->right, sizeof(tmp));
+    memcpy(&p->right, &tmp, sizeof(tmp));
+
+    // flip operator as necessary
+    if (p->op == OPERATOR_LT) {
+        p->op = OPERATOR_GT;
+    } else if (p->op == OPERATOR_LE) {
+        p->op = OPERATOR_GE;
+    } else if (p->op == OPERATOR_GT) {
+        p->op = OPERATOR_LT;
+    } else if (p->op == OPERATOR_GE) {
+        p->op = OPERATOR_LE;
+    } else if (p->op == OPERATOR_EQ) {
+        // no op
+    } else {
+        // Unable to swap
+        return -1;
     }
 
-    if (required) {
-        // copy struct
-        struct ColumnNode tmp = p->left;
-
-        // swap
-        memcpy(&p->left, &p->right, sizeof(tmp));
-        memcpy(&p->right, &tmp, sizeof(tmp));
-
-        // flip operator as necessary
-        if (p->op == OPERATOR_LT) {
-            p->op = OPERATOR_GT;
-        } else if (p->op == OPERATOR_LE) {
-            p->op = OPERATOR_GE;
-        } else if (p->op == OPERATOR_GT) {
-            p->op = OPERATOR_LT;
-        } else if (p->op == OPERATOR_GE) {
-            p->op = OPERATOR_LE;
-        }
-    }
+    return 0;
 }

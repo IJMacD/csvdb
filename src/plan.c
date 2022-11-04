@@ -489,12 +489,32 @@ static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
         struct Predicate * join = &table->join;
 
         if (join->op == OPERATOR_ALWAYS) {
-            addStep(plan, PLAN_CROSS_JOIN);
+            // Still need to include predicate to indicate to the executor
+            // which table to join.
+            join->left.fields[0].table_id = i;
+            addStepWithPredicate(plan, PLAN_CROSS_JOIN, join);
         }
         else {
-            if (join->left.fields[0].index == FIELD_CONSTANT ||
-                join->right.fields[0].index == FIELD_CONSTANT)
+            // We'll define that table-to-be-joined MUST be on left
+            if (join->left.fields[0].table_id != i) {
+                if (join->right.fields[0].table_id != i) {
+                    fprintf(stderr, "At least one of the predicates must be on the joined table.\n");
+                    exit(-1);
+                }
+
+                // Swap left and right so that preciate looks like this:
+                //  A JOIN B ON B.field = A.field
+                swapPredicate(join);
+            }
+
+            // Constant must be on right if there is one
+            if (join->right.fields[0].index == FIELD_CONSTANT)
             {
+                addStepWithPredicate(plan, PLAN_CONSTANT_JOIN, join);
+            }
+            else if (join->right.fields[0].table_id == i) {
+                // Both sides of predicate are on same table
+                // We can do contsant join
                 addStepWithPredicate(plan, PLAN_CONSTANT_JOIN, join);
             }
             else {
@@ -568,6 +588,39 @@ static void addLimitStepIfRequired (struct Plan *plan, struct Query *query) {
 
     if (query->limit_value >= 0) {
         int limit = query->offset_value + query->limit_value;
+
+        if (!(query->flags & FLAG_ORDER) && !(query->flags & FLAG_GROUP)) {
+            // Check if all LEFT UNIQUE joins
+            int all_left_unique = 1;
+
+            for (int i = 1; i < plan->step_count; i++) {
+                if (
+                    plan->steps[i].type == PLAN_CONSTANT_JOIN
+                    || plan->steps[i].type == PLAN_LOOP_JOIN
+                    || plan->steps[i].type == PLAN_CROSS_JOIN
+                ) {
+                    all_left_unique = 0;
+                    break;
+                }
+
+                if (plan->steps[0].type == PLAN_UNIQUE) {
+                    // Defined to be this table join ID on left
+                    int table_id = plan->steps[i].predicates[0].left.fields[0].table_id;
+
+                    if (query->tables[table_id].join_type != JOIN_LEFT) {
+                        all_left_unique = 0;
+                        break;
+                    }
+                }
+            }
+
+            // If we have no joins, or only unique left joins; then we can
+            // apply the limit to the first "{table|index} {access|scan}""
+            if (all_left_unique) {
+                plan->steps[0].limit = limit;
+                return;
+            }
+        }
 
         struct PlanStep *prev = &plan->steps[plan->step_count - 1];
 
