@@ -338,7 +338,7 @@ enum IndexSearchType calendar_findIndex(struct DB *db, __attribute__((unused)) c
     return INDEX_NONE;
 }
 
-int calendar_fullTableScan (struct DB *db, struct RowList *row_list, struct Predicate *predicates, int predicate_count, int limit_value) {
+int calendar_fullTableAccess (struct DB *db, struct RowList *row_list, struct Predicate *predicates, int predicate_count, int limit_value) {
     int julian = -1, max_julian = -1;
 
     // Try to get range from predicates

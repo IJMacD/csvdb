@@ -82,6 +82,26 @@ int explain_select_query (
             strncpy(table, q->tables[join_count].alias, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
         }
+        else if (s.type == PLAN_TABLE_SCAN){
+            operation = "TABLE SCAN";
+            rows = row_estimate;
+            cost = rows;
+
+            for (int i = 0; i < s.predicate_count; i++) {
+                if (s.predicates[i].op == OPERATOR_EQ) {
+                    rows = 1;
+                } else {
+                    rows = rows / 2;
+                }
+            }
+
+            if (s.limit >= 0) {
+                rows = (s.limit < rows) ? s.limit : rows;
+            }
+
+            strncpy(table, q->tables[join_count].alias, MAX_FIELD_LENGTH);
+            table[MAX_FIELD_LENGTH - 1] = '\0';
+        }
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
             operation = "ACCESS BY ROWID";
 

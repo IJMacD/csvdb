@@ -160,8 +160,13 @@ int executeQueryPlan (
                 break;
             }
 
-            case PLAN_TABLE_SCAN:
+            case PLAN_TABLE_ACCESS_FULL:
             {
+                /*************************************************************
+                 * Sequentially access every row of the table applying the
+                 * predicates to each row accessed.
+                 *************************************************************/
+
                 #ifdef DEBUG
                 fprintf(stderr, "Q%d: PLAN_TABLE_ACCESS_FULL\n", getpid());
                 #endif
@@ -174,12 +179,78 @@ int executeQueryPlan (
                 // First table
                 struct Table * table = q->tables;
 
+                fullTableAccess(table->db, getRowList(row_list), s->predicates, s->predicate_count, s->limit);
+
+                break;
+            }
+
+            case PLAN_TABLE_SCAN:
+            {
+                /*************************************************************
+                 * Iterate a range of rowids adding each one to the RowList.
+                 * Any predicates on this step must ONLY be rowid predicates.
+                 *************************************************************/
+
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d: PLAN_TABLE_SCAN\n", getpid());
+                #endif
+
+                // First table
+                struct Table * table = q->tables;
+
+                int start_rowid = 0;
+                int limit = s->limit;
+
                 if (s->predicate_count > 0) {
-                    fullTableScan(table->db, getRowList(row_list), s->predicates, s->predicate_count, s->limit);
+                    if (s->predicate_count > 1) {
+                        fprintf(stderr, "Unable to do FULL TABLE SCAN with more than one predicate\n");
+                        return -1;
+                    }
+
+                    if (s->predicates[0].right.fields[0].index != FIELD_CONSTANT) {
+                        fprintf(stderr, "Cannot compare rowid against non-constant value\n");
+                        return -1;
+                    }
+
+                    int right_val = atoi(s->predicates[0].right.fields[0].text);
+
+                    if (s->predicates[0].op == OPERATOR_EQ) {
+                        start_rowid = right_val;
+                        limit = 1;
+                    }
+                    else if (s->predicates[0].op == OPERATOR_LT) {
+                        start_rowid = 0;
+                        limit = limit > -1 ? MIN(limit, right_val) : right_val;
+                    }
+                    else if (s->predicates[0].op == OPERATOR_LE) {
+                        start_rowid = 0;
+                        limit = limit > -1 ? MIN(limit, right_val + 1) : (right_val + 1);
+                    }
+                    else if (s->predicates[0].op == OPERATOR_GT) {
+                        start_rowid = right_val + 1;
+                        limit = -1;
+                    }
+                    else if (s->predicates[0].op == OPERATOR_GE) {
+                        start_rowid = right_val;
+                        limit = -1;
+                    }
+                    else {
+                        fprintf(stderr, "Unable to do FULL TABLE SCAN with operator %d\n", s->predicates[0].op);
+                        return -1;
+                    }
                 }
-                else {
-                    fullTableAccess(table->db, getRowList(row_list), s->limit);
+
+                int record_count = limit;
+
+                if (record_count < 0) {
+                    record_count = getRecordCount(q->tables[0].db) - start_rowid;
                 }
+
+                RowListIndex row_list = createRowList(1, record_count);
+                pushRowList(result_set, row_list);
+
+                fullTableScan(table->db, getRowList(row_list), start_rowid, limit);
+
                 break;
             }
 
@@ -286,7 +357,7 @@ int executeQueryPlan (
 
                 // This is a constant join so we'll just populate the table once
                 // Hopefully it won't be the whole table since we have a predicate
-                fullTableScan(next_db, getRowList(tmp_list), s->predicates, s->predicate_count, -1);
+                fullTableAccess(next_db, getRowList(tmp_list), s->predicates, s->predicate_count, -1);
 
                 int new_length = getRowList(row_list)->row_count * getRowList(tmp_list)->row_count;
 
@@ -366,7 +437,7 @@ int executeQueryPlan (
                     getRowList(tmp_list)->row_count = 0;
 
                     // Populate the temp list with all rows which match our special predicate
-                    fullTableScan(next_db, getRowList(tmp_list), &p, 1, -1);
+                    fullTableAccess(next_db, getRowList(tmp_list), &p, 1, -1);
 
                     // Append each row we've just found to the main getRowList(row_list)
                     for (int j = 0; j < getRowList(tmp_list)->row_count; j++) {

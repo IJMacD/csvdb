@@ -23,6 +23,6 @@ int indexSearch(struct DB *db, const char *value, int rowid_field, int mode, int
 
 int uniqueIndexSearch(struct DB *db, const char *value, int rowid_field, int * output_flag);
 
-int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value);
+int fullTableAccess (struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value);
 
-int fullTableAccess (struct DB *db, struct RowList * row_list, int limit);
+int fullTableScan (struct DB *db, struct RowList * row_list, int rowid_start, int limit);

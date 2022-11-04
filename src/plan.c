@@ -86,8 +86,11 @@ int makePlan (struct Query *q, struct Plan *plan) {
             }
 
             if (skip_index == 0) {
+                if (p->left.fields[0].index == FIELD_ROW_INDEX) {
+                    step_type = PLAN_TABLE_SCAN;
+                }
                 // LIKE can only use index if '%' is at the end
-                if (p->op == OPERATOR_LIKE && field_right->text[len-1] != '%') {
+                else if (p->op == OPERATOR_LIKE && field_right->text[len-1] != '%') {
                     // NOP
                     step_type = 0;
                 }
@@ -258,7 +261,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
                     }
 
                 } else {
-                    addStepWithPredicates(plan, PLAN_TABLE_SCAN, q->predicates, predicatesOnFirstTable);
+                    addStepWithPredicates(plan, PLAN_TABLE_ACCESS_FULL, q->predicates, predicatesOnFirstTable);
 
                     addJoinStepsIfRequired(plan, q);
 
@@ -274,7 +277,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
             else {
                 if (q->table_count > 1) {
                     // First predicates are from first table
-                    addStepWithPredicates(plan, PLAN_TABLE_SCAN, q->predicates, predicatesOnFirstTable);
+                    addStepWithPredicates(plan, PLAN_TABLE_ACCESS_FULL, q->predicates, predicatesOnFirstTable);
 
                     // The join
                     addJoinStepsIfRequired(plan, q);
@@ -285,7 +288,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
                     }
                 } else {
                     // Only one table so add all predicates together
-                    addStepWithPredicates(plan, PLAN_TABLE_SCAN, q->predicates, q->predicate_count);
+                    addStepWithPredicates(plan, PLAN_TABLE_ACCESS_FULL, q->predicates, q->predicate_count);
 
                 }
 

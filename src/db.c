@@ -54,7 +54,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordCount = &calendar_getRecordCount,
         .getRecordValue = &calendar_getRecordValue,
         .findIndex = &calendar_findIndex,
-        .fullTableScan = &calendar_fullTableScan,
+        .fullTableAccess = &calendar_fullTableAccess,
         .indexSearch = &calendar_indexSearch,
     },
     {
@@ -210,20 +210,20 @@ enum IndexSearchType findIndex(struct DB *db, const char *table_name, const char
 }
 
 /**
- * @brief Scan table, filtering rows
+ * @brief Access table, filtering rows
  *
  * @return int number of matched rows
  */
-int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value) {
+int fullTableAccess (struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value) {
     if (db->vfs == 0) {
-        fprintf(stderr, "Trying to scan unititialised DB\n");
+        fprintf(stderr, "Trying to access unititialised DB\n");
         exit(-1);
     }
 
-    int (*vfs_fullTableScan) (struct DB *, struct RowList *, struct Predicate *, int, int) = VFS_Table[db->vfs].fullTableScan;
+    int (*vfs_fullTableAccess) (struct DB *, struct RowList *, struct Predicate *, int, int) = VFS_Table[db->vfs].fullTableAccess;
 
-    if (vfs_fullTableScan != NULL) {
-        return vfs_fullTableScan(db, row_list, predicates, predicate_count, limit_value);
+    if (vfs_fullTableAccess != NULL) {
+        return vfs_fullTableAccess(db, row_list, predicates, predicate_count, limit_value);
     }
 
     // VFS-agnostic implementation
@@ -278,24 +278,31 @@ int fullTableScan (struct DB *db, struct RowList * row_list, struct Predicate *p
  *
  * Equivalent to FULL TABLE SCAN with no predicates
  */
-int fullTableAccess (struct DB *db, struct RowList * row_list, int limit_value) {
+int fullTableScan (struct DB *db, struct RowList * row_list, int start_rowid, int limit_value) {
+    // VFS-agnostic implementation
+
     if (db->vfs == 0) {
         fprintf(stderr, "Trying to access unititialised DB\n");
         exit(-1);
     }
 
-    // VFS-agnostic implementation
+    int count = limit_value;
 
-    int l = limit_value;
-    if (l < 0) {
-        l = getRecordCount(db);
+    if (limit_value < 0) {
+        count = getRecordCount(db) - start_rowid;
     }
 
-    for (int i = 0; i < l; i++) {
+    // Exclusive
+    int end_rowid = start_rowid + count;
+
+    // We hope that end_rowid < getRecordCount(db)
+
+    // Just push all rowids in range
+    for (int i = start_rowid; i < end_rowid; i++) {
         appendRowID(row_list, i);
     }
 
-    return l;
+    return count;
 }
 
 /**

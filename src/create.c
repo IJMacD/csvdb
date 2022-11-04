@@ -191,7 +191,7 @@ static int create_index (const char *index_name, const char *table_name, const c
     RowListIndex row_list = createRowList(1, record_count);
 
     // Fill row list with every sequential rowid
-    fullTableAccess(&db, getRowList(row_list), -1);
+    fullTableScan(&db, getRowList(row_list), 0, -1);
 
     enum Order order_directions[] = {
         ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC,

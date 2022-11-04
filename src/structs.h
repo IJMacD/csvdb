@@ -10,6 +10,8 @@
 
 #define dt(stop,start)  (stop.tv_sec - start.tv_sec) * 1000000 + stop.tv_usec - start.tv_usec
 
+#define MIN(a,b)    ((a<b)?(a):(b))
+
 #define VFS_COUNT   9
 
 enum VFSType {
@@ -226,33 +228,41 @@ enum IndexScanMode {
 enum PlanStepType {
     NO_PLAN =                   0,
 
-    PLAN_TABLE_ACCESS_FULL =    1,
-    // Duplicated at the moment but plan to separate
-    PLAN_TABLE_SCAN =           1,
-    PLAN_TABLE_ACCESS_ROWID =   3,
-    PLAN_PK =                   4,
-    PLAN_PK_RANGE =             5,
-    PLAN_UNIQUE =               6,
-    PLAN_UNIQUE_RANGE =         7,
-    PLAN_INDEX_RANGE =          8,
-    PLAN_INDEX_SCAN =           9,
+    // POP = 0, PUSH = 1
+    PLAN_TABLE_ACCESS_FULL =    0x01,
+    PLAN_TABLE_SCAN =           0x02,
+    PLAN_PK =                   0x04,
+    PLAN_PK_RANGE =             0x05,
+    PLAN_UNIQUE =               0x06,
+    PLAN_UNIQUE_RANGE =         0x07,
+    PLAN_INDEX_RANGE =          0x08,
+    PLAN_INDEX_SCAN =           0x09,
+    PLAN_DUMMY_ROW =            0x0A,
 
-    PLAN_CROSS_JOIN =          10,
-    PLAN_CONSTANT_JOIN =       11,
-    PLAN_LOOP_JOIN =           12,
-    PLAN_UNIQUE_JOIN =         13,
+    // POP = 1(n), PUSH = 1(n') n' < n
+    PLAN_TABLE_ACCESS_ROWID =   0x10,
 
-    PLAN_SORT =                20,
-    PLAN_REVERSE =             21,
-    PLAN_SLICE =               22,
+    // POP = 1(n x m), PUSH = 1(n' x m+1)
+    PLAN_CROSS_JOIN =           0x21,
+    PLAN_CONSTANT_JOIN =        0x22,
+    PLAN_LOOP_JOIN =            0x23,
+    PLAN_UNIQUE_JOIN =          0x24,
 
-    PLAN_GROUP =               30,
+    // POP = 1, PUSH = 1
+    PLAN_SORT =                 0x30,
+    PLAN_REVERSE =              0x31,
+    PLAN_SLICE =                0x32,
 
-    PLAN_UNION =               40,
-    PLAN_INTERSECT =           41,
+    // POP = 1, PUSH = N
+    PLAN_GROUP =                0x40,
 
-    PLAN_SELECT =              50,
-    PLAN_DUMMY_ROW =           51,
+    // POP = 2, PUSH = 1
+    PLAN_UNION =                0x50,
+    PLAN_INTERSECT =            0x51,
+    PLAN_EXCEPT =               0x52,
+
+    // POP = N, PUSH = 0
+    PLAN_SELECT =               0x60,
 };
 
 struct PlanStep {
@@ -367,7 +377,7 @@ struct VFS {
     int (* getRecordCount)(struct DB *db);
     int (* getRecordValue)(struct DB *db, int record_index, int field_index, char *value, size_t value_max_length);
     enum IndexSearchType (* findIndex)(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);
-    int (* fullTableScan)(struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value);
-    int (* fullTableAccess)(struct DB *db, struct RowList * row_list, int limit_value);
+    int (* fullTableAccess)(struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value);
+    int (* fullTableScan)(struct DB *db, struct RowList * row_list, int start_rowid, int limit_value);
     int (* indexSearch)(struct DB *db, const char *value, int rowid_field, int mode, int * output_flag);
 };
