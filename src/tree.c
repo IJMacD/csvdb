@@ -4,9 +4,17 @@
 
 #include "structs.h"
 
-static void walkTree (struct TreeNode *node, struct TreeNode **list, int *index);
+static void walkTree (
+    struct TreeNode *node,
+    struct TreeNode **list,
+    int *index
+);
 
-static struct TreeNode *buildBalancedTree (struct TreeNode **list, int start, int end);
+static struct TreeNode *buildBalancedTree (
+    struct TreeNode **list,
+    int start,
+    int end
+);
 
 void insertNode (struct TreeNode *root, struct TreeNode *node) {
     // We're responsible for prepping nodes
@@ -37,7 +45,11 @@ struct TreeNode *rebalanceTree (struct TreeNode *root, int count) {
     return new_root;
 }
 
-static void walkTree (struct TreeNode *node, struct TreeNode **list, int *index) {
+static void walkTree (
+    struct TreeNode *node,
+    struct TreeNode **list,
+    int *index
+) {
     if (node->left != NULL) {
         walkTree(node->left, list, index);
     }
@@ -49,7 +61,11 @@ static void walkTree (struct TreeNode *node, struct TreeNode **list, int *index)
     }
 }
 
-static struct TreeNode *buildBalancedTree (struct TreeNode **list, int start, int end) {
+static struct TreeNode *buildBalancedTree (
+    struct TreeNode **list,
+    int start,
+    int end
+) {
     if (start > end) {
         return NULL;
     }

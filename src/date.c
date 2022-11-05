@@ -8,8 +8,16 @@
 
 int checkFormat(const char *input, const char *format);
 
-                          //  31  28  31   30   31   30   31   31   30   31   30   31
-const int month_index[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 };
+const int month_index[] = {
+//   31   28   31
+      0,  31,  59,
+//   30   31   30
+     90, 120, 151,
+//   31   31   30
+    181, 212, 243,
+//   31   30   31
+    273, 304, 334
+};
 
 /**
  * Returns 1 on success; 0 on failure
@@ -74,27 +82,32 @@ int parseDateTime(const char *input, struct DateTime *output) {
         return 1;
     }
 
-    if (checkFormat(input, "nn-aaa-nnnn")) {
+    if (
+        checkFormat(input, "nn-aaa-nnnn")
+        || checkFormat(input, "nn aaa nnnn")
+    ) {
         char v[5] = {0};
 
         memcpy(v, input, 2);
         v[2] = '\0';
         output->day = atoi(v);
 
+        char m = 0;
         memcpy(v, input + 3, 3);
         v[3] = '\0';
-             if (strcmp(v, "Jan") == 0 || strcmp(v, "JAN") == 0) output->month = 1;
-        else if (strcmp(v, "Feb") == 0 || strcmp(v, "FEB") == 0) output->month = 2;
-        else if (strcmp(v, "Mar") == 0 || strcmp(v, "MAR") == 0) output->month = 3;
-        else if (strcmp(v, "Apr") == 0 || strcmp(v, "APR") == 0) output->month = 4;
-        else if (strcmp(v, "May") == 0 || strcmp(v, "MAY") == 0) output->month = 5;
-        else if (strcmp(v, "Jun") == 0 || strcmp(v, "JUN") == 0) output->month = 6;
-        else if (strcmp(v, "Jul") == 0 || strcmp(v, "JUL") == 0) output->month = 7;
-        else if (strcmp(v, "Aug") == 0 || strcmp(v, "AUG") == 0) output->month = 8;
-        else if (strcmp(v, "Sep") == 0 || strcmp(v, "SEP") == 0) output->month = 9;
-        else if (strcmp(v, "Oct") == 0 || strcmp(v, "OCT") == 0) output->month = 10;
-        else if (strcmp(v, "Nov") == 0 || strcmp(v, "NOV") == 0) output->month = 11;
-        else if (strcmp(v, "Dec") == 0 || strcmp(v, "DEC") == 0) output->month = 12;
+             if (strcmp(v, "Jan") == 0 || strcmp(v, "JAN") == 0) m = 1;
+        else if (strcmp(v, "Feb") == 0 || strcmp(v, "FEB") == 0) m = 2;
+        else if (strcmp(v, "Mar") == 0 || strcmp(v, "MAR") == 0) m = 3;
+        else if (strcmp(v, "Apr") == 0 || strcmp(v, "APR") == 0) m = 4;
+        else if (strcmp(v, "May") == 0 || strcmp(v, "MAY") == 0) m = 5;
+        else if (strcmp(v, "Jun") == 0 || strcmp(v, "JUN") == 0) m = 6;
+        else if (strcmp(v, "Jul") == 0 || strcmp(v, "JUL") == 0) m = 7;
+        else if (strcmp(v, "Aug") == 0 || strcmp(v, "AUG") == 0) m = 8;
+        else if (strcmp(v, "Sep") == 0 || strcmp(v, "SEP") == 0) m = 9;
+        else if (strcmp(v, "Oct") == 0 || strcmp(v, "OCT") == 0) m = 10;
+        else if (strcmp(v, "Nov") == 0 || strcmp(v, "NOV") == 0) m = 11;
+        else if (strcmp(v, "Dec") == 0 || strcmp(v, "DEC") == 0) m = 12;
+        output->month = m;
 
         memcpy(v, input + 7, 4);
         v[4] = '\0';

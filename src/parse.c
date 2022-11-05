@@ -10,15 +10,31 @@
 
 #define MAX_CTES    10
 
-static int parseColumn (const char * query, size_t * index, struct ColumnNode *column);
+static int parseColumn (
+    const char * query,
+    size_t * index,
+    struct ColumnNode *column
+);
 
-static int parseFunctionParams (const char * query, size_t * index, struct ColumnNode * column);
+static int parseFunctionParams (
+    const char * query,
+    size_t * index,
+    struct ColumnNode * column
+);
 
 static int checkConstantField (struct Field * field);
 
-static int checkSimpleArithmeticOperator (const char *query, size_t *index, struct ColumnNode *column);
+static int checkSimpleArithmeticOperator (
+    const char *query,
+    size_t *index,
+    struct ColumnNode *column
+);
 
-static struct Table *findTable (const char *table_name, struct Table *tables, int table_count);
+static struct Table *findTable (
+    const char *table_name,
+    struct Table *tables,
+    int table_count
+);
 
 int parseQuery (struct Query *q, const char *query) {
     /*********************
@@ -55,7 +71,10 @@ int parseQuery (struct Query *q, const char *query) {
 
     skipWhitespace(query, &index);
 
-    if (strncmp(query + index, "EXPLAIN", 7) == 0 && isspace(query[index + 7])) {
+    if (
+        strncmp(query + index, "EXPLAIN", 7) == 0
+        && isspace(query[index + 7])
+    ) {
         q->flags |= FLAG_EXPLAIN;
         index += 8;
     }
@@ -65,7 +84,10 @@ int parseQuery (struct Query *q, const char *query) {
     // Special treatment for VALUES only (top-level) query
     // Will behave as a query: SELECT * FROM values_mem
     // Where values_mem is a simulated DB in memory
-    if (strncmp(query + index, "VALUES", 6) == 0 && isspace(query[index + 6])) {
+    if (
+        strncmp(query + index, "VALUES", 6) == 0
+        && isspace(query[index + 6])
+    ) {
         index += 7;
 
         q->tables = calloc(1, sizeof(q->tables[0]));
@@ -106,7 +128,11 @@ int parseQuery (struct Query *q, const char *query) {
         skipWhitespace(query, &index);
 
         if (query[index] != '\0') {
-            fprintf(stderr, "expected end of TABLE query. found '%s'\n", query + index);
+            fprintf(
+                stderr,
+                "expected end of TABLE query. found '%s'\n",
+                query + index
+            );
             return -1;
         }
 
@@ -123,7 +149,12 @@ int parseQuery (struct Query *q, const char *query) {
         int token_length = getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
         if (token_length <= 0 && index < query_length) {
-            fprintf(stderr, "Unable to get next token but not at end of query. Remaining: '%s'\n", query + index);
+            fprintf(
+                stderr,
+                "Unable to get next token but not at end of query. Remaining: "
+                "'%s'\n",
+                query + index
+            );
             return -1;
         }
 
@@ -134,7 +165,11 @@ int parseQuery (struct Query *q, const char *query) {
                 int cte_index = cte_count++;
 
                 if (cte_index >= MAX_CTES) {
-                    fprintf(stderr, "Cannot have more than %d ctes.\n", MAX_CTES);
+                    fprintf(
+                        stderr,
+                        "Cannot have more than %d ctes.\n",
+                        MAX_CTES
+                    );
                     return -1;
                 }
 
@@ -159,7 +194,13 @@ int parseQuery (struct Query *q, const char *query) {
                 int len = find_matching_parenthesis(query + index);
 
                 if (len >= MAX_TABLE_LENGTH) {
-                    fprintf(stderr, "CTEs longer than %d are not supported. CTE was %d bytes.\n", MAX_TABLE_LENGTH, len);
+                    fprintf(
+                        stderr,
+                        "CTEs longer than %d are not supported. CTE was %d "
+                        "bytes.\n",
+                        MAX_TABLE_LENGTH,
+                        len
+                    );
                     return -1;
                 }
 
@@ -205,7 +246,11 @@ int parseQuery (struct Query *q, const char *query) {
                 // Default alias is whole column spec (if it fits in)
                 int len = index - col_start_index;
                 if (len < MAX_FIELD_LENGTH) {
-                    whitespaceCollapse(column->alias, query + col_start_index, len);
+                    whitespaceCollapse(
+                        column->alias,
+                        query + col_start_index,
+                        len
+                    );
                 }
 
                 q->flags |= result;
@@ -215,7 +260,12 @@ int parseQuery (struct Query *q, const char *query) {
                 if (strncmp(query + index, "AS ", 3) == 0) {
                     index += 3;
 
-                    getQuotedToken(query, &index, column->alias, MAX_FIELD_LENGTH);
+                    getQuotedToken(
+                        query,
+                        &index,
+                        column->alias,
+                        MAX_FIELD_LENGTH
+                    );
 
                     skipWhitespace(query, &index);
                 }
@@ -243,7 +293,10 @@ int parseQuery (struct Query *q, const char *query) {
                 if (q->table_count == 1) {
                     q->tables = calloc(q->table_count, sizeof (struct Table));
                 } else {
-                    void * ptr = realloc(q->tables, sizeof (struct Table) * q->table_count);
+                    void * ptr = realloc(
+                        q->tables,
+                        sizeof (struct Table) * q->table_count
+                    );
 
                     if (ptr == NULL) {
                         fprintf(stderr, "Can't allocate memory\n");
@@ -253,7 +306,11 @@ int parseQuery (struct Query *q, const char *query) {
                     q->tables = ptr;
 
                     // Zero out realloc'd space
-                    memset(q->tables + (q->table_count - 1), 0, sizeof (struct Table));
+                    memset(
+                        q->tables + (q->table_count - 1),
+                        0,
+                        sizeof (struct Table)
+                    );
                 }
 
                 struct Table *table = &q->tables[q->table_count - 1];
@@ -284,7 +341,11 @@ int parseQuery (struct Query *q, const char *query) {
                         // free this for us.
                         struct DB *db = malloc(sizeof(*db));
 
-                        csvMem_fromValues(db, query + index, end_ptr - query - index);
+                        csvMem_fromValues(
+                            db,
+                            query + index,
+                            end_ptr - query - index
+                        );
 
                         // This DB needs to be free'd in populateTables()
                         table->db = db;
@@ -293,7 +354,13 @@ int parseQuery (struct Query *q, const char *query) {
                     }
                     else {
                         if (len >= MAX_TABLE_LENGTH) {
-                            fprintf(stderr, "Subqueries longer than %d are not supported. Subquery was %d bytes.\n", MAX_TABLE_LENGTH, len);
+                            fprintf(
+                                stderr,
+                                "Subqueries longer than %d are not supported. "
+                                "Subquery was %d bytes.\n",
+                                MAX_TABLE_LENGTH,
+                                len
+                            );
                             return -1;
                         }
 
@@ -310,7 +377,12 @@ int parseQuery (struct Query *q, const char *query) {
                     }
                 }
                 else {
-                    getQuotedToken(query, &index, table->name, MAX_TABLE_LENGTH);
+                    getQuotedToken(
+                        query,
+                        &index,
+                        table->name,
+                        MAX_TABLE_LENGTH
+                    );
 
                     if (query[index] == '(') {
                         // we have a table-valued-function
@@ -326,8 +398,14 @@ int parseQuery (struct Query *q, const char *query) {
                     else {
                         // We just have a regular table identifier
 
-                        // As soon as we have a name we should search for a matching CTE
-                        struct Table *cte = findTable(table->name, ctes, MAX_CTES);
+                        // As soon as we have a name we should search for a
+                        // matching CTE
+                        struct Table *cte = findTable(
+                            table->name,
+                            ctes,
+                            MAX_CTES
+                        );
+
                         if (cte != NULL) {
                             memcpy(table, cte, sizeof(*cte));
 
@@ -341,7 +419,12 @@ int parseQuery (struct Query *q, const char *query) {
                 if (strncmp(query + index, "AS ", 3) == 0) {
                     index += 3;
 
-                    getQuotedToken(query, &index, table->alias, MAX_FIELD_LENGTH);
+                    getQuotedToken(
+                        query,
+                        &index,
+                        table->alias,
+                        MAX_FIELD_LENGTH
+                    );
 
                     skipWhitespace(query, &index);
 
@@ -354,7 +437,11 @@ int parseQuery (struct Query *q, const char *query) {
 
                         index++;
 
-                        char * c = strncpy(table->alias + strlen(table->alias) + 1, query + start_index, index - start_index);
+                        char * c = strncpy(
+                            table->alias + strlen(table->alias) + 1,
+                            query + start_index,
+                            index - start_index
+                        );
 
                         c[index - start_index] = '\0';
                     }
@@ -419,8 +506,8 @@ int parseQuery (struct Query *q, const char *query) {
                     memcpy(&p->right, &p->left, sizeof (p->left));
 
                     // One side (right) needs to be on this joined table
-                    // The other side needs to be from any of the previous tables
-                    // we don't which yet, but it will be filled in later
+                    // The other side needs to be from any of the previous
+                    // tables we don't which yet, but it will be filled in later
                     p->right.fields[0].table_id = q->table_count - 1;
 
                     // Set operator
@@ -468,7 +555,10 @@ int parseQuery (struct Query *q, const char *query) {
                 if (q->predicate_count == 0) {
                     mem = malloc(sizeof (*q->predicates));
                 } else {
-                    mem = realloc(q->predicates, sizeof (*q->predicates) * (q->predicate_count + 1));
+                    mem = realloc(
+                        q->predicates,
+                        sizeof (*q->predicates) * (q->predicate_count + 1)
+                    );
                 }
 
                 if (mem == NULL) {
@@ -598,7 +688,10 @@ int parseQuery (struct Query *q, const char *query) {
                     return -1;
                 }
 
-                if (strcmp(q->order_node->fields[0].text, "PK") == 0 && query[index] == '(') {
+                if (
+                    strcmp(q->order_node->fields[0].text, "PK") == 0
+                    && query[index] == '('
+                ) {
                     // We've been asked to sort on primary key.
                     // We don't actually care which column it is so we just
                     // discard the contents of the parentheses.
@@ -610,7 +703,6 @@ int parseQuery (struct Query *q, const char *query) {
 
                 getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-                // Note: current implementation only supports all ASC or all DESC
                 if (strcmp(keyword, "ASC") == 0) {
                     q->order_direction[i] = ORDER_ASC;
                 } else if (strcmp(keyword, "DESC") == 0) {
@@ -662,7 +754,11 @@ int parseQuery (struct Query *q, const char *query) {
 
         }
         else {
-            fprintf(stderr, "expected WITH|SELECT|FROM|WHERE|OFFSET|FETCH FIRST|LIMIT|ORDER|GROUP\n");
+            fprintf(
+                stderr,
+                "expected WITH|SELECT|FROM|WHERE|OFFSET|FETCH FIRST|LIMIT|ORDER"
+                "|GROUP\n"
+            );
             fprintf(stderr, "Found '%s'\n", keyword);
             return -1;
         }
@@ -671,7 +767,11 @@ int parseQuery (struct Query *q, const char *query) {
     return 0;
 }
 
-static int parseColumn (const char * query, size_t * index, struct ColumnNode *column) {
+static int parseColumn (
+    const char * query,
+    size_t * index,
+    struct ColumnNode *column
+) {
     char value[MAX_FIELD_LENGTH];
     int flags = 0;
 
@@ -823,7 +923,12 @@ static int parseColumn (const char * query, size_t * index, struct ColumnNode *c
             (*index)++;
 
             if (strlen(part) + strlen(field->text) + 15 < MAX_FIELD_LENGTH)
-                sprintf(column->alias, "EXTRACT(%s FROM %s)", part, field->text);
+                sprintf(
+                    column->alias,
+                    "EXTRACT(%s FROM %s)",
+                    part,
+                    field->text
+                );
 
             if (checkConstantField(field) < 0) {
                 return -1;
@@ -952,7 +1057,11 @@ static int parseColumn (const char * query, size_t * index, struct ColumnNode *c
  * @param name_length Length of function name (excluding opening bracket)
  * @return int
  */
-static int parseFunctionParams (const char * query, size_t * index, struct ColumnNode * column) {
+static int parseFunctionParams (
+    const char * query,
+    size_t * index,
+    struct ColumnNode * column
+) {
     struct Field *field1 = column->fields;
 
     getQuotedToken(query, index, field1->text, MAX_FIELD_LENGTH);
@@ -1004,7 +1113,11 @@ static int checkConstantField (struct Field * field) {
         int len = strlen(field->text);
 
         if (field->text[len - 1] != '\'') {
-            fprintf(stderr, "expected apostrophe got '%c'\n", field->text[len - 1]);
+            fprintf(
+                stderr,
+                "expected apostrophe got '%c'\n",
+                field->text[len - 1]
+            );
             return -1;
         }
 
@@ -1029,7 +1142,11 @@ static int checkConstantField (struct Field * field) {
     return 0;
 }
 
-static int checkSimpleArithmeticOperator(const char *query, size_t *index, struct ColumnNode *column) {
+static int checkSimpleArithmeticOperator(
+    const char *query,
+    size_t *index,
+    struct ColumnNode *column
+) {
     skipWhitespace(query, index);
 
     char c = query[*index];
@@ -1069,7 +1186,11 @@ static int checkSimpleArithmeticOperator(const char *query, size_t *index, struc
     return 0;
 }
 
-static struct Table *findTable (const char *table_name, struct Table *tables, int table_count) {
+static struct Table *findTable (
+    const char *table_name,
+    struct Table *tables,
+    int table_count
+) {
     for (int i = 0; i < table_count; i++) {
         struct Table *table = tables + i;
 

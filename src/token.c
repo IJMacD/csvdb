@@ -80,7 +80,12 @@ static void skipLine (const char *string, size_t *index) {
  * @param token_max_length
  * @return int Length of token
  */
-int getToken (const char *string, size_t *index, char *token, int token_max_length) {
+int getToken (
+    const char *string,
+    size_t *index,
+    char *token,
+    int token_max_length
+) {
     skipWhitespace(string, index);
 
     // End of string
@@ -113,9 +118,14 @@ int getToken (const char *string, size_t *index, char *token, int token_max_leng
  * @param index
  * @param token
  * @param token_max_length
- * @return int 0 means no quotes, ~~1 means single quotes~~, 2 means double quotes
+ * @return int 0 means no quotes, 2 means double quotes
  */
-int getQuotedToken (const char *string, size_t *index, char *token, int token_max_length) {
+int getQuotedToken (
+    const char *string,
+    size_t *index,
+    char *token,
+    int token_max_length
+) {
     skipWhitespace(string, index);
 
     if (string[*index] == '\0') {
@@ -164,7 +174,12 @@ int getNumericToken (const char *string, size_t *index) {
  * @param token_max_length
  * @return int Length of token
  */
-int getOperatorToken (const char *string, size_t *index, char *token, int token_max_length) {
+int getOperatorToken (
+    const char *string,
+    size_t *index,
+    char *token,
+    int token_max_length
+) {
     skipWhitespace(string, index);
 
     // End of string

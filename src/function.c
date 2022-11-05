@@ -8,7 +8,12 @@
 #include "result.h"
 #include "db.h"
 
-int evaluateFunction(char * output, int function, char **values, __attribute__((unused)) int value_count) {
+int evaluateFunction(
+    char * output,
+    int function,
+    char **values,
+    __attribute__((unused)) int value_count
+) {
 
     // NULL output from VFS
     if (values[0][0] == 0) {
@@ -174,13 +179,27 @@ int evaluateFunction(char * output, int function, char **values, __attribute__((
             sprintf(output, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
         }
         else if (function == FUNC_EXTRACT_DATETIME) {
-            sprintf(output, "%04d-%02d-%02dT%02d:%02d:%02d", dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second);
+            sprintf(
+                output,
+                "%04d-%02d-%02dT%02d:%02d:%02d",
+                dt.year,
+                dt.month,
+                dt.day,
+                dt.hour,
+                dt.minute,
+                dt.second
+            );
         }
         else if (function == FUNC_EXTRACT_MONTH_STRING) {
             sprintf(output, "%04d-%02d", dt.year, dt.month);
         }
         else if (function == FUNC_EXTRACT_WEEK_STRING) {
-            sprintf(output, "%04d-W%02d", datetimeGetWeekYear(&dt), datetimeGetWeek(&dt));
+            sprintf(
+                output,
+                "%04d-W%02d",
+                datetimeGetWeekYear(&dt),
+                datetimeGetWeek(&dt)
+            );
         }
         else if (function == FUNC_EXTRACT_YEARDAY_STRING) {
             sprintf(output, "%04d-%03d", dt.year, datetimeGetYearDay(&dt));
@@ -247,7 +266,13 @@ int evaluateFunction(char * output, int function, char **values, __attribute__((
     return 0;
 }
 
-int evaluateAggregateFunction (char * output, struct Table *tables, __attribute__((unused)) int table_count, struct ColumnNode *column, struct RowList * row_list) {
+int evaluateAggregateFunction (
+    char * output,
+    struct Table *tables,
+    __attribute__((unused)) int table_count,
+    struct ColumnNode *column,
+    struct RowList * row_list
+) {
     struct Field *field = column->fields;
 
     char value[MAX_VALUE_LENGTH];
@@ -263,7 +288,15 @@ int evaluateAggregateFunction (char * output, struct Table *tables, __attribute_
             int rowid = getRowID(row_list, field->table_id, i);
 
             // Count up the non-NULL values
-            if (getRecordValue(tables[field->table_id].db, rowid, field->index, value, MAX_VALUE_LENGTH) > 0) {
+            if (
+                getRecordValue(
+                    tables[field->table_id].db,
+                    rowid,
+                    field->index,
+                    value,
+                    MAX_VALUE_LENGTH
+                ) > 0
+            ) {
                 count++;
             }
         }
@@ -280,7 +313,15 @@ int evaluateAggregateFunction (char * output, struct Table *tables, __attribute_
             int rowid = getRowID(row_list, field->table_id, i);
 
             // Only consider the non-NULL values
-            if (getRecordValue(tables[field->table_id].db, rowid, field->index, value, MAX_VALUE_LENGTH) > 0) {
+            if (
+                getRecordValue(
+                    tables[field->table_id].db,
+                    rowid,
+                    field->index,
+                    value,
+                    MAX_VALUE_LENGTH
+                ) > 0
+            ) {
                 int v = atoi(value);
 
                 if (v < min) min = v;
@@ -301,7 +342,15 @@ int evaluateAggregateFunction (char * output, struct Table *tables, __attribute_
             int rowid = getRowID(row_list, field->table_id, i);
 
             // Only consider the non-NULL values
-            if (getRecordValue(tables[field->table_id].db, rowid, field->index, value, MAX_VALUE_LENGTH) > 0) {
+            if (
+                getRecordValue(
+                    tables[field->table_id].db,
+                    rowid,
+                    field->index,
+                    value,
+                    MAX_VALUE_LENGTH
+                ) > 0
+            ) {
                 int v = atoi(value);
 
                 if (v > max) max = v;
@@ -323,7 +372,15 @@ int evaluateAggregateFunction (char * output, struct Table *tables, __attribute_
             int rowid = getRowID(row_list, field->table_id, i);
 
             // Sum the non-NULL values
-            if (getRecordValue(tables[field->table_id].db, rowid, field->index, value, MAX_VALUE_LENGTH) > 0) {
+            if (
+                getRecordValue(
+                    tables[field->table_id].db,
+                    rowid,
+                    field->index,
+                    value,
+                    MAX_VALUE_LENGTH
+                ) > 0
+            ) {
                 non_null = 1;
                 sum += atoi(value);
             }
@@ -348,7 +405,15 @@ int evaluateAggregateFunction (char * output, struct Table *tables, __attribute_
             int rowid = getRowID(row_list, field->table_id, i);
 
             // Count up the non-NULL values
-            if (getRecordValue(tables[field->table_id].db, rowid, field->index, value, MAX_VALUE_LENGTH) > 0) {
+            if (
+                getRecordValue(
+                    tables[field->table_id].db,
+                    rowid,
+                    field->index,
+                    value,
+                    MAX_VALUE_LENGTH
+                ) > 0
+            ) {
                 count++;
 
                 sum += atoi(value);
@@ -374,7 +439,15 @@ int evaluateAggregateFunction (char * output, struct Table *tables, __attribute_
             int rowid = getRowID(row_list, field->table_id, i);
 
             // Count up the non-NULL values
-            if (getRecordValue(tables[field->table_id].db, rowid, field->index, value, MAX_VALUE_LENGTH) > 0) {
+            if (
+                getRecordValue(
+                    tables[field->table_id].db,
+                    rowid,
+                    field->index,
+                    value,
+                    MAX_VALUE_LENGTH
+                ) > 0
+            ) {
                 if (have_prev == 1) {
                     sprintf(output++, ",");
                 }

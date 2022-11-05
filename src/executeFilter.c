@@ -12,7 +12,11 @@
  * @param result_set
  * @return int
  */
-int executeTableAccessRowid (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
+int executeTableAccessRowid (
+    struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
     // We'll just recycle the same RowList
     RowListIndex row_list = popRowList(result_set);
 
@@ -29,8 +33,22 @@ int executeTableAccessRowid (struct Query *query, struct PlanStep *step, struct 
             char value_left[MAX_VALUE_LENGTH] = {0};
             char value_right[MAX_VALUE_LENGTH] = {0};
 
-            evaluateNode(query, getRowList(row_list), i, &p->left, value_left, MAX_VALUE_LENGTH);
-            evaluateNode(query, getRowList(row_list), i, &p->right, value_right, MAX_VALUE_LENGTH);
+            evaluateNode(
+                query,
+                getRowList(row_list),
+                i,
+                &p->left,
+                value_left,
+                MAX_VALUE_LENGTH
+            );
+            evaluateNode(
+                query,
+                getRowList(row_list),
+                i,
+                &p->right,
+                value_right,
+                MAX_VALUE_LENGTH
+            );
 
             if (!evaluateExpression(p->op, value_left, value_right)) {
                 match = 0;
@@ -42,7 +60,10 @@ int executeTableAccessRowid (struct Query *query, struct PlanStep *step, struct 
             // Add to result set
             copyResultRow(getRowList(row_list), getRowList(row_list), i);
 
-            if (step->limit > -1 && getRowList(row_list)->row_count >= step->limit) {
+            if (
+                step->limit > -1
+                && getRowList(row_list)->row_count >= step->limit
+            ) {
                 break;
             }
         }
@@ -53,8 +74,11 @@ int executeTableAccessRowid (struct Query *query, struct PlanStep *step, struct 
     return 0;
 }
 
-int executeSlice (__attribute__((unused))  struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
-
+int executeSlice (
+    __attribute__((unused)) struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
     // Offset is taken care of in PLAN_SELECT
 
     RowListIndex row_list = popRowList(result_set);

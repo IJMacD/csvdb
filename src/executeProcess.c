@@ -6,20 +6,32 @@
 #include "sort-quick.h"
 #include "evaluate.h"
 
-int executeSort (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
+int executeSort (
+    struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
     // debugRowList(row_list, 2);
 
     RowListIndex row_list = popRowList(result_set);
 
     enum Order sort_directions[10];
-    struct ColumnNode *columns = malloc(sizeof(*columns) * step->predicate_count);
+    struct ColumnNode *columns = malloc(
+        sizeof(*columns) * step->predicate_count
+    );
 
     for (int i = 0; i < step->predicate_count && i < 10; i++) {
         memcpy(columns + i, &step->predicates[i].left, sizeof(*columns));
         sort_directions[i] = (enum Order)step->predicates[i].op;
     }
 
-    sortQuick(query, columns, step->predicate_count, sort_directions, getRowList(row_list));
+    sortQuick(
+        query,
+        columns,
+        step->predicate_count,
+        sort_directions,
+        getRowList(row_list)
+    );
 
     pushRowList(result_set, row_list);
 
@@ -28,7 +40,11 @@ int executeSort (struct Query *query, struct PlanStep *step, struct ResultSet *r
     return 0;
 }
 
-int executeReverse (__attribute__((unused)) struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
+int executeReverse (
+    __attribute__((unused)) struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
 
     RowListIndex row_list = popRowList(result_set);
     reverseRowList(getRowList(row_list), step->limit);
@@ -37,7 +53,11 @@ int executeReverse (__attribute__((unused)) struct Query *query, struct PlanStep
     return 0;
 }
 
-int executeGroup (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
+int executeGroup (
+    struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
 
     // Important! PLAN_GROUP requires rows are already sorted in
     // GROUP BY order
@@ -66,7 +86,14 @@ int executeGroup (struct Query *query, struct PlanStep *step, struct ResultSet *
         char *curr_value = values[i%2];
         char *prev_value = values[(i+1)%2];
 
-        evaluateNode(query, getRowList(row_list), i, col, curr_value, MAX_VALUE_LENGTH);
+        evaluateNode(
+            query,
+            getRowList(row_list),
+            i,
+            col,
+            curr_value,
+            MAX_VALUE_LENGTH
+        );
 
         if (strcmp(prev_value, curr_value)) {
             if (count >= limit) {

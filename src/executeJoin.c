@@ -15,7 +15,11 @@
  * @param result_set
  * @return int
  */
-int executeCrossJoin (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
+int executeCrossJoin (
+    struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
 
     RowListIndex row_list = popRowList(result_set);
 
@@ -28,7 +32,10 @@ int executeCrossJoin (struct Query *query, struct PlanStep *step, struct ResultS
 
     int new_length = getRowList(row_list)->row_count * record_count;
 
-    RowListIndex new_list = createRowList(getRowList(row_list)->join_count + 1, new_length);
+    RowListIndex new_list = createRowList(
+        getRowList(row_list)->join_count + 1,
+        new_length
+    );
 
     for (int i = 0; i < getRowList(row_list)->row_count; i++) {
         int done = 0;
@@ -36,7 +43,10 @@ int executeCrossJoin (struct Query *query, struct PlanStep *step, struct ResultS
         for (int j = 0; j < record_count; j++) {
             appendJoinedRowID(getRowList(new_list), getRowList(row_list), i, j);
 
-            if (step->limit > -1 && getRowList(new_list)->row_count >= step->limit) {
+            if (
+                step->limit > -1
+                && getRowList(new_list)->row_count >= step->limit
+            ) {
                 done = 1;
                 break;
             }
@@ -62,7 +72,11 @@ int executeCrossJoin (struct Query *query, struct PlanStep *step, struct ResultS
  * @param result_set
  * @return int 0 on success
  */
-int executeConstantJoin (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
+int executeConstantJoin (
+    struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
 
     RowListIndex row_list = popRowList(result_set);
 
@@ -74,7 +88,11 @@ int executeConstantJoin (struct Query *query, struct PlanStep *step, struct Resu
     if (p->left.fields[0].table_id != table_id &&
         p->right.fields[0].table_id != table_id)
     {
-        fprintf(stderr, "Cannot perform constant join (Join Index: %d)\n", table_id);
+        fprintf(
+            stderr,
+            "Cannot perform constant join (Join Index: %d)\n",
+            table_id
+        );
         return -1;
     }
 
@@ -85,7 +103,13 @@ int executeConstantJoin (struct Query *query, struct PlanStep *step, struct Resu
 
     // This is a constant join so we'll just populate the table once
     // Hopefully it won't be the whole table since we have a predicate
-    fullTableAccess(next_db, getRowList(tmp_list), step->predicates, step->predicate_count, -1);
+    fullTableAccess(
+        next_db,
+        getRowList(tmp_list),
+        step->predicates,
+        step->predicate_count,
+        -1
+    );
 
     int old_count = getRowList(row_list)->row_count;
     int tmp_count = getRowList(tmp_list)->row_count;
@@ -99,7 +123,10 @@ int executeConstantJoin (struct Query *query, struct PlanStep *step, struct Resu
 
     // Now we know how many rows are to be joined we can make the
     // new row list.
-    RowListIndex new_list = createRowList(getRowList(row_list)->join_count + 1, new_length);
+    RowListIndex new_list = createRowList(
+        getRowList(row_list)->join_count + 1,
+        new_length
+    );
 
     // For each row in the original row list, join every row of the
     // tmp row list.
@@ -110,18 +137,34 @@ int executeConstantJoin (struct Query *query, struct PlanStep *step, struct Resu
         // need to add each row to the new row list with NULLs for
         // the right table
         if (tmp_count == 0 && query->tables[table_id].join_type == JOIN_LEFT) {
-            appendJoinedRowID(getRowList(new_list), getRowList(row_list), i, ROWID_NULL);
+            appendJoinedRowID(
+                getRowList(new_list),
+                getRowList(row_list),
+                i,
+                ROWID_NULL
+            );
 
-            if (step->limit > -1 && getRowList(new_list)->row_count >= step->limit) {
+            if (
+                step->limit > -1
+                && getRowList(new_list)->row_count >= step->limit
+            ) {
                 done = 1;
                 break;
             }
         }
         else for (int j = 0; j < tmp_count; j++) {
             int rowid = getRowID(getRowList(tmp_list), 0, j);
-            appendJoinedRowID(getRowList(new_list), getRowList(row_list), i, rowid);
+            appendJoinedRowID(
+                getRowList(new_list),
+                getRowList(row_list),
+                i,
+                rowid
+            );
 
-            if (step->limit > -1 && getRowList(new_list)->row_count >= step->limit) {
+            if (
+                step->limit > -1
+                && getRowList(new_list)->row_count >= step->limit
+            ) {
                 done = 1;
                 break;
             }
@@ -148,7 +191,11 @@ int executeConstantJoin (struct Query *query, struct PlanStep *step, struct Resu
  * @param result_set
  * @return int
  */
-int executeLoopJoin (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
+int executeLoopJoin (
+    struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
 
     RowListIndex row_list = popRowList(result_set);
 
@@ -162,7 +209,10 @@ int executeLoopJoin (struct Query *query, struct PlanStep *step, struct ResultSe
 
     int new_length = getRowList(row_list)->row_count * record_count;
 
-    RowListIndex new_list = createRowList(getRowList(row_list)->join_count + 1, new_length);
+    RowListIndex new_list = createRowList(
+        getRowList(row_list)->join_count + 1,
+        new_length
+    );
 
     // Prepare a temporary list that can hold every record in the table
     RowListIndex tmp_list = createRowList(1, record_count);
@@ -175,29 +225,48 @@ int executeLoopJoin (struct Query *query, struct PlanStep *step, struct ResultSe
 
         // Fill in right value as constant from outer tables
         if (p.right.fields[0].table_id < table_id) {
-            evaluateNode(query, getRowList(row_list), i, &p.right, p.right.fields[0].text, MAX_FIELD_LENGTH);
+            evaluateNode(
+                query,
+                getRowList(row_list),
+                i,
+                &p.right,
+                p.right.fields[0].text,
+                MAX_FIELD_LENGTH
+            );
             p.right.fields[0].index = FIELD_CONSTANT;
             p.right.function = FUNC_UNITY;
 
-            // We're only passing one table to fullTableScan so predicate will be on first table
+            // We're only passing one table to fullTableScan so predicate will
+            // be on first table
             p.left.fields[0].table_id = 0;
         }
         else {
-            fprintf(stderr, "Limitation of RowList: tables must be joined in order specified.\n");
+            fprintf(stderr, "Limitation of RowList: tables must be joined in "
+                "order specified.\n");
             exit(-1);
         }
 
         getRowList(tmp_list)->row_count = 0;
 
-        // Populate the temp list with all rows which match our special predicate
+        // Populate the temp list with all rows which match our special
+        // predicate
         fullTableAccess(next_db, getRowList(tmp_list), &p, 1, -1);
 
         // Append each row we've just found to the main getRowList(row_list)
         for (int j = 0; j < getRowList(tmp_list)->row_count; j++) {
             int rowid = getRowID(getRowList(tmp_list), 0, j);
-            appendJoinedRowID(getRowList(new_list), getRowList(row_list), i, rowid);
 
-            if (step->limit > -1 && getRowList(new_list)->row_count >= step->limit) {
+            appendJoinedRowID(
+                getRowList(new_list),
+                getRowList(row_list),
+                i,
+                rowid
+            );
+
+            if (
+                step->limit > -1
+                && getRowList(new_list)->row_count >= step->limit
+            ) {
                 done = 1;
                 break;
             }
@@ -205,9 +274,17 @@ int executeLoopJoin (struct Query *query, struct PlanStep *step, struct ResultSe
 
         if (done) break;
 
-        if (table->join_type == JOIN_LEFT && getRowList(tmp_list)->row_count == 0) {
+        if (
+            table->join_type == JOIN_LEFT
+            && getRowList(tmp_list)->row_count == 0
+        ) {
             // Add NULL to list
-            appendJoinedRowID(getRowList(new_list), getRowList(row_list), i, ROWID_NULL);
+            appendJoinedRowID(
+                getRowList(new_list),
+                getRowList(row_list),
+                i,
+                ROWID_NULL
+            );
         }
     }
 
@@ -228,7 +305,11 @@ int executeLoopJoin (struct Query *query, struct PlanStep *step, struct ResultSe
  * @param result_set
  * @return int 0 on success
  */
-int executeUniqueJoin (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
+int executeUniqueJoin (
+    struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
 
     RowListIndex row_list = popRowList(result_set);
 
@@ -237,7 +318,10 @@ int executeUniqueJoin (struct Query *query, struct PlanStep *step, struct Result
 
     struct Table *table = &query->tables[table_id];
 
-    RowListIndex new_list = createRowList(getRowList(row_list)->join_count + 1, getRowList(row_list)->row_count);
+    RowListIndex new_list = createRowList(
+        getRowList(row_list)->join_count + 1,
+        getRowList(row_list)->row_count
+    );
 
     RowListIndex tmp_list = createRowList(1, 1);
 
@@ -260,8 +344,20 @@ int executeUniqueJoin (struct Query *query, struct PlanStep *step, struct Result
     }
 
     struct DB index_db = {0};
-    if (findIndex(&index_db, query->tables[table_id].name, inner->fields[0].text, INDEX_UNIQUE) == 0) {
-        fprintf(stderr, "Couldn't find unique index on '%s(%s)'\n", query->tables[table_id].name, inner->fields[0].text);
+    if (
+        findIndex(
+            &index_db,
+            query->tables[table_id].name,
+            inner->fields[0].text,
+            INDEX_UNIQUE
+        ) == 0
+    ) {
+        fprintf(
+            stderr,
+            "Couldn't find unique index on '%s(%s)'\n",
+            query->tables[table_id].name,
+            inner->fields[0].text
+        );
         return -1;
     }
 
@@ -272,22 +368,48 @@ int executeUniqueJoin (struct Query *query, struct PlanStep *step, struct Result
         int output_status;
 
         // Fill in value as constant from outer tables
-        evaluateNode(query, getRowList(row_list), i, outer, value, MAX_FIELD_LENGTH);
+        evaluateNode(
+            query,
+            getRowList(row_list),
+            i,
+            outer,
+            value,
+            MAX_FIELD_LENGTH
+        );
 
         int index_rowid = uniqueIndexSearch(&index_db, value, &output_status);
-        getRecordValue(&index_db, index_rowid, rowid_field, value, MAX_VALUE_LENGTH);
+        getRecordValue(
+            &index_db,
+            index_rowid,
+            rowid_field,
+            value,
+            MAX_VALUE_LENGTH
+        );
         int rowid = atoi(value);
 
         if (rowid != RESULT_NO_ROWS) {
             getRowList(tmp_list)->row_count = 0;
-            appendJoinedRowID(getRowList(new_list), getRowList(row_list), i, rowid);
+            appendJoinedRowID(
+                getRowList(new_list),
+                getRowList(row_list),
+                i,
+                rowid
+            );
         }
         else if (table->join_type == JOIN_LEFT) {
             // Add NULL rowid
-            appendJoinedRowID(getRowList(new_list), getRowList(row_list), i, ROWID_NULL);
+            appendJoinedRowID(
+                getRowList(new_list),
+                getRowList(row_list),
+                i,
+                ROWID_NULL
+            );
         }
 
-        if (step->limit > -1 && getRowList(new_list)->row_count >= step->limit) {
+        if (
+            step->limit > -1
+            && getRowList(new_list)->row_count >= step->limit
+        ) {
             break;
         }
     }
@@ -309,7 +431,11 @@ int executeUniqueJoin (struct Query *query, struct PlanStep *step, struct Result
  * @param result_set
  * @return int 0 on success
  */
-int executeIndexJoin (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
+int executeIndexJoin (
+    struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
 
     RowListIndex row_list = popRowList(result_set);
 
@@ -318,7 +444,10 @@ int executeIndexJoin (struct Query *query, struct PlanStep *step, struct ResultS
 
     struct Table *table = &query->tables[table_id];
 
-    RowListIndex new_list = createRowList(getRowList(row_list)->join_count + 1, getRowList(row_list)->row_count);
+    RowListIndex new_list = createRowList(
+        getRowList(row_list)->join_count + 1,
+        getRowList(row_list)->row_count
+    );
 
     RowListIndex tmp_list = createRowList(1, getRecordCount(table->db));
 
@@ -341,12 +470,25 @@ int executeIndexJoin (struct Query *query, struct PlanStep *step, struct ResultS
     }
 
     struct DB index_db = {0};
-    if (findIndex(&index_db, query->tables[table_id].name, inner->fields[0].text, INDEX_ANY) == 0) {
-        fprintf(stderr, "Couldn't find index on '%s(%s)'\n", query->tables[table_id].name, inner->fields[0].text);
+    if (
+        findIndex(
+            &index_db,
+            query->tables[table_id].name,
+            inner->fields[0].text,
+            INDEX_ANY
+        ) == 0
+    ) {
+        fprintf(
+            stderr,
+            "Couldn't find index on '%s(%s)'\n",
+            query->tables[table_id].name,
+            inner->fields[0].text
+        );
         return -1;
     }
 
-    // Find which column in the index table contains the rowids of the primary table
+    // Find which column in the index table contains the rowids of the primary
+    // table
     int rowid_col = getFieldIndex(&index_db, "rowid");
 
     for (int i = 0; i < getRowList(row_list)->row_count; i++) {
@@ -354,16 +496,39 @@ int executeIndexJoin (struct Query *query, struct PlanStep *step, struct ResultS
         int done = 0;
 
         // Fill in value as constant from outer tables
-        evaluateNode(query, getRowList(row_list), i, outer, value, MAX_FIELD_LENGTH);
+        evaluateNode(
+            query,
+            getRowList(row_list),
+            i,
+            outer,
+            value,
+            MAX_FIELD_LENGTH
+        );
 
-        int sub_row_count = indexSeek(&index_db, rowid_col, p->op, value, getRowList(tmp_list), -1);
+        int sub_row_count = indexSeek(
+            &index_db,
+            rowid_col,
+            p->op,
+            value,
+            getRowList(tmp_list),
+            -1
+        );
 
         if (sub_row_count > 0) {
             for (int j = 0; j < sub_row_count; j++) {
                 int rowid = getRowID(getRowList(tmp_list), 0, j);
-                appendJoinedRowID(getRowList(new_list), getRowList(row_list), i, rowid);
 
-                if (step->limit > -1 && getRowList(new_list)->row_count >= step->limit) {
+                appendJoinedRowID(
+                    getRowList(new_list),
+                    getRowList(row_list),
+                    i,
+                    rowid
+                );
+
+                if (
+                    step->limit > -1
+                    && getRowList(new_list)->row_count >= step->limit
+                ) {
                     done = 1;
                     break;
                 }
@@ -371,10 +536,21 @@ int executeIndexJoin (struct Query *query, struct PlanStep *step, struct ResultS
         }
         else if (table->join_type == JOIN_LEFT) {
             // Add NULL rowid
-            appendJoinedRowID(getRowList(new_list), getRowList(row_list), i, ROWID_NULL);
+            appendJoinedRowID(
+                getRowList(new_list),
+                getRowList(row_list),
+                i,
+                ROWID_NULL
+            );
         }
 
-        if (done || (step->limit > -1 && getRowList(new_list)->row_count >= step->limit)) {
+        if (
+            done
+            || (
+                step->limit > -1
+                && getRowList(new_list)->row_count >= step->limit
+            )
+        ) {
             break;
         }
 

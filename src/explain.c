@@ -52,10 +52,20 @@ int explain_select_query (
                 }
 
                 if (s.predicates[i].left.function == FUNC_UNITY) {
-                    ptr += snprintf(ptr, remaining, "%s", s.predicates[i].left.fields[0].text);
+                    ptr += snprintf(
+                        ptr,
+                        remaining,
+                        "%s",
+                        s.predicates[i].left.fields[0].text
+                    );
                 }
                 else {
-                    ptr += snprintf(ptr, remaining, "F(%s)", s.predicates[i].left.fields[0].text);
+                    ptr += snprintf(
+                        ptr,
+                        remaining,
+                        "F(%s)",
+                        s.predicates[i].left.fields[0].text
+                    );
                 }
 
                 *ptr = '\0';
@@ -130,25 +140,45 @@ int explain_select_query (
         }
         else if (s.type == PLAN_PK) {
             operation = "PRIMARY KEY UNIQUE";
-            sprintf(table, "%s__%s", q->tables[join_count].name, s.predicates[0].left.alias);
+            sprintf(
+                table,
+                "%s__%s",
+                q->tables[join_count].name,
+                s.predicates[0].left.alias
+            );
             rows = 1;
             cost = log_rows;
         }
         else if (s.type == PLAN_PK_RANGE) {
             operation = "PRIMARY KEY RANGE";
-            sprintf(table, "%s__%s", q->tables[join_count].name, s.predicates[0].left.alias);
+            sprintf(
+                table,
+                "%s__%s",
+                q->tables[join_count].name,
+                s.predicates[0].left.alias
+            );
             rows = row_estimate / 2;
             cost = rows;
         }
         else if (s.type == PLAN_UNIQUE) {
             operation = "INDEX UNIQUE";
-            sprintf(table, "%s__%s", q->tables[join_count].name, s.predicates[0].left.alias);
+            sprintf(
+                table,
+                "%s__%s",
+                q->tables[join_count].name,
+                s.predicates[0].left.alias
+            );
             rows = 1;
             cost = log_rows;
         }
         else if (s.type == PLAN_UNIQUE_RANGE) {
             operation = "INDEX UNIQUE RANGE";
-            sprintf(table, "%s__%s", q->tables[join_count].name, s.predicates[0].left.alias);
+            sprintf(
+                table,
+                "%s__%s",
+                q->tables[join_count].name,
+                s.predicates[0].left.alias
+            );
             if (s.predicate_count > 0) {
                 if (s.limit >= 0) {
                     rows = (s.limit < row_estimate) ? s.limit : row_estimate;
@@ -173,7 +203,13 @@ int explain_select_query (
         }
         else if (s.type == PLAN_INDEX_RANGE) {
             operation = "INDEX RANGE";
-            sprintf(table, "%s__%s", q->tables[join_count].name, s.predicates[0].left.alias);
+            sprintf(
+                table,
+                "%s__%s",
+                q->tables[join_count].name,
+                s.predicates[0].left.alias
+            );
+
             if (s.predicate_count > 0) {
                 if (s.limit >= 0) {
                     rows = (s.limit < row_estimate) ? s.limit : row_estimate;
@@ -198,7 +234,12 @@ int explain_select_query (
         }
         else if (s.type == PLAN_INDEX_SCAN) {
             operation = "INDEX SCAN";
-            sprintf(table, "%s__%s", q->tables[join_count].name, s.predicates[0].left.alias);
+            sprintf(
+                table,
+                "%s__%s",
+                q->tables[join_count].name,
+                s.predicates[0].left.alias
+            );
         }
         else if (s.type == PLAN_SORT) {
             operation = "SORT";
@@ -352,7 +393,16 @@ int explain_select_query (
             rows = (s.limit < rows) ? s.limit : rows;
         }
 
-        fprintf(output, "%d,%s,%s,%s,%ld,%ld\n", i, operation, table, predicate, rows, cost);
+        fprintf(
+            output,
+            "%d,%s,%s,%s,%ld,%ld\n",
+            i,
+            operation,
+            table,
+            predicate,
+            rows,
+            cost
+        );
     }
 
     return 0;

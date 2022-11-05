@@ -16,17 +16,32 @@
 #include "db-csv-mem.h"
 #include "util.h"
 
-int basic_select_query (struct Query *q, struct Plan *plan, enum OutputOption output_flags, FILE * output);
+int basic_select_query (
+    struct Query *q,
+    struct Plan *plan,
+    enum OutputOption output_flags,
+    FILE * output
+);
 
 int information_query (const char *table, FILE * output);
 
 static int populateTables (struct Query *q, struct DB * dbs);
 
-static int findField (struct Query *q, const char *text, int *table_id, int *column_id, char *name);
+static int findField (
+    struct Query *q,
+    const char *text,
+    int *table_id,
+    int *column_id,
+    char *name
+);
 
 static void checkColumnAliases (struct Table * table);
 
-static int process_query (struct Query *q, enum OutputOption output_flags, FILE * output);
+static int process_query (
+    struct Query *q,
+    enum OutputOption output_flags,
+    FILE * output
+);
 
 int query (const char *query, enum OutputOption output_flags, FILE * output) {
     #ifdef DEBUG
@@ -61,7 +76,10 @@ int query (const char *query, enum OutputOption output_flags, FILE * output) {
 
     // If we're querying the stats table then we must have stats turned off
     // for this query otherwise they would get overwritten.
-    if (strcmp(query, "TABLE stats") == 0 || strncmp(query, "FROM stats", 10) == 0) {
+    if (
+        strcmp(query, "TABLE stats") == 0
+        || strncmp(query, "FROM stats", 10) == 0
+    ) {
         output_flags &= ~OUTPUT_OPTION_STATS;
     }
 
@@ -110,7 +128,11 @@ int query (const char *query, enum OutputOption output_flags, FILE * output) {
     return select_query(query, output_flags, output);
 }
 
-int select_query (const char *query, enum OutputOption output_flags, FILE * output) {
+int select_query (
+    const char *query,
+    enum OutputOption output_flags,
+    FILE * output
+) {
     struct Query q = {0};
     struct timeval stop, start;
 
@@ -165,7 +187,13 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
         q2.flags &= ~FLAG_ORDER;
         q2.order_count = 0;
 
-        int result = process_query(&q2, OUTPUT_OPTION_HEADERS | OUTPUT_FORMAT_COMMA | (output_flags & OUTPUT_OPTION_STATS), tmpfile);
+        int result = process_query(&q2,
+            (
+                OUTPUT_OPTION_HEADERS
+                | OUTPUT_FORMAT_COMMA
+                | (output_flags & OUTPUT_OPTION_STATS)
+            ),
+            tmpfile);
 
         fclose(tmpfile);
 
@@ -175,21 +203,34 @@ int select_query (const char *query, enum OutputOption output_flags, FILE * outp
         }
 
         if (q.order_node[0].function != FUNC_UNITY) {
-            fprintf(stderr, "Cannot do ORDER BY and GROUP BY when ORDER BY uses a function\n");
+            fprintf(stderr, "Cannot do ORDER BY and GROUP BY when ORDER BY uses"
+                " a function\n");
             remove(tmpfile_name);
             return -1;
         }
 
         char query2[1024];
-        int len = sprintf(query2, "FROM \"%s\" ORDER BY %s %s", tmpfile_name, q.order_node[0].fields[0].text, q.order_direction[0] == ORDER_ASC ? "ASC" : "DESC");
+        int len = sprintf(
+            query2,
+            "FROM \"%s\" ORDER BY %s %s",
+            tmpfile_name,
+            q.order_node[0].fields[0].text,
+            q.order_direction[0] == ORDER_ASC ? "ASC" : "DESC"
+        );
         char *c = query2 + len;
         for (int i = 1; i < q.order_count; i++) {
             if (q.order_node[i].function != FUNC_UNITY) {
-                fprintf(stderr, "Cannot do ORDER BY and GROUP BY when ORDER BY uses a function\n");
+                fprintf(stderr, "Cannot do ORDER BY and GROUP BY when ORDER BY"
+                    " uses a function\n");
                 remove(tmpfile_name);
                 return -1;
             }
-            len = sprintf(c, ", %s %s", q.order_node[i].fields[0].text, q.order_direction[i] == ORDER_ASC ? "ASC" : "DESC");
+            len = sprintf(
+                c,
+                ", %s %s",
+                q.order_node[i].fields[0].text,
+                q.order_direction[i] == ORDER_ASC ? "ASC" : "DESC"
+            );
             c += len;
         }
 
@@ -214,11 +255,14 @@ void destroyQuery (struct Query *query) {
     }
 }
 
-static int process_query (struct Query *q, enum OutputOption output_flags, FILE * output)
-{
+static int process_query (
+    struct Query *q,
+    enum OutputOption output_flags,
+    FILE * output
+) {
     int result;
 
-    // Explain can be specified on the command line so copy that value in jsut
+    // Explain can be specified on the command line so copy that value in just
     // in case.
     if (output_flags & FLAG_EXPLAIN) {
         q->flags |= FLAG_EXPLAIN;
@@ -226,8 +270,8 @@ static int process_query (struct Query *q, enum OutputOption output_flags, FILE 
 
     if (q->table_count == 0) {
         // No table was specified.
-        // However, if stdin is something more than a tty (i.e pipe or redirected file)
-        // then we can default to it.
+        // However, if stdin is something more than a tty (i.e pipe or
+        // redirected file) then we can default to it.
         if (!isatty(fileno(stdin))) {
             q->tables = calloc(1, sizeof (struct Table));
             q->table_count = 1;
@@ -256,7 +300,10 @@ static int process_query (struct Query *q, enum OutputOption output_flags, FILE 
 
         q->tables[0].db = NULL;
 
-        result = information_query(q->predicates[0].right.fields[0].text, output);
+        result = information_query(
+            q->predicates[0].right.fields[0].text,
+            output
+        );
         destroyQuery(q);
         return result;
     }
@@ -412,7 +459,12 @@ int information_query (const char *table, FILE * output) {
             have_index = 1;
         }
 
-        fprintf(output, "%s\t%c\n", getFieldName(&db, i), have_index ? 'Y' : 'N');
+        fprintf(
+            output,
+            "%s\t%c\n",
+            getFieldName(&db, i),
+            have_index ? 'Y' : 'N'
+        );
     }
 
     closeDB(&db);
@@ -532,7 +584,13 @@ static int populateTables (struct Query *q, struct DB *dbs) {
  * @param name OUT
  * @return int
  */
-static int findField (struct Query *q, const char *text, int *table_id, int *column_id, char *name) {
+static int findField (
+    struct Query *q,
+    const char *text,
+    int *table_id,
+    int *column_id,
+    char *name
+) {
 
     int dot_index = str_find_index(text, '.');
 
@@ -645,14 +703,28 @@ int populateColumnNode (struct Query * query, struct ColumnNode * column) {
     }
 
     if (field1->index == FIELD_UNKNOWN && field1->text[0] != '\0') {
-        if (!findField(query, field1->text, &field1->table_id, &field1->index, field1->text)) {
+        if (!findField(
+                query,
+                field1->text,
+                &field1->table_id,
+                &field1->index,
+                field1->text
+            )
+        ) {
             fprintf(stderr, "Unable to find column '%s'\n", field1->text);
             return -1;
         }
     }
 
     if (field2->index == FIELD_UNKNOWN && field2->text[0] != '\0') {
-        if (!findField(query, field2->text, &field2->table_id, &field2->index, field2->text)) {
+        if (!findField(
+                query,
+                field2->text,
+                &field2->table_id,
+                &field2->index,
+                field2->text
+            )
+        ) {
             fprintf(stderr, "Unable to find column '%s'\n", field2->text);
             return -1;
         }

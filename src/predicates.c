@@ -106,7 +106,10 @@ int evaluateExpression (enum Operator op, const char *left, const char *right) {
  * @param p
  */
 void normalisePredicate (struct Predicate *p) {
-    if (p->left.fields[0].index == FIELD_CONSTANT && p->right.fields[0].index >= 0) {
+    if (
+        p->left.fields[0].index == FIELD_CONSTANT
+        && p->right.fields[0].index >= 0
+    ) {
         flipPredicate(p);
     } else if (p->left.function != FUNC_PK && p->right.function == FUNC_PK) {
         flipPredicate(p);

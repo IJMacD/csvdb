@@ -13,6 +13,17 @@ char *csv_getFieldName (struct DB *db, int field_index);
 
 int csv_getRecordCount (struct DB *db);
 
-int csv_getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length);
+int csv_getRecordValue (
+    struct DB *db,
+    int record_index,
+    int field_index,
+    char *value,
+    size_t value_max_length
+);
 
-enum IndexSearchType csv_findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);
+enum IndexSearchType csv_findIndex(
+    struct DB *db,
+    const char *table_name,
+    const char *index_name,
+    int index_type_flags
+);

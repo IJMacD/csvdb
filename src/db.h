@@ -13,9 +13,20 @@ char * getFieldName (struct DB *db, int field_index);
 
 int getRecordCount (struct DB *db);
 
-int getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length);
+int getRecordValue (
+    struct DB *db,
+    int record_index,
+    int field_index,
+    char *value,
+    size_t value_max_length
+);
 
-enum IndexSearchType findIndex(struct DB *db, const char *table_name, const char *index_name, enum IndexSearchType index_type_flags);
+enum IndexSearchType findIndex(
+    struct DB *db,
+    const char *table_name,
+    const char *index_name,
+    enum IndexSearchType index_type_flags
+);
 
 int pkSearch(struct DB *db, const char *value);
 
@@ -23,6 +34,17 @@ int indexSearch(struct DB *db, const char *value, int mode, int * output_flag);
 
 int uniqueIndexSearch(struct DB *db, const char *value, int * output_flag);
 
-int fullTableAccess (struct DB *db, struct RowList * row_list, struct Predicate *predicates, int predicate_count, int limit_value);
+int fullTableAccess (
+    struct DB *db,
+    struct RowList * row_list,
+    struct Predicate *predicates,
+    int predicate_count,
+    int limit_value
+);
 
-int fullTableScan (struct DB *db, struct RowList * row_list, int rowid_start, int limit);
+int fullTableScan (
+    struct DB *db,
+    struct RowList * row_list,
+    int rowid_start,
+    int limit
+);

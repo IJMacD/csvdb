@@ -32,7 +32,14 @@ int executeQueryPlan (
     printPreamble(output, NULL, q->columns, q->column_count, output_flags);
 
     if (output_flags & OUTPUT_OPTION_HEADERS) {
-        printHeaderLine(output, q->tables, q->table_count, q->columns, q->column_count, output_flags);
+        printHeaderLine(
+            output,
+            q->tables,
+            q->table_count,
+            q->columns,
+            q->column_count,
+            output_flags
+        );
     }
 
     // struct ResultSet results;
@@ -284,11 +291,34 @@ int executeQueryPlan (
 
                     // Aggregate functions will print just one row
                     if (q->flags & FLAG_GROUP) {
-                        printResultLine(output, q->tables, q->table_count, q->columns, q->column_count, row_list->row_count > 0 ? q->offset_value : RESULT_NO_ROWS, row_list, output_flags);
+                        printResultLine(
+                            output,
+                            q->tables,
+                            q->table_count,
+                            q->columns,
+                            q->column_count,
+                            row_list->row_count > 0
+                                ? q->offset_value : RESULT_NO_ROWS,
+                            row_list,
+                            output_flags
+                        );
                         row_count++;
                     }
-                    else for (int i = q->offset_value; i < row_list->row_count; i++) {
-                        printResultLine(output, q->tables, q->table_count, q->columns, q->column_count, i, row_list, output_flags);
+                    else for (
+                        int i = q->offset_value;
+                        i < row_list->row_count;
+                        i++
+                    ) {
+                        printResultLine(
+                            output,
+                            q->tables,
+                            q->table_count,
+                            q->columns,
+                            q->column_count,
+                            i,
+                            row_list,
+                            output_flags
+                        );
                         row_count++;
                     }
 
@@ -327,7 +357,14 @@ int executeQueryPlan (
         fclose(fstats);
     }
 
-    printPostamble(output, NULL, q->columns, q->column_count, row_count, output_flags);
+    printPostamble(
+        output,
+        NULL,
+        q->columns,
+        q->column_count,
+        row_count,
+        output_flags
+    );
 
     // destroyRowListPool();
 

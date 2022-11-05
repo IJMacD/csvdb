@@ -70,11 +70,26 @@ static char *field_names[] = {
 
 const int month_lengths[] = {31,28,31,30,31,30,31,31,30,31,30,31};
 
-static void getJulianRange (struct Predicate *predicates, int predicate_count, int *julian_start, int *julian_end);
+static void getJulianRange (
+    struct Predicate *predicates,
+    int predicate_count,
+    int *julian_start,
+    int *julian_end
+);
 
-static int printDate (char *value, int max_length, struct DateTime date);
+static int printDate (
+    char *value,
+    int max_length,
+    struct DateTime date
+);
 
-static int calendar_evaluateNode(struct DB *db, struct ColumnNode *column, int rowid, char *value, int max_length);
+static int calendar_evaluateField(
+    struct DB *db,
+    struct ColumnNode *column,
+    int rowid,
+    char *value,
+    int max_length
+);
 
 int calendar_openDB (struct DB *db, const char *filename) {
     if (strcmp(filename, "CALENDAR") != 0) {
@@ -96,7 +111,10 @@ void calendar_closeDB (struct DB *db) {
     }
 }
 
-int calendar_getFieldIndex (__attribute__((unused)) struct DB *db, const char *field) {
+int calendar_getFieldIndex (
+    __attribute__((unused)) struct DB *db,
+    const char *field
+) {
     if (strcmp(field, "julian") == 0 || strcmp(field, "rowid") == 0) {
         return FIELD_ROW_INDEX;
     }
@@ -112,7 +130,10 @@ int calendar_getFieldIndex (__attribute__((unused)) struct DB *db, const char *f
     return -1;
 }
 
-char *calendar_getFieldName (__attribute__((unused)) struct DB *db, int field_index) {
+char *calendar_getFieldName (
+    __attribute__((unused)) struct DB *db,
+    int field_index
+) {
     return field_names[field_index];
 }
 
@@ -120,10 +141,17 @@ int calendar_getRecordCount (struct DB *db) {
     return db->_record_count;
 }
 
-int calendar_getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
+int calendar_getRecordValue (
+    struct DB *db,
+    int record_index,
+    int field_index,
+    char *value,
+    size_t value_max_length
+) {
     // Special case for an "index"
     if (db->field_count == 2 && field_index == 1) {
-        // indexRangeScan() thinks it's dealing with an index DB, just return the rowid
+        // indexRangeScan() thinks it's dealing with an index DB, just return
+        // the rowid
         return snprintf(value, value_max_length, "%d", record_index);
     }
 
@@ -159,7 +187,12 @@ int calendar_getRecordValue (struct DB *db, int record_index, int field_index, c
 
     // weekyear
     if (field_index == COL_WEEKYEAR) {
-        return snprintf(value, value_max_length, "%d", datetimeGetWeekYear(&dt));
+        return snprintf(
+            value,
+            value_max_length,
+            "%d",
+            datetimeGetWeekYear(&dt)
+        );
     }
 
     // week
@@ -271,7 +304,12 @@ int calendar_getRecordValue (struct DB *db, int record_index, int field_index, c
 
     // isLeapYear
     if (field_index == COL_IS_LEAP_YEAR) {
-        return snprintf(value, value_max_length, "%d", isLeapYear(dt.year) ? 1 : 0);
+        return snprintf(
+            value,
+            value_max_length,
+            "%d",
+            isLeapYear(dt.year) ? 1 : 0
+        );
     }
 
     // weekdayInMonth
@@ -281,34 +319,70 @@ int calendar_getRecordValue (struct DB *db, int record_index, int field_index, c
 
     // isWeekend
     if (field_index == COL_IS_WEEKEND) {
-        return snprintf(value, value_max_length, "%d", datetimeGetWeekDay(&dt) >= 6 ? 1 : 0);
+        return snprintf(
+            value,
+            value_max_length,
+            "%d",
+            datetimeGetWeekDay(&dt) >= 6 ? 1 : 0
+        );
     }
 
     // month string
     if (field_index == COL_MONTH_STRING) {
-        return snprintf(value, value_max_length, "%04d-%02d", dt.year, dt.month);
+        return snprintf(
+            value,
+            value_max_length,
+            "%04d-%02d",
+            dt.year,
+            dt.month
+        );
     }
 
     // yearday string
     if (field_index == COL_YEARDAY_STRING) {
-        return snprintf(value, value_max_length, "%04d-%03d", dt.year, datetimeGetYearDay(&dt));
+        return snprintf(
+            value,
+            value_max_length,
+            "%04d-%03d",
+            dt.year,
+            datetimeGetYearDay(&dt)
+        );
     }
 
     // week string
     if (field_index == COL_WEEK_STRING) {
-        return snprintf(value, value_max_length, "%04d-W%02d", datetimeGetWeekYear(&dt), datetimeGetWeek(&dt));
+        return snprintf(
+            value,
+            value_max_length,
+            "%04d-W%02d",
+            datetimeGetWeekYear(&dt),
+            datetimeGetWeek(&dt)
+        );
     }
 
     // month string
     if (field_index == COL_WEEKDAY_STRING) {
-        return snprintf(value, value_max_length, "%04d-W%02d-%d", datetimeGetWeekYear(&dt), datetimeGetWeek(&dt), datetimeGetWeekDay(&dt));
+        return snprintf(
+            value,
+            value_max_length,
+            "%04d-W%02d-%d",
+            datetimeGetWeekYear(&dt),
+            datetimeGetWeek(&dt),
+            datetimeGetWeekDay(&dt)
+        );
     }
 
     return 0;
 }
 
-// All queries go through fullTableScan but it's useful to indicate to the planner that julian and date are unique
-enum IndexSearchType calendar_findIndex(struct DB *db, __attribute__((unused)) const char *table_name, const char *index_name, __attribute__((unused)) int index_type_flags) {
+// All queries go through fullTableScan but it's useful to indicate to the
+// planner that julian and date are unique
+enum IndexSearchType calendar_findIndex(
+    struct DB *db,
+    __attribute__((unused)) const char *table_name,
+    const char *index_name,
+    __attribute__((unused)) int index_type_flags
+) {
     if (strcmp(index_name, "julian") == 0) {
         if (db != NULL) {
             calendar_openDB(db, "CALENDAR");
@@ -338,7 +412,13 @@ enum IndexSearchType calendar_findIndex(struct DB *db, __attribute__((unused)) c
     return INDEX_NONE;
 }
 
-int calendar_fullTableAccess (struct DB *db, struct RowList *row_list, struct Predicate *predicates, int predicate_count, int limit_value) {
+int calendar_fullTableAccess (
+    struct DB *db,
+    struct RowList *row_list,
+    struct Predicate *predicates,
+    int predicate_count,
+    int limit_value
+) {
     int julian = -1, max_julian = -1;
 
     // Try to get range from predicates
@@ -355,7 +435,8 @@ int calendar_fullTableAccess (struct DB *db, struct RowList *row_list, struct Pr
     }
 
     // No limit means we'll use the limit defined for the VFS
-    // (hopefully there are enough predicates that we won't have that many results though)
+    // (hopefully there are enough predicates that we won't have that many
+    // results though)
     if (limit_value < 0) {
         limit_value = db->_record_count;
     }
@@ -373,8 +454,20 @@ int calendar_fullTableAccess (struct DB *db, struct RowList *row_list, struct Pr
         for (int j = 0; j < predicate_count && matching; j++) {
             struct Predicate *predicate = predicates + j;
 
-            calendar_evaluateNode(db, &predicate->left, julian, value_left, MAX_VALUE_LENGTH);
-            calendar_evaluateNode(db, &predicate->right, julian, value_right, MAX_VALUE_LENGTH);
+            calendar_evaluateField(
+                db,
+                &predicate->left,
+                julian,
+                value_left,
+                MAX_VALUE_LENGTH
+            );
+            calendar_evaluateField(
+                db,
+                &predicate->right,
+                julian,
+                value_right,
+                MAX_VALUE_LENGTH
+            );
 
             if (!evaluateExpression(predicate->op, value_left, value_right)) {
                 matching = 0;
@@ -396,7 +489,12 @@ int calendar_fullTableAccess (struct DB *db, struct RowList *row_list, struct Pr
     return count;
 }
 
-static void getJulianRange (struct Predicate *predicates, int predicate_count, int *julian_start, int *julian_end) {
+static void getJulianRange (
+    struct Predicate *predicates,
+    int predicate_count,
+    int *julian_start,
+    int *julian_end
+) {
 
     for (int i = 0; i < predicate_count; i++) {
         struct Predicate *p = predicates + i;
@@ -404,7 +502,8 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
         struct Field * field_left = p->left.fields;
         struct Field * field_right = p->right.fields;
 
-        // Prep: We need field on the left and constant on the right, swap if necessary
+        // Prep: We need field on the left and constant on the right, swap if
+        // necessary
         normalisePredicate(p);
 
         // Prep: We're only looking for constants
@@ -548,14 +647,34 @@ static void getJulianRange (struct Predicate *predicates, int predicate_count, i
 
 static int printDate (char *value, int max_length, struct DateTime date) {
     if (date.year >= 0 && date.year < 10000) {
-        return snprintf(value, max_length, "%04d-%02d-%02d", date.year, date.month, date.day);
+        return snprintf(
+            value,
+            max_length,
+            "%04d-%02d-%02d",
+            date.year,
+            date.month,
+            date.day
+        );
     } else {
-        return snprintf(value, max_length, "%+06d-%02d-%02d", date.year, date.month, date.day);
+        return snprintf(
+            value,
+            max_length,
+            "%+06d-%02d-%02d",
+            date.year,
+            date.month,
+            date.day
+        );
     }
 }
 
 
-static int calendar_evaluateNode(struct DB *db, struct ColumnNode *column, int rowid, char *value, int max_length) {
+static int calendar_evaluateField(
+    struct DB *db,
+    struct ColumnNode *column,
+    int rowid,
+    char *value,
+    int max_length
+) {
     struct Field *field = column->fields;
 
     if (field->index == FIELD_CONSTANT) {
@@ -568,7 +687,13 @@ static int calendar_evaluateNode(struct DB *db, struct ColumnNode *column, int r
     }
 
     if (field->index >= 0) {
-        return calendar_getRecordValue(db, rowid, field->index, value, max_length);
+        return calendar_getRecordValue(
+            db,
+            rowid,
+            field->index,
+            value,
+            max_length
+        );
     }
 
     fprintf(stderr, "CALENDAR Cannot evaluate column '%s'\n", field->text);
@@ -578,7 +703,12 @@ static int calendar_evaluateNode(struct DB *db, struct ColumnNode *column, int r
 /**
  * Calendar can do super efficient index searches
  */
-int calendar_indexSearch(struct DB *db, const char *value, __attribute__((unused)) int mode, int * output_flag){
+int calendar_indexSearch(
+    struct DB *db,
+    const char *value,
+    __attribute__((unused)) int mode,
+    int * output_flag
+){
     if (db->field_count == 2) {
         // Dealing with an "index"
 

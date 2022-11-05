@@ -149,7 +149,10 @@ int main () {
     else if (format == OUTPUT_FORMAT_HTML) {
         printf("Content-Type: text/html; charset=utf-8\n");
     }
-    else if (format == OUTPUT_FORMAT_JSON || format == OUTPUT_FORMAT_JSON_ARRAY) {
+    else if (
+        format == OUTPUT_FORMAT_JSON
+        || format == OUTPUT_FORMAT_JSON_ARRAY
+    ) {
         printf("Content-Type: application/json; charset=utf-8\n");
     }
     else if (format == OUTPUT_FORMAT_SQL_INSERT) {

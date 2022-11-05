@@ -8,24 +8,72 @@
 #include "db.h"
 #include "util.h"
 
-static void printAllColumnValues (FILE *f, struct DB *db, const char *prefix, int rowid, enum OutputOption format);
-static void printAllHeaderNames (FILE *f, struct DB *db, const char *prefix, enum OutputOption format);
+static void printAllColumnValues (
+    FILE *f,
+    struct DB *db,
+    const char *prefix,
+    int rowid,
+    enum OutputOption format
+);
+static void printAllHeaderNames (
+    FILE *f,
+    struct DB *db,
+    const char *prefix,
+    enum OutputOption format
+);
 
-static void printHeaderName (FILE *f, enum OutputOption format, const char *prefix, const char *name);
+static void printHeaderName (
+    FILE *f,
+    enum OutputOption format,
+    const char *prefix,
+    const char *name
+);
 static void printHeaderSeparator (FILE *f, enum OutputOption format);
-static void printRecordStart (FILE *f, enum OutputOption format, int is_first, int is_single_column);
-static void printRecordEnd (FILE *f, enum OutputOption format, int is_last, int is_single_column);
+static void printRecordStart (
+    FILE *f,
+    enum OutputOption format,
+    int is_first,
+    int is_single_column
+);
+static void printRecordEnd (
+    FILE *f,
+    enum OutputOption format,
+    int is_last,
+    int is_single_column
+);
 static void printRecordSeparator (FILE *f, enum OutputOption format);
-static void printColumnValue (FILE *f, enum OutputOption format, const char *prefix, const char *name, const char *value);
-static void printColumnValueNumber (FILE *f, enum OutputOption format, const char *prefix, const char *name, long value);
+static void printColumnValue (
+    FILE *f,
+    enum OutputOption format,
+    const char *prefix,
+    const char *name,
+    const char *value
+);
+static void printColumnValueNumber (
+    FILE *f,
+    enum OutputOption format,
+    const char *prefix,
+    const char *name,
+    long value
+);
 static void printColumnSeparator (FILE *f, enum OutputOption format);
 
-void printResultLine (FILE *f, struct Table *tables, int table_count, struct ColumnNode columns[], int column_count, int result_index, struct RowList * row_list, enum OutputOption flags) {
+void printResultLine (
+    FILE *f,
+    struct Table *tables,
+    int table_count,
+    struct ColumnNode columns[],
+    int column_count,
+    int result_index,
+    struct RowList * row_list,
+    enum OutputOption flags
+) {
     enum OutputOption format = flags & OUTPUT_MASK_FORMAT;
 
     int have_aggregate = 0;
 
-    int is_single_column = column_count == 1 && strcmp(columns[0].alias, "_") == 0;
+    int is_single_column
+        = column_count == 1 && strcmp(columns[0].alias, "_") == 0;
 
     printRecordStart(f, format, result_index == 0, is_single_column);
 
@@ -39,7 +87,10 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
             || format == OUTPUT_FORMAT_TABLE
             ) && column.concat == 1
         ) {
-            fprintf(stderr, "Cannot output json, json_array, sql with concat columns\n");
+            fprintf(
+                stderr,
+                "Cannot output json, json_array, sql with concat columns\n"
+            );
             exit(-1);
         }
 
@@ -50,15 +101,21 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
                 if (field->table_id >= 0) {
                     // e.g. table.*
                     struct DB *db = tables[field->table_id].db;
-                    int rowid = getRowID(row_list, field->table_id, result_index);
-                    const char *prefix = table_count > 1 ? tables[field->table_id].alias : NULL;
+                    int rowid = getRowID(
+                        row_list,
+                        field->table_id,
+                        result_index
+                    );
+                    const char *prefix = table_count > 1
+                        ? tables[field->table_id].alias : NULL;
                     printAllColumnValues(f, db, prefix, rowid, format);
                 } else {
                     // e.g. *
                     for (int m = 0; m < table_count; m++) {
                         struct DB *db = tables[m].db;
                         int rowid = getRowID(row_list, m, result_index);
-                        const char *prefix = table_count > 1 ? tables[m].alias : NULL;
+                        const char *prefix = table_count > 1
+                            ? tables[m].alias : NULL;
                         printAllColumnValues(f, db, prefix, rowid, format);
 
                         if (m < table_count - 1) {
@@ -68,11 +125,23 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
                 }
             }
             else if (field->index == FIELD_COUNT_STAR) {
-                printColumnValueNumber(f, format, NULL, column.alias, row_list->row_count);
+                printColumnValueNumber(
+                    f,
+                    format,
+                    NULL,
+                    column.alias,
+                    row_list->row_count
+                );
             }
             else if (field->index == FIELD_ROW_NUMBER) {
                 // ROW_NUMBER() is 1-indexed
-                printColumnValueNumber(f, format, NULL, column.alias, result_index + 1);
+                printColumnValueNumber(
+                    f,
+                    format,
+                    NULL,
+                    column.alias,
+                    result_index + 1
+                );
             }
             else if (field->index == FIELD_ROW_INDEX) {
                 // FIELD_ROW_INDEX is the input line (0 indexed)
@@ -96,11 +165,23 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
         }
         else if ((column.function & MASK_FUNC_FAMILY) == FUNC_FAM_AGG) {
             char output[MAX_VALUE_LENGTH];
-            int result = evaluateAggregateFunction(output, tables, table_count, columns + j, row_list);
+            int result = evaluateAggregateFunction(
+                output,
+                tables,
+                table_count,
+                columns + j,
+                row_list
+            );
 
             have_aggregate = 1;
 
-            printColumnValue(f, format, NULL, column.alias, result < 0 ? "BADFUNC" : output);
+            printColumnValue(
+                f,
+                format,
+                NULL,
+                column.alias,
+                result < 0 ? "BADFUNC" : output
+            );
         }
         else {
             // Evaluate functions
@@ -110,9 +191,22 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
             struct Query q;
             q.tables = tables;
 
-            int result = evaluateNode(&q, row_list, result_index, columns + j, output, MAX_VALUE_LENGTH);
+            int result = evaluateNode(
+                &q,
+                row_list,
+                result_index,
+                columns + j,
+                output,
+                MAX_VALUE_LENGTH
+            );
 
-            printColumnValue(f, format, NULL, column.alias, result < 0 ? "BADFUNC" : output);
+            printColumnValue(
+                f,
+                format,
+                NULL,
+                column.alias,
+                result < 0 ? "BADFUNC" : output
+            );
         }
 
         int is_last_column = j == column_count - 1;
@@ -122,7 +216,8 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
 
     }
 
-    int is_last = result_index == row_list->row_count - 1 || have_aggregate == 1;
+    int is_last
+        = result_index == row_list->row_count - 1 || have_aggregate == 1;
 
     printRecordEnd(f, format, is_last, is_single_column);
 
@@ -131,7 +226,14 @@ void printResultLine (FILE *f, struct Table *tables, int table_count, struct Col
     }
 }
 
-void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct ColumnNode columns[], int column_count, enum OutputOption flags) {
+void printHeaderLine (
+    FILE *f,
+    struct Table *tables,
+    int table_count,
+    struct ColumnNode columns[],
+    int column_count,
+    enum OutputOption flags
+) {
     enum OutputOption format = flags & OUTPUT_MASK_FORMAT;
 
     /********************
@@ -181,7 +283,10 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
             || format == OUTPUT_FORMAT_SQL_INSERT
             ) && column.concat == 1
         ) {
-            fprintf(stderr, "Cannot output json, json_array, sql with concat columns\n");
+            fprintf(
+                stderr,
+                "Cannot output json, json_array, sql with concat columns\n"
+            );
             exit(-1);
         }
 
@@ -190,13 +295,15 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
         if (field->index == FIELD_STAR) {
             if (field->table_id >= 0) {
                 struct DB *db = tables[field->table_id].db;
-                const char *prefix = table_count > 1 ? tables[field->table_id].alias : NULL;
+                const char *prefix
+                    = table_count > 1 ? tables[field->table_id].alias : NULL;
                 printAllHeaderNames(f, db, prefix, format);
             }
             else {
                 for (int m = 0; m < table_count; m++) {
                     struct DB *db = tables[m].db;
-                    const char *prefix = table_count > 1 ? tables[m].alias : NULL;
+                    const char *prefix
+                        = table_count > 1 ? tables[m].alias : NULL;
                     printAllHeaderNames(f, db, prefix, format);
 
                     if (m < table_count - 1) {
@@ -279,13 +386,28 @@ void printHeaderLine (FILE *f, struct Table *tables, int table_count, struct Col
     }
 }
 
-void printPreamble (FILE *f, __attribute__((unused)) struct Table *table, __attribute__((unused)) struct ColumnNode columns[], __attribute__((unused)) int column_count, enum OutputOption flags) {
+void printPreamble (
+    FILE *f,
+    __attribute__((unused)) struct Table *table,
+    __attribute__((unused)) struct ColumnNode columns[],
+    __attribute__((unused)) int column_count,
+    enum OutputOption flags
+) {
     enum OutputOption format = flags & OUTPUT_MASK_FORMAT;
 
     if (format == OUTPUT_FORMAT_HTML) {
-        fputs("<STYLE>.csvdb{font-family:sans-serif;width:100%;border-collapse:collapse}.csvdb th{border-bottom:1px solid #333}.csvdb td{padding:.5em}.csvdb tr:hover td{background-color:#f8f8f8}</STYLE>\n<TABLE CLASS=\"csvdb\">\n", f);
+        fputs(
+            "<STYLE>.csvdb{font-family:sans-serif;width:100%%;border-collapse:"
+            "collapse}.csvdb th{border-bottom:1px solid #333}.csvdb td{padding:"
+            ".5em}.csvdb tr:hover td{background-color:#f8f8f8}</STYLE>\n<TABLE "
+            "CLASS=\"csvdb\">\n",
+            f
+        );
     }
-    else if (format == OUTPUT_FORMAT_JSON_ARRAY || format == OUTPUT_FORMAT_JSON) {
+    else if (
+        format == OUTPUT_FORMAT_JSON_ARRAY
+        || format == OUTPUT_FORMAT_JSON
+    ) {
         fprintf(f, "[");
     }
     else if (format == OUTPUT_FORMAT_XML) {
@@ -296,17 +418,30 @@ void printPreamble (FILE *f, __attribute__((unused)) struct Table *table, __attr
     }
 }
 
-void printPostamble (FILE *f, __attribute__((unused)) struct Table *table, __attribute__((unused)) struct ColumnNode columns[], __attribute__((unused)) int column_count, __attribute__((unused)) int result_count, enum OutputOption flags) {
+void printPostamble (
+    FILE *f,
+    __attribute__((unused)) struct Table *table,
+    __attribute__((unused)) struct ColumnNode columns[],
+    __attribute__((unused)) int column_count,
+    __attribute__((unused)) int result_count,
+    enum OutputOption flags
+) {
 
     enum OutputOption format = flags & OUTPUT_MASK_FORMAT;
 
     if (format == OUTPUT_FORMAT_HTML) {
         fprintf(f, "</TABLE>\n");
     }
-    else if (format == OUTPUT_FORMAT_JSON_ARRAY || format == OUTPUT_FORMAT_JSON) {
+    else if (
+        format == OUTPUT_FORMAT_JSON_ARRAY
+        || format == OUTPUT_FORMAT_JSON
+    ) {
         fprintf(f, "]\n");
     }
-    else if (format == OUTPUT_FORMAT_SQL_INSERT || format == OUTPUT_FORMAT_SQL_VALUES) {
+    else if (
+        format == OUTPUT_FORMAT_SQL_INSERT
+        || format == OUTPUT_FORMAT_SQL_VALUES
+    ) {
         fprintf(f, "\n");
     }
     else if (format == OUTPUT_FORMAT_XML) {
@@ -314,7 +449,13 @@ void printPostamble (FILE *f, __attribute__((unused)) struct Table *table, __att
     }
 }
 
-static void printAllColumnValues (FILE *f, struct DB *db, const char *prefix, int rowid, enum OutputOption format) {
+static void printAllColumnValues (
+    FILE *f,
+    struct DB *db,
+    const char *prefix,
+    int rowid,
+    enum OutputOption format
+) {
     for (int k = 0; k < db->field_count; k++) {
         // Value
         char value[MAX_VALUE_LENGTH];
@@ -337,7 +478,12 @@ static void printAllColumnValues (FILE *f, struct DB *db, const char *prefix, in
     }
 }
 
-static void printAllHeaderNames (FILE *f, struct DB *db, const char *prefix, enum OutputOption format) {
+static void printAllHeaderNames (
+    FILE *f,
+    struct DB *db,
+    const char *prefix,
+    enum OutputOption format
+) {
     for (int k = 0; k < db->field_count; k++) {
         printHeaderName(f, format, prefix, getFieldName(db, k));
 
@@ -347,7 +493,12 @@ static void printAllHeaderNames (FILE *f, struct DB *db, const char *prefix, enu
     }
 }
 
-static void printHeaderName (FILE *f, enum OutputOption format, const char *prefix, const char *name) {
+static void printHeaderName (
+    FILE *f,
+    enum OutputOption format,
+    const char *prefix,
+    const char *name
+) {
 
     if (format == OUTPUT_FORMAT_TABLE) {
         if (prefix) {
@@ -390,7 +541,12 @@ static void printHeaderSeparator (FILE *f, enum OutputOption format) {
     }
 }
 
-static void printRecordStart (FILE *f, enum OutputOption format, int is_first, int is_single_col) {
+static void printRecordStart (
+    FILE *f,
+    enum OutputOption format,
+    int is_first,
+    int is_single_col
+) {
     if (format == OUTPUT_FORMAT_HTML) {
         if (is_first) {
             fprintf(f, "<TBODY>\n");
@@ -424,7 +580,13 @@ static void printRecordStart (FILE *f, enum OutputOption format, int is_first, i
 
 }
 
-static void printColumnValue (FILE *f, enum OutputOption format, const char *prefix, const char *name, const char *value) {
+static void printColumnValue (
+    FILE *f,
+    enum OutputOption format,
+    const char *prefix,
+    const char *name,
+    const char *value
+) {
     int value_is_numeric = is_numeric(value);
 
     if (format == OUTPUT_FORMAT_JSON) {
@@ -435,8 +597,8 @@ static void printColumnValue (FILE *f, enum OutputOption format, const char *pre
             fprintf(f, "\"%s\": ", name);
         }
     }
-    // For XML output a column alias of "_" means create a text node rather than an element
-    // Can be used to create a flat list of elements for example
+    // For XML output a column alias of "_" means create a text node rather than
+    // an element. Can be used to create a flat list of elements for example.
     else if (format == OUTPUT_FORMAT_XML && strcmp(name, "_")) {
         if (prefix) {
             fprintf(f, "<%s.%s>", prefix, name);
@@ -473,7 +635,10 @@ static void printColumnValue (FILE *f, enum OutputOption format, const char *pre
         string_fmt = "\"%s\"";
         num_fmt = "%ld";
     }
-    else if (format == OUTPUT_FORMAT_SQL_INSERT || format == OUTPUT_FORMAT_SQL_VALUES) {
+    else if (
+        format == OUTPUT_FORMAT_SQL_INSERT
+        || format == OUTPUT_FORMAT_SQL_VALUES
+    ) {
         string_fmt = "'%s'";
         num_fmt = "%ld";
     }
@@ -483,7 +648,10 @@ static void printColumnValue (FILE *f, enum OutputOption format, const char *pre
     }
 
     #ifdef JSON_NULL
-    if ((format == OUTPUT_FORMAT_JSON || format == OUTPUT_FORMAT_JSON_ARRAY) && strlen(value) == 0) {
+    if (
+        (format == OUTPUT_FORMAT_JSON || format == OUTPUT_FORMAT_JSON_ARRAY)
+        && strlen(value) == 0
+    ) {
         fprintf(f, "null");
     }
     else
@@ -508,7 +676,13 @@ static void printColumnValue (FILE *f, enum OutputOption format, const char *pre
     }
 }
 
-static void printColumnValueNumber (FILE *f, enum OutputOption format, const char *prefix, const char *name, long value) {
+static void printColumnValueNumber (
+    FILE *f,
+    enum OutputOption format,
+    const char *prefix,
+    const char *name,
+    long value
+) {
     char output[16];
     sprintf(output, "%ld", value);
     printColumnValue(f, format, prefix, name, output);
@@ -527,7 +701,10 @@ static void printColumnSeparator (FILE *f, enum OutputOption format) {
     else if (format == OUTPUT_FORMAT_JSON) {
         fprintf(f, ",");
     }
-    else if (format == OUTPUT_FORMAT_SQL_INSERT || format == OUTPUT_FORMAT_SQL_VALUES) {
+    else if (
+        format == OUTPUT_FORMAT_SQL_INSERT
+        || format == OUTPUT_FORMAT_SQL_VALUES
+    ) {
         fprintf(f, ",");
     }
     else if (format == OUTPUT_FORMAT_INFO_SEP) {
@@ -535,7 +712,12 @@ static void printColumnSeparator (FILE *f, enum OutputOption format) {
     }
 }
 
-static void printRecordEnd (FILE *f, enum OutputOption format, int is_last, int is_single_column) {
+static void printRecordEnd (
+    FILE *f,
+    enum OutputOption format,
+    int is_last,
+    int is_single_column
+) {
     if (format == OUTPUT_FORMAT_TAB) {
         fprintf(f, "\n");
     }
@@ -556,7 +738,10 @@ static void printRecordEnd (FILE *f, enum OutputOption format, int is_last, int 
     else if (format == OUTPUT_FORMAT_JSON) {
         fprintf(f, "}");
     }
-    else if (format == OUTPUT_FORMAT_SQL_INSERT || format == OUTPUT_FORMAT_SQL_VALUES) {
+    else if (
+        format == OUTPUT_FORMAT_SQL_INSERT
+        || format == OUTPUT_FORMAT_SQL_VALUES
+    ) {
         fprintf(f, ")");
     }
     else if (format == OUTPUT_FORMAT_XML) {
@@ -574,7 +759,10 @@ static void printRecordSeparator (FILE *f, enum OutputOption format) {
     else if (format == OUTPUT_FORMAT_JSON) {
         fprintf(f, ",");
     }
-    else if (format == OUTPUT_FORMAT_SQL_INSERT || format == OUTPUT_FORMAT_SQL_VALUES) {
+    else if (
+        format == OUTPUT_FORMAT_SQL_INSERT
+        || format == OUTPUT_FORMAT_SQL_VALUES
+    ) {
         fprintf(f, ",\n");
     }
     else if (format == OUTPUT_FORMAT_INFO_SEP) {

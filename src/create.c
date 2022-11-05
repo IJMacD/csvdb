@@ -16,7 +16,13 @@ static int create_view_query (const char * query);
 
 static int create_index_query (const char * query);
 
-static int create_index (const char *index_name, const char *table_name, const char (*index_field)[32], int field_count, int unique_flag);
+static int create_index (
+    const char *index_name,
+    const char *table_name,
+    const char (*index_field)[32],
+    int field_count,
+    int unique_flag
+);
 
 int create_query (const char *query) {
     size_t index = 0;
@@ -110,7 +116,12 @@ int create_index_query (const char * query) {
     while (query[index] != '\0') {
         skipWhitespace(query, &index);
 
-        getQuotedToken(query, &index, index_field[field_count++], MAX_TABLE_LENGTH);
+        getQuotedToken(
+            query,
+            &index,
+            index_field[field_count++],
+            MAX_TABLE_LENGTH
+        );
 
         skipWhitespace(query, &index);
 
@@ -135,7 +146,13 @@ int create_index_query (const char * query) {
     return 0;
 }
 
-static int create_index (const char *index_name, const char *table_name, const char (*index_field)[32], int field_count, int unique_flag) {
+static int create_index (
+    const char *index_name,
+    const char *table_name,
+    const char (*index_field)[32],
+    int field_count,
+    int unique_flag
+) {
     struct DB db;
     struct Table table = {0};
     struct Query q = {0};
@@ -177,7 +194,12 @@ static int create_index (const char *index_name, const char *table_name, const c
     columns[field_count].fields[0].index = FIELD_ROW_INDEX;
 
     char file_name[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12];
-    sprintf(file_name, "%s.%s.csv", index_name, unique_flag ? "unique" : "index");
+    sprintf(
+        file_name,
+        "%s.%s.csv",
+        index_name,
+        unique_flag ? "unique" : "index"
+    );
 
     FILE *f = fopen(file_name, "w");
 
@@ -201,7 +223,14 @@ static int create_index (const char *index_name, const char *table_name, const c
     sortQuick(&q, columns, field_count, order_directions, getRowList(row_list));
 
     // Output functions assume array of DBs
-    printHeaderLine(f, &table, 1, columns, field_count + 1, OUTPUT_FORMAT_COMMA);
+    printHeaderLine(
+        f,
+        &table,
+        1,
+        columns,
+        field_count + 1,
+        OUTPUT_FORMAT_COMMA
+    );
 
     char values[2][MAX_VALUE_LENGTH];
 
@@ -209,17 +238,36 @@ static int create_index (const char *index_name, const char *table_name, const c
         // Check for UNIQUE
         if (unique_flag) {
             int row_id = getRowID(getRowList(row_list), 0, i);
-            getRecordValue(&db, row_id, columns[0].fields[0].index, values[i % 2], MAX_VALUE_LENGTH);
+            getRecordValue(
+                &db,
+                row_id,
+                columns[0].fields[0].index,
+                values[i % 2],
+                MAX_VALUE_LENGTH
+            );
 
             if (i > 0 && strcmp(values[0], values[1]) == 0) {
-                fprintf(stderr, "UNIQUE constraint failed. Multiple values for: '%s'\n", values[0]);
+                fprintf(
+                    stderr,
+                    "UNIQUE constraint failed. Multiple values for: '%s'\n",
+                    values[0]
+                );
                 fclose(f);
                 remove(file_name);
                 exit(-1);
             }
         }
 
-        printResultLine(f, &table, 1, columns, field_count + 1, i, getRowList(row_list), OUTPUT_FORMAT_COMMA);
+        printResultLine(
+            f,
+            &table,
+            1,
+            columns,
+            field_count + 1,
+            i,
+            getRowList(row_list),
+            OUTPUT_FORMAT_COMMA
+        );
     }
 
     destroyRowList(row_list);

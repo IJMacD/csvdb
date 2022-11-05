@@ -21,14 +21,20 @@ void printUsage (const char* name) {
         "\t%1$s -h|--help\n"
         "\n"
         "Where <query> is one of:\n"
-        "\tSELECT <fields, ...> FROM <file> [JOIN <file>] [WHERE] [ORDER BY] [OFFSET FETCH FIRST]\n"
-        "\tSELECT <fields, ...> FROM (<query>) [JOIN <file>] [WHERE] [ORDER BY] [OFFSET FETCH FIRST]\n"
+        "\tSELECT <fields, ...> FROM <file> [JOIN <file>] [WHERE] [ORDER BY] "
+        "[OFFSET FETCH FIRST]\n"
+        "\tSELECT <fields, ...> FROM (<query>) [JOIN <file>] [WHERE] [ORDER BY]"
+        " [OFFSET FETCH FIRST]\n"
         "\tVALUES (value,...),...\n"
         "\n"
-        "\t<file> can be a CSV file which behaves as a table, or an SQL file which will behave as a view.\n"
-        "\tIf <file> is the string 'stdin' then an attempt will be made to read the table from stdin.\n"
-        "\tIf an exact filename match cannot be found, %1$s will try to append '.csv' and then '.sql'\n"
-        "\tand attempt to open the file as either a table or a view respectively.\n"
+        "\t<file> can be a CSV file which behaves as a table, or an SQL file "
+        "which will behave as a view.\n"
+        "\tIf <file> is the string 'stdin' then an attempt will be made to read"
+        " the table from stdin.\n"
+        "\tIf an exact filename match cannot be found, %1$s will try to append "
+        "'.csv' and then '.sql'\n"
+        "\tand attempt to open the file as either a table or a view "
+        "respectively.\n"
         "\n"
         "Options:\n"
         "\t[-E|--explain]\n"
@@ -85,7 +91,9 @@ int main (int argc, char * argv[]) {
         }
         else if (strcmp(arg, "-o") == 0) {
             if (argi + 1 >= argc) {
-                fprintf(stderr, "Expected output name to be specified after -o\n");
+                fprintf(stderr,
+                    "Expected output name to be specified after -o\n"
+                );
                 printUsage(argv[0]);
                 exit(-1);
             }
@@ -181,7 +189,11 @@ int main (int argc, char * argv[]) {
             output = fopen(output_name, "w");
 
             if (!output) {
-                fprintf(stderr, "Couldn't open file '%s' for writing\n", output_name);
+                fprintf(
+                    stderr,
+                    "Couldn't open file '%s' for writing\n",
+                    output_name
+                );
                 return -1;
             }
         }

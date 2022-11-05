@@ -5,15 +5,24 @@
 #include "db.h"
 #include "indices.h"
 
-int executeSourceDummyRow (__attribute__((unused)) struct Query *query, __attribute__((unused)) struct PlanStep *step, struct ResultSet *result_set) {
+int executeSourceDummyRow (
+    __attribute__((unused)) struct Query *query,
+    __attribute__((unused)) struct PlanStep *step,
+    struct ResultSet *result_set
+) {
     RowListIndex row_list = createRowList(0, 0);
     getRowList(row_list)->row_count = 1;
     pushRowList(result_set, row_list);
     return 0;
 }
 
-int executeSourcePK (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
-    int record_count = (step->limit > -1) ? step->limit : getRecordCount(query->tables[0].db);
+int executeSourcePK (
+    struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
+    int record_count = (step->limit > -1)
+        ? step->limit : getRecordCount(query->tables[0].db);
 
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);
@@ -21,74 +30,149 @@ int executeSourcePK (struct Query *query, struct PlanStep *step, struct ResultSe
     // First table
     struct Table * table = query->tables;
     struct Predicate *p = &step->predicates[0];
-    indexPrimarySeek(table->db, p->op, p->right.fields[0].text, getRowList(row_list), step->limit);
+
+    indexPrimarySeek(
+        table->db,
+        p->op,
+        p->right.fields[0].text,
+        getRowList(row_list),
+        step->limit
+    );
 
     return 0;
 }
 
-int executeSourceUnique (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
+int executeSourceUnique (
+    struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
     // First table
     struct Table * table = query->tables;
     struct Predicate *p = &step->predicates[0];
     struct DB index_db;
 
-    if (findIndex(&index_db, table->name, p->left.fields[0].text, INDEX_UNIQUE) == 0) {
-        fprintf(stderr, "Unable to find unique index on column '%s' on table '%s'\n", p->left.fields[0].text, table->name);
+    if (
+        findIndex(
+            &index_db,
+            table->name,
+            p->left.fields[0].text,
+            INDEX_UNIQUE
+        ) == 0
+    ) {
+        fprintf(
+            stderr,
+            "Unable to find unique index on column '%s' on table '%s'\n",
+            p->left.fields[0].text,
+            table->name
+        );
         return -1;
     }
 
-    int record_count = (step->limit > -1) ? step->limit : getRecordCount(&index_db);
+    int record_count = (step->limit > -1)
+        ? step->limit : getRecordCount(&index_db);
 
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);
 
-    // Find which column in the index table contains the rowids of the primary table
+    // Find which column in the index table contains the rowids of the primary
+    // table
     int rowid_col = getFieldIndex(&index_db, "rowid");
-    indexUniqueSeek(&index_db, rowid_col, p->op, p->right.fields[0].text, getRowList(row_list), step->limit);
+    indexUniqueSeek(
+        &index_db,
+        rowid_col,
+        p->op,
+        p->right.fields[0].text,
+        getRowList(row_list),
+        step->limit
+    );
 
     return 0;
 }
 
-int executeSourceIndexSeek (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
+int executeSourceIndexSeek (
+    struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
     // First table
     struct Table * table = query->tables;
     struct Predicate *p = &step->predicates[0];
     struct DB index_db;
 
-    if (findIndex(&index_db, table->name, p->left.fields[0].text, INDEX_ANY) == 0) {
-        fprintf(stderr, "Unable to find index on column '%s' on table '%s'\n", p->left.fields[0].text, table->name);
+    if (
+        findIndex(
+            &index_db,
+            table->name,
+            p->left.fields[0].text,
+            INDEX_ANY
+        ) == 0
+    ) {
+        fprintf(
+            stderr,
+            "Unable to find index on column '%s' on table '%s'\n",
+            p->left.fields[0].text,
+            table->name
+        );
         return -1;
     }
 
-    int record_count = (step->limit > -1) ? step->limit : getRecordCount(&index_db);
+    int record_count = (step->limit > -1)
+        ? step->limit : getRecordCount(&index_db);
 
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);
 
-    // Find which column in the index table contains the rowids of the primary table
+    // Find which column in the index table contains the rowids of the primary
+    // table
     int rowid_col = getFieldIndex(&index_db, "rowid");
-    indexSeek(&index_db, rowid_col, p->op, p->right.fields[0].text, getRowList(row_list), step->limit);
+    indexSeek(
+        &index_db,
+        rowid_col,
+        p->op,
+        p->right.fields[0].text,
+        getRowList(row_list),
+        step->limit
+    );
 
     return 0;
 }
 
-int executeSourceIndexScan (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
+int executeSourceIndexScan (
+    struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
     // First table
     struct Table * table = query->tables;
     struct Predicate *p = &step->predicates[0];
     struct DB index_db;
 
-    if (findIndex(&index_db, table->name, p->left.fields[0].text, INDEX_ANY) == 0) {
-        fprintf(stderr, "Unable to find index on column '%s' on table '%s'\n", p->left.fields[0].text, table->name);
+    if (
+        findIndex(
+            &index_db,
+            table->name,
+            p->left.fields[0].text,
+            INDEX_ANY
+        ) == 0
+    ) {
+        fprintf(
+            stderr,
+            "Unable to find index on column '%s' on table '%s'\n",
+            p->left.fields[0].text,
+            table->name
+        );
         return -1;
     }
 
-    int record_count = (step->limit > -1) ? step->limit : getRecordCount(&index_db);
+    int record_count = (step->limit > -1)
+    ? step->limit : getRecordCount(&index_db);
 
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);
 
-    // Find which column in the index table contains the rowids of the primary table
+    // Find which column in the index table contains the rowids of the primary
+    // table
     int rowid_col = getFieldIndex(&index_db, "rowid");
     indexScan(&index_db, rowid_col, getRowList(row_list), step->limit);
 
@@ -104,8 +188,13 @@ int executeSourceIndexScan (struct Query *query, struct PlanStep *step, struct R
  * @param result_set
  * @return int
  */
-int executeSourceTableFull (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
-    int record_count = (step->limit >= 0) ? step->limit : getRecordCount(query->tables[0].db);
+int executeSourceTableFull (
+    struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
+    int record_count = (step->limit >= 0)
+        ? step->limit : getRecordCount(query->tables[0].db);
 
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);
@@ -113,7 +202,13 @@ int executeSourceTableFull (struct Query *query, struct PlanStep *step, struct R
     // First table
     struct Table * table = query->tables;
 
-    fullTableAccess(table->db, getRowList(row_list), step->predicates, step->predicate_count, step->limit);
+    fullTableAccess(
+        table->db,
+        getRowList(row_list),
+        step->predicates,
+        step->predicate_count,
+        step->limit
+    );
 
     return 0;
 }
@@ -127,7 +222,11 @@ int executeSourceTableFull (struct Query *query, struct PlanStep *step, struct R
  * @param result_set
  * @return int
  */
-int executeSourceTableScan (struct Query *query, struct PlanStep *step, struct ResultSet *result_set) {
+int executeSourceTableScan (
+    struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
     // First table
     struct Table * table = query->tables;
 
@@ -136,12 +235,18 @@ int executeSourceTableScan (struct Query *query, struct PlanStep *step, struct R
 
     if (step->predicate_count > 0) {
         if (step->predicate_count > 1) {
-            fprintf(stderr, "Unable to do FULL TABLE SCAN with more than one predicate\n");
+            fprintf(
+                stderr,
+                "Unable to do FULL TABLE SCAN with more than one predicate\n"
+            );
             return -1;
         }
 
         if (step->predicates[0].right.fields[0].index != FIELD_CONSTANT) {
-            fprintf(stderr, "Cannot compare rowid against non-constant value\n");
+            fprintf(
+                stderr,
+                "Cannot compare rowid against non-constant value\n"
+            );
             return -1;
         }
 
@@ -169,7 +274,11 @@ int executeSourceTableScan (struct Query *query, struct PlanStep *step, struct R
             limit = -1;
         }
         else {
-            fprintf(stderr, "Unable to do FULL TABLE SCAN with operator %d\n", op);
+            fprintf(
+                stderr,
+                "Unable to do FULL TABLE SCAN with operator %d\n",
+                op
+            );
             return -1;
         }
     }

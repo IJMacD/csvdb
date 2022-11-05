@@ -19,7 +19,14 @@
  * @param max_length
  * @return int
  */
-int evaluateNode (struct Query * q, struct RowList *rowlist, int index, struct ColumnNode * column, char * output, __attribute__((unused)) int max_length) {
+int evaluateNode (
+    struct Query * q,
+    struct RowList *rowlist,
+    int index,
+    struct ColumnNode * column,
+    char * output,
+    __attribute__((unused)) int max_length
+) {
 
     char value1[MAX_VALUE_LENGTH];
     char value2[MAX_VALUE_LENGTH];
@@ -50,7 +57,13 @@ int evaluateNode (struct Query * q, struct RowList *rowlist, int index, struct C
  * @param result_index
  * @return int number of chars written
  */
-int evaluateField (char * output, struct Table *tables, struct RowList *rowlist, struct Field *field, int result_index) {
+int evaluateField (
+    char * output,
+    struct Table *tables,
+    struct RowList *rowlist,
+    struct Field *field,
+    int result_index
+) {
 
     if (field->index == FIELD_CONSTANT) {
         return evaluateConstantField(output, field);
@@ -64,7 +77,14 @@ int evaluateField (char * output, struct Table *tables, struct RowList *rowlist,
         }
 
         struct DB *db = tables[field->table_id].db;
-        return getRecordValue(db, row_id, field->index, output, MAX_VALUE_LENGTH) > 0;
+
+        return getRecordValue(
+            db,
+            row_id,
+            field->index,
+            output,
+            MAX_VALUE_LENGTH
+        ) > 0;
     }
 
     output[0] = '\0';
@@ -82,7 +102,11 @@ int evaluateField (char * output, struct Table *tables, struct RowList *rowlist,
 int evaluateConstantField (char * value, struct Field * field) {
 
     if (field->index != FIELD_CONSTANT) {
-        fprintf(stderr, "Tried to evaluate non-contant value as constant: %s\n", field->text);
+        fprintf(
+            stderr,
+            "Tried to evaluate non-contant value as constant: %s\n",
+            field->text
+        );
         exit(-1);
     }
 

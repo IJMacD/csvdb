@@ -61,7 +61,10 @@ int dir_getFieldIndex (struct DB *db, const char *field) {
     return -1;
 }
 
-char *dir_getFieldName (__attribute__((unused)) struct DB *db, int field_index) {
+char *dir_getFieldName (
+    __attribute__((unused)) struct DB *db,
+    int field_index
+) {
     return field_names[field_index];
 }
 
@@ -69,7 +72,13 @@ int dir_getRecordCount (struct DB *db) {
     return db->_record_count;
 }
 
-int dir_getRecordValue (struct DB *db, int record_index, int field_index, char *value, __attribute__((unused)) size_t value_max_length) {
+int dir_getRecordValue (
+    struct DB *db,
+    int record_index,
+    int field_index,
+    char *value,
+    __attribute__((unused)) size_t value_max_length
+) {
 
     struct dirent *dp = getDirectoryEntry(db, record_index);
     char path[MAX_TABLE_LENGTH * 2];
@@ -136,7 +145,12 @@ int dir_getRecordValue (struct DB *db, int record_index, int field_index, char *
 }
 
 // All queries go through fullTableScan
-int dir_findIndex(__attribute__((unused)) struct DB *db, __attribute__((unused)) const char *table_name, __attribute__((unused)) const char *index_name, __attribute__((unused)) int index_type_flags) {
+int dir_findIndex(
+    __attribute__((unused)) struct DB *db,
+    __attribute__((unused)) const char *table_name,
+    __attribute__((unused)) const char *index_name,
+    __attribute__((unused)) int index_type_flags
+) {
     return 0;
 }
 
@@ -177,7 +191,8 @@ static int makeDB(struct DB *db, const char * path) {
 }
 
 static struct dirent * getDirectoryEntry (struct DB *db, int record_index) {
-    return (struct dirent *)&db->data[MAX_TABLE_LENGTH + record_index * sizeof(struct dirent)];
+    return (struct dirent *)&db->data[MAX_TABLE_LENGTH
+        + record_index * sizeof(struct dirent)];
 }
 
 static int unixToJulian (long time) {

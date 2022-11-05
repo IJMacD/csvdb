@@ -19,7 +19,13 @@ static int partition (struct SortContext *context, int lo, int hi);
 static void swap (struct SortContext *context, int index_a, int index_b);
 static int compare (struct SortContext *context, int index_a, int index_b);
 
-void sortQuick (struct Query *q, struct ColumnNode *columns, int column_count, enum Order *sort_directions, struct RowList *row_list) {
+void sortQuick (
+    struct Query *q,
+    struct ColumnNode *columns,
+    int column_count,
+    enum Order *sort_directions,
+    struct RowList *row_list
+) {
     struct SortContext context = {
         .query = q,
         .columns = columns,
@@ -73,8 +79,22 @@ static int compare (struct SortContext *context, int index_a, int index_b) {
     int result;
 
     for (int i = 0; i < context->column_count; i++) {
-        evaluateNode(context->query, context->row_list, index_a, &context->columns[i], value_a, MAX_VALUE_LENGTH);
-        evaluateNode(context->query, context->row_list, index_b, &context->columns[i], value_b, MAX_VALUE_LENGTH);
+        evaluateNode(
+            context->query,
+            context->row_list,
+            index_a,
+            &context->columns[i],
+            value_a,
+            MAX_VALUE_LENGTH
+        );
+        evaluateNode(
+            context->query,
+            context->row_list,
+            index_b,
+            &context->columns[i],
+            value_b,
+            MAX_VALUE_LENGTH
+        );
 
         if (is_numeric(value_a) && is_numeric(value_b)) {
             result = atol(value_a) - atol(value_b);

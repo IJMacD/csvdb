@@ -95,7 +95,12 @@ int find_matching_parenthesis (const char *string) {
     int depth = 1;
 
     if (string[offset] != '(') {
-        fprintf(stderr, "find_matching_parenthesis was expecting '(' but actually got '%c'\n", string[offset]);
+        fprintf(
+            stderr,
+            "find_matching_parenthesis was expecting '(' but actually got '%c'"
+            "\n",
+            string[offset]
+        );
         exit(-1);
     }
 

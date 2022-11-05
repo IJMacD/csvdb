@@ -114,7 +114,13 @@ int csvMem_getRecordCount (struct DB *db) {
 /**
  * Returns the number of bytes read, or -1 on error
  */
-int csvMem_getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length) {
+int csvMem_getRecordValue (
+    struct DB *db,
+    int record_index,
+    int field_index,
+    char *value,
+    size_t value_max_length
+) {
     if (db->_record_count == -1) {
         indexLines(db);
     }
@@ -146,7 +152,17 @@ int csvMem_getRecordValue (struct DB *db, int record_index, int field_index, cha
 
             // Have we found the end of a quoted value?
             // We've found the end of a record
-            if (db->data[i] == '"' || (!quoted_flag && (db->data[i] == ',' || db->data[i] == '\n' || db->data[i] == '\r'))) {
+            if (
+                db->data[i] == '"'
+                || (
+                    !quoted_flag
+                    && (
+                        db->data[i] == ','
+                        || db->data[i] == '\n'
+                        || db->data[i] == '\r'
+                    )
+                )
+            ) {
 
                 // There might be quotes in the middle of a values, who cares?
                 // Let's just ignore that and pretend it won't happen
@@ -169,7 +185,8 @@ int csvMem_getRecordValue (struct DB *db, int record_index, int field_index, cha
                 current_field_index++;
             }
 
-            // If we got to a newline and we're not in the correct field then the field was not found
+            // If we got to a newline and we're not in the correct field then
+            // the field was not found.
             if (db->data[i] == '\n') {
                 return -1;
             }
@@ -226,9 +243,18 @@ static int indexLines (struct DB *db) {
 
         if (count == max_size) {
             max_size *= 2;
-            void *ptr = realloc(db->line_indices, sizeof(*db->line_indices) * max_size);
+
+            void *ptr = realloc(
+                db->line_indices,
+                sizeof(*db->line_indices) * max_size
+            );
+
             if (ptr == NULL) {
-                fprintf(stderr, "Unable to allocate memory for %d line_indices\n", max_size);
+                fprintf(
+                    stderr,
+                    "Unable to allocate memory for %d line_indices\n",
+                    max_size
+                );
                 exit(-1);
             }
             db->line_indices = ptr;
@@ -251,7 +277,12 @@ static int indexLines (struct DB *db) {
 
 
 // No Indexes on memory table
-int csvMem_findIndex(__attribute__((unused)) struct DB *db, __attribute__((unused)) const char *table_name, __attribute__((unused)) const char *index_name, __attribute__((unused)) int index_type_flags) {
+int csvMem_findIndex(
+    __attribute__((unused)) struct DB *db,
+    __attribute__((unused)) const char *table_name,
+    __attribute__((unused)) const char *index_name,
+    __attribute__((unused)) int index_type_flags
+) {
     return 0;
 }
 
@@ -318,7 +349,8 @@ void csvMem_fromValues(struct DB *db, const char *input, int length) {
 
     // Headers
     db->line_indices[0] = 0;
-    const char headers[] = "col1\0col2\0col3\0col4\0col5\0col6\0col7\0col8\0col9\0col10\n";
+    const char headers[]
+        = "col1\0col2\0col3\0col4\0col5\0col6\0col7\0col8\0col9\0col10\n";
     memcpy(out_ptr, headers, sizeof(headers));
     out_ptr += sizeof(headers);
 
@@ -330,7 +362,11 @@ void csvMem_fromValues(struct DB *db, const char *input, int length) {
     while(*in_ptr != '\0' && in_ptr != end_ptr) {
 
         if (*in_ptr != '(') {
-            fprintf(stderr, "VALUES expected to start with '('. Found: %c\n", *in_ptr);
+            fprintf(
+                stderr,
+                "VALUES expected to start with '('. Found: %c\n",
+                *in_ptr
+            );
             exit(-1);
         }
 
@@ -358,7 +394,11 @@ void csvMem_fromValues(struct DB *db, const char *input, int length) {
             // NOTE: db->fields is the start of the allocation
             void *ptr = realloc(db->fields, max_data_size);
             if (ptr == NULL) {
-                fprintf(stderr, "Unable to allocate memory: %ld\n", max_data_size);
+                fprintf(
+                    stderr,
+                    "Unable to allocate memory: %ld\n",
+                    max_data_size
+                );
                 exit(-1);
             }
             db->fields = ptr;

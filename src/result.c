@@ -15,17 +15,30 @@ void writeRowID (struct RowList * row_list, int join_id, int index, int value) {
 
 void appendRowID (struct RowList * row_list, int value) {
     if (row_list->join_count != 1) {
-        fprintf(stderr, "Cannot append 1 row ID to list with %d joins\n", row_list->join_count);
+        fprintf(
+            stderr,
+            "Cannot append 1 row ID to list with %d joins\n",
+            row_list->join_count
+        );
         exit(-1);
     }
     row_list->row_ids[row_list->row_count * row_list->join_count] = value;
     row_list->row_count++;
-    // fprintf(stderr, "Append row %d @ idx %d\n", row_list->row_count, row_list->row_count * row_list->join_count);
+    // fprintf(
+    //     stderr,
+    //     "Append row %d @ idx %d\n",
+    //     row_list->row_count,
+    //     row_list->row_count * row_list->join_count
+    // );
 }
 
 void appendRowID2 (struct RowList * row_list, int value1, int value2) {
     if (row_list->join_count != 2) {
-        fprintf(stderr, "Cannot append 2 row IDs to list with %d join(s)\n", row_list->join_count);
+        fprintf(
+            stderr,
+            "Cannot append 2 row IDs to list with %d join(s)\n",
+            row_list->join_count
+        );
         exit(-1);
     }
     row_list->row_ids[row_list->row_count * row_list->join_count + 0] = value1;
@@ -35,7 +48,11 @@ void appendRowID2 (struct RowList * row_list, int value1, int value2) {
 
 void appendRowID3 (struct RowList * row_list, int value1, int value2, int value3) {
     if (row_list->join_count != 3) {
-        fprintf(stderr, "Cannot append 3 row IDs to list with %d join(s)\n", row_list->join_count);
+        fprintf(
+            stderr,
+            "Cannot append 3 row IDs to list with %d join(s)\n",
+            row_list->join_count
+        );
         exit(-1);
     }
     row_list->row_ids[row_list->row_count * row_list->join_count + 0] = value1;
@@ -53,10 +70,20 @@ void appendRowID3 (struct RowList * row_list, int value1, int value2, int value3
  * @param src_index
  * @param value
  */
-void appendJoinedRowID (struct RowList * dest_list, struct RowList * src_list, int src_index, int value) {
+void appendJoinedRowID (
+    struct RowList * dest_list,
+    struct RowList * src_list,
+    int src_index,
+    int value
+) {
     if (dest_list->join_count != src_list->join_count + 1) {
-        fprintf(stderr, "Cannot append joined rowid from list with size %d to size %d\n", src_list->join_count, dest_list->join_count);
-        exit(-1);;
+        fprintf(
+            stderr,
+            "Cannot append joined rowid from list with size %d to size %d\n",
+            src_list->join_count,
+            dest_list->join_count
+        );
+        exit(-1);
     }
 
     int dest_index = dest_list->row_count;
@@ -71,20 +98,36 @@ void appendJoinedRowID (struct RowList * dest_list, struct RowList * src_list, i
 }
 
 /**
- * @brief Copy all N rowids in a result row from src_list and append to dest_list
+ * @brief Copy all N rowids in a result row from src_list and append to
+ * dest_list
  *
  * @param dest_list
  * @param src_list
  * @param src_index
  */
-void copyResultRow (struct RowList * dest_list, struct RowList * src_list, int src_index) {
+void copyResultRow (
+    struct RowList * dest_list,
+    struct RowList * src_list,
+    int src_index
+) {
     if (dest_list->join_count != src_list->join_count) {
-        fprintf(stderr, "Cannot copy source result row to destination with different size (%d vs %d)\n", src_list->join_count, dest_list->join_count);
+        fprintf(
+            stderr,
+            "Cannot copy source result row to destination with different size "
+            "(%d vs %d)\n",
+            src_list->join_count,
+            dest_list->join_count
+        );
         exit(-1);
     }
 
     for(int i = 0; i < src_list->join_count; i++) {
-        writeRowID(dest_list, i, dest_list->row_count, getRowID(src_list, i, src_index));
+        writeRowID(
+            dest_list,
+            i,
+            dest_list->row_count,
+            getRowID(src_list, i, src_index)
+        );
     }
 
     dest_list->row_count++;
@@ -130,7 +173,13 @@ void reverseRowList (struct RowList * row_list, int limit) {
  */
 void copyRowList (struct RowList *dest_list, struct RowList *src_list) {
     if (src_list->join_count != dest_list->join_count) {
-        fprintf(stderr, "copyRowList src_list and dest_list have different join counts (%d vs %d)\n", src_list->join_count, dest_list->join_count);
+        fprintf(
+            stderr,
+            "copyRowList src_list and dest_list have different join counts (%d "
+            "vs %d)\n",
+            src_list->join_count,
+            dest_list->join_count
+        );
         exit(-1);
     }
 
@@ -200,7 +249,11 @@ RowListIndex createRowList (int join_count, int max_rows) {
         int size = sizeof(*row_list_pool) * max_size;
         void *ptr = realloc(row_list_pool, size);
         if (ptr == NULL) {
-            fprintf(stderr, "Unable to allocate %d bytes for a RowList\n", size);
+            fprintf(
+                stderr,
+                "Unable to allocate %d bytes for a RowList\n",
+                size
+            );
             exit(-1);
         }
 
@@ -237,7 +290,13 @@ RowListIndex createRowList (int join_count, int max_rows) {
         exit(-1);
     }
 
-    // fprintf(stderr, "Created RowList %d. Pool use: %d/%d\n", pool_count - 1, pool_count, max_size);
+    // fprintf(
+    //     stderr,
+    //     "Created RowList %d. Pool use: %d/%d\n",
+    //     pool_count - 1,
+    //     pool_count,
+    //     max_size
+    // );
 
     return pool_count - 1;
 }
@@ -256,7 +315,12 @@ void destroyRowList (RowListIndex row_list) {
         pool_count--;
     }
 
-    // fprintf(stderr, "Destroyed RowList %d. Pool use: %d\n", row_list, pool_count);
+    // fprintf(
+    //     stderr,
+    //     "Destroyed RowList %d. Pool use: %d\n",
+    //     row_list,
+    //     pool_count
+    // );
 }
 
 void pushRowList(struct ResultSet *result_set, RowListIndex row_list_index) {
@@ -264,7 +328,11 @@ void pushRowList(struct ResultSet *result_set, RowListIndex row_list_index) {
         int size = result_set->size * 2;
         void *ptr = realloc(result_set->row_list_indices, sizeof(int) * size);
         if (ptr == NULL) {
-            fprintf(stderr, "Unable to reallocate memory for RowList. New size: %d\n", size);
+            fprintf(
+                stderr,
+                "Unable to reallocate memory for RowList. New size: %d\n",
+                size
+            );
             exit(-1);
         }
         result_set->row_list_indices = ptr;
@@ -272,7 +340,12 @@ void pushRowList(struct ResultSet *result_set, RowListIndex row_list_index) {
     }
 
     // fprintf(stderr, "pushRowList()\n");
-    // fprintf(stderr, "result_set: { row_lists @ %p, count = %d }\n", result_set->row_lists, result_set->count);
+    // fprintf(
+    //     stderr,
+    //     "result_set: { row_lists @ %p, count = %d }\n",
+    //     result_set->row_lists,
+    //     result_set->count
+    // );
     result_set->row_list_indices[result_set->count++] = row_list_index;
 }
 

@@ -68,7 +68,8 @@ void csvMmap_closeDB (struct DB *db) {
         // Rough size, and rough start location.
         // Exact values aren't required.
         // We'll do our best, especially if we've only done a partial index
-        int final_index = db->_record_count < 0 ? -db->_record_count - 1 : db->_record_count;
+        int final_index = db->_record_count < 0
+            ? -db->_record_count - 1 : db->_record_count;
         int file_size = db->line_indices[final_index];
         munmap(db->data, file_size);
 
@@ -124,7 +125,13 @@ int csvMmap_getRecordCount (struct DB *db) {
 /**
  * Returns the number of bytes read, or -1 on error
  */
-int csvMmap_getRecordValue (struct DB *db, int rowid, int field_index, char *value, size_t value_max_length) {
+int csvMmap_getRecordValue (
+    struct DB *db,
+    int rowid,
+    int field_index,
+    char *value,
+    size_t value_max_length
+) {
     if (rowid < 0) {
         return -1;
     }
@@ -164,7 +171,17 @@ int csvMmap_getRecordValue (struct DB *db, int rowid, int field_index, char *val
 
             // Have we found the end of a quoted value?
             // We've found the end of a record
-            if (db->data[i] == '"' || (!quoted_flag && (db->data[i] == ',' || db->data[i] == '\n' || db->data[i] == '\r'))) {
+            if (
+                db->data[i] == '"'
+                || (
+                    !quoted_flag
+                    && (
+                        db->data[i] == ','
+                        || db->data[i] == '\n'
+                        || db->data[i] == '\r'
+                    )
+                )
+            ) {
 
                 // There might be quotes in the middle of a values, who cares?
                 // Let's just ignore that and pretend it won't happen
@@ -187,7 +204,8 @@ int csvMmap_getRecordValue (struct DB *db, int rowid, int field_index, char *val
                 current_field_index++;
             }
 
-            // If we got to a newline and we're not in the correct field then the field was not found
+            // If we got to a newline and we're not in the correct field then
+            // the field was not found
             if (db->data[i] == '\n') {
                 return -1;
             }
@@ -225,7 +243,11 @@ static void prepareHeaders (struct DB *db) {
         i++;
 
         if (i >= MAX_TABLE_LENGTH) {
-            fprintf(stderr, "Unable to process header longer than %d bytes\n", i);
+            fprintf(
+                stderr,
+                "Unable to process header longer than %d bytes\n",
+                i
+            );
             exit(-1);
         }
     }
@@ -283,9 +305,18 @@ static int indexLines (struct DB *db, int max_rows) {
             if (count == *max_size) {
                 *max_size *= 2;
                 // max_size is the real location of the allocation
-                void *ptr = realloc(max_size, sizeof(*db->line_indices) * *max_size);
+
+                void *ptr = realloc(
+                    max_size,
+                    sizeof(*db->line_indices) * *max_size
+                );
+
                 if (ptr == NULL) {
-                    fprintf(stderr, "Unable to allocate memory for %d line_indices\n", *max_size);
+                    fprintf(
+                        stderr,
+                        "Unable to allocate memory for %d line_indices\n",
+                        *max_size
+                    );
                     exit(-1);
                 }
                 // save new memory addresses
@@ -296,8 +327,8 @@ static int indexLines (struct DB *db, int max_rows) {
             if (max_rows > -1 && count >= max_rows) {
                 count--;
 
-                // Save count as negative number to indicate full scan has not yet
-                // taken place.
+                // Save count as negative number to indicate full scan has not
+                // yet taken place.
                 db->_record_count = -count - 1;
 
                 return count;

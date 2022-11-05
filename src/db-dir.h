@@ -13,7 +13,18 @@ char *dir_getFieldName (struct DB *db, int field_index);
 
 int dir_getRecordCount (struct DB *db);
 
-int dir_getRecordValue (struct DB *db, int record_index, int field_index, char *value, size_t value_max_length);
+int dir_getRecordValue (
+    struct DB *db,
+    int record_index,
+    int field_index,
+    char *value,
+    size_t value_max_length
+);
 
-int dir_findIndex(struct DB *db, const char *table_name, const char *index_name, int index_type_flags);
+int dir_findIndex(
+    struct DB *db,
+    const char *table_name,
+    const char *index_name,
+    int index_type_flags
+);
 

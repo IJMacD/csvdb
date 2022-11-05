@@ -9,7 +9,12 @@ void debugRowList (struct RowList * list, int verbosity) {
         return;
     }
 
-    fprintf(stderr, "RowList (%d joins x %d rows)\n", list->join_count, list->row_count);
+    fprintf(
+        stderr,
+        "RowList (%d joins x %d rows)\n",
+        list->join_count,
+        list->row_count
+    );
 
     if (verbosity > 1) {
         for (int i = 0; i < list->row_count; i++) {
@@ -26,7 +31,11 @@ void debugRowList (struct RowList * list, int verbosity) {
 }
 
 void debugTree (struct TreeNode * node) {
-    printf("{ \"key\": %d, \"value\": \"%s\", \"left\": ", node->key, node->value);
+    printf(
+        "{ \"key\": %d, \"value\": \"%s\", \"left\": ",
+        node->key,
+        node->value
+    );
 
     if (node->left != NULL) {
         debugTree(node->left);

@@ -9,19 +9,17 @@
 #include "util.h"
 #include "debug.h"
 
-static void sort_walkTree (struct TreeNode *node, struct RowList * source_list, struct RowList * target_list);
+static void sort_walkTree (
+    struct TreeNode *node,
+    struct RowList * source_list,
+    struct RowList * target_list
+);
 
-static void sort_walkTreeBackwards (struct TreeNode *node, struct RowList * source_list, struct RowList * target_list);
-
-/**
- * @param db
- * @param sort_fields
- * @param sort_count
- * @param source_list
- * @param target_list
- */
-// To implement better sort later
-// void sortResultRows (struct DB *db, struct SortField *sort_fields, int sort_count, struct RowList * source_list, struct RowList * target_list) {
+static void sort_walkTreeBackwards (
+    struct TreeNode *node,
+    struct RowList * source_list,
+    struct RowList * target_list
+);
 
 /**
  * @brief source_list must be different from target_list
@@ -33,7 +31,13 @@ static void sort_walkTreeBackwards (struct TreeNode *node, struct RowList * sour
  * @param source_list
  * @param target_list
  */
-void sortResultRows (struct Query *q, struct ColumnNode *column, int direction, struct RowList * source_list, struct RowList * target_list) {
+void sortResultRows (
+    struct Query *q,
+    struct ColumnNode *column,
+    int direction,
+    struct RowList * source_list,
+    struct RowList * target_list
+) {
     if (source_list->row_count <= 0) {
         return;
     }
@@ -47,7 +51,14 @@ void sortResultRows (struct Query *q, struct ColumnNode *column, int direction, 
         struct TreeNode *node = &pool[i];
         node->key = i;
 
-        evaluateNode(q, source_list, i, column, node->value, sizeof(node->value));
+        evaluateNode(
+            q,
+            source_list,
+            i,
+            column,
+            node->value,
+            sizeof(node->value)
+        );
 
         // First value determines whether we're in numeric mode or not
         if (i == 0) {
@@ -102,7 +113,14 @@ void sortResultRows (struct Query *q, struct ColumnNode *column, int direction, 
  * @param source_list
  * @param target_list
  */
-void sortResultRowsMultiple (struct Query *q, struct ColumnNode *columns, int column_count, int *sort_directions, RowListIndex source_list_id, RowListIndex target_list_id) {
+void sortResultRowsMultiple (
+    struct Query *q,
+    struct ColumnNode *columns,
+    int column_count,
+    int *sort_directions,
+    RowListIndex source_list_id,
+    RowListIndex target_list_id
+) {
     struct RowList *source_list = getRowList(source_list_id);
 
     struct TreeNode *pool = malloc(sizeof (*pool) * source_list->row_count);
@@ -116,7 +134,14 @@ void sortResultRowsMultiple (struct Query *q, struct ColumnNode *columns, int co
         char value[MAX_VALUE_LENGTH];
 
         for (int j = 0; j < column_count; j++) {
-            int count = evaluateNode(q, source_list, i, &columns[j], value, sizeof(value));
+            int count = evaluateNode(
+                q,
+                source_list,
+                i,
+                &columns[j],
+                value,
+                sizeof(value)
+            );
 
             // Numeric values need to be fixed width for comparison.
             // After testing it make no difference whether numeric values are
@@ -161,7 +186,11 @@ void sortResultRowsMultiple (struct Query *q, struct ColumnNode *columns, int co
     free(pool);
 }
 
-static void sort_walkTree (struct TreeNode *node, struct RowList * source_list, struct RowList * target_list) {
+static void sort_walkTree (
+    struct TreeNode *node,
+    struct RowList * source_list,
+    struct RowList * target_list
+) {
 
     if (node->left != NULL) {
         sort_walkTree(node->left, source_list, target_list);
@@ -176,7 +205,11 @@ static void sort_walkTree (struct TreeNode *node, struct RowList * source_list, 
     }
 }
 
-static void sort_walkTreeBackwards (struct TreeNode *node, struct RowList * source_list, struct RowList * target_list) {
+static void sort_walkTreeBackwards (
+    struct TreeNode *node,
+    struct RowList * source_list,
+    struct RowList * target_list
+) {
     if (node->right != NULL) {
         sort_walkTreeBackwards(node->right, source_list, target_list);
     }
