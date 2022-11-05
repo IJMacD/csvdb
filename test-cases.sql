@@ -90,6 +90,6 @@ SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' AND score > 95
 -- Simple arithmetic operators
 SELECT 9 * 5;
 FROM test SELECT 21 - score FETCH FIRST 5 ROWS ONLY;
-FROM ranks SELECT value * 4 FETCH FIRST 5 ROWS ONLY;
+FROM ranks SELECT value*4 FETCH FIRST 5 ROWS ONLY;
 FROM ranks SELECT 1000 / value ORDER BY rowid DESC FETCH FIRST 5 ROWS ONLY;
 FROM test SELECT score % 4 AS mod, COUNT(*) WHERE rowid < 100000 GROUP BY mod FETCH FIRST 5 ROWS ONLY;

@@ -786,6 +786,17 @@ static int parseColumn (
     // First field
     struct Field * field = &column->fields[0];
 
+    if (query[*index] == '*') {
+        field->index = FIELD_STAR;
+
+        // '*' will default to ALL tables
+        field->table_id = -1;
+
+        (*index)++;
+
+        return flags;
+    }
+
     int quoted_flag = getQuotedToken(query, index, value, MAX_FIELD_LENGTH);
 
     strcpy(column->alias, value);
@@ -797,15 +808,6 @@ static int parseColumn (
         checkSimpleArithmeticOperator(query, index, column);
 
         // Whether we found a simple operator or not, we're done here
-
-        return flags;
-    }
-
-    if (strcmp(value, "*") == 0) {
-        field->index = FIELD_STAR;
-
-        // '*' will default to ALL tables
-        field->table_id = -1;
 
         return flags;
     }
@@ -1063,28 +1065,37 @@ static int parseFunctionParams (
 ) {
     struct Field *field1 = column->fields;
 
-    getQuotedToken(query, index, field1->text, MAX_FIELD_LENGTH);
+    // getQuotedToken won't get '*' so we'll check manually
+    if (query[*index] == '*') {
+        field1->text[0] = '*';
+        field1->index = FIELD_STAR;
 
-    if (checkConstantField(field1) < 0) {
-        return -1;
-    }
-
-    skipWhitespace(query, index);
-
-    if (query[*index] == ',') {
         (*index)++;
+    }
+    else {
+        getQuotedToken(query, index, field1->text, MAX_FIELD_LENGTH);
 
-        skipWhitespace(query, index);
-
-        struct Field *field2 = column->fields + 1;
-
-        getQuotedToken(query, index, field2->text, MAX_FIELD_LENGTH);
-
-        if (checkConstantField(field2) < 0) {
+        if (checkConstantField(field1) < 0) {
             return -1;
         }
 
         skipWhitespace(query, index);
+
+        if (query[*index] == ',') {
+            (*index)++;
+
+            skipWhitespace(query, index);
+
+            struct Field *field2 = column->fields + 1;
+
+            getQuotedToken(query, index, field2->text, MAX_FIELD_LENGTH);
+
+            if (checkConstantField(field2) < 0) {
+                return -1;
+            }
+
+            skipWhitespace(query, index);
+        }
     }
 
     if (query[*index] != ')') {
