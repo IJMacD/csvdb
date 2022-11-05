@@ -23,6 +23,9 @@ SELECT id, name, birth_date FROM test WHERE PK(id) < 51;
 SELECT id, name, birth_date FROM test WHERE 51 >= PK(id);
 -- Test EXTRACT
 SELECT birth_date, EXTRACT(YEAR FROM birth_date), EXTRACT(MONTH FROM birth_date), EXTRACT(DAY FROM birth_date), EXTRACT(YEARDAY FROM birth_date) FROM test FETCH FIRST ROW ONLY;
+-- Test Functions
+SELECT RANDOM() AS "Your lucky number"
+SELECT LEFT('Hello there', 4), RIGHT('shampoo', 3), TO_HEX(66), CHR(128169),
 -- Test COUNT(*)
 SELECT COUNT(*) FROM test;
 SELECT COUNT(*) FROM test WHERE name = 'Walter KELLY';

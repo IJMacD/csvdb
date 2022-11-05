@@ -8,6 +8,14 @@
 #include "result.h"
 #include "db.h"
 
+/**
+ * @brief
+ *
+ * @param output
+ * @param function
+ * @param values
+ * @return int number of bytes written
+ */
 int evaluateFunction(
     char * output,
     int function,
@@ -15,54 +23,57 @@ int evaluateFunction(
     __attribute__((unused)) int value_count
 ) {
 
-    // NULL output from VFS
+    // Random takes 0 parameters
+    if (function == FUNC_RANDOM) {
+        return sprintf(output, "%d", rand());
+    }
+
+    // All other functions take at least 1 parameter. If the field is NULL then
+    // the whole function evaluates to NULL.
     if (values[0][0] == 0) {
         output[0] = '\0';
         return 0;
     }
 
     if (function == FUNC_UNITY) {
-        sprintf(output, "%s", values[0]);
+        return sprintf(output, "%s", values[0]);
     }
     else if (function == FUNC_CHR) {
         int codepoint = atoi(values[0]);
         writeUTF8(values[0], codepoint);
 
-        sprintf(output, "%s", values[0]);
+        return sprintf(output, "%s", values[0]);
     }
     else if (function == FUNC_TO_HEX) {
         int val = atoi(values[0]);
 
         if (val < 0) {
-            sprintf(output, "-0x%x", abs(val));
+            return sprintf(output, "-0x%x", abs(val));
         } else if (val < 0x100) {
-            sprintf(output, "0x%02x", val);
+            return sprintf(output, "0x%02x", val);
         } else if (val < 0x10000) {
-            sprintf(output, "0x%04x", val);
+            return sprintf(output, "0x%04x", val);
         } else {
-            sprintf(output, "0x%x", val);
+            return sprintf(output, "0x%x", val);
         }
-    }
-    else if (function == FUNC_RANDOM) {
-        sprintf(output, "%d", rand());
     }
     else if (function == FUNC_ADD) {
         long val1 = atol(values[0]);
         long val2 = atol(values[1]);
 
-        sprintf(output, "%ld", val1 + val2);
+        return sprintf(output, "%ld", val1 + val2);
     }
     else if (function == FUNC_SUB) {
         long val1 = atol(values[0]);
         long val2 = atol(values[1]);
 
-        sprintf(output, "%ld", val1 - val2);
+        return sprintf(output, "%ld", val1 - val2);
     }
     else if (function == FUNC_MUL) {
         long val1 = atol(values[0]);
         long val2 = atol(values[1]);
 
-        sprintf(output, "%ld", val1 * val2);
+        return sprintf(output, "%ld", val1 * val2);
     }
     else if (function == FUNC_DIV) {
         long val1 = atol(values[0]);
@@ -73,7 +84,7 @@ int evaluateFunction(
             return 0;
         }
 
-        sprintf(output, "%ld", val1 / val2);
+        return sprintf(output, "%ld", val1 / val2);
     }
     else if (function == FUNC_MOD) {
         long val1 = atol(values[0]);
@@ -84,7 +95,7 @@ int evaluateFunction(
             return 0;
         }
 
-        sprintf(output, "%ld", val1 % val2);
+        return sprintf(output, "%ld", val1 % val2);
     }
     else if (function == FUNC_POW) {
         long val1 = atol(values[0]);
@@ -100,12 +111,12 @@ int evaluateFunction(
             prod *= val1;
         }
 
-        sprintf(output, "%ld", prod);
+        return sprintf(output, "%ld", prod);
     }
     else if ((function & MASK_FUNC_FAMILY) == FUNC_FAM_STRING) {
         if (function == FUNC_LENGTH) {
             int len = strlen(values[0]);
-            sprintf(output, "%d", len);
+            return sprintf(output, "%d", len);
         }
         else if (function == FUNC_LEFT) {
             int count = atoi(values[1]);
@@ -114,8 +125,9 @@ int evaluateFunction(
             if (len > count) {
                 strncpy(output, values[0], count);
                 output[count] = '\0';
+                return count;
             } else {
-                sprintf(output, "%s", values[0]);
+                return sprintf(output, "%s", values[0]);
             }
         }
         else if (function == FUNC_RIGHT) {
@@ -123,9 +135,9 @@ int evaluateFunction(
             int len = strlen(values[0]);
 
             if (len > count) {
-                sprintf(output, "%s", values[0] + len - count);
+                return sprintf(output, "%s", values[0] + len - count);
             } else {
-                sprintf(output, "%s", values[0]);
+                return sprintf(output, "%s", values[0]);
             }
         }
     }
@@ -137,49 +149,49 @@ int evaluateFunction(
         }
 
         if (function == FUNC_EXTRACT_YEAR){
-            sprintf(output, "%d", dt.year);
+            return sprintf(output, "%d", dt.year);
         }
         else if (function == FUNC_EXTRACT_MONTH) {
-            sprintf(output, "%d", dt.month);
+            return sprintf(output, "%d", dt.month);
         }
         else if (function == FUNC_EXTRACT_DAY) {
-            sprintf(output, "%d", dt.day);
+            return sprintf(output, "%d", dt.day);
         }
         else if (function == FUNC_EXTRACT_WEEK) {
-            sprintf(output, "%d", datetimeGetWeek(&dt));
+            return sprintf(output, "%d", datetimeGetWeek(&dt));
         }
         else if (function == FUNC_EXTRACT_WEEKYEAR) {
-            sprintf(output, "%d", datetimeGetWeekYear(&dt));
+            return sprintf(output, "%d", datetimeGetWeekYear(&dt));
         }
         else if (function == FUNC_EXTRACT_WEEKDAY) {
-            sprintf(output, "%d", datetimeGetWeekDay(&dt));
+            return sprintf(output, "%d", datetimeGetWeekDay(&dt));
         }
         else if (function == FUNC_EXTRACT_HEYEAR) {
-            sprintf(output, "%d", dt.year + 10000);
+            return sprintf(output, "%d", dt.year + 10000);
         }
         else if (function == FUNC_EXTRACT_YEARDAY) {
-            sprintf(output, "%d", datetimeGetYearDay(&dt));
+            return sprintf(output, "%d", datetimeGetYearDay(&dt));
         }
         else if (function == FUNC_EXTRACT_MILLENNIUM) {
-            sprintf(output, "%d", dt.year / 1000);
+            return sprintf(output, "%d", dt.year / 1000);
         }
         else if (function == FUNC_EXTRACT_CENTURY) {
-            sprintf(output, "%d", dt.year / 100);
+            return sprintf(output, "%d", dt.year / 100);
         }
         else if (function == FUNC_EXTRACT_DECADE) {
-            sprintf(output, "%d", dt.year / 10);
+            return sprintf(output, "%d", dt.year / 10);
         }
         else if (function == FUNC_EXTRACT_QUARTER) {
-            sprintf(output, "%d", (dt.month - 1) / 3 + 1);
+            return sprintf(output, "%d", (dt.month - 1) / 3 + 1);
         }
         else if (function == FUNC_EXTRACT_JULIAN) {
-            sprintf(output, "%d", datetimeGetJulian(&dt));
+            return sprintf(output, "%d", datetimeGetJulian(&dt));
         }
         else if (function == FUNC_EXTRACT_DATE) {
-            sprintf(output, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
+            return sprintf(output, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
         }
         else if (function == FUNC_EXTRACT_DATETIME) {
-            sprintf(
+            return sprintf(
                 output,
                 "%04d-%02d-%02dT%02d:%02d:%02d",
                 dt.year,
@@ -191,10 +203,10 @@ int evaluateFunction(
             );
         }
         else if (function == FUNC_EXTRACT_MONTH_STRING) {
-            sprintf(output, "%04d-%02d", dt.year, dt.month);
+            return sprintf(output, "%04d-%02d", dt.year, dt.month);
         }
         else if (function == FUNC_EXTRACT_WEEK_STRING) {
-            sprintf(
+            return sprintf(
                 output,
                 "%04d-W%02d",
                 datetimeGetWeekYear(&dt),
@@ -202,10 +214,10 @@ int evaluateFunction(
             );
         }
         else if (function == FUNC_EXTRACT_YEARDAY_STRING) {
-            sprintf(output, "%04d-%03d", dt.year, datetimeGetYearDay(&dt));
+            return sprintf(output, "%04d-%03d", dt.year, datetimeGetYearDay(&dt));
         }
         else {
-            sprintf(output, "BADEXTRACT");
+            return sprintf(output, "BADEXTRACT");
         }
     }
     else if (function == FUNC_DATE_ADD) {
@@ -301,9 +313,7 @@ int evaluateAggregateFunction (
             }
         }
 
-        sprintf(output, "%d", count);
-
-        return 0;
+        return sprintf(output, "%d", count);
     }
 
     if (column->function == FUNC_AGG_MIN) {
@@ -329,7 +339,7 @@ int evaluateAggregateFunction (
         }
 
         if (min < INT_MAX) {
-            sprintf(output, "%d", min);
+            return sprintf(output, "%d", min);
         }
 
         return 0;
@@ -358,7 +368,7 @@ int evaluateAggregateFunction (
         }
 
         if (max > INT_MIN) {
-            sprintf(output, "%d", max);
+            return sprintf(output, "%d", max);
         }
 
         return 0;
@@ -388,11 +398,10 @@ int evaluateAggregateFunction (
 
         // If *all* rows are NULL then the result is NULL
         if (non_null) {
-            sprintf(output, "%d", sum);
+            return sprintf(output, "%d", sum);
         }
-        else {
-            output[0] = '\0';
-        }
+
+        output[0] = '\0';
 
         return 0;
     }
@@ -421,12 +430,10 @@ int evaluateAggregateFunction (
         }
 
         if (count > 0) {
-            sprintf(output, "%d", sum / count);
-        }
-        else {
-            output[0] = '\0';
+            return sprintf(output, "%d", sum / count);
         }
 
+        output[0] = '\0';
 
         return 0;
     }
