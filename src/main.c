@@ -40,7 +40,8 @@ void printUsage (const char* name) {
         "\t[-E|--explain]\n"
         "\t[-H|--headers] (default)\n"
         "\t[--no-headers]\n"
-        "\t[(-F |--format=)(tsv|csv|html|json|json_array|sql)]\n"
+        "\t[(-F |--format=)(tsv|csv|html|json|json_array|sql|sql_values|xml|"
+        "record)]\n"
         "\t[(-o |--output=)<filename>]\n"
     , name);
 }
