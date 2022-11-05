@@ -8,6 +8,7 @@
 
 #include "query.h"
 #include "execute.h"
+#include "evaluate.h"
 #include "create.h"
 #include "parse.h"
 #include "explain.h"
@@ -702,7 +703,10 @@ int populateColumnNode (struct Query * query, struct ColumnNode * column) {
         }
     }
 
-    if (field1->index == FIELD_UNKNOWN && field1->text[0] != '\0') {
+    if (field1->index == FIELD_CONSTANT) {
+        evaluateConstantField(field1->text, field1);
+    }
+    else if (field1->index == FIELD_UNKNOWN && field1->text[0] != '\0') {
         if (!findField(
                 query,
                 field1->text,
@@ -716,7 +720,10 @@ int populateColumnNode (struct Query * query, struct ColumnNode * column) {
         }
     }
 
-    if (field2->index == FIELD_UNKNOWN && field2->text[0] != '\0') {
+    if (field2->index == FIELD_CONSTANT) {
+        evaluateConstantField(field2->text, field2);
+    }
+    else if (field2->index == FIELD_UNKNOWN && field2->text[0] != '\0') {
         if (!findField(
                 query,
                 field2->text,
