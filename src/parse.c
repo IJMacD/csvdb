@@ -43,11 +43,7 @@ int parseQuery (struct Query *q, const char *query) {
 
     size_t index = 0;
 
-    size_t query_length = strlen(query);
-
     q->table_count = 0;
-
-    // printf("Query length: %ld\n", query_length);
 
     // Allow SELECT to be optional and default to SELECT *
     q->columns[0].function = FUNC_UNITY;
@@ -127,7 +123,7 @@ int parseQuery (struct Query *q, const char *query) {
 
         skipWhitespace(query, &index);
 
-        if (query[index] != '\0') {
+        if (query[index] != '\0' && query[index] != ';') {
             fprintf(
                 stderr,
                 "expected end of TABLE query. found '%s'\n",
@@ -144,11 +140,14 @@ int parseQuery (struct Query *q, const char *query) {
 
     char keyword[MAX_FIELD_LENGTH] = {0};
 
-    while (index < query_length) {
+    while (query[index] != '\0' && query[index] != ';') {
+        if (query[index] == ';') {
+            break;
+        }
 
         int token_length = getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-        if (token_length <= 0 && index < query_length) {
+        if (token_length <= 0) {
             fprintf(
                 stderr,
                 "Unable to get next token but not at end of query. Remaining: "
@@ -161,7 +160,7 @@ int parseQuery (struct Query *q, const char *query) {
         // printf("Token: '%s'\n", keyword);
 
         if (strcmp(keyword, "WITH") == 0) {
-            while (index < query_length) {
+            while (query[index] != '\0' && query[index] != ';') {
                 int cte_index = cte_count++;
 
                 if (cte_index >= MAX_CTES) {
@@ -223,7 +222,7 @@ int parseQuery (struct Query *q, const char *query) {
         else if (strcmp(keyword, "SELECT") == 0) {
 
             int curr_index = 0;
-            while (index < query_length) {
+            while (query[index] != '\0' && query[index] != ';') {
                 struct ColumnNode *column = &(q->columns[curr_index++]);
 
                 column->concat = 0;
@@ -287,7 +286,7 @@ int parseQuery (struct Query *q, const char *query) {
         else if (strcmp(keyword, "FROM") == 0) {
             int next_join_flag = 0;
 
-            while (index < query_length) {
+            while (query[index] != '\0' && query[index] != ';') {
                 q->table_count++;
 
                 if (q->table_count == 1) {
@@ -431,7 +430,7 @@ int parseQuery (struct Query *q, const char *query) {
                     if (query[index] == '(') {
                         int start_index = index;
 
-                        while (query[index] != '\0' && query[index] != ')') {
+                        while (query[index] != '\0' && query[index] != ';' && query[index] != ')') {
                             index++;
                         }
 
@@ -549,7 +548,7 @@ int parseQuery (struct Query *q, const char *query) {
         else if (strcmp(keyword, "WHERE") == 0) {
             q->flags |= FLAG_HAVE_PREDICATE;
 
-            while (index < query_length) {
+            while (query[index] != '\0' && query[index] != ';') {
                 void *mem;
 
                 if (q->predicate_count == 0) {
@@ -678,7 +677,7 @@ int parseQuery (struct Query *q, const char *query) {
 
             q->flags |= FLAG_ORDER;
 
-            while (index < query_length) {
+            while (query[index] != '\0' && query[index] != ';') {
                 int i = q->order_count++;
 
                 skipWhitespace(query, &index);
@@ -733,7 +732,7 @@ int parseQuery (struct Query *q, const char *query) {
 
             q->flags |= FLAG_GROUP;
 
-            while (index < query_length) {
+            while (query[index] != '\0' && query[index] != ';') {
                 int i = q->group_count++;
 
                 skipWhitespace(query, &index);
