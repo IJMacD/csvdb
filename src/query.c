@@ -73,9 +73,13 @@ int query (const char *query, enum OutputOption output_flags, FILE * output) {
         || format == OUTPUT_FORMAT_TABLE;
 
     // In order to support concat for these output formats
-    // we wrap the whole query in a subquery
-    if (is_escaped_output && strstr(query, "||") != NULL)
-    {
+    // we wrap the whole query in a subquery.
+    // This does not apply to --explain queries
+    if (
+        is_escaped_output
+        && strstr(query, "||") != NULL
+        && !(output_flags & FLAG_EXPLAIN)
+    ) {
         char query2[1024];
         sprintf(query2, "FROM (%s)", query);
 
