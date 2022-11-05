@@ -3,6 +3,7 @@
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 ORANGE='\033[0;33m'
+GREY='\033[0;90m'
 NC='\033[0m' # No Color
 
 readarray -t lines < ./test-cases.sql
@@ -10,6 +11,11 @@ readarray -t lines < ./test-cases.sql
 OUTFILE=/tmp/test.out
 
 STATFILE=test-cases-stats.csv
+
+stats=""
+if [[ $1 == "stats" ]]; then
+    stats="--stats"
+fi
 
 errors=0
 
@@ -20,16 +26,16 @@ for sql in "${lines[@]}"; do
         continue
     fi
 
-    printf ' -- SQL: %s --\n' "$sql";
+    printf "$GREY -- SQL:$NC %s $GREY--$NC\n" "$sql";
 
-    printf " -- Plan: --\n"
+    printf "\n$GREY -- Plan: --\n"
 
     ./release/csvdb -E "$sql"
 
-    printf " -- Results: --\n"
+    printf "$NC"
 
     start=`date +%s%N`
-    ./release/csvdb -o $OUTFILE "$sql"
+    ./release/csvdb -o $OUTFILE $stats "$sql"
     result=$?
     end=`date +%s%N`
 
@@ -37,15 +43,25 @@ for sql in "${lines[@]}"; do
 
     if [ $result -eq 0 ]; then
         if [ -s $OUTFILE ]; then
+            if [[ ! -z $stats ]]; then
+                printf "\n$GREY -- Stats: (microseconds) --\n"
+
+                ./release/csvdb "TABLE stats"
+
+                printf "$NC"
+            fi
+
+            printf "\n$GREY -- Results: --$NC\n"
+
             cat $OUTFILE
-            printf " -- ${GREEN}OK${NC} (Check output above) Time: $runtime ms --\n\n";
+            printf "\n$GREY -- ${GREEN}OK${GREY} (Check output above) Time: $runtime ms --$NC\n\n";
         else
-            printf " -- ${ORANGE}NO OUTPUT${NC} Time: $runtime ms --\n\n";
+            printf "\n$GREY -- ${ORANGE}NO OUTPUT${GREY} Time: $runtime ms --$NC\n\n";
         fi
 
         echo $runtime >> $STATFILE
     else
-        printf " -- ${RED}ERROR${NC} --\n\n\n";
+        printf "\n$GREY -- ${RED}ERROR${GREY} --$NC\n\n\n";
         ((errors=errors+1))
     fi
 
