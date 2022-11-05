@@ -171,7 +171,7 @@ int main () {
     // Double newline to end headers
     printf("\n");
 
-    if (query(query_buffer, flags, output)) {
+    if (query(query_buffer, flags, output, NULL)) {
         // Write errors to stdout now
         printError(format, error);
         return -1;

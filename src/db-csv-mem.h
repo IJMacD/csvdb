@@ -32,4 +32,4 @@ int csvMem_findIndex(
     int index_type_flags
 );
 
-int csvMem_fromValues (struct DB *db, const char *values, int length);
+const char *csvMem_fromValues (struct DB *db, const char *values, int length);

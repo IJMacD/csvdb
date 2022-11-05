@@ -1,5 +1,7 @@
 void skipWhitespace (const char *string, size_t *index);
 
+void skipWhitespacePtr (const char **string);
+
 int getToken (
     const char *string,
     size_t *index,

@@ -92,7 +92,7 @@ int executeQueryPlan (
 
             case PLAN_INDEX_RANGE: {
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_INDEX_RANGE\n", getpid());
+                fprintf(stderr, "Q%d: PLAN_INDEX_SEEK\n", getpid());
                 #endif
 
                 result = executeSourceIndexSeek(q, s, result_set);

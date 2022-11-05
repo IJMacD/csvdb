@@ -8,6 +8,8 @@ static void skipToken (const char *string, size_t *index);
 
 static void skipLine (const char * string, size_t *index);
 
+static void skipLinePtr (const char **string);
+
 static int isTokenChar (char c);
 
 static int isOperatorChar (char c);
@@ -24,6 +26,24 @@ void skipWhitespace (const char *string, size_t *index) {
 
         if (strncmp(string + *index, "--", 2) == 0) {
             skipLine(string, index);
+        } else {
+            break;
+        }
+    }
+}
+
+/**
+ * @brief Skips spaces, newlines, tabs and comment lines
+ *
+ * @param string
+ * @param index
+ */
+void skipWhitespacePtr (const char **string) {
+    while (**string != '\0') {
+        while(isspace(**string)) { (*string)++; }
+
+        if (strncmp(*string, "--", 2) == 0) {
+            skipLinePtr(string);
         } else {
             break;
         }
@@ -69,6 +89,14 @@ static void skipLine (const char *string, size_t *index) {
         (*index)++;
     }
     if (string[*index] == '\n') (*index)++;
+}
+
+
+static void skipLinePtr (const char **string) {
+    while (**string != '\n' && **string != '\0') {
+        (*string)++;
+    }
+    if (**string == '\n') (*string)++;
 }
 
 /**

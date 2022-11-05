@@ -202,7 +202,7 @@ int explain_select_query (
             }
         }
         else if (s.type == PLAN_INDEX_RANGE) {
-            operation = "INDEX RANGE";
+            operation = "INDEX SEEK";
             sprintf(
                 table,
                 "%s__%s",

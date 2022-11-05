@@ -300,15 +300,13 @@ static int indexLines (struct DB *db, int max_rows) {
 
     while (db->data[i] != '\0') {
         if (db->data[i] == '\n'){
-            db->line_indices[count++] = i + 1;
-
             if (count == *max_size) {
                 *max_size *= 2;
                 // max_size is the real location of the allocation
 
                 void *ptr = realloc(
                     max_size,
-                    sizeof(*db->line_indices) * *max_size
+                    sizeof(*db->line_indices) * *max_size + sizeof(*max_size)
                 );
 
                 if (ptr == NULL) {
@@ -323,6 +321,8 @@ static int indexLines (struct DB *db, int max_rows) {
                 max_size = ptr;
                 db->line_indices = ptr + sizeof(*max_size);
             }
+
+            db->line_indices[count++] = i + 1;
 
             if (max_rows > -1 && count >= max_rows) {
                 count--;

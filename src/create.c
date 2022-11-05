@@ -10,11 +10,11 @@
 #include "output.h"
 #include "query.h"
 
-static int create_table_query (const char * query);
+static int create_table_query (const char * query, const char **end_ptr);
 
-static int create_view_query (const char * query);
+static int create_view_query (const char * query, const char **end_ptr);
 
-static int create_index_query (const char * query);
+static int create_index_query (const char * query, const char **end_ptr);
 
 static int create_index (
     const char *index_name,
@@ -24,7 +24,7 @@ static int create_index (
     int unique_flag
 );
 
-int create_query (const char *query) {
+int create_query (const char *query, const char **end_ptr) {
     size_t index = 0;
 
     char keyword[MAX_FIELD_LENGTH] = {0};
@@ -39,22 +39,22 @@ int create_query (const char *query) {
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
     if (strcmp(keyword, "TABLE") == 0) {
-        return create_table_query(query);
+        return create_table_query(query, end_ptr);
     }
 
     if (strcmp(keyword, "VIEW") == 0) {
-        return create_view_query(query);
+        return create_view_query(query, end_ptr);
     }
 
     if (strcmp(keyword, "INDEX") == 0 || strcmp(keyword, "UNIQUE") == 0) {
-        return create_index_query(query);
+        return create_index_query(query, end_ptr);
     }
 
     fprintf(stderr, "Cannot CREATE '%s'\n", keyword);
     return -1;
 }
 
-int create_index_query (const char * query) {
+int create_index_query (const char * query, const char **end_ptr) {
     int unique_flag = 0;
     int auto_name = 0;
 
@@ -142,6 +142,14 @@ int create_index_query (const char * query) {
     }
 
     create_index(index_name, table_name, index_field, field_count, unique_flag);
+
+    if (query[index] == ';') {
+        index++;
+    }
+
+    if (end_ptr != NULL) {
+        *end_ptr = &query[index];
+    }
 
     return 0;
 }
@@ -270,12 +278,14 @@ static int create_index (
         );
     }
 
+    fclose(f);
+
     destroyRowList(row_list);
 
     return 0;
 }
 
-static int create_table_query (const char * query) {
+static int create_table_query (const char * query, const char **end_ptr) {
 
     size_t index = 0;
 
@@ -322,10 +332,14 @@ static int create_table_query (const char * query) {
 
     int flags = OUTPUT_FORMAT_COMMA | OUTPUT_OPTION_HEADERS;
 
-    return select_query(query + index, flags, f);
+    int result = select_query(query + index, flags, f, end_ptr);
+
+    fclose(f);
+
+    return result;
 }
 
-static int create_view_query (const char * query) {
+static int create_view_query (const char * query, const char **end_ptr) {
     size_t index = 0;
 
     char keyword[MAX_FIELD_LENGTH] = {0};
@@ -369,7 +383,27 @@ static int create_view_query (const char * query) {
         return -1;
     }
 
-    fputs(query + index, f);
+    // Warning! can't cope with semicolons legally embedded in SQL
+    char *c = strchr(query + index, ';');
+
+    if (*c != '\0') {
+        int view_len = c - (query + index);
+        char *s = malloc(view_len + 1);
+        strncpy(s, query + index, view_len);
+        s[view_len] = '\0';
+
+        fputs(s, f);
+
+        if (end_ptr != NULL) {
+            *end_ptr = c;
+        }
+    } else {
+        int len = fputs(query + index, f);
+
+        if (end_ptr != NULL) {
+            *end_ptr = query + index + len;
+        }
+    }
 
     fputc('\n', f);
 
@@ -378,7 +412,7 @@ static int create_view_query (const char * query) {
     return 0;
 }
 
-int insert_query (const char * query) {
+int insert_query (const char * query, const char **end_ptr) {
     size_t index = 0;
 
     char keyword[MAX_FIELD_LENGTH] = {0};
@@ -410,7 +444,11 @@ int insert_query (const char * query) {
 
     int flags = OUTPUT_FORMAT_COMMA;
 
-    return select_query(query + index, flags, f);
+    int result = select_query(query + index, flags, f, end_ptr);
+
+    fclose(f);
+
+    return result;
 
     /**
      * TODO: Optionally rebuild any indexes found on the table

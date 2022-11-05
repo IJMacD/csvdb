@@ -24,8 +24,8 @@ SELECT id, name, birth_date FROM test WHERE 51 >= PK(id);
 -- Test EXTRACT
 SELECT birth_date, EXTRACT(YEAR FROM birth_date), EXTRACT(MONTH FROM birth_date), EXTRACT(DAY FROM birth_date), EXTRACT(YEARDAY FROM birth_date) FROM test FETCH FIRST ROW ONLY;
 -- Test Functions
-SELECT RANDOM() AS "Your lucky number"
-SELECT LEFT('Hello there', 4), RIGHT('shampoo', 3), TO_HEX(66), CHR(128169),
+SELECT RANDOM() AS "Your lucky number";
+SELECT LEFT('Hello there', 4), RIGHT('shampoo', 3), TO_HEX(66), CHR(128169);
 -- Test COUNT(*)
 SELECT COUNT(*) FROM test;
 SELECT COUNT(*) FROM test WHERE name = 'Walter KELLY';
@@ -65,7 +65,7 @@ FROM suits, ranks ORDER BY ranks.name DESC, suits.name DESC FETCH FIRST 2 ROWS O
 -- Test Subqueries
 FROM (FROM SEQUENCE(10) OFFSET 5 ROWS) AS a, (FROM SEQUENCE(2)) AS b SELECT b.value, a.value;
 -- Test VALUES clause
-VALUES ('a',1),('b',2),('c',3)
+VALUES ('a',1),('b',2),('c',3);
 FROM (VALUES ('a',1),('b',2),('c',3)) AS a WHERE a.col2 < 3 SELECT a.col2, a.col1;
 FROM (VALUES ('a',1),('b',2),('c',3)) AS a (first, second);
 -- Test CTEs

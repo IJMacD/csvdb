@@ -10,12 +10,17 @@
 #include "execute.h"
 #include "evaluate.h"
 #include "create.h"
+#include "token.h"
 #include "parse.h"
 #include "explain.h"
 #include "plan.h"
 #include "db.h"
 #include "db-csv-mem.h"
 #include "util.h"
+
+#ifdef DEBUG
+static int query_count = 0;
+#endif
 
 int basic_select_query (
     struct Query *q,
@@ -26,9 +31,9 @@ int basic_select_query (
 
 int information_query (const char *table, FILE * output);
 
-static int populateTables (struct Query *q, struct DB * dbs);
+static int populate_tables (struct Query *q, struct DB * dbs);
 
-static int findField (
+static int find_field (
     struct Query *q,
     const char *text,
     int *table_id,
@@ -36,7 +41,7 @@ static int findField (
     char *name
 );
 
-static void checkColumnAliases (struct Table * table);
+static void check_column_aliases (struct Table * table);
 
 static int process_query (
     struct Query *q,
@@ -44,10 +49,50 @@ static int process_query (
     FILE * output
 );
 
-int query (const char *query, enum OutputOption output_flags, FILE * output) {
+static int process_subquery(
+    struct Query *query,
+    enum OutputOption options,
+    char *output_filename
+);
+
+static void destroy_query (struct Query *q);
+
+static int wrap_query (
+    struct Query *query,
+    enum OutputOption inner_options,
+    enum OutputOption outer_options,
+    FILE *output
+);
+
+int runQueries (
+    const char *query_string,
+    enum OutputOption output_flags,
+    FILE * output
+) {
+    const char *end_ptr = query_string;
+
+    while(*end_ptr != '\0') {
+        int result = query(end_ptr, output_flags, output, &end_ptr);
+
+        if (result < 0) {
+            return result;
+        }
+    }
+
+    return 0;
+}
+
+int query (
+    const char *query,
+    enum OutputOption output_flags,
+    FILE * output,
+    const char **end_ptr
+) {
     #ifdef DEBUG
-    fprintf(stderr, "Start Query (%d)\n", getpid());
+    fprintf(stderr, "Start Query (%d.%d)\n", getpid(), query_count++);
     #endif
+
+    skipWhitespacePtr(&query);
 
     if (strncmp(query, "CREATE ", 7) == 0) {
         if (output_flags & FLAG_READ_ONLY) {
@@ -56,10 +101,10 @@ int query (const char *query, enum OutputOption output_flags, FILE * output) {
         }
 
         if (output_flags & FLAG_EXPLAIN) {
-            return 0;
+            return -1;
         }
 
-        return create_query(query);
+        return create_query(query, end_ptr);
     }
 
     if (strncmp(query, "INSERT ", 7) == 0) {
@@ -72,7 +117,7 @@ int query (const char *query, enum OutputOption output_flags, FILE * output) {
             return 0;
         }
 
-        return insert_query(query);
+        return insert_query(query, end_ptr);
     }
 
     // If we're querying the stats table then we must have stats turned off
@@ -84,41 +129,6 @@ int query (const char *query, enum OutputOption output_flags, FILE * output) {
         output_flags &= ~OUTPUT_OPTION_STATS;
     }
 
-    int format = output_flags & OUTPUT_MASK_FORMAT;
-    int is_escaped_output = format == OUTPUT_FORMAT_JSON
-        || format == OUTPUT_FORMAT_JSON_ARRAY
-        || format == OUTPUT_FORMAT_SQL_INSERT
-        || format == OUTPUT_FORMAT_XML
-        || format == OUTPUT_FORMAT_TABLE;
-
-    // In order to support concat for these output formats
-    // we wrap the whole query in a subquery.
-    // This does not apply to --explain queries
-    if (
-        is_escaped_output
-        && strstr(query, "||") != NULL
-        && !(output_flags & FLAG_EXPLAIN)
-    ) {
-        char query2[1024];
-        sprintf(query2, "FROM (%s)", query);
-
-        return select_query(query2, output_flags, output);
-    }
-
-    // In order to support different output formats for EXPLAIN we wrap the
-    // whole query in a subquery. This EXPLAIN has come from the command line.
-    // (There could also be an EXPLAIN keyword in the query which will probably
-    // confuse the parser.)
-    if (format != OUTPUT_FORMAT_COMMA && output_flags & FLAG_EXPLAIN)
-    {
-        char query2[1024];
-        sprintf(query2, "FROM (EXPLAIN %s)", query);
-
-        output_flags &= ~FLAG_EXPLAIN;
-
-        return select_query(query2, output_flags, output);
-    }
-
     if (output_flags & OUTPUT_OPTION_STATS) {
         // start stats file
         FILE *fstats = fopen("stats.csv", "w");
@@ -126,13 +136,14 @@ int query (const char *query, enum OutputOption output_flags, FILE * output) {
         fclose(fstats);
     }
 
-    return select_query(query, output_flags, output);
+    return select_query(query, output_flags, output, end_ptr);
 }
 
 int select_query (
     const char *query,
     enum OutputOption output_flags,
-    FILE * output
+    FILE * output,
+    const char **end_ptr
 ) {
     struct Query q = {0};
     struct timeval stop, start;
@@ -141,15 +152,15 @@ int select_query (
         gettimeofday(&start, NULL);
     }
 
-    if (parseQuery(&q, query) < 0) {
+    if (parseQuery(&q, query, end_ptr) < 0) {
         fprintf(stderr, "Parsing query\n");
         return -1;
     }
 
     if (output_flags & OUTPUT_OPTION_STATS) {
-        FILE *fstats = fopen("stats.csv", "a");
-
         gettimeofday(&stop, NULL);
+
+        FILE *fstats = fopen("stats.csv", "a");
 
         fprintf(fstats, "PARSE,%ld\n", dt(stop, start));
 
@@ -158,101 +169,118 @@ int select_query (
         fclose(fstats);
     }
 
-    int format = output_flags & OUTPUT_MASK_FORMAT;
+    int explain = (q.flags & FLAG_EXPLAIN) || (output_flags & FLAG_EXPLAIN);
+
+    enum OutputOption format = output_flags & OUTPUT_MASK_FORMAT;
+
     // In order to support different output formats for EXPLAIN we wrap the
-    // whole query in a subquery. This EXPLAIN has come from the start of the
-    // query.
-    if (format != OUTPUT_FORMAT_COMMA && q.flags & FLAG_EXPLAIN)
-    {
-        char query2[1024];
-        sprintf(query2, "FROM (%s)", query);
+    // whole query in a subquery.
+    if (format != OUTPUT_FORMAT_COMMA && explain) {
+        return wrap_query(
+            &q,
+            FLAG_EXPLAIN,
+            format | (output_flags & OUTPUT_OPTION_HEADERS),
+            output
+        );
+    }
 
-        output_flags &= ~FLAG_EXPLAIN;
+    int is_escaped_output =
+        format == OUTPUT_FORMAT_JSON
+        || format == OUTPUT_FORMAT_JSON_ARRAY
+        || format == OUTPUT_FORMAT_SQL_INSERT
+        || format == OUTPUT_FORMAT_XML
+        || format == OUTPUT_FORMAT_TABLE;
 
-        // Don't measure stats for sub-process queries
-        output_flags &= ~OUTPUT_OPTION_STATS;
+    int have_concat = 0;
+    for (int i = 0; i < q.column_count; i++) {
+        if (q.columns[i].concat) {
+            have_concat = 1;
+            break;
+        }
+    }
 
-        return select_query(query2, output_flags, output);
+    // In order to support concat for these output formats we wrap the whole
+    // query in a subquery.
+    // This does not apply to --explain queries
+    if (
+        is_escaped_output
+        && have_concat
+        && !(output_flags & FLAG_EXPLAIN)
+    ) {
+        return wrap_query(&q, 0, output_flags, output);
     }
 
     // Cannot group and sort in the same query.
-    if (q.flags & FLAG_GROUP && q.flags & FLAG_ORDER)
+    if ((q.flags & FLAG_GROUP) && q.order_count > 0)
     {
         // We will materialise the GROUP'd query to disk then sort that
 
-        char tmpfile_name[255];
-        sprintf(tmpfile_name, "/tmp/csvdb.%d-%d.csv", getpid(), rand());
-        FILE *tmpfile = fopen(tmpfile_name, "w");
+        // Make a copy of the struct
+        struct Query q2a = q;
+        q2a.order_count = 0;
 
-        struct Query q2 = q;
-        q2.flags &= ~FLAG_ORDER;
-        q2.order_count = 0;
+        struct Table table;
 
-        int result = process_query(&q2,
-            (
-                OUTPUT_OPTION_HEADERS
-                | OUTPUT_FORMAT_COMMA
-                | (output_flags & OUTPUT_OPTION_STATS)
-            ),
-            tmpfile);
+        int result = process_subquery(
+            &q2a,
+            (output_flags & OUTPUT_OPTION_STATS),
+            table.name
+        );
 
-        fclose(tmpfile);
+        destroy_query(&q2a);
 
         if (result < 0) {
-            remove(tmpfile_name);
+            remove(table.name);
             return -1;
         }
 
-        if (q.order_node[0].function != FUNC_UNITY) {
-            fprintf(stderr, "Cannot do ORDER BY and GROUP BY when ORDER BY uses"
-                " a function\n");
-            remove(tmpfile_name);
-            return -1;
-        }
+        struct Query q2b = {0};
+        q2b.tables = &table;
+        q2b.table_count = 1;
 
-        char query2[1024];
-        int len = sprintf(
-            query2,
-            "FROM \"%s\" ORDER BY %s %s",
-            tmpfile_name,
-            q.order_node[0].fields[0].text,
-            q.order_direction[0] == ORDER_ASC ? "ASC" : "DESC"
+        q2b.limit_value = -1;
+
+        memcpy(
+            q2b.order_direction,
+            q.order_direction,
+            sizeof(q.order_direction)
         );
-        char *c = query2 + len;
-        for (int i = 1; i < q.order_count; i++) {
-            if (q.order_node[i].function != FUNC_UNITY) {
-                fprintf(stderr, "Cannot do ORDER BY and GROUP BY when ORDER BY"
-                    " uses a function\n");
-                remove(tmpfile_name);
-                return -1;
-            }
-            len = sprintf(
-                c,
-                ", %s %s",
-                q.order_node[i].fields[0].text,
-                q.order_direction[i] == ORDER_ASC ? "ASC" : "DESC"
-            );
-            c += len;
-        }
 
-        result = select_query(query2, output_flags, output);
+        memcpy(
+            q2b.order_node,
+            q.order_node,
+            sizeof(q.order_node)
+        );
 
-        remove(tmpfile_name);
+        q2b.order_count = q.order_count;
+
+        result = process_query(&q2b, output_flags, output);
+
+        remove(table.name);
+
+        q2b.tables = NULL;
+
+        destroy_query(&q2b);
 
         return result;
     }
 
-    return process_query(&q, output_flags, output);
+    int result = process_query(&q, output_flags, output);
+
+    destroy_query(&q);
+
+    return result;
 }
 
-void destroyQuery (struct Query *query) {
-    if (query->predicate_count > 0) {
+static void destroy_query (struct Query *query) {
+    if (query->predicates != NULL) {
         free(query->predicates);
         query->predicates = NULL;
     }
 
-    if (query->table_count > 0) {
+    if (query->tables != NULL) {
         free(query->tables);
+        query->tables = NULL;
     }
 }
 
@@ -305,7 +333,7 @@ static int process_query (
             q->predicates[0].right.fields[0].text,
             output
         );
-        destroyQuery(q);
+
         return result;
     }
 
@@ -321,12 +349,21 @@ static int process_query (
         gettimeofday(&start, NULL);
     }
 
+    if (q->column_count == 0) {
+        // Allow SELECT to be optional and default to SELECT *
+        q->columns[0].function = FUNC_UNITY;
+        q->columns[0].concat = 0;
+        q->columns[0].fields[0].index = FIELD_STAR;
+        q->columns[0].fields[0].table_id = -1;
+        q->column_count = 1;
+    }
+
     // Create array on stack to hold DB structs
     struct DB dbs[MAX_TABLE_COUNT] = {0};
 
     // Populate Tables
     // (including JOIN predicate columns)
-    result = populateTables(q, dbs);
+    result = populate_tables(q, dbs);
     if (result < 0) {
         return result;
     }
@@ -393,13 +430,11 @@ static int process_query (
 
     if (q->flags & FLAG_EXPLAIN) {
         result =  explain_select_query(q, &plan, output_flags, output);
-        destroyQuery(q);
         destroyPlan(&plan);
         return result;
     }
 
     result = executeQueryPlan(q, &plan, output_flags, output);
-    destroyQuery(q);
     destroyPlan(&plan);
     return result;
 }
@@ -415,17 +450,43 @@ static int process_query (
  * @return int 0 for success; -1 for failure
  */
 int select_subquery(const char *query, char *filename) {
-    sprintf(filename, "/tmp/csvdb.%d-%d.csv", getpid(), rand());
-    FILE *f = fopen(filename, "w");
+    struct Query q = {0};
 
-    struct Query *q = malloc(sizeof(*q));
-
-    int result = parseQuery(q, query);
+    int result = parseQuery(&q, query, NULL);
     if (result < 0) {
         return -1;
     }
 
-    result = process_query(q, OUTPUT_OPTION_HEADERS | OUTPUT_FORMAT_COMMA, f);
+    result = process_subquery(&q, 0, filename);
+
+    destroy_query(&q);
+
+    return result;
+}
+
+/**
+ * @brief Execute the query, write the results to a temp file and write the tmp
+ * filename to the char pointer provieded as `filename`.
+ *
+ * @param query Parsed query to process and execute.
+ * @param filename Char buffer to write temp filename to. Must be at least 32
+ * chars. Consumer is responsible for deleting file from disk when no longer
+ * needed.
+ * @return int 0 for success; -1 for failure
+ */
+static int process_subquery(
+    struct Query *query,
+    enum OutputOption options,
+    char *output_filename
+) {
+    sprintf(output_filename, "/tmp/csvdb.%d-%d.csv", getpid(), rand());
+    FILE *f = fopen(output_filename, "w");
+
+    int result = process_query(
+        query,
+        options | OUTPUT_OPTION_HEADERS | OUTPUT_FORMAT_COMMA,
+        f
+    );
 
     fclose(f);
 
@@ -473,7 +534,7 @@ int information_query (const char *table, FILE * output) {
     return 0;
 }
 
-static int populateTables (struct Query *q, struct DB *dbs) {
+static int populate_tables (struct Query *q, struct DB *dbs) {
 
     for (int i = 0; i < q->table_count; i++) {
         struct Table *table = &q->tables[i];
@@ -551,7 +612,7 @@ static int populateTables (struct Query *q, struct DB *dbs) {
             table->db = &dbs[i];
         }
 
-        checkColumnAliases(table);
+        check_column_aliases(table);
 
         int result;
 
@@ -585,7 +646,7 @@ static int populateTables (struct Query *q, struct DB *dbs) {
  * @param name OUT
  * @return int
  */
-static int findField (
+static int find_field (
     struct Query *q,
     const char *text,
     int *table_id,
@@ -707,7 +768,7 @@ int populateColumnNode (struct Query * query, struct ColumnNode * column) {
         evaluateConstantField(field1->text, field1);
     }
     else if (field1->index == FIELD_UNKNOWN && field1->text[0] != '\0') {
-        if (!findField(
+        if (!find_field(
                 query,
                 field1->text,
                 &field1->table_id,
@@ -724,7 +785,7 @@ int populateColumnNode (struct Query * query, struct ColumnNode * column) {
         evaluateConstantField(field2->text, field2);
     }
     else if (field2->index == FIELD_UNKNOWN && field2->text[0] != '\0') {
-        if (!findField(
+        if (!find_field(
                 query,
                 field2->text,
                 &field2->table_id,
@@ -746,7 +807,7 @@ int populateColumnNode (struct Query * query, struct ColumnNode * column) {
  *
  * @param table
  */
-static void checkColumnAliases (struct Table * table) {
+static void check_column_aliases (struct Table * table) {
     int alias_len = strlen(table->alias);
 
     if (table->alias[alias_len + 1] == '(') {
@@ -769,4 +830,47 @@ static void checkColumnAliases (struct Table * table) {
         }
         *d = '\0';
     }
+}
+
+/**
+ * @brief To support all combinations of output formats it's sometimes necessary
+ * to split the options and wrap one query inside of another. This function is
+ * just a wrapper around other functions to achieve that easily.
+ *
+ * @param query
+ * @param inner_options
+ * @param outer_options
+ * @param output
+ * @return int 0 on success
+ */
+static int wrap_query (
+    struct Query *query,
+    enum OutputOption inner_options,
+    enum OutputOption outer_options,
+    FILE *output
+) {
+    struct Query q2 = {0};
+    struct Table table = {0};
+
+    int result = process_subquery(query, inner_options, table.name);
+    if (result < 0) {
+        return result;
+    }
+
+    q2.table_count = 1;
+    q2.tables = &table;
+    q2.limit_value = -1;
+
+    result = process_query(
+        &q2,
+        outer_options,
+        output
+    );
+
+    remove(table.name);
+
+    q2.tables = NULL;
+    destroy_query(&q2);
+
+    return result;
 }

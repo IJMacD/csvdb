@@ -304,8 +304,6 @@ enum OutputOption {
 enum QueryFlag {
     FLAG_HAVE_PREDICATE =       (1<<0),
     FLAG_GROUP =                (1<<1),
-    FLAG_PRIMARY_KEY_SEARCH =   (1<<2),
-    FLAG_ORDER =                (1<<3),
     FLAG_EXPLAIN =              (1<<12),
     FLAG_READ_ONLY =            (1<<13),
 };

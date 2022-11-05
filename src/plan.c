@@ -206,7 +206,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
                     // PLAN_UNIQUE.
                 } else if (q->flags & FLAG_GROUP){
                     // Reverse is not required if we're grouping.
-                } else if (q->flags & FLAG_ORDER) {
+                } else if (q->order_count > 0) {
                     // Follow our own logic to add an order step
                     // We can avoid it if we're just going to sort on the same
                     // column we've just scanned.
@@ -234,7 +234,6 @@ int makePlan (struct Query *q, struct Plan *plan) {
             // ordering now.
             else if (
                 skip_index == 0
-                && (q->flags & FLAG_ORDER)
                 && q->order_count == 1
                 // If we're selecting a lot of rows this optimisation is
                 // probably worth it. If we have an EQ operator then it's
@@ -431,8 +430,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
         }
     }
     else if (
-            (q->flags & FLAG_ORDER)
-            && q->order_count >= 1
+            q->order_count >= 1
             && q->order_node[0].function == FUNC_UNITY
             && !(q->flags & FLAG_GROUP)
         ) {
@@ -559,7 +557,7 @@ static void addStep (struct Plan *plan, int type) {
  */
 static void addOrderStepsIfRequired (struct Plan *plan, struct Query *q) {
     // Check if there's an order by clause
-    if (!(q->flags & FLAG_ORDER)) {
+    if (q->order_count == 0) {
         return;
     }
 
@@ -765,7 +763,11 @@ static void addLimitStepIfRequired (struct Plan *plan, struct Query *query) {
     if (query->limit_value >= 0) {
         int limit = query->offset_value + query->limit_value;
 
-        if (!(query->flags & FLAG_ORDER) && !(query->flags & FLAG_GROUP)) {
+        if (
+            query->predicate_count == 0
+            && query->order_count == 0
+            && !(query->flags & FLAG_GROUP)
+        ) {
             // Check if all LEFT UNIQUE joins
             int all_left_unique = 1;
 

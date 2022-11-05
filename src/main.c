@@ -9,6 +9,8 @@
 #include "query.h"
 #include "output.h"
 
+static int read_file(FILE *file, char **output);
+
 void printUsage (const char* name) {
     printf(
         "Usage:\n"
@@ -57,7 +59,7 @@ int main (int argc, char * argv[]) {
     FILE * output = stdout;
     const char * format_val = NULL;
     const char * output_name = NULL;
-    char buffer[1024] = {0};
+    char *buffer = NULL;
 
     int argi = 1;
 
@@ -130,14 +132,12 @@ int main (int argc, char * argv[]) {
                 }
             }
 
-            size_t count = fread(buffer, 1, 1024, f);
+            size_t count = read_file(f, &buffer);
 
             if (count == 0) {
                 fprintf(stderr, "File '%s' was empty\n", filename);
                 return -1;
             }
-
-            buffer[count] = '\0';
         }
         else if (strcmp(arg, "-0") == 0) {
             // Secret internal argument to force read-only mode
@@ -203,29 +203,69 @@ int main (int argc, char * argv[]) {
 
     int bare_args = argc - argi;
 
-    if (bare_args == 1) {
-        strcpy(buffer, argv[argi]);
-    }
-    else if (bare_args > 1) {
-        int offset = 0;
+    if (bare_args) {
+        buffer = malloc(1024);
 
-        while (argi < argc) {
-            offset += sprintf(buffer + offset, "%s ", argv[argi]);
-            argi++;
+        if (bare_args == 1) {
+            strcpy(buffer, argv[argi]);
+        }
+        else if (bare_args > 1) {
+            int offset = 0;
+
+            while (argi < argc) {
+                offset += sprintf(buffer + offset, "%s ", argv[argi]);
+                argi++;
+            }
         }
     }
 
-    if (buffer[0] != '\0') {
-        return query(buffer, flags, output);
+    if (buffer != NULL) {
+        return runQueries(buffer, flags, output);
     }
 
     // If we're here it means we don't yet have a query.
     // If stdin is something more than a tty (i.e pipe or redirected file)
     // then we will assume the following query:
     if (!isatty(fileno(stdin))) {
-        return query("SELECT * FROM stdin", flags, output);
+        return runQueries("SELECT * FROM stdin", flags, output);
     }
 
     printUsage(argv[0]);
     return -1;
+}
+
+static int read_file (FILE *file, char **output) {
+    size_t read_size = 1024;
+    size_t alloc_size = read_size;
+
+    char *buffer = malloc(alloc_size);
+
+    size_t count = 0;
+    size_t bytes_read;
+
+    while(
+        (bytes_read = fread(buffer + count, 1, read_size, file)) == read_size
+    ) {
+        alloc_size += read_size;
+        buffer = realloc(buffer, alloc_size);
+
+        if (buffer == NULL) {
+            fprintf(
+                stderr,
+                "Unable to allocate read buffer of size %ld\n",
+                alloc_size
+            );
+            exit(-1);
+        }
+
+        count += bytes_read;
+    }
+
+    count += bytes_read;
+
+    buffer[count] = '\0';
+
+    *output = buffer;
+
+    return count;
 }

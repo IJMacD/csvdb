@@ -36,7 +36,7 @@ static struct Table *findTable (
     int table_count
 );
 
-int parseQuery (struct Query *q, const char *query) {
+int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
     /*********************
      * Begin Query parsing
      *********************/
@@ -44,13 +44,6 @@ int parseQuery (struct Query *q, const char *query) {
     size_t index = 0;
 
     q->table_count = 0;
-
-    // Allow SELECT to be optional and default to SELECT *
-    q->columns[0].function = FUNC_UNITY;
-    q->columns[0].concat = 0;
-    q->columns[0].fields[0].index = FIELD_STAR;
-    q->columns[0].fields[0].table_id = -1;
-    q->column_count = 1;
 
     q->predicate_count = 0;
 
@@ -97,7 +90,11 @@ int parseQuery (struct Query *q, const char *query) {
         // populateTables() then populateTables() will free this for us.
         struct DB *db = malloc(sizeof(*db));
 
-        csvMem_fromValues(db, query + index, -1);
+        const char * end = csvMem_fromValues(db, query + index, -1);
+
+        if (end_ptr != NULL) {
+            *end_ptr = end;
+        }
 
         // This DB needs to be free'd in populateTables()
         table->db = db;
@@ -132,10 +129,18 @@ int parseQuery (struct Query *q, const char *query) {
             return -1;
         }
 
+        if (query[index] == ';') {
+            index++;
+        }
+
+        if (end_ptr != NULL) {
+            *end_ptr = query + index;
+        }
+
         char buffer[1024];
         sprintf(buffer, "FROM \"%s\"", name);
 
-        return parseQuery(q, buffer);
+        return parseQuery(q, buffer, NULL);
     }
 
     char keyword[MAX_FIELD_LENGTH] = {0};
@@ -675,8 +680,6 @@ int parseQuery (struct Query *q, const char *query) {
                 return -1;
             }
 
-            q->flags |= FLAG_ORDER;
-
             while (query[index] != '\0' && query[index] != ';') {
                 int i = q->order_count++;
 
@@ -761,6 +764,15 @@ int parseQuery (struct Query *q, const char *query) {
             fprintf(stderr, "Found '%s'\n", keyword);
             return -1;
         }
+    }
+
+    // Consume trailing semicolon
+    if (query[index] == ';') {
+        index++;
+    }
+
+    if (end_ptr != NULL) {
+        *end_ptr = &query[index];
     }
 
     return 0;

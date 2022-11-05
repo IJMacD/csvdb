@@ -329,8 +329,10 @@ static void consumeStream (struct DB *db, FILE *stream) {
  * @param db
  * @param input
  * @param length Maximum length to read from input. -1 for no limit
+ * @returns char * pointer to end of query (i.e. if it came accross a '\0' or
+ * ';')
  */
-void csvMem_fromValues(struct DB *db, const char *input, int length) {
+const char *csvMem_fromValues(struct DB *db, const char *input, int length) {
     const char *in_ptr = input;
     const char *end_ptr = input + length - 1;
     char *out_ptr;
@@ -359,12 +361,13 @@ void csvMem_fromValues(struct DB *db, const char *input, int length) {
 
     int line_index = 0;
 
-    while(*in_ptr != '\0' && in_ptr != end_ptr) {
+    while(*in_ptr != '\0' && *in_ptr != ';' && in_ptr != end_ptr) {
 
         if (*in_ptr != '(') {
             fprintf(
                 stderr,
-                "VALUES expected to start with '('. Found: %c\n",
+                "VALUES: expected row %d to start with '('. Found: %c\n",
+                line_index,
                 *in_ptr
             );
             exit(-1);
@@ -435,9 +438,15 @@ void csvMem_fromValues(struct DB *db, const char *input, int length) {
         }
     }
 
+    if (*in_ptr == ';') {
+        in_ptr++;
+    }
+
     db->field_count = countFields(db->data + db->line_indices[0]);
 
     db->_record_count = line_index;
+
+    return in_ptr;
 }
 
 static int countFields (const char *ptr) {
