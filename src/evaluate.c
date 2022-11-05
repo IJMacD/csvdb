@@ -110,6 +110,14 @@ int evaluateConstantField (char * value, struct Field * field) {
         exit(-1);
     }
 
+    if (
+        field->text[0] == '0'
+        && field->text[1] == 'x'
+    ) {
+        long val = strtol(field->text, NULL, 16);
+        return sprintf(value, "%ld", val);
+    }
+
     if (strcmp(field->text, "CURRENT_DATE") == 0
         || strcmp(field->text, "TODAY()") == 0)
     {

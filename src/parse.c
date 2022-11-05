@@ -1115,6 +1115,11 @@ static int checkConstantField (struct Field * field) {
         field->index = FIELD_CONSTANT;
         field->table_id = -1;
     }
+    else if (field->text[0] == '0' && field->text[1] == 'x') {
+        // Detected hex numeric constant
+        field->index = FIELD_CONSTANT;
+        field->table_id = -1;
+    }
     else if (field->text[0] == '\'') {
         // Detected string literal
         field->index = FIELD_CONSTANT;
