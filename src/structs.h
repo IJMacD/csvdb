@@ -256,6 +256,7 @@ enum PlanStepType {
 
     // POP = 1, PUSH = N
     PLAN_GROUP =                0x40,
+    PLAN_GROUP_BUCKET =         0x41,
 
     // POP = 2, PUSH = 1
     PLAN_UNION =                0x50,

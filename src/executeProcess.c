@@ -112,3 +112,90 @@ int executeGroup (
 
     return 0;
 }
+
+/**
+ * @brief For a small (known) number of groups, the bucket algorithm works
+ * faster than requiring a sort.
+ *
+ * @param query
+ * @param step
+ * @param result_set
+ * @return int
+ */
+int executeGroupBucket (
+    struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
+    RowListIndex row_list = popRowList(result_set);
+
+    int bucket_count = step->limit;
+
+    if (bucket_count < 0) {
+        fprintf(
+            stderr,
+            "Cannot perform bucket group with %d buckets.\n",
+            bucket_count
+        );
+        exit(-1);
+    }
+
+    if (step->predicate_count > 1) {
+        fprintf(
+            stderr,
+            "Cannot perform bucket group with %d predicates.\n",
+            step->predicate_count
+        );
+        exit(-1);
+    }
+
+    RowListIndex *buckets = malloc(sizeof(row_list) * bucket_count);
+
+    // Create Buckets
+
+    int join_count = getRowList(row_list)->join_count;
+    int row_count = getRowList(row_list)->row_count;
+
+    for (int i = 0; i < bucket_count; i++) {
+        buckets[i] = createRowList(join_count, row_count);
+        pushRowList(result_set, buckets[i]);
+    }
+
+    char value[MAX_VALUE_LENGTH];
+
+    // Put each row into appropriate bucket
+    for (int i = 0; i < row_count; i++) {
+        evaluateNode(
+            query,
+            getRowList(row_list),
+            i,
+            &step->predicates[0].left,
+            value,
+            MAX_VALUE_LENGTH
+        );
+
+        int bucket_index = atoi(value);
+
+        if (bucket_index >= bucket_count) {
+            fprintf(stderr, "Unexpected bucket value: %d\n", bucket_index);
+            exit(-1);
+        }
+
+        copyResultRow(
+            getRowList(buckets[bucket_index]),
+            getRowList(row_list),
+            i
+        );
+    }
+
+    // Discard any buckets more than the limit
+    if (step->limit > -1) {
+        while (bucket_count > step->limit) {
+            RowListIndex list = popRowList(result_set);
+            destroyRowList(list);
+            bucket_count--;
+        }
+    }
+
+    return 0;
+}

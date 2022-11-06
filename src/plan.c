@@ -5,6 +5,7 @@
 #include "util.h"
 #include "db.h"
 #include "predicates.h"
+#include "evaluate.h"
 
 static void addStep (struct Plan *plan, int type);
 
@@ -710,12 +711,50 @@ static void addGroupStepIfRequired (struct Plan *plan, struct Query *q) {
      * Grouping
      *******************/
     if (q->flags & FLAG_GROUP && q->group_count > 0) {
+        struct ColumnNode *group_node = &q->group_node[0];
+
         struct Predicate *group_predicate = makePredicate(
-            &q->group_node[0],
+            group_node,
             (enum Operator)ORDER_ASC
         );
 
-        // Grouping *requires* sorting
+        // Check if we can use bucket grouping first
+
+        int bucket_count = -1;
+
+        if (group_node->function == FUNC_MOD) {
+            char value[32];
+            evaluateConstantField(value, &group_node->fields[1]);
+            bucket_count = atoi(value);
+        }
+        else if (group_node->function == FUNC_EXTRACT_WEEKDAY) {
+            // Buckets always start numbered at 0
+            bucket_count = 8;
+        }
+        else if (group_node->function == FUNC_EXTRACT_MONTH) {
+            // Buckets always start numbered at 0
+            bucket_count = 13;
+        }
+
+        if (bucket_count >= 0 && bucket_count < 20) {
+            addStepWithPredicate(plan, PLAN_GROUP_BUCKET, group_predicate);
+
+            struct PlanStep *prev = &plan->steps[plan->step_count - 1];
+
+            prev->limit = bucket_count;
+
+            if (
+                q->limit_value > -1
+                && q->offset_value + q->limit_value < prev->limit
+            ) {
+
+                prev->limit = q->offset_value + q->limit_value;
+            }
+
+            return;
+        }
+
+        // The remaining grouping algortithm *requires* sorting
         // We'll check if we can get away without sorting explicitly.
         // This check is less than perfect.
         int sort_required = 1;

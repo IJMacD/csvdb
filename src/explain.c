@@ -269,6 +269,13 @@ int explain_select_query (
                 rows = 1;
             }
         }
+        else if (s.type == PLAN_GROUP_BUCKET) {
+            operation = "GROUP BUCKET";
+
+            if (rows > 0) {
+                rows = s.limit;
+            }
+        }
         else if (s.type == PLAN_SELECT) {
             operation = "SELECT";
 

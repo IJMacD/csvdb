@@ -334,6 +334,21 @@ int executeQueryPlan (
                 break;
             }
 
+            case PLAN_GROUP_BUCKET: {
+                #ifdef DEBUG
+                fprintf(
+                    stderr,
+                    "Q%d.%d: PLAN_GROUP_BUCKET\n",
+                    getpid(),
+                    query_count
+                );
+                #endif
+
+                result = executeGroupBucket(q, s, result_set);
+
+                break;
+            }
+
             case PLAN_SELECT: {
                 #ifdef DEBUG
                 fprintf(stderr, "Q%d.%d: PLAN_SELECT\n", getpid(), query_count);

@@ -17,3 +17,9 @@ int executeGroup (
     struct PlanStep *step,
     struct ResultSet *result_set
 );
+
+int executeGroupBucket (
+    struct Query *query,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+);
