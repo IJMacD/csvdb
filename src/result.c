@@ -216,6 +216,8 @@ static struct RowList *row_list_pool = NULL;
 
 static int pool_count = 0;
 
+static unsigned long pool_map = 0;
+
 /**
  * @brief Get the RowList object from the pool by index.
  * Important: DO NOT hold on to this pointer for long.
@@ -262,6 +264,14 @@ RowListIndex createRowList (int join_count, int max_rows) {
         // #ifdef DEBUG
         // fprintf(stderr, "Expanded RowList Pool: %d\n", max_size);
         // #endif
+    }
+
+    if (pool_count > (int)sizeof(pool_map) * 8) {
+        // There's no coming back.
+        // Don't bother tracking the pool allocations in a map any
+        pool_map = -1;
+    } else {
+        pool_map |= (1ul << pool_count);
     }
 
     struct RowList *row_list = &row_list_pool[pool_count++];
@@ -313,9 +323,16 @@ void destroyRowList (RowListIndex row_list) {
         list->row_ids = NULL;
     }
 
-    // If we're destroying the most recent row_list in the pool we can "return"
-    // it to the pool;
-    if (row_list == pool_count - 1) {
+    pool_map &= ~(1ul << row_list);
+
+    // If every allocated row_list has been destroyed then we can reset the pool
+    // to the start.
+    if (pool_map == 0) {
+        pool_count = 0;
+    }
+    // Otherwise, if we're destroying the most recent row_list in the pool we
+    // can "return" it to the pool;
+    else if (row_list == pool_count - 1) {
         pool_count--;
     }
 
