@@ -438,6 +438,8 @@ const char *csvMem_fromValues(struct DB *db, const char *input, int length) {
         }
     }
 
+    *out_ptr = '\0';
+
     if (*in_ptr == ';') {
         in_ptr++;
     }

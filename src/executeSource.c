@@ -70,7 +70,9 @@ int executeSourceUnique (
     }
 
     int record_count = (step->limit > -1)
-        ? step->limit : getRecordCount(&index_db);
+        ? step->limit : (
+            (p->op == OPERATOR_EQ) ? 1 : getRecordCount(&index_db)
+        );
 
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);

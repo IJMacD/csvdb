@@ -19,7 +19,7 @@
 #include "util.h"
 
 #ifdef DEBUG
-static int query_count = 0;
+int query_count = -1;
 #endif
 
 int basic_select_query (
@@ -89,7 +89,7 @@ int query (
     const char **end_ptr
 ) {
     #ifdef DEBUG
-    fprintf(stderr, "Start Query (%d.%d)\n", getpid(), query_count++);
+    fprintf(stderr, "Start Query (%d.%d)\n", getpid(), ++query_count);
     #endif
 
     skipWhitespacePtr(&query);
@@ -157,6 +157,12 @@ int select_query (
         return -1;
     }
 
+    #ifdef DEBUG
+    size_t query_len = *end_ptr - query;
+    fwrite(query, 1, query_len, stderr);
+    fprintf(stderr, "\n");
+    #endif
+
     if (output_flags & OUTPUT_OPTION_STATS) {
         gettimeofday(&stop, NULL);
 
@@ -219,7 +225,7 @@ int select_query (
         struct Query q2a = q;
         q2a.order_count = 0;
 
-        struct Table table;
+        struct Table table = {0};
 
         int result = process_subquery(
             &q2a,

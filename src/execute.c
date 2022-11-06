@@ -20,6 +20,10 @@
 #include "sort-quick.h"
 #include "debug.h"
 
+#ifdef DEBUG
+extern int query_count;
+#endif
+
 int executeQueryPlan (
     struct Query *q,
     struct Plan *plan,
@@ -71,7 +75,7 @@ int executeQueryPlan (
             case PLAN_PK:
             case PLAN_PK_RANGE: {
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_PK\n", getpid());
+                fprintf(stderr, "Q%d.%d: PLAN_PK\n", getpid(), query_count);
                 #endif
 
                 result = executeSourcePK(q, s, result_set);
@@ -82,7 +86,7 @@ int executeQueryPlan (
             case PLAN_UNIQUE:
             case PLAN_UNIQUE_RANGE: {
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_UNIQUE\n", getpid());
+                fprintf(stderr, "Q%d.%d: PLAN_UNIQUE\n", getpid(), query_count);
                 #endif
 
                 result = executeSourceUnique(q, s, result_set);
@@ -92,7 +96,12 @@ int executeQueryPlan (
 
             case PLAN_INDEX_RANGE: {
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_INDEX_SEEK\n", getpid());
+                fprintf(
+                    stderr,
+                    "Q%d.%d: PLAN_INDEX_SEEK\n",
+                    getpid(),
+                    query_count
+                );
                 #endif
 
                 result = executeSourceIndexSeek(q, s, result_set);
@@ -102,7 +111,12 @@ int executeQueryPlan (
 
             case PLAN_INDEX_SCAN: {
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_INDEX_SCAN\n", getpid());
+                fprintf(
+                    stderr,
+                    "Q%d.%d: PLAN_INDEX_SCAN\n",
+                    getpid(),
+                    query_count
+                );
                 #endif
 
                 result = executeSourceIndexScan(q, s, result_set);
@@ -118,7 +132,12 @@ int executeQueryPlan (
                  *************************************************************/
 
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_TABLE_ACCESS_FULL\n", getpid());
+                fprintf(
+                    stderr,
+                    "Q%d.%d: PLAN_TABLE_ACCESS_FULL\n",
+                    getpid(),
+                    query_count
+                );
                 #endif
 
                 result = executeSourceTableFull(q, s, result_set);
@@ -134,7 +153,12 @@ int executeQueryPlan (
                  *************************************************************/
 
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_TABLE_SCAN\n", getpid());
+                fprintf(
+                    stderr,
+                    "Q%d.%d: PLAN_TABLE_SCAN\n",
+                    getpid(),
+                    query_count
+                );
                 #endif
 
                 result = executeSourceTableScan(q, s, result_set);
@@ -149,7 +173,12 @@ int executeQueryPlan (
                  *************************************************************/
 
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_TABLE_ACCESS_ROWID\n", getpid());
+                fprintf(
+                    stderr,
+                    "Q%d.%d: PLAN_TABLE_ACCESS_ROWID\n",
+                    getpid(),
+                    query_count
+                );
                 #endif
 
                 result = executeTableAccessRowid(q, s, result_set);
@@ -164,7 +193,12 @@ int executeQueryPlan (
                  *************************************************************/
 
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_CROSS_JOIN\n", getpid());
+                fprintf(
+                    stderr,
+                    "Q%d.%d: PLAN_CROSS_JOIN\n",
+                    getpid(),
+                    query_count
+                );
                 #endif
 
                 result = executeCrossJoin(q, s, result_set);
@@ -180,7 +214,12 @@ int executeQueryPlan (
                  *************************************************************/
 
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_CONSTANT_JOIN\n", getpid());
+                fprintf(
+                    stderr,
+                    "Q%d.%d: PLAN_CONSTANT_JOIN\n",
+                    getpid(),
+                    query_count
+                );
                 #endif
 
                 result = executeConstantJoin(q, s, result_set);
@@ -195,7 +234,12 @@ int executeQueryPlan (
                  * if all predicates compare true.
                  *************************************************************/
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_LOOP_JOIN\n", getpid());
+                fprintf(
+                    stderr,
+                    "Q%d.%d: PLAN_LOOP_JOIN\n",
+                    getpid(),
+                    query_count
+                );
                 #endif
 
                 result = executeLoopJoin(q, s, result_set);
@@ -210,7 +254,12 @@ int executeQueryPlan (
                  *************************************************************/
 
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_UNIQUE_JOIN\n", getpid());
+                fprintf(
+                    stderr,
+                    "Q%d.%d: PLAN_UNIQUE_JOIN\n",
+                    getpid(),
+                    query_count
+                );
                 #endif
 
                 result = executeUniqueJoin(q, s, result_set);
@@ -227,7 +276,12 @@ int executeQueryPlan (
                  *************************************************************/
 
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_INDEX_JOIN\n", getpid());
+                fprintf(
+                    stderr,
+                    "Q%d.%d: PLAN_INDEX_JOIN\n",
+                    getpid(),
+                    query_count
+                );
                 #endif
 
                 result = executeIndexJoin(q, s, result_set);
@@ -237,7 +291,7 @@ int executeQueryPlan (
 
             case PLAN_SORT: {
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_SORT\n", getpid());
+                fprintf(stderr, "Q%d.%d: PLAN_SORT\n", getpid(), query_count);
                 #endif
 
                 result = executeSort(q, s, result_set);
@@ -247,7 +301,12 @@ int executeQueryPlan (
 
             case PLAN_REVERSE: {
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_REVERSE\n", getpid());
+                fprintf(
+                    stderr,
+                    "Q%d.%d: PLAN_REVERSE\n",
+                    getpid(),
+                    query_count
+                );
                 #endif
 
                 result = executeReverse(q, s, result_set);
@@ -257,7 +316,7 @@ int executeQueryPlan (
 
             case PLAN_SLICE: {
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_SLICE\n", getpid());
+                fprintf(stderr, "Q%d.%d: PLAN_SLICE\n", getpid(), query_count);
                 #endif
 
                 result = executeSlice(q, s, result_set);
@@ -267,7 +326,7 @@ int executeQueryPlan (
 
             case PLAN_GROUP: {
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_GROUP\n", getpid());
+                fprintf(stderr, "Q%d.%d: PLAN_GROUP\n", getpid(), query_count);
                 #endif
 
                 result = executeGroup(q, s, result_set);
@@ -277,7 +336,7 @@ int executeQueryPlan (
 
             case PLAN_SELECT: {
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d: PLAN_SELECT\n", getpid());
+                fprintf(stderr, "Q%d.%d: PLAN_SELECT\n", getpid(), query_count);
                 #endif
                 /*******************
                  * Output result set
@@ -345,7 +404,7 @@ int executeQueryPlan (
         }
 
         #ifdef DEBUG
-            debugResultSet(result_set);
+            // debugResultSet(result_set);
 
             RowListIndex row_list = popRowList(result_set);
             debugRowList(getRowList(row_list), 1);

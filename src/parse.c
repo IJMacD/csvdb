@@ -88,7 +88,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
         // Malloc a DB ahead of time. It will be copied to the stack in
         // populateTables() then populateTables() will free this for us.
-        struct DB *db = malloc(sizeof(*db));
+        struct DB *db = calloc(1, sizeof(*db));
 
         const char * end = csvMem_fromValues(db, query + index, -1);
 
@@ -343,7 +343,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                         // Malloc a DB ahead of time. It will be copied to the
                         // stack in populateTables() then populateTables() will
                         // free this for us.
-                        struct DB *db = malloc(sizeof(*db));
+                        struct DB *db = calloc(1, sizeof(*db));
 
                         csvMem_fromValues(
                             db,

@@ -290,13 +290,17 @@ RowListIndex createRowList (int join_count, int max_rows) {
         exit(-1);
     }
 
-    // fprintf(
-    //     stderr,
-    //     "Created RowList %d. Pool use: %d/%d\n",
-    //     pool_count - 1,
-    //     pool_count,
-    //     max_size
-    // );
+    #ifdef DEBUG
+    fprintf(
+        stderr,
+        "Created RowList %d (max: %dj x %dr). Pool use: %d/%d\n",
+        pool_count - 1,
+        join_count,
+        max_rows,
+        pool_count,
+        max_size
+    );
+    #endif
 
     return pool_count - 1;
 }
@@ -315,12 +319,15 @@ void destroyRowList (RowListIndex row_list) {
         pool_count--;
     }
 
-    // fprintf(
-    //     stderr,
-    //     "Destroyed RowList %d. Pool use: %d\n",
-    //     row_list,
-    //     pool_count
-    // );
+
+    #ifdef DEBUG
+    fprintf(
+        stderr,
+        "Destroyed RowList %d. Pool use: %d\n",
+        row_list,
+        pool_count
+    );
+    #endif
 }
 
 void pushRowList(struct ResultSet *result_set, RowListIndex row_list_index) {

@@ -887,7 +887,7 @@ static int optimisePredicates (
     // many are already in place
     if (chosen_predicate_index >= 0) {
         int i = 1;
-        while (predicates[i].left.fields[0].table_id == 0 && i < count) {
+        while (i < count && predicates[i].left.fields[0].table_id == 0) {
             i++;
         }
         return i;
