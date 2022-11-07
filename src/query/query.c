@@ -323,19 +323,28 @@ static int process_query (
             strcpy(q->tables[0].name, "stdin");
             strcpy(q->tables[0].alias, "stdin");
         }
-        else {
+        else  if (q->column_count > 0) {
             // We could have a constant query which will output a single row
             // Check if any of the fields are non-constant and abort
 
-            // TODO: now that there are multi-field columns we need to check
-            // *all* fields .
             for (int i = 0; i < q->column_count; i++) {
-                struct Field * field = q->columns[0].fields;
-                if (field->index != FIELD_CONSTANT) {
+                struct Field * field1 = q->columns[i].fields;
+                if (field1->index != FIELD_CONSTANT) {
+                    fprintf(stderr, "No Tables specified\n");
+                    return -1;
+                }
+
+                struct Field * field2 = q->columns[i].fields;
+                if (field2->index != FIELD_CONSTANT) {
                     fprintf(stderr, "No Tables specified\n");
                     return -1;
                 }
             }
+        }
+        else {
+            // We have an empty query.
+            // We'll just exit without error
+            return 0;
         }
     }
     else if (strcmp(q->tables[0].name, "INFORMATION") == 0) {
