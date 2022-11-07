@@ -174,6 +174,11 @@ int datetimeGetDayDiff(struct DateTime *dt1, struct DateTime *dt2) {
 int datetimeGetWeek (struct DateTime *dt) {
     int n, g, s;
 
+    // Special case for 0000-01-01
+    if (dt->year == 0 && dt->month == 1 && dt->day == 1) {
+        return 52;
+    }
+
     if (dt->month < 3) {
         int a = dt->year - 1;
         int b = a / 4 - a / 100 + a / 400;
@@ -216,6 +221,11 @@ int datetimeGetWeek (struct DateTime *dt) {
 int datetimeGetWeekYear (struct DateTime *dt) {
     int n, g, s;
 
+    // Special case for 0000-01-01
+    if (dt->year == 0 && dt->month == 1 && dt->day == 1) {
+        return -1;
+    }
+
     if (dt->month < 3) {
         int a = dt->year - 1;
         int b = a / 4 - a / 100 + a / 400;
@@ -256,6 +266,11 @@ int datetimeGetWeekYear (struct DateTime *dt) {
  */
 int datetimeGetWeekDay (struct DateTime *dt) {
     int d;
+
+    // Special case for 0000-01-01
+    if (dt->year == 0 && dt->month == 1 && dt->day == 1) {
+        return 7;
+    }
 
     if (dt->month < 3) {
         int a = dt->year - 1;

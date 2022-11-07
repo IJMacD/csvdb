@@ -85,6 +85,7 @@ FROM ranks SELECT POW(value, 2) FETCH FIRST 5 ROWS ONLY;
 -- Test Grouping
 FROM test WHERE name LIKE 'Adam WE%' GROUP BY name SELECT name, COUNT(*);
 FROM test WHERE name LIKE 'Adam K%' GROUP BY name ORDER BY score DESC SELECT name, COUNT(*), SUM(score) AS score;
+FROM test GROUP BY day SELECT EXTRACT(WEEKDAY FROM birth_date) AS day, COUNT(*);
 -- Functions on ORDER BY columns
 SELECT name FROM test WHERE name < 'Adam' ORDER BY LENGTH(name) FETCH FIRST 2 ROWS ONLY;
 SELECT name, birth_date, score FROM test WHERE birth_date > '2050-01-01' AND score > 95 ORDER BY LENGTH(name), birth_date FETCH FIRST 5 ROWS ONLY;
