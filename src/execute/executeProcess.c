@@ -242,5 +242,7 @@ int executeGroupBucket (
         }
     }
 
+    destroyRowList(row_list);
+
     return 0;
 }
