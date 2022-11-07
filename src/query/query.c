@@ -72,9 +72,19 @@ int runQueries (
     const char *end_ptr = query_string;
 
     while(*end_ptr != '\0') {
-        int result = query(end_ptr, output_flags, output, &end_ptr);
+        const char *query_start = end_ptr;
+        int result = query(query_start, output_flags, output, &end_ptr);
+
+        if (query_start == end_ptr) {
+            break;
+        }
 
         if (result < 0) {
+            size_t query_len = end_ptr - query_start;
+            fprintf(stderr, "Error with query: \n");
+            fwrite(query_start, 1, query_len, stderr);
+            fprintf(stderr, "\n");
+
             return result;
         }
     }

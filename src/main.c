@@ -227,13 +227,21 @@ int main (int argc, char * argv[]) {
     // If stdin is something more than a tty (i.e pipe or redirected file)
     // then we will assume the following query:
     if (!isatty(fileno(stdin))) {
-        return runQueries("SELECT * FROM stdin", flags, output);
+        return query("SELECT * FROM stdin", flags, output, NULL);
     }
 
     printUsage(argv[0]);
     return -1;
 }
 
+/**
+ * @brief Read a file into a buffer created by this function. It is the caller's
+ * responsibility to free the buffer returned in output
+ *
+ * @param file
+ * @param output OUT a buffer will be malloc'd and written to this pointer
+ * @return int Size of file read in bytes
+ */
 static int read_file (FILE *file, char **output) {
     size_t read_size = 1024;
     size_t alloc_size = read_size;
