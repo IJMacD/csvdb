@@ -324,21 +324,21 @@ int executeQueryPlan (
                 break;
             }
 
-            case PLAN_GROUP: {
+            case PLAN_GROUP_SORTED: {
                 #ifdef DEBUG
-                fprintf(stderr, "Q%d.%d: PLAN_GROUP\n", getpid(), query_count);
+                fprintf(stderr, "Q%d.%d: PLAN_GROUP_SORTED\n", getpid(), query_count);
                 #endif
 
-                result = executeGroup(q, s, result_set);
+                result = executeGroupSorted(q, s, result_set);
 
                 break;
             }
 
-            case PLAN_GROUP_BUCKET: {
+            case PLAN_GROUP: {
                 #ifdef DEBUG
                 fprintf(
                     stderr,
-                    "Q%d.%d: PLAN_GROUP_BUCKET\n",
+                    "Q%d.%d: PLAN_GROUP\n",
                     getpid(),
                     query_count
                 );

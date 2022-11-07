@@ -53,14 +53,31 @@ int executeReverse (
     return 0;
 }
 
-int executeGroup (
+/**
+ * @brief Group rows which are already sorted in the correct order. Probably
+ * about the same speed but this can offer moderate memory usage improvements.
+ *
+ * @param query
+ * @param step
+ * @param result_set
+ * @return int 0 for success
+ */
+int executeGroupSorted (
     struct Query *query,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
 
-    // Important! PLAN_GROUP requires rows are already sorted in
+    // Important! PLAN_GROUP_SORTED requires rows are already sorted in
     // GROUP BY order
+
+    if (step->predicate_count > 1) {
+        fprintf(
+            stderr,
+            "Unable to do sorted group by with more than one predicate.\n"
+        );
+        exit(-1);
+    }
 
     char values[2][MAX_VALUE_LENGTH] = {0};
 
@@ -114,71 +131,99 @@ int executeGroup (
 }
 
 /**
- * @brief For a small (known) number of groups, the bucket algorithm works
- * faster than requiring a sort.
+ * @brief Group items by bucket index lookup
  *
  * @param query
  * @param step
  * @param result_set
- * @return int
+ * @return int 0 for success
  */
 int executeGroupBucket (
     struct Query *query,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
+    // Prepare group nodes
+
+    struct ColumnNode *group_nodes
+        = malloc(sizeof(*group_nodes) * step->predicate_count);
+
+    for (int i = 0; i < step->predicate_count; i++) {
+        memcpy(
+            &group_nodes[i],
+            &step->predicates[i].left,
+            sizeof(*group_nodes)
+        );
+    }
+
+    // Get RowList
     RowListIndex row_list = popRowList(result_set);
 
-    int bucket_count = step->limit;
-
-    if (bucket_count < 0) {
-        fprintf(
-            stderr,
-            "Cannot perform bucket group with %d buckets.\n",
-            bucket_count
-        );
-        exit(-1);
-    }
-
-    if (step->predicate_count > 1) {
-        fprintf(
-            stderr,
-            "Cannot perform bucket group with %d predicates.\n",
-            step->predicate_count
-        );
-        exit(-1);
-    }
-
-    RowListIndex *buckets = malloc(sizeof(row_list) * bucket_count);
-
-    // Create Buckets
+    int bucket_count = 0;
+    char (*bucket_keys)[MAX_VALUE_LENGTH] = NULL;
+    RowListIndex *buckets = NULL;
 
     int join_count = getRowList(row_list)->join_count;
     int row_count = getRowList(row_list)->row_count;
 
-    for (int i = 0; i < bucket_count; i++) {
-        buckets[i] = createRowList(join_count, row_count);
-        pushRowList(result_set, buckets[i]);
-    }
+    // Iterate rows
 
-    char value[MAX_VALUE_LENGTH];
+    for (int i = 0; i < getRowList(row_list)->row_count; i++) {
+        char value[MAX_VALUE_LENGTH];
 
-    // Put each row into appropriate bucket
-    for (int i = 0; i < row_count; i++) {
-        evaluateNode(
+        // Evaluate group key
+        evaluateNodeList(
             query,
             getRowList(row_list),
             i,
-            &step->predicates[0].left,
+            group_nodes,
+            step->predicate_count,
             value,
             MAX_VALUE_LENGTH
         );
 
-        int bucket_index = atoi(value);
+        // Find bucket index;
+        int bucket_index = -1;
+        for (int i = 0; i < bucket_count; i++) {
+            if (strcmp(value, bucket_keys[i]) == 0) {
+                bucket_index = i;
+                break;
+            }
+        }
 
-        if (bucket_index >= bucket_count) {
-            fprintf(stderr, "Unexpected bucket value: %d\n", bucket_index);
-            exit(-1);
+        if (bucket_index == -1) {
+            // Bucket not found. We need to make a new bucket
+
+            if (bucket_keys == NULL) {
+                bucket_keys = malloc(sizeof(*bucket_keys));
+                buckets = malloc(sizeof(*buckets));
+            }
+            else {
+                bucket_keys = realloc(
+                    bucket_keys,
+                    sizeof(*bucket_keys) * (bucket_count + 1)
+                );
+                buckets = realloc(
+                    buckets,
+                    sizeof(*buckets) * (bucket_count + 1)
+                );
+
+                if (bucket_keys == NULL || buckets == NULL) {
+                    fprintf(
+                        stderr,
+                        "Unable to allocate space for %d buckets.\n",
+                        bucket_count + 1
+                    );
+                    exit(-1);
+                }
+            }
+
+            strcpy(bucket_keys[bucket_count], value);
+            buckets[bucket_count] = createRowList(join_count, row_count - i);
+
+            pushRowList(result_set, buckets[bucket_count]);
+
+            bucket_index = bucket_count++;
         }
 
         copyResultRow(

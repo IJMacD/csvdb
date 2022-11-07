@@ -9,6 +9,16 @@ int evaluateNode (
     int max_length
 );
 
+int evaluateNodeList (
+    struct Query * query,
+    struct RowList *rowlist,
+    int index,
+    struct ColumnNode * columns,
+    int column_count,
+    char * output,
+    int max_length
+);
+
 int evaluateField (
     char * output,
     struct Table *tables,

@@ -12,7 +12,7 @@ int executeReverse (
     struct ResultSet *result_set
 );
 
-int executeGroup (
+int executeGroupSorted (
     struct Query *query,
     struct PlanStep *step,
     struct ResultSet *result_set

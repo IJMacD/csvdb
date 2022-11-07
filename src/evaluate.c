@@ -7,6 +7,7 @@
 #include "result.h"
 #include "db.h"
 #include "date.h"
+#include "util.h"
 
 /**
  * @brief
@@ -17,7 +18,7 @@
  * @param column
  * @param value
  * @param max_length
- * @return int
+ * @return int Number of bytes written
  */
 int evaluateNode (
     struct Query * q,
@@ -45,6 +46,60 @@ int evaluateNode (
     evaluateField(value2, q->tables, rowlist, &(column->fields[1]), index);
 
     return evaluateFunction(output, column->function, values, 2);
+}
+
+/**
+ * @brief Evaluate a set of columns into a single sortable string using \x1f to
+ * separate fields.
+ *
+ * @param query
+ * @param rowlist
+ * @param index
+ * @param columns
+ * @param column_count
+ * @param output
+ * @param max_length
+ * @return int Number of bytes written
+ */
+int evaluateNodeList (
+    struct Query * query,
+    struct RowList *rowlist,
+    int index,
+    struct ColumnNode * columns,
+    int column_count,
+    char * output,
+    __attribute__ ((unused)) int max_length
+) {
+    char value[MAX_VALUE_LENGTH];
+    int bytes_written = 0;
+
+    for (int j = 0; j < column_count; j++) {
+        int count = evaluateNode(
+            query,
+            rowlist,
+            index,
+            &columns[j],
+            value,
+            sizeof(value)
+        );
+
+        // Numeric values need to be fixed width for comparison.
+        // After testing it make no difference whether numeric values are
+        // compared or strings are compared. (There are other slower steps).
+        if (is_numeric(value)) {
+            count = sprintf(output, "%020ld", atol(value));
+        }
+        else {
+            strcpy(output, value);
+        }
+
+        output += count;
+        *(output++) = '\x1f'; // Field separator
+
+        bytes_written += count + 1;
+    }
+
+    return bytes_written;
 }
 
 /**

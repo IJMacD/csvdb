@@ -260,8 +260,8 @@ int explain_select_query (
                 rows = s.limit;
             }
         }
-        else if (s.type == PLAN_GROUP) {
-            operation = "GROUP";
+        else if (s.type == PLAN_GROUP_SORTED) {
+            operation = "GROUP SORTED";
 
             if (s.predicate_count > 0) {
                 rows /= 10;
@@ -269,11 +269,13 @@ int explain_select_query (
                 rows = 1;
             }
         }
-        else if (s.type == PLAN_GROUP_BUCKET) {
-            operation = "GROUP BUCKET";
+        else if (s.type == PLAN_GROUP) {
+            operation = "GROUP";
 
-            if (rows > 0) {
-                rows = s.limit;
+            if (s.predicate_count > 0) {
+                rows /= 10;
+            } else {
+                rows = 1;
             }
         }
         else if (s.type == PLAN_SELECT) {

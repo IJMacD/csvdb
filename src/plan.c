@@ -7,24 +7,28 @@
 #include "predicates.h"
 #include "evaluate.h"
 
-static void addStep (struct Plan *plan, int type);
+static struct PlanStep *addStep (struct Plan *plan, int type);
 
-static void addOrderStepsIfRequired (struct Plan *plan, struct Query *q);
-
-static void addStepWithPredicate (
+static struct PlanStep *addStepWithPredicate (
     struct Plan *plan,
     int type,
     struct Predicate *p
 );
 
-static void addStepWithPredicates (
+static struct PlanStep *addStepWithPredicates (
     struct Plan *plan,
     int type,
     struct Predicate *p,
     int predicate_count
 );
 
-static void addStepWithLimit (struct Plan *plan, int type, int limit);
+static struct PlanStep *addStepWithLimit (
+    struct Plan *plan,
+    int type,
+    int limit
+);
+
+static void addOrderStepsIfRequired (struct Plan *plan, struct Query *q);
 
 static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q);
 
@@ -48,6 +52,8 @@ static int applySortLogic (
     struct Plan *plan,
     int *sorts_needed
 );
+
+static int areNodesEqual (struct ColumnNode *nodeA, struct ColumnNode *nodeB);
 
 int makePlan (struct Query *q, struct Plan *plan) {
     plan->step_count = 0;
@@ -541,7 +547,7 @@ void destroyPlan (struct Plan *plan) {
     }
 }
 
-static void addStep (struct Plan *plan, int type) {
+static struct PlanStep *addStep (struct Plan *plan, int type) {
     int i = plan->step_count;
 
     plan->steps[i].predicate_count = 0;
@@ -550,6 +556,46 @@ static void addStep (struct Plan *plan, int type) {
     plan->steps[i].limit = -1;
 
     plan->step_count++;
+
+    return &plan->steps[i];
+}
+
+static struct PlanStep *addStepWithPredicate (
+    struct Plan *plan,
+    int type, struct Predicate *p
+) {
+    return addStepWithPredicates(plan, type, p, 1);
+}
+
+static struct PlanStep *addStepWithPredicates (
+    struct Plan *plan,
+    int type,
+    struct Predicate *p,
+    int predicate_count
+) {
+    int i = plan->step_count;
+
+    plan->steps[i].predicate_count = predicate_count;
+    plan->steps[i].predicates = p;
+    plan->steps[i].type = type;
+    plan->steps[i].limit = -1;
+
+    plan->step_count++;
+
+    return &plan->steps[i];
+}
+
+static struct PlanStep *addStepWithLimit (struct Plan *plan, int type, int limit) {
+    int i = plan->step_count;
+
+    plan->steps[i].predicate_count = 0;
+    plan->steps[i].predicates = NULL;
+    plan->steps[i].type = type;
+    plan->steps[i].limit = limit;
+
+    plan->step_count++;
+
+    return &plan->steps[i];
 }
 
 /**
@@ -596,40 +642,6 @@ static void addOrderStepsIfRequired (struct Plan *plan, struct Query *q) {
 
         addStepWithPredicates(plan, PLAN_SORT, predicates, sorts_added);
     }
-}
-
-static void addStepWithPredicate (
-    struct Plan *plan,
-    int type, struct Predicate *p
-) {
-    addStepWithPredicates(plan, type, p, 1);
-}
-
-static void addStepWithPredicates (
-    struct Plan *plan,
-    int type,
-    struct Predicate *p,
-    int predicate_count
-) {
-    int i = plan->step_count;
-
-    plan->steps[i].predicate_count = predicate_count;
-    plan->steps[i].predicates = p;
-    plan->steps[i].type = type;
-    plan->steps[i].limit = -1;
-
-    plan->step_count++;
-}
-
-static void addStepWithLimit (struct Plan *plan, int type, int limit) {
-    int i = plan->step_count;
-
-    plan->steps[i].predicate_count = 0;
-    plan->steps[i].predicates = NULL;
-    plan->steps[i].type = type;
-    plan->steps[i].limit = limit;
-
-    plan->step_count++;
 }
 
 static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
@@ -718,77 +730,30 @@ static void addGroupStepIfRequired (struct Plan *plan, struct Query *q) {
             (enum Operator)ORDER_ASC
         );
 
-        // Check if we can use bucket grouping first
+        // Check if we can use sorted grouping first
+        struct PlanStep *first = &plan->steps[0];
+        if (first->type == PLAN_INDEX_RANGE || first->type == PLAN_INDEX_SCAN) {
+            struct ColumnNode *first_node = &first->predicates[0].left;
 
-        int bucket_count = -1;
+            if (areNodesEqual(first_node, group_node)) {
+                struct PlanStep *prev = addStepWithPredicate(
+                    plan,
+                    PLAN_GROUP_SORTED,
+                    group_predicate
+                );
 
-        if (group_node->function == FUNC_MOD) {
-            char value[32];
-            evaluateConstantField(value, &group_node->fields[1]);
-            bucket_count = atoi(value);
-        }
-        else if (group_node->function == FUNC_EXTRACT_WEEKDAY) {
-            // Buckets always start numbered at 0
-            bucket_count = 8;
-        }
-        else if (group_node->function == FUNC_EXTRACT_MONTH) {
-            // Buckets always start numbered at 0
-            bucket_count = 13;
-        }
+                if (q->limit_value > -1) {
+                    prev->limit = q->offset_value + q->limit_value;
+                }
 
-        if (bucket_count >= 0 && bucket_count < 20) {
-            addStepWithPredicate(plan, PLAN_GROUP_BUCKET, group_predicate);
-
-            struct PlanStep *prev = &plan->steps[plan->step_count - 1];
-
-            prev->limit = bucket_count;
-
-            if (
-                q->limit_value > -1
-                && q->offset_value + q->limit_value < prev->limit
-            ) {
-
-                prev->limit = q->offset_value + q->limit_value;
-            }
-
-            return;
-        }
-
-        // The remaining grouping algortithm *requires* sorting
-        // We'll check if we can get away without sorting explicitly.
-        // This check is less than perfect.
-        int sort_required = 1;
-
-        if (q->group_node[0].function == FUNC_UNITY) {
-            struct PlanStep *first = &plan->steps[0];
-
-            char *first_predicate_value
-                = first->predicates[0].left.fields[0].text;
-
-            if (
-                (
-                    first->type == PLAN_INDEX_RANGE
-                    || first->type == PLAN_UNIQUE_RANGE
-                )
-                && strcmp(
-                    first_predicate_value,
-                    q->group_node[0].fields[0].text
-                ) == 0
-            ) {
-                // Already sorted on our field
-                sort_required = 0;
+                return;
             }
         }
 
-        if (sort_required) {
-            addStepWithPredicate(plan, PLAN_SORT, group_predicate);
-        }
-
-        addStepWithPredicate(plan, PLAN_GROUP, group_predicate);
+        struct PlanStep *prev
+            = addStepWithPredicate(plan, PLAN_GROUP, group_predicate);
 
         if (q->limit_value >= 0) {
-            struct PlanStep *prev = &plan->steps[plan->step_count - 1];
-
             prev->limit = q->offset_value + q->limit_value;
         }
     }
@@ -1086,4 +1051,16 @@ static int applySortLogic (
     }
 
     return sorts_added;
+}
+
+static int areNodesEqual (struct ColumnNode *nodeA, struct ColumnNode *nodeB) {
+    return nodeA->function == nodeB->function
+        && nodeA->fields[0].table_id
+            == nodeB->fields[0].table_id
+        && nodeA->fields[0].index
+            == nodeB->fields[0].index
+        && nodeA->fields[1].table_id
+            == nodeB->fields[1].table_id
+        && nodeA->fields[1].index
+            == nodeB->fields[1].index;
 }

@@ -130,32 +130,15 @@ void sortResultRowsMultiple (
         struct TreeNode *node = &pool[i];
         node->key = i;
 
-        char *target = node->value;
-        char value[MAX_VALUE_LENGTH];
-
-        for (int j = 0; j < column_count; j++) {
-            int count = evaluateNode(
-                q,
-                source_list,
-                i,
-                &columns[j],
-                value,
-                sizeof(value)
-            );
-
-            // Numeric values need to be fixed width for comparison.
-            // After testing it make no difference whether numeric values are
-            // compared or strings are compared. (There are other slower steps).
-            if (is_numeric(value)) {
-                count = sprintf(target, "%020ld", atol(value));
-            }
-            else {
-                strcpy(target, value);
-            }
-
-            target += count;
-            *(target++) = '\x1f'; // Field separator
-        }
+        evaluateNodeList(
+            q,
+            source_list,
+            i,
+            columns,
+            column_count,
+            node->value,
+            sizeof(node->value)
+        );
 
         // For first (root) node we do a dummy insert to make sure struct
         // has been initialised properly
