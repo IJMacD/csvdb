@@ -7,8 +7,11 @@ CFLAGS = -Wall -Werror -Wextra -Wno-format-overflow
 #
 # Project files
 #
-SRCS = main.c db.c db-csv.c db-calendar.c db-csv-mem.c db-csv-mmap.c db-sequence.c db-sample.c db-dir.c db-view.c query.c execute.c executeSource.c executeJoin.c executeFilter.c executeProcess.c token.c parse.c predicates.c evaluate.c sort-tree.c sort-quick.c tree.c output.c create.c util.c explain.c indices.c plan.c function.c date.c result.c debug.c
 SRCDIR = src
+SUBDIRS = db query execute evaluate sort functions
+SRCDIRS = $(addprefix $(SRCDIR)/, $(SUBDIRS))
+RAWSRCS = main.c $(wildcard $(addsuffix /*.c, $(SRCDIRS)))
+SRCS = $(RAWSRCS:src/%=%)
 OBJS = $(SRCS:.c=.o)
 EXE  = csvdb
 GENEXE = gen
@@ -19,7 +22,7 @@ INSTALL_DIR = /usr/local/bin
 #
 DBGDIR = debug
 DBGEXE = $(DBGDIR)/$(EXE)
-DBGOBJS = $(addprefix $(DBGDIR)/, $(OBJS))
+DBGOBJS = $(addprefix $(DBGDIR)/, $(OBJS)) $(DBGDIR)/debug.o
 DBGCFLAGS = -g -O0 -DDEBUG -DJSON_NULL
 
 #
@@ -102,7 +105,7 @@ $(GENEXE): $(GENOBJS)
 # Other rules
 #
 prep:
-	@mkdir -p $(DBGDIR) $(RELDIR)
+	@mkdir -p $(DBGDIR) $(addprefix $(DBGDIR)/, $(SRCDIRS)) $(RELDIR) $(addprefix $(RELDIR)/, $(SRCDIRS))
 
 remake: clean all
 

@@ -3,6 +3,7 @@
 #include <time.h>
 
 #include "structs.h"
+#include "query/query.h"
 
 void printUsage (const char* name) {
     printf(
@@ -40,5 +41,10 @@ int main (int argc, char * argv[]) {
     char query[64];
     sprintf(query, "FROM SAMPLE LIMIT %d", record_count);
 
-    select_query(query, OUTPUT_FORMAT_COMMA | OUTPUT_OPTION_HEADERS, stream);
+    select_query(
+        query,
+        OUTPUT_FORMAT_COMMA | OUTPUT_OPTION_HEADERS,
+        stream,
+        NULL
+    );
 }

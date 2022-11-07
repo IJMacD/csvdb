@@ -1,7 +1,7 @@
 #include <stdio.h>
 
 #include "structs.h"
-#include "result.h"
+#include "query/result.h"
 
 void debugRowList (struct RowList * list, int verbosity) {
     if (list == NULL) {

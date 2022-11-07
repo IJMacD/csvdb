@@ -12,6 +12,16 @@
         "array": "c",
         "functional": "c",
         "tuple": "c",
-        "utility": "c"
+        "utility": "c",
+        "csv-mem.h": "c",
+        "db.h": "c",
+        "evaluate.h": "c",
+        "execute.h": "c",
+        "util.h": "c",
+        "sort-quick.h": "c",
+        "output.h": "c",
+        "indices.h": "c",
+        "function.h": "c",
+        "result.h": "c"
     }
 }

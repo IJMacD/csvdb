@@ -6,8 +6,8 @@
 #include <unistd.h>
 
 #include "structs.h"
-#include "query.h"
-#include "output.h"
+#include "query/query.h"
+#include "query/output.h"
 
 static int read_file(FILE *file, char **output);
 

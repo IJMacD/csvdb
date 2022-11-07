@@ -9,8 +9,7 @@
 #include <sys/stat.h>
 
 #include "structs.h"
-#include "query.h"
-#include "output.h"
+#include "query/query.h"
 
 /*
  * CGI Spec:
