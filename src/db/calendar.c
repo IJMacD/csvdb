@@ -83,9 +83,9 @@ static int printDate (
     struct DateTime date
 );
 
-static int calendar_evaluateField(
+static int calendar_evaluateField (
     struct DB *db,
-    struct ColumnNode *column,
+    struct Field *field,
     int rowid,
     char *value,
     int max_length
@@ -456,14 +456,14 @@ int calendar_fullTableAccess (
 
             calendar_evaluateField(
                 db,
-                &predicate->left,
+                (struct Field *)&predicate->left,
                 julian,
                 value_left,
                 MAX_VALUE_LENGTH
             );
             calendar_evaluateField(
                 db,
-                &predicate->right,
+                (struct Field *)&predicate->right,
                 julian,
                 value_right,
                 MAX_VALUE_LENGTH
@@ -499,8 +499,8 @@ static void getJulianRange (
     for (int i = 0; i < predicate_count; i++) {
         struct Predicate *p = predicates + i;
 
-        struct Field * field_left = p->left.fields;
-        struct Field * field_right = p->right.fields;
+        struct Field * field_left = (struct Field *)&p->left;
+        struct Field * field_right = (struct Field *)&p->right;
 
         // Prep: We need field on the left and constant on the right, swap if
         // necessary
@@ -670,13 +670,11 @@ static int printDate (char *value, int max_length, struct DateTime date) {
 
 static int calendar_evaluateField(
     struct DB *db,
-    struct ColumnNode *column,
+    struct Field *field,
     int rowid,
     char *value,
     int max_length
 ) {
-    struct Field *field = column->fields;
-
     if (field->index == FIELD_CONSTANT) {
         strcpy(value, field->text);
         return 0;

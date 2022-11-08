@@ -20,6 +20,4 @@ int select_query (
     const char **end_ptr
 );
 
-int populateColumnNode (struct Query * query, struct ColumnNode * column);
-
 int select_subquery(const char *query, char *filename);

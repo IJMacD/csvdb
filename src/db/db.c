@@ -19,17 +19,17 @@
 #include "../evaluate/function.h"
 
 static int evaluateTableNode (
-    char * value,
     struct DB *db,
-    struct ColumnNode *column,
-    int rowid
+    int row_id,
+    struct Node *node,
+    char * output
 );
 
 static int evaluateTableField (
-    char * output,
     struct DB *db,
+    int row_id,
     struct Field *field,
-    int row_id
+    char * output
 );
 
 struct VFS VFS_Table[VFS_COUNT] = {
@@ -301,11 +301,11 @@ int fullTableAccess (
 
             // All fields in predicates MUST be on this table or constant
 
-            result = evaluateTableNode(value_left, db, &predicate->left, i);
+            result = evaluateTableNode(db, i, &predicate->left, value_left);
             if (result < 0) {
                 return -1;
             }
-            result = evaluateTableNode(value_right, db, &predicate->right, i);
+            result = evaluateTableNode(db, i, &predicate->right, value_right);
             if (result < 0) {
                 return -1;
             }
@@ -620,39 +620,53 @@ int uniqueIndexSearch (struct DB *db, const char * value, int * output_flag) {
  * @return int
  */
 static int evaluateTableNode (
-    char * output,
     struct DB *db,
-    struct ColumnNode *column,
-    int row_id
+    int row_id,
+    struct Node *node,
+    char * output
 ) {
-    struct Field *field1 = &(column->fields[0]);
-    struct Field *field2 = &(column->fields[1]);
-
-    char value1[MAX_VALUE_LENGTH] = {0};
-    char value2[MAX_VALUE_LENGTH] = {0};
-
-    char *values[2];
-    values[0] = value1;
-    values[1] = value2;
-
-    int result;
-
-    result = evaluateTableField(value1, db, field1, row_id);
-    if (result < 0) {
-        return -1;
+    if (node->function == FUNC_UNITY) {
+        // With FUNC_UNITY we'll just output directly to parent
+        return evaluateTableField(db, row_id, (struct Field *)node, output);
     }
 
-    if (column->function == FUNC_UNITY) {
-        strcpy(output, value1);
-        return strlen(output);
+    if (node->child_count == -1) {
+        // Optimistation where node is its own child
+
+        char value[MAX_VALUE_LENGTH];
+        char *values[] = { value };
+        evaluateTableField(db, row_id, (struct Field *)node, value);
+        return evaluateFunction(output, node->function, values, 1);
     }
 
-    result = evaluateTableField(value2, db, field2, row_id);
-    if (result < 0) {
-        return -1;
+    char (*values)[MAX_VALUE_LENGTH]
+        = malloc(node->child_count * MAX_VALUE_LENGTH);
+
+    if (values == NULL) {
+        fprintf(
+            stderr,
+            "Unable to allocate %d bytes for %d child node values\n",
+            node->child_count * MAX_VALUE_LENGTH,
+            node->child_count
+        );
+        exit(-1);
     }
 
-    return evaluateFunction(output, column->function, values, 2);
+    for (int i = 0; i < node->child_count; i++) {
+        evaluateTableNode(
+            db,
+            row_id,
+            &node->children[i],
+            values[i]
+        );
+    }
+
+    return evaluateFunction(
+        output,
+        node->function,
+        (char **)values,
+        node->child_count
+    );
 }
 /**
  * @brief Like evaluateField() but only operates on a single table
@@ -665,10 +679,10 @@ static int evaluateTableNode (
  * @return int number of chars written
  */
 static int evaluateTableField (
-    char * output,
     struct DB *db,
+    int row_id,
     struct Field *field,
-    int row_id
+    char * output
 ) {
 
     if (field->index == FIELD_CONSTANT) {

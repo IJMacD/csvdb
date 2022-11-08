@@ -43,7 +43,7 @@ static int optimisePredicates (
 );
 
 static struct Predicate *makePredicate (
-    struct ColumnNode *column,
+    struct Node *node,
     enum Operator op
 );
 
@@ -53,7 +53,7 @@ static int applySortLogic (
     int *sorts_needed
 );
 
-static int areNodesEqual (struct ColumnNode *nodeA, struct ColumnNode *nodeB);
+static int areNodesEqual (struct Node *nodeA, struct Node *nodeB);
 
 int makePlan (struct Query *q, struct Plan *plan) {
     plan->step_count = 0;
@@ -91,13 +91,13 @@ int makePlan (struct Query *q, struct Plan *plan) {
         // First predicate
         struct Predicate *p = &q->predicates[0];
 
-        struct Field * field_left = p->left.fields;
-        struct Field * field_right = p->right.fields;
+        struct Node *field_left = &p->left;
+        struct Node *field_right = &p->right;
 
         if (predicatesOnFirstTable > 0) {
 
             enum PlanStepType step_type = 0;
-            size_t len = strlen(field_right->text);
+            size_t len = strlen(field_right->field.text);
 
             int skip_index = 0;
 
@@ -111,19 +111,19 @@ int makePlan (struct Query *q, struct Plan *plan) {
             if (predicatesOnFirstTable > 1 && table->db->vfs == VFS_CALENDAR) {
                 struct Predicate *p2 = &q->predicates[1];
 
-                if (strcmp(field_left->text, p2->left.fields[0].text) == 0) {
+                if (strcmp(field_left->field.text, p2->left.field.text) == 0) {
                     skip_index = 1;
                 }
             }
 
             if (skip_index == 0) {
-                if (p->left.fields[0].index == FIELD_ROW_INDEX) {
+                if (p->left.field.index == FIELD_ROW_INDEX) {
                     step_type = PLAN_TABLE_SCAN;
                 }
                 // LIKE can only use index if '%' is at the end
                 else if (
                     p->op == OPERATOR_LIKE
-                    && field_right->text[len-1] != '%'
+                    && field_right->field.text[len-1] != '%'
                 ) {
                     // NOP
                     step_type = 0;
@@ -143,11 +143,11 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 else if (p->left.function == FUNC_UNITY) {
 
                     // Remove qualified name so indexes can be searched etc.
-                    int dot_index = str_find_index(field_left->text, '.');
+                    int dot_index = str_find_index(field_left->field.text, '.');
                     if (dot_index >= 0) {
                         char value[MAX_FIELD_LENGTH];
-                        strcpy(value, field_left->text);
-                        strcpy(field_left->text, value + dot_index + 1);
+                        strcpy(value, field_left->field.text);
+                        strcpy(field_left->field.text, value + dot_index + 1);
                     }
 
                     /*******************
@@ -158,7 +158,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
                     enum IndexSearchType find_result = findIndex(
                         NULL,
                         table->name,
-                        field_left->text,
+                        field_left->field.text,
                         INDEX_ANY
                     );
 
@@ -219,10 +219,10 @@ int makePlan (struct Query *q, struct Plan *plan) {
                     // column we've just scanned.
                     if (
                         (q->order_count == 1)
-                        && q->order_node[0].function == FUNC_UNITY
+                        && q->order_nodes[0].function == FUNC_UNITY
                         && strcmp(
-                            field_left->text,
-                            q->order_node[0].fields[0].text
+                            field_left->field.text,
+                            q->order_nodes[0].field.text
                         ) == 0
                     ) {
 
@@ -251,16 +251,16 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 //  Index, then filter:     real    0m3.012s
                 //  Filter, then sort:      real    0m1.637s
                 && (p->op != OPERATOR_EQ)
-                && q->order_node[0].function == FUNC_UNITY
+                && q->order_nodes[0].function == FUNC_UNITY
                 && findIndex(
                     NULL,
                     table->name,
-                    q->order_node[0].fields[0].text,
+                    q->order_nodes[0].field.text,
                     INDEX_ANY
                 )
             ) {
                 struct Predicate *order_p = makePredicate(
-                    &q->order_node[0],
+                    &q->order_nodes[0],
                     OPERATOR_ALWAYS
                 );
 
@@ -272,9 +272,10 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 for (int i = 0; i < q->predicate_count; i++) {
                     // If left and right are either constant or table 0 then we
                     // can filter
-                    if (q->predicates[i].left.fields[0].table_id <= 0 &&
-                        q->predicates[i].right.fields[0].table_id <= 0)
-                    {
+                    if (
+                        q->predicates[i].left.field.table_id <= 0
+                        && q->predicates[i].right.field.table_id <= 0
+                    ) {
                         skip_predicates++;
                     } else {
                         break;
@@ -311,7 +312,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
             }
             else if (
                 (q->flags & FLAG_GROUP)
-                && q->group_node[0].function == FUNC_UNITY
+                && q->group_nodes[0].function == FUNC_UNITY
             ) {
                 // Before we do a full table scan... we have one more
                 // opportunity to use an index to save a sort later, see if we
@@ -320,12 +321,12 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 if (findIndex(
                     NULL,
                     table->name,
-                    q->group_node[0].fields[0].text,
+                    q->group_nodes[0].field.text,
                     INDEX_ANY
                 )) {
 
                     struct Predicate *group_p = makePredicate(
-                        &q->group_node[0],
+                        &q->group_nodes[0],
                         OPERATOR_ALWAYS
                     );
 
@@ -438,7 +439,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
     }
     else if (
             q->order_count >= 1
-            && q->order_node[0].function == FUNC_UNITY
+            && q->order_nodes[0].function == FUNC_UNITY
             && !(q->flags & FLAG_GROUP)
         ) {
         // Before we do a full table scan... we have one more opportunity to use
@@ -450,13 +451,13 @@ int makePlan (struct Query *q, struct Plan *plan) {
         enum IndexSearchType index_type = findIndex(
             NULL,
             table->name,
-            q->order_node[0].fields[0].text,
+            q->order_nodes[0].field.text,
             INDEX_ANY
         );
 
         if (index_type != INDEX_NONE) {
             struct Predicate *order_p = makePredicate(
-                &q->order_node[0],
+                &q->order_nodes[0],
                 OPERATOR_ALWAYS
             );
 
@@ -481,7 +482,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
     }
     else if (
         (q->flags & FLAG_GROUP)
-        && q->group_node[0].function == FUNC_UNITY
+        && q->group_nodes[0].function == FUNC_UNITY
     ) {
         // Before we do a full table scan... we have one more opportunity to use
         // an index to save a sort later, see if we can use an index for
@@ -491,12 +492,12 @@ int makePlan (struct Query *q, struct Plan *plan) {
         if (findIndex(
             NULL,
             table->name,
-            q->group_node[0].fields[0].text,
+            q->group_nodes[0].field.text,
             INDEX_ANY
         )) {
 
             struct Predicate *group_p = makePredicate(
-                &q->group_node[0],
+                &q->group_nodes[0],
                 OPERATOR_ALWAYS
             );
 
@@ -635,7 +636,7 @@ static void addOrderStepsIfRequired (struct Plan *plan, struct Query *q) {
         for (int i = 0; i < sorts_added; i++) {
             int idx = sorts_needed[i];
 
-            memcpy(&p->left, &q->order_node[idx], sizeof(p->left));
+            memcpy(&p->left, &q->order_nodes[idx], sizeof(p->left));
             p->op = (enum Operator)q->order_direction[idx];
             p++;
         }
@@ -655,29 +656,29 @@ static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
         if (join->op == OPERATOR_ALWAYS) {
             // Still need to include predicate to indicate to the executor
             // which table to join.
-            join->left.fields[0].table_id = i;
+            join->left.field.table_id = i;
             addStepWithPredicate(plan, PLAN_CROSS_JOIN, join);
         }
         else {
             // We'll define that table-to-be-joined MUST be on left
-            if (join->left.fields[0].table_id != i) {
-                if (join->right.fields[0].table_id != i) {
+            if (join->left.field.table_id != i) {
+                if (join->right.field.table_id != i) {
                     fprintf(stderr, "At least one of the predicates must be on "
                         "the joined table.\n");
                     exit(-1);
                 }
 
                 // Swap left and right so that preciate looks like this:
-                //  A JOIN B ON B.field = A.field
+                //  A JOIN B ON B.field.index = A.field
                 flipPredicate(join);
             }
 
             // Constant must be on right if there is one
-            if (join->right.fields[0].index == FIELD_CONSTANT)
+            if (join->right.field.index == FIELD_CONSTANT)
             {
                 addStepWithPredicate(plan, PLAN_CONSTANT_JOIN, join);
             }
-            else if (join->right.fields[0].table_id == i) {
+            else if (join->right.field.table_id == i) {
                 // Both sides of predicate are on same table
                 // We can do contsant join
                 addStepWithPredicate(plan, PLAN_CONSTANT_JOIN, join);
@@ -686,7 +687,7 @@ static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
                 int index_result = findIndex(
                     NULL,
                     table->name,
-                    join->left.fields[0].text,
+                    join->left.field.text,
                     INDEX_ANY
                 );
 
@@ -723,7 +724,7 @@ static void addGroupStepIfRequired (struct Plan *plan, struct Query *q) {
      * Grouping
      *******************/
     if (q->flags & FLAG_GROUP && q->group_count > 0) {
-        struct ColumnNode *group_node = &q->group_node[0];
+        struct Node *group_node = &q->group_nodes[0];
 
         struct Predicate *group_predicate = makePredicate(
             group_node,
@@ -733,7 +734,7 @@ static void addGroupStepIfRequired (struct Plan *plan, struct Query *q) {
         // Check if we can use sorted grouping first
         struct PlanStep *first = &plan->steps[0];
         if (first->type == PLAN_INDEX_RANGE || first->type == PLAN_INDEX_SCAN) {
-            struct ColumnNode *first_node = &first->predicates[0].left;
+            struct Node *first_node = &first->predicates[0].left;
 
             if (areNodesEqual(first_node, group_node)) {
                 struct PlanStep *prev = addStepWithPredicate(
@@ -789,7 +790,7 @@ static void addLimitStepIfRequired (struct Plan *plan, struct Query *query) {
                 if (plan->steps[i].type == PLAN_UNIQUE_JOIN) {
                     // Defined to be this table join ID on left
                     int table_id
-                        = plan->steps[i].predicates[0].left.fields[0].table_id;
+                        = plan->steps[i].predicates[0].left.field.table_id;
 
                     if (query->tables[table_id].join_type != JOIN_LEFT) {
                         all_left_unique = 0;
@@ -855,7 +856,7 @@ static int optimisePredicates (
 
         if (
             predicates[i].left.function == FUNC_PK
-            && predicates[i].left.fields[0].table_id == 0
+            && predicates[i].left.field.table_id == 0
         ) {
             chosen_predicate_index = i;
             break;
@@ -868,7 +869,7 @@ static int optimisePredicates (
         for (int i = 0; i < count; i++) {
             // Any predicate on the first table is fine
             // Comment: Only checking left?
-            if (predicates[i].left.fields[0].table_id == 0) {
+            if (predicates[i].left.field.table_id == 0) {
                 chosen_predicate_index = i;
                 break;
             }
@@ -891,7 +892,7 @@ static int optimisePredicates (
     // many are already in place
     if (chosen_predicate_index >= 0) {
         int i = 1;
-        while (i < count && predicates[i].left.fields[0].table_id == 0) {
+        while (i < count && predicates[i].left.field.table_id == 0) {
             i++;
         }
         return i;
@@ -901,19 +902,19 @@ static int optimisePredicates (
 }
 
 static struct Predicate *makePredicate (
-    struct ColumnNode *column,
+    struct Node *node,
     enum Operator op
 ) {
     // free'd in destroyPlan()
     struct Predicate *predicate = malloc(sizeof(*predicate));
 
-    memcpy(&predicate->left, column, sizeof(*column));
+    memcpy(&predicate->left, node, sizeof(*node));
 
     predicate->op = op;
 
-    predicate->right.fields[0].table_id = -1;
-    predicate->right.fields[0].index = FIELD_UNKNOWN;
-    predicate->right.fields[0].text[0] = '\0';
+    predicate->right.field.table_id = -1;
+    predicate->right.field.index = FIELD_UNKNOWN;
+    predicate->right.field.text[0] = '\0';
 
     return predicate;
 }
@@ -959,11 +960,11 @@ static int applySortLogic (
             if (
                 q->predicates[j].op == OPERATOR_EQ
                 && q->predicates[j].left.function
-                    == q->order_node[i].function
-                && q->predicates[j].left.fields[0].table_id
-                    == q->order_node[i].fields[0].table_id
-                && q->predicates[j].left.fields[0].index
-                    == q->order_node[i].fields[0].index
+                    == q->order_nodes[i].function
+                && q->predicates[j].left.field.table_id
+                    == q->order_nodes[i].field.table_id
+                && q->predicates[j].left.field.index
+                    == q->order_nodes[i].field.index
             ) {
                 // OK we don't need to sort by this field
 
@@ -982,11 +983,11 @@ static int applySortLogic (
     // first table.
     if (sorts_added > 0 && non_unique_joins == 0) {
         int primary_sort_idx = sorts_needed[0];
-        struct ColumnNode *primary_sort_col = &q->order_node[primary_sort_idx];
+        struct Node *primary_sort_col = &q->order_nodes[primary_sort_idx];
         enum Order primary_sort_dir = q->order_direction[primary_sort_idx];
 
         struct PlanStep *first = &plan->steps[0];
-        struct ColumnNode *first_node = &first->predicates[0].left;
+        struct Node *first_node = &first->predicates[0].left;
 
         // If we're sorting on rowid or PK on single table then we can optimse
         // Only works if results were retrieved in table order
@@ -994,7 +995,7 @@ static int applySortLogic (
 
             if (
                 primary_sort_col->function == FUNC_UNITY
-                && primary_sort_col->fields[0].index == FIELD_ROW_INDEX
+                && primary_sort_col->field.index == FIELD_ROW_INDEX
             ) {
                 // No need to sort
 
@@ -1010,9 +1011,9 @@ static int applySortLogic (
         if (
             (first->type == PLAN_UNIQUE || first->type == PLAN_UNIQUE_RANGE)
             && first_node->function == FUNC_UNITY
-            && first_node->fields[0].table_id
-                == primary_sort_col->fields[0].table_id
-            && first_node->fields[0].index == primary_sort_col->fields[0].index
+            && first_node->field.table_id
+                == primary_sort_col->field.table_id
+            && first_node->field.index == primary_sort_col->field.index
         ) {
             // Rows were returned in INDEX order.
             // The first order column is the index column,
@@ -1032,9 +1033,9 @@ static int applySortLogic (
             (first->type == PLAN_INDEX_RANGE || first->type == PLAN_INDEX_SCAN)
             && sorts_added == 1
             && first_node->function == primary_sort_col->function
-            && first_node->fields[0].table_id
-                == primary_sort_col->fields[0].table_id
-            && first_node->fields[0].index == primary_sort_col->fields[0].index
+            && first_node->field.table_id
+                == primary_sort_col->field.table_id
+            && first_node->field.index == primary_sort_col->field.index
         ) {
             // Rows were returned in INDEX order.
             // The first order column is the index column,
@@ -1053,14 +1054,10 @@ static int applySortLogic (
     return sorts_added;
 }
 
-static int areNodesEqual (struct ColumnNode *nodeA, struct ColumnNode *nodeB) {
+static int areNodesEqual (struct Node *nodeA, struct Node *nodeB) {
     return nodeA->function == nodeB->function
-        && nodeA->fields[0].table_id
-            == nodeB->fields[0].table_id
-        && nodeA->fields[0].index
-            == nodeB->fields[0].index
-        && nodeA->fields[1].table_id
-            == nodeB->fields[1].table_id
-        && nodeA->fields[1].index
-            == nodeB->fields[1].index;
+        && nodeA->field.table_id
+            == nodeB->field.table_id
+        && nodeA->field.index
+            == nodeB->field.index;
 }

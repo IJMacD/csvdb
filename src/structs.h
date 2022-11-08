@@ -112,6 +112,7 @@ enum Function {
     FUNC_LENGTH =                   0x21,
     FUNC_LEFT =                     0x22,
     FUNC_RIGHT =                    0x23,
+    FUNC_CONCAT =                   0x24,
 
     // Family 010x (0x40) Extract
     FUNC_FAM_EXTRACT =              0x40,
@@ -188,17 +189,31 @@ struct Field {
     enum FieldIndex index;
 };
 
-struct ColumnNode {
-    char alias[MAX_FIELD_LENGTH];
+// Since Field is first field of Node, it means that Node can be cast to Field
+struct Node {
+    struct Field field;
     enum Function function;
-    int concat;
-    struct Field fields[2];
+    /**
+     * @brief When function != FUNC_UNITY, child_count = -1 means this node is
+     * it's own child.
+     * i.e. this node's table_id and field are the single parameter to the
+     * function.
+     */
+    int child_count;
+    /* Can only be used when function is not FUNC_UNITY */
+    struct Node *children;
+};
+
+// Since Node is first field of Column, it means that Column can be cast to Node
+struct Column {
+    struct Node node;
+    char alias[MAX_FIELD_LENGTH];
 };
 
 struct Predicate {
     enum Operator op;
-    struct ColumnNode left;
-    struct ColumnNode right;
+    struct Node left;
+    struct Node right;
 };
 
 enum IndexSearchResult {
@@ -326,17 +341,17 @@ struct Table {
 struct Query {
     struct Table *tables;
     int table_count;
-    struct ColumnNode columns[MAX_FIELD_COUNT];
+    struct Column columns[MAX_FIELD_COUNT];
     int column_count;
     enum QueryFlag flags;
     int offset_value;
     int limit_value;
     struct Predicate *predicates;
     int predicate_count;
-    struct ColumnNode order_node[MAX_FIELD_COUNT];
+    struct Node order_nodes[MAX_FIELD_COUNT];
     enum Order order_direction[MAX_FIELD_COUNT];
     int order_count;
-    struct ColumnNode group_node[MAX_FIELD_COUNT];
+    struct Node group_nodes[MAX_FIELD_COUNT];
     int group_count;
 };
 

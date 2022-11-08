@@ -7,9 +7,9 @@
 #include "../functions/util.h"
 
 struct SortContext {
-    struct Query *query;
-    struct ColumnNode *columns;
-    int column_count;
+    struct Table *tables;
+    struct Node *nodes;
+    int node_count;
     enum Order *sort_directions;
     struct RowList *row_list;
 };
@@ -20,16 +20,16 @@ static void swap (struct SortContext *context, int index_a, int index_b);
 static int compare (struct SortContext *context, int index_a, int index_b);
 
 void sortQuick (
-    struct Query *q,
-    struct ColumnNode *columns,
-    int column_count,
+    struct Table *tables,
+    struct Node *nodes,
+    int node_count,
     enum Order *sort_directions,
     struct RowList *row_list
 ) {
     struct SortContext context = {
-        .query = q,
-        .columns = columns,
-        .column_count = column_count,
+        .tables = tables,
+        .nodes = nodes,
+        .node_count = node_count,
         .sort_directions = sort_directions,
         .row_list = row_list,
     };
@@ -78,20 +78,20 @@ static int compare (struct SortContext *context, int index_a, int index_b) {
     char value_b[MAX_VALUE_LENGTH];
     int result;
 
-    for (int i = 0; i < context->column_count; i++) {
+    for (int i = 0; i < context->node_count; i++) {
         evaluateNode(
-            context->query,
+            context->tables,
             context->row_list,
             index_a,
-            &context->columns[i],
+            &context->nodes[i],
             value_a,
             MAX_VALUE_LENGTH
         );
         evaluateNode(
-            context->query,
+            context->tables,
             context->row_list,
             index_b,
-            &context->columns[i],
+            &context->nodes[i],
             value_b,
             MAX_VALUE_LENGTH
         );

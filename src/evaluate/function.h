@@ -4,3 +4,10 @@ int evaluateFunction(
     char **values,
     int value_count
 );
+
+int evaluateAggregateFunction (
+    char * output,
+    struct Table *tables,
+    struct Node *node,
+    struct RowList * row_list
+);

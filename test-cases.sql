@@ -72,7 +72,7 @@ FROM (VALUES ('a',1),('b',2),('c',3)) AS a (first, second);
 WITH r1 AS (FROM ranks WHERE value < 8 SELECT name, symbol) FROM r1 ORDER BY name;
 WITH r1 AS (FROM ranks WHERE value < 8 SELECT name, symbol), s1 AS (FROM suits SELECT name), v1 AS (VALUES ('b')) FROM r1,r1 AS r2,v1 ORDER BY r2.name, r1.name DESC FETCH FIRST 5 ROWS ONLY;
 -- Test Date functions
-SELECT DATE_DIFF('2000-01-01', '1990-01-01');
+SELECT DATE_DIFF('2000-01-01', '1986-04-24');
 SELECT DATE_DIFF(CURRENT_DATE, '2000-01-01');
 FROM test SELECT birth_date, score, DATE_ADD(birth_date, score) FETCH FIRST 5 ROWS ONLY;
 -- Test arithmetic functions

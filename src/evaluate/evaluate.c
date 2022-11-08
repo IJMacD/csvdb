@@ -9,6 +9,15 @@
 #include "../functions/date.h"
 #include "../functions/util.h"
 
+static int evaluateField (
+    struct Table *tables,
+    struct RowList *rowlist,
+    int index,
+    struct Field *field,
+    char * output,
+    int max_length
+);
+
 /**
  * @brief
  *
@@ -21,64 +30,114 @@
  * @return int Number of bytes written
  */
 int evaluateNode (
-    struct Query * q,
+    struct Table *tables,
     struct RowList *rowlist,
     int index,
-    struct ColumnNode * column,
-    char * output,
-    __attribute__((unused)) int max_length
+    struct Node *node,
+    char *output,
+    int max_length
 ) {
-
-    char value1[MAX_VALUE_LENGTH];
-    char value2[MAX_VALUE_LENGTH];
-
-    char *values[2];
-    values[0] = value1;
-    values[1] = value2;
-
-    evaluateField(value1, q->tables, rowlist, &(column->fields[0]), index);
-
-    if (column->function == FUNC_UNITY) {
-        strcpy(output, value1);
-        return strlen(output);
+    if (node->function == FUNC_UNITY) {
+        // With FUNC_UNITY we'll just output directly to parent
+        return evaluateField(
+            tables,
+            rowlist,
+            index,
+            (struct Field *)node,
+            output,
+            max_length
+        );
     }
 
-    evaluateField(value2, q->tables, rowlist, &(column->fields[1]), index);
+    if (node->child_count == -1) {
+        // Optimistation where node is its own child
 
-    return evaluateFunction(output, column->function, values, 2);
+        char value[MAX_VALUE_LENGTH];
+        evaluateField(
+            tables,
+            rowlist,
+            index,
+            (struct Field *)node,
+            value,
+            MAX_VALUE_LENGTH
+        );
+
+        char *values[] = { value };
+
+        return evaluateFunction(output, node->function, (char **)values, 1);
+    }
+
+    char *values = malloc(node->child_count * MAX_VALUE_LENGTH);
+    char **values_ptrs = malloc(node->child_count * sizeof(values));
+    for (int i = 0; i < node->child_count; i++) {
+        values_ptrs[i] = values + MAX_FIELD_LENGTH * i;
+    }
+
+    if (values == NULL) {
+        fprintf(
+            stderr,
+            "Unable to allocate %d bytes for %d child node values\n",
+            node->child_count * MAX_VALUE_LENGTH,
+            node->child_count
+        );
+        exit(-1);
+    }
+
+    for (int i = 0; i < node->child_count; i++) {
+        evaluateNode(
+            tables,
+            rowlist,
+            index,
+            &node->children[i],
+            values_ptrs[i],
+            MAX_VALUE_LENGTH
+        );
+    }
+
+    int result = evaluateFunction(
+        output,
+        node->function,
+        values_ptrs,
+        node->child_count
+    );
+
+    free(values);
+    free(values_ptrs);
+
+    return result;
 }
 
 /**
- * @brief Evaluate a set of columns into a single sortable string using \x1f to
+ * @brief Evaluate a set of nodes into a single sortable string using \x1f to
  * separate fields.
  *
  * @param query
  * @param rowlist
  * @param index
- * @param columns
- * @param column_count
+ * @param nodes
+ * @param node_count
  * @param output
  * @param max_length
  * @return int Number of bytes written
  */
 int evaluateNodeList (
-    struct Query * query,
+    struct Table * tables,
     struct RowList *rowlist,
     int index,
-    struct ColumnNode * columns,
-    int column_count,
-    char * output,
+    struct Node *nodes,
+    int node_count,
+    char *output,
     __attribute__ ((unused)) int max_length
 ) {
     char value[MAX_VALUE_LENGTH];
     int bytes_written = 0;
 
-    for (int j = 0; j < column_count; j++) {
+    for (int j = 0; j < node_count; j++) {
         int count = evaluateNode(
-            query,
+            tables,
             rowlist,
             index,
-            &columns[j],
+            &nodes[j],
             value,
             sizeof(value)
         );
@@ -112,12 +171,13 @@ int evaluateNodeList (
  * @param result_index
  * @return int number of chars written
  */
-int evaluateField (
-    char * output,
+static int evaluateField (
     struct Table *tables,
     struct RowList *rowlist,
+    int index,
     struct Field *field,
-    int result_index
+    char * output,
+    int max_length
 ) {
 
     if (field->index == FIELD_CONSTANT) {
@@ -125,7 +185,7 @@ int evaluateField (
     }
 
     if (field->table_id >= 0) {
-        int row_id = getRowID(rowlist, field->table_id, result_index);
+        int row_id = getRowID(rowlist, field->table_id, index);
 
         if (field->index == FIELD_ROW_INDEX) {
             return sprintf(output, "%d", row_id);
@@ -138,7 +198,7 @@ int evaluateField (
             row_id,
             field->index,
             output,
-            MAX_VALUE_LENGTH
+            max_length
         ) > 0;
     }
 
@@ -154,7 +214,7 @@ int evaluateField (
  * @param field
  * @return int Number of chars written
  */
-int evaluateConstantField (char * value, struct Field * field) {
+int evaluateConstantField (char * value, struct Field *field) {
 
     if (field->index != FIELD_CONSTANT) {
         fprintf(
@@ -182,4 +242,18 @@ int evaluateConstantField (char * value, struct Field * field) {
     }
 
     return sprintf(value, "%s", field->text);
+}
+
+int isConstantNode (struct Node *node) {
+    if (node->function == FUNC_UNITY || node->child_count == -1) {
+        return node->field.index == FIELD_CONSTANT;
+    }
+
+    for (int i = 0; i < node->child_count; i++) {
+        if (isConstantNode(&node->children[i]) == 0) {
+            return 0;
+        }
+    }
+
+    return 1;
 }

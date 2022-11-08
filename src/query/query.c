@@ -33,6 +33,8 @@ int information_query (const char *table, FILE * output);
 
 static int populate_tables (struct Query *q, struct DB * dbs);
 
+int resolveNode (struct Query *query, struct Node *node, int allow_aliases);
+
 static int find_field (
     struct Query *q,
     const char *text,
@@ -75,17 +77,19 @@ int runQueries (
         const char *query_start = end_ptr;
         int result = query(query_start, output_flags, output, &end_ptr);
 
-        if (query_start == end_ptr) {
-            break;
-        }
-
         if (result < 0) {
-            size_t query_len = end_ptr - query_start;
-            fprintf(stderr, "Error with query: \n");
-            fwrite(query_start, 1, query_len, stderr);
-            fprintf(stderr, "\n");
+            if (query_start != end_ptr) {
+                size_t query_len = end_ptr - query_start;
+                fprintf(stderr, "Error with query: \n");
+                fwrite(query_start, 1, query_len, stderr);
+                fprintf(stderr, "\n");
+            }
 
             return result;
+        }
+
+        if (query_start == end_ptr) {
+            break;
         }
     }
 
@@ -163,7 +167,6 @@ int select_query (
     }
 
     if (parseQuery(&q, query, end_ptr) < 0) {
-        fprintf(stderr, "Parsing query\n");
         return -1;
     }
 
@@ -198,32 +201,6 @@ int select_query (
             format | (output_flags & OUTPUT_OPTION_HEADERS),
             output
         );
-    }
-
-    int is_escaped_output =
-        format == OUTPUT_FORMAT_JSON
-        || format == OUTPUT_FORMAT_JSON_ARRAY
-        || format == OUTPUT_FORMAT_SQL_INSERT
-        || format == OUTPUT_FORMAT_XML
-        || format == OUTPUT_FORMAT_TABLE;
-
-    int have_concat = 0;
-    for (int i = 0; i < q.column_count; i++) {
-        if (q.columns[i].concat) {
-            have_concat = 1;
-            break;
-        }
-    }
-
-    // In order to support concat for these output formats we wrap the whole
-    // query in a subquery.
-    // This does not apply to --explain queries
-    if (
-        is_escaped_output
-        && have_concat
-        && !(output_flags & FLAG_EXPLAIN)
-    ) {
-        return wrap_query(&q, 0, output_flags, output);
     }
 
     // Cannot group and sort in the same query.
@@ -263,9 +240,9 @@ int select_query (
         );
 
         memcpy(
-            q2b.order_node,
-            q.order_node,
-            sizeof(q.order_node)
+            q2b.order_nodes,
+            q.order_nodes,
+            sizeof(q.order_nodes)
         );
 
         q2b.order_count = q.order_count;
@@ -328,14 +305,7 @@ static int process_query (
             // Check if any of the fields are non-constant and abort
 
             for (int i = 0; i < q->column_count; i++) {
-                struct Field * field1 = q->columns[i].fields;
-                if (field1->index != FIELD_CONSTANT) {
-                    fprintf(stderr, "No Tables specified\n");
-                    return -1;
-                }
-
-                struct Field * field2 = q->columns[i].fields;
-                if (field2->index != FIELD_CONSTANT) {
+                if (isConstantNode((struct Node *)&q->columns[i]) == 0) {
                     fprintf(stderr, "No Tables specified\n");
                     return -1;
                 }
@@ -355,7 +325,7 @@ static int process_query (
         q->tables[0].db = NULL;
 
         result = information_query(
-            q->predicates[0].right.fields[0].text,
+            q->predicates[0].right.field.text,
             output
         );
 
@@ -376,10 +346,9 @@ static int process_query (
 
     if (q->column_count == 0) {
         // Allow SELECT to be optional and default to SELECT *
-        q->columns[0].function = FUNC_UNITY;
-        q->columns[0].concat = 0;
-        q->columns[0].fields[0].index = FIELD_STAR;
-        q->columns[0].fields[0].table_id = -1;
+        q->columns[0].node.function = FUNC_UNITY;
+        q->columns[0].node.field.index = FIELD_STAR;
+        q->columns[0].node.field.table_id = -1;
         q->column_count = 1;
     }
 
@@ -390,41 +359,47 @@ static int process_query (
     // (including JOIN predicate columns)
     result = populate_tables(q, dbs);
     if (result < 0) {
+        fprintf(stderr, "Unable to populate tables\n");
         return result;
     }
 
     // Populate SELECT Columns
     for (int i = 0; i < q->column_count; i++) {
-        result = populateColumnNode(q, &q->columns[i]);
+        result = resolveNode(q, (struct Node *)&q->columns[i], 0);
         if (result < 0) {
+            fprintf(stderr, "Unable to resolve SELECT column %d\n", i);
             return result;
         }
     }
 
     // Populate WHERE columns
     for (int i = 0; i < q->predicate_count; i++) {
-        result = populateColumnNode(q, &q->predicates[i].left);
+        result = resolveNode(q, &q->predicates[i].left, 1);
         if (result < 0) {
+            fprintf(stderr, "Unable to resolve WHERE node (%d left)\n", i);
             return result;
         }
-        result = populateColumnNode(q, &q->predicates[i].right);
+        result = resolveNode(q, &q->predicates[i].right, 1);
         if (result < 0) {
+            fprintf(stderr, "Unable to resolve WHERE node (%i right)\n", i);
             return result;
         }
     }
 
     // Populate ORDER BY columns
     for (int i = 0; i < q->order_count; i++) {
-        result = populateColumnNode(q, &q->order_node[i]);
+        result = resolveNode(q, &q->order_nodes[i], 1);
         if (result < 0) {
+            fprintf(stderr, "Unable to resolve ORDER BY node %i\n", i);
             return result;
         }
     }
 
     // Populate GROUP BY columns
     for (int i = 0; i < q->group_count; i++) {
-        result = populateColumnNode(q, &q->group_node[i]);
+        result = resolveNode(q, &q->group_nodes[i], 1);
         if (result < 0) {
+            fprintf(stderr, "Unable to resolve GROUP BY node %i\n", i);
             return result;
         }
     }
@@ -642,11 +617,11 @@ static int populate_tables (struct Query *q, struct DB *dbs) {
         int result;
 
         if (table->join.op != OPERATOR_ALWAYS) {
-            result = populateColumnNode(q, &table->join.left);
+            result = resolveNode(q, &table->join.left, 0);
             if (result < 0) {
                 return result;
             }
-            result = populateColumnNode(q, &table->join.right);
+            result = resolveNode(q, &table->join.right, 0);
             if (result < 0) {
                 return result;
             }
@@ -762,63 +737,55 @@ static int find_field (
 }
 
 /**
- * Will resolve a column name to a table_id and column_id.
+ * Will resolve a field name to a table_id and column_id.
+ * Will also evaluate constant values.
  * Safe to call multiple times on same column.
  *
  * @returns 0 on success
  */
-int populateColumnNode (struct Query * query, struct ColumnNode * column) {
-    struct Field * field1 = column->fields + 0;
-    struct Field * field2 = column->fields + 1;
+int resolveNode (struct Query *query, struct Node *node, int allow_aliases) {
+    if (node->child_count > 0) {
+        for (int i = 0; i < node->child_count; i++) {
+            int result = resolveNode(query, &node->children[i], allow_aliases);
+            if (result < 0) return -1;
+        }
+        return 0;
+    }
 
     // Check for aliases first
     if (
-        column->function == FUNC_UNITY
-        && field1->index == FIELD_UNKNOWN
-        && field1->text[0] != '\0'
+        allow_aliases
+        && node->function == FUNC_UNITY
+        && node->field.index == FIELD_UNKNOWN
+        && node->field.text[0] != '\0'
     ) {
         for (int i = 0; i < query->column_count; i++) {
             if (
-                column != &query->columns[i]
-                && query->columns[i].fields[0].index != FIELD_UNKNOWN
-                && strcmp(field1->text, query->columns[i].alias) == 0
+                node != (struct Node *)&query->columns[i]
+                && strcmp(node->field.text, query->columns[i].alias) == 0
             ) {
-                memcpy(column, &query->columns[i], sizeof(*column));
+                memcpy(node, &query->columns[i], sizeof(*node));
                 return 0;
             }
         }
     }
 
-    if (field1->index == FIELD_CONSTANT) {
-        evaluateConstantField(field1->text, field1);
+    if (node->field.index == FIELD_CONSTANT) {
+        evaluateConstantField(node->field.text, &node->field);
     }
-    else if (field1->index == FIELD_UNKNOWN && field1->text[0] != '\0') {
+    else if (
+        node->field.index == FIELD_UNKNOWN
+        && node->field.text[0] != '\0'
+    ) {
         if (!find_field(
                 query,
-                field1->text,
-                &field1->table_id,
-                &field1->index,
-                field1->text
+                node->field.text,
+                &node->field.table_id,
+                &node->field.index,
+                node->field.text
             )
         ) {
-            fprintf(stderr, "Unable to find column '%s'\n", field1->text);
-            return -1;
-        }
-    }
-
-    if (field2->index == FIELD_CONSTANT) {
-        evaluateConstantField(field2->text, field2);
-    }
-    else if (field2->index == FIELD_UNKNOWN && field2->text[0] != '\0') {
-        if (!find_field(
-                query,
-                field2->text,
-                &field2->table_id,
-                &field2->index,
-                field2->text
-            )
-        ) {
-            fprintf(stderr, "Unable to find column '%s'\n", field2->text);
+            fprintf(stderr, "Unable to find column '%s'\n", node->field.text);
             return -1;
         }
     }

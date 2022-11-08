@@ -20,7 +20,7 @@ int evaluateFunction(
     char * output,
     int function,
     char **values,
-    __attribute__((unused)) int value_count
+    int value_count
 ) {
 
     // Random takes 0 parameters
@@ -139,6 +139,17 @@ int evaluateFunction(
             } else {
                 return sprintf(output, "%s", values[0]);
             }
+        }
+        else if (function == FUNC_CONCAT) {
+            int count = 0;
+
+            for (int i = 0; i < value_count; i++) {
+                int size = sprintf(output, "%s", values[i]);
+                count += size;
+                output += size;
+            }
+
+            return count;
         }
     }
     else if ((function & MASK_FUNC_FAMILY) == FUNC_FAM_EXTRACT) {
@@ -281,30 +292,28 @@ int evaluateFunction(
 int evaluateAggregateFunction (
     char * output,
     struct Table *tables,
-    __attribute__((unused)) int table_count,
-    struct ColumnNode *column,
+    struct Node *node,
     struct RowList * row_list
 ) {
-    struct Field *field = column->fields;
 
     char value[MAX_VALUE_LENGTH];
 
-    if ((column->function & MASK_FUNC_FAMILY) != FUNC_FAM_AGG) {
+    if ((node->function & MASK_FUNC_FAMILY) != FUNC_FAM_AGG) {
         return -1;
     }
 
-    if (column->function == FUNC_AGG_COUNT) {
+    if (node->function == FUNC_AGG_COUNT) {
         int count = 0;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, field->table_id, i);
+            int rowid = getRowID(row_list, node->field.table_id, i);
 
             // Count up the non-NULL values
             if (
                 getRecordValue(
-                    tables[field->table_id].db,
+                    tables[node->field.table_id].db,
                     rowid,
-                    field->index,
+                    node->field.index,
                     value,
                     MAX_VALUE_LENGTH
                 ) > 0
@@ -316,18 +325,18 @@ int evaluateAggregateFunction (
         return sprintf(output, "%d", count);
     }
 
-    if (column->function == FUNC_AGG_MIN) {
+    if (node->function == FUNC_AGG_MIN) {
         int min = INT_MAX;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, field->table_id, i);
+            int rowid = getRowID(row_list, node->field.table_id, i);
 
             // Only consider the non-NULL values
             if (
                 getRecordValue(
-                    tables[field->table_id].db,
+                    tables[node->field.table_id].db,
                     rowid,
-                    field->index,
+                    node->field.index,
                     value,
                     MAX_VALUE_LENGTH
                 ) > 0
@@ -345,18 +354,18 @@ int evaluateAggregateFunction (
         return 0;
     }
 
-    if (column->function == FUNC_AGG_MAX) {
+    if (node->function == FUNC_AGG_MAX) {
         int max = INT_MIN;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, field->table_id, i);
+            int rowid = getRowID(row_list, node->field.table_id, i);
 
             // Only consider the non-NULL values
             if (
                 getRecordValue(
-                    tables[field->table_id].db,
+                    tables[node->field.table_id].db,
                     rowid,
-                    field->index,
+                    node->field.index,
                     value,
                     MAX_VALUE_LENGTH
                 ) > 0
@@ -374,19 +383,19 @@ int evaluateAggregateFunction (
         return 0;
     }
 
-    if (column->function == FUNC_AGG_SUM) {
+    if (node->function == FUNC_AGG_SUM) {
         int sum = 0;
         int non_null = 0;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, field->table_id, i);
+            int rowid = getRowID(row_list, node->field.table_id, i);
 
             // Sum the non-NULL values
             if (
                 getRecordValue(
-                    tables[field->table_id].db,
+                    tables[node->field.table_id].db,
                     rowid,
-                    field->index,
+                    node->field.index,
                     value,
                     MAX_VALUE_LENGTH
                 ) > 0
@@ -406,19 +415,19 @@ int evaluateAggregateFunction (
         return 0;
     }
 
-    if (column->function == FUNC_AGG_AVG) {
+    if (node->function == FUNC_AGG_AVG) {
         int count = 0;
         int sum = 0;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, field->table_id, i);
+            int rowid = getRowID(row_list, node->field.table_id, i);
 
             // Count up the non-NULL values
             if (
                 getRecordValue(
-                    tables[field->table_id].db,
+                    tables[node->field.table_id].db,
                     rowid,
-                    field->index,
+                    node->field.index,
                     value,
                     MAX_VALUE_LENGTH
                 ) > 0
@@ -438,19 +447,19 @@ int evaluateAggregateFunction (
         return 0;
     }
 
-    if (column->function == FUNC_AGG_LISTAGG) {
+    if (node->function == FUNC_AGG_LISTAGG) {
 
         int have_prev = 0;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, field->table_id, i);
+            int rowid = getRowID(row_list, node->field.table_id, i);
 
             // Count up the non-NULL values
             if (
                 getRecordValue(
-                    tables[field->table_id].db,
+                    tables[node->field.table_id].db,
                     rowid,
-                    field->index,
+                    node->field.index,
                     value,
                     MAX_VALUE_LENGTH
                 ) > 0

@@ -5,6 +5,7 @@
 #include "../structs.h"
 #include "result.h"
 #include "../evaluate/evaluate.h"
+#include "../evaluate/function.h"
 #include "../db/db.h"
 #include "../functions/util.h"
 
@@ -62,7 +63,7 @@ void printResultLine (
     FILE *f,
     struct Table *tables,
     int table_count,
-    struct ColumnNode columns[],
+    struct Column columns[],
     int column_count,
     int result_index,
     struct RowList * row_list,
@@ -78,36 +79,22 @@ void printResultLine (
     printRecordStart(f, format, result_index == 0, is_single_column);
 
     for (int j = 0; j < column_count; j++) {
-        struct ColumnNode column = columns[j];
+        struct Column *column = &columns[j];
 
-        if ((format == OUTPUT_FORMAT_JSON
-            || format == OUTPUT_FORMAT_JSON_ARRAY
-            || format == OUTPUT_FORMAT_SQL_INSERT
-            || format == OUTPUT_FORMAT_XML
-            || format == OUTPUT_FORMAT_TABLE
-            ) && column.concat == 1
-        ) {
-            fprintf(
-                stderr,
-                "Cannot output json, json_array, sql with concat columns\n"
-            );
-            exit(-1);
-        }
+        struct Node *node = &column->node;
+        if (node->function == FUNC_UNITY) {
 
-        if (column.function == FUNC_UNITY) {
-            struct Field * field = column.fields;
-
-            if (field->index == FIELD_STAR) {
-                if (field->table_id >= 0) {
+            if (node->field.index == FIELD_STAR) {
+                if (node->field.table_id >= 0) {
                     // e.g. table.*
-                    struct DB *db = tables[field->table_id].db;
+                    struct DB *db = tables[node->field.table_id].db;
                     int rowid = getRowID(
                         row_list,
-                        field->table_id,
+                        node->field.table_id,
                         result_index
                     );
                     const char *prefix = table_count > 1
-                        ? tables[field->table_id].alias : NULL;
+                        ? tables[node->field.table_id].alias : NULL;
                     printAllColumnValues(f, db, prefix, rowid, format);
                 } else {
                     // e.g. *
@@ -124,52 +111,63 @@ void printResultLine (
                     }
                 }
             }
-            else if (field->index == FIELD_COUNT_STAR) {
+            else if (node->field.index == FIELD_COUNT_STAR) {
                 printColumnValueNumber(
                     f,
                     format,
                     NULL,
-                    column.alias,
+                    column->alias,
                     row_list->row_count
                 );
             }
-            else if (field->index == FIELD_ROW_NUMBER) {
+            else if (node->field.index == FIELD_ROW_NUMBER) {
                 // ROW_NUMBER() is 1-indexed
                 printColumnValueNumber(
                     f,
                     format,
                     NULL,
-                    column.alias,
+                    column->alias,
                     result_index + 1
                 );
             }
-            else if (field->index == FIELD_ROW_INDEX) {
+            else if (node->field.index == FIELD_ROW_INDEX) {
                 // FIELD_ROW_INDEX is the input line (0 indexed)
-                int rowid = getRowID(row_list, field->table_id, result_index);
-                printColumnValueNumber(f, format, NULL, column.alias, rowid);
-            }
-            else if (field->index == FIELD_CONSTANT) {
-                char output[MAX_VALUE_LENGTH];
-                evaluateConstantField(output, field);
-                printColumnValue(f, format, NULL, column.alias, output);
-            }
-            else if (field->index >= 0 && field->table_id >= 0) {
-                char output[MAX_VALUE_LENGTH];
-                evaluateField(output, tables, row_list, field, result_index);
-                printColumnValue(f, format, NULL, column.alias, output);
+                int rowid = getRowID(
+                    row_list,
+                    node->field.table_id,
+                    result_index
+                );
+                printColumnValueNumber(f, format, NULL, column->alias, rowid);
             }
             else {
-                fprintf(stderr, "Cannot evaluate field '%s\n", field->text);
-                return;
+                char output[MAX_VALUE_LENGTH];
+                int result = evaluateNode(
+                    tables,
+                    row_list,
+                    result_index,
+                    node,
+                    output,
+                    MAX_VALUE_LENGTH
+                );
+
+                if (result < 0) {
+                    fprintf(
+                        stderr,
+                        "Cannot evaluate field '%s\n",
+                        node->field.text
+                    );
+                    return;
+                }
+
+                printColumnValue(f, format, NULL, column->alias, output);
             }
         }
-        else if ((column.function & MASK_FUNC_FAMILY) == FUNC_FAM_AGG) {
+        else if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_AGG) {
             char output[MAX_VALUE_LENGTH];
             int result = evaluateAggregateFunction(
                 output,
                 tables,
-                table_count,
-                columns + j,
+                node,
                 row_list
             );
 
@@ -179,7 +177,7 @@ void printResultLine (
                 f,
                 format,
                 NULL,
-                column.alias,
+                column->alias,
                 result < 0 ? "BADFUNC" : output
             );
         }
@@ -187,15 +185,11 @@ void printResultLine (
             // Evaluate functions
             char output[MAX_VALUE_LENGTH];
 
-            // Fudge
-            struct Query q;
-            q.tables = tables;
-
             int result = evaluateNode(
-                &q,
+                tables,
                 row_list,
                 result_index,
-                columns + j,
+                (struct Node *)(columns + j),
                 output,
                 MAX_VALUE_LENGTH
             );
@@ -204,13 +198,15 @@ void printResultLine (
                 f,
                 format,
                 NULL,
-                column.alias,
+                column->alias,
                 result < 0 ? "BADFUNC" : output
             );
         }
 
         int is_last_column = j == column_count - 1;
-        if (!is_last_column && !column.concat) {
+        if (!is_last_column
+            // && !column->concat
+        ) {
             printColumnSeparator(f, format);
         }
 
@@ -230,7 +226,7 @@ void printHeaderLine (
     FILE *f,
     struct Table *tables,
     int table_count,
-    struct ColumnNode columns[],
+    struct Column columns[],
     int column_count,
     enum OutputOption flags
 ) {
@@ -275,13 +271,16 @@ void printHeaderLine (
      ********************/
 
     for (int j = 0; j < column_count; j++) {
-        struct ColumnNode column = columns[j];
-        struct Field * field = column.fields;
+        struct Column *column = &columns[j];
+        struct Node *node = &column->node;
 
-        if ((format == OUTPUT_FORMAT_JSON
-            || format == OUTPUT_FORMAT_JSON_ARRAY
-            || format == OUTPUT_FORMAT_SQL_INSERT
-            ) && column.concat == 1
+        if (
+            (
+                format == OUTPUT_FORMAT_JSON
+                || format == OUTPUT_FORMAT_JSON_ARRAY
+                || format == OUTPUT_FORMAT_SQL_INSERT
+            )
+            // && column->concat == 1
         ) {
             fprintf(
                 stderr,
@@ -292,18 +291,20 @@ void printHeaderLine (
 
         int is_last = j == column_count - 1;
 
-        if (field->index == FIELD_STAR) {
-            if (field->table_id >= 0) {
-                struct DB *db = tables[field->table_id].db;
+        if (node->field.index == FIELD_STAR) {
+            if (node->field.table_id >= 0) {
+                struct DB *db = tables[node->field.table_id].db;
                 const char *prefix
-                    = table_count > 1 ? tables[field->table_id].alias : NULL;
+                    = table_count > 1
+                        ? tables[node->field.table_id].alias : NULL;
                 printAllHeaderNames(f, db, prefix, format);
             }
             else {
                 for (int m = 0; m < table_count; m++) {
                     struct DB *db = tables[m].db;
                     const char *prefix
-                        = table_count > 1 ? tables[m].alias : NULL;
+                        = table_count > 1
+                            ? tables[m].alias : NULL;
                     printAllHeaderNames(f, db, prefix, format);
 
                     if (m < table_count - 1) {
@@ -312,26 +313,23 @@ void printHeaderLine (
                 }
             }
         }
-        else if (column.concat == 1) {
-            // noop
+        else if (column->alias[0] != '\0') {
+            printHeaderName(f, format, NULL, column->alias);
         }
-        else if (column.alias[0] != '\0') {
-            printHeaderName(f, format, NULL, column.alias);
-        }
-        else if (field->index == FIELD_COUNT_STAR) {
+        else if (node->field.index == FIELD_COUNT_STAR) {
             printHeaderName(f, format, NULL, "COUNT(*)");
         }
-        else if (field->index == FIELD_ROW_NUMBER) {
+        else if (node->field.index == FIELD_ROW_NUMBER) {
             printHeaderName(f, format, NULL, "ROW_NUMBER()");
         }
-        else if (field->index == FIELD_ROW_INDEX) {
+        else if (node->field.index == FIELD_ROW_INDEX) {
             printHeaderName(f, format, NULL, "rowid");
         }
         else {
-            printHeaderName(f, format, NULL, field->text);
+            printHeaderName(f, format, NULL, node->field.text);
         }
 
-        if (!is_last && !column.concat) {
+        if (!is_last) {
             printHeaderSeparator(f, format);
         }
     }
@@ -359,12 +357,12 @@ void printHeaderLine (
         fprintf(f, "|\n");
 
         for (int i = 0; i < column_count; i++) {
-            struct ColumnNode *col = columns + i;
-            struct Field * field = col->fields;
+            struct Column *col = columns + i;
+            struct Node *node = &col->node;
 
-            if (field->index == FIELD_STAR) {
-                if (field->table_id >= 0) {
-                    struct DB *db = tables[field->table_id].db;
+            if (node->field.index == FIELD_STAR) {
+                if (node->field.table_id >= 0) {
+                    struct DB *db = tables[node->field.table_id].db;
                     for (int j = 0; j < db->field_count; j++) {
                         fprintf(f, "|--------------------");
                     }
@@ -389,7 +387,8 @@ void printHeaderLine (
 void printPreamble (
     FILE *f,
     __attribute__((unused)) struct Table *table,
-    __attribute__((unused)) struct ColumnNode columns[],
+    __attribute__((unused)) int table_count,
+    __attribute__((unused)) struct Column columns[],
     __attribute__((unused)) int column_count,
     enum OutputOption flags
 ) {
@@ -421,7 +420,8 @@ void printPreamble (
 void printPostamble (
     FILE *f,
     __attribute__((unused)) struct Table *table,
-    __attribute__((unused)) struct ColumnNode columns[],
+    __attribute__((unused)) int table_count,
+    __attribute__((unused)) struct Column columns[],
     __attribute__((unused)) int column_count,
     __attribute__((unused)) int result_count,
     enum OutputOption flags

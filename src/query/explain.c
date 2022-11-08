@@ -56,7 +56,7 @@ int explain_select_query (
                         ptr,
                         remaining,
                         "%s",
-                        s.predicates[i].left.fields[0].text
+                        s.predicates[i].left.field.text
                     );
                 }
                 else {
@@ -64,7 +64,7 @@ int explain_select_query (
                         ptr,
                         remaining,
                         "F(%s)",
-                        s.predicates[i].left.fields[0].text
+                        s.predicates[i].left.field.text
                     );
                 }
 
@@ -132,7 +132,7 @@ int explain_select_query (
             }
 
             if (s.predicate_count > 0) {
-                int table_id = s.predicates->left.fields[0].table_id;
+                int table_id = s.predicates->left.field.table_id;
 
                 strncpy(table, q->tables[table_id].alias, MAX_FIELD_LENGTH);
                 table[MAX_FIELD_LENGTH - 1] = '\0';
@@ -144,7 +144,7 @@ int explain_select_query (
                 table,
                 "%s__%s",
                 q->tables[join_count].name,
-                s.predicates[0].left.alias
+                s.predicates[0].left.field.text
             );
             rows = 1;
             cost = log_rows;
@@ -155,7 +155,7 @@ int explain_select_query (
                 table,
                 "%s__%s",
                 q->tables[join_count].name,
-                s.predicates[0].left.alias
+                s.predicates[0].left.field.text
             );
             rows = row_estimate / 2;
             cost = rows;
@@ -166,7 +166,7 @@ int explain_select_query (
                 table,
                 "%s__%s",
                 q->tables[join_count].name,
-                s.predicates[0].left.alias
+                s.predicates[0].left.field.text
             );
             rows = 1;
             cost = log_rows;
@@ -177,7 +177,7 @@ int explain_select_query (
                 table,
                 "%s__%s",
                 q->tables[join_count].name,
-                s.predicates[0].left.alias
+                s.predicates[0].left.field.text
             );
             if (s.predicate_count > 0) {
                 if (s.limit >= 0) {
@@ -207,7 +207,7 @@ int explain_select_query (
                 table,
                 "%s__%s",
                 q->tables[join_count].name,
-                s.predicates[0].left.alias
+                s.predicates[0].left.field.text
             );
 
             if (s.predicate_count > 0) {
@@ -238,7 +238,7 @@ int explain_select_query (
                 table,
                 "%s__%s",
                 q->tables[join_count].name,
-                s.predicates[0].left.alias
+                s.predicates[0].left.field.text
             );
         }
         else if (s.type == PLAN_SORT) {
@@ -319,8 +319,8 @@ int explain_select_query (
                 }
 
                 // We might have been too hasty copying predicate name
-                if (s.predicates[0].left.fields[0].table_id != join_count) {
-                    strcpy(predicate, s.predicates[0].right.fields[0].text);
+                if (s.predicates[0].left.field.table_id != join_count) {
+                    strcpy(predicate, s.predicates[0].right.field.text);
                 }
             } else {
                 rows += record_count;
@@ -350,8 +350,8 @@ int explain_select_query (
                 }
 
                 // We might have been too hasty copying predicate name
-                if (s.predicates[0].left.fields[0].table_id != join_count) {
-                    strcpy(predicate, s.predicates[0].right.fields[0].text);
+                if (s.predicates[0].left.field.table_id != join_count) {
+                    strcpy(predicate, s.predicates[0].right.field.text);
                 }
             } else {
                 rows *= record_count;

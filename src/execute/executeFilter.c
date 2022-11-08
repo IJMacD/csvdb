@@ -34,7 +34,7 @@ int executeTableAccessRowid (
             char value_right[MAX_VALUE_LENGTH] = {0};
 
             evaluateNode(
-                query,
+                query->tables,
                 getRowList(row_list),
                 i,
                 &p->left,
@@ -42,7 +42,7 @@ int executeTableAccessRowid (
                 MAX_VALUE_LENGTH
             );
             evaluateNode(
-                query,
+                query->tables,
                 getRowList(row_list),
                 i,
                 &p->right,

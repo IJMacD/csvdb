@@ -34,7 +34,7 @@ int executeSourcePK (
     indexPrimarySeek(
         table->db,
         p->op,
-        p->right.fields[0].text,
+        p->right.field.text,
         getRowList(row_list),
         step->limit
     );
@@ -56,14 +56,14 @@ int executeSourceUnique (
         findIndex(
             &index_db,
             table->name,
-            p->left.fields[0].text,
+            p->left.field.text,
             INDEX_UNIQUE
         ) == 0
     ) {
         fprintf(
             stderr,
             "Unable to find unique index on column '%s' on table '%s'\n",
-            p->left.fields[0].text,
+            p->left.field.text,
             table->name
         );
         return -1;
@@ -84,7 +84,7 @@ int executeSourceUnique (
         &index_db,
         rowid_col,
         p->op,
-        p->right.fields[0].text,
+        p->right.field.text,
         getRowList(row_list),
         step->limit
     );
@@ -106,14 +106,14 @@ int executeSourceIndexSeek (
         findIndex(
             &index_db,
             table->name,
-            p->left.fields[0].text,
+            p->left.field.text,
             INDEX_ANY
         ) == 0
     ) {
         fprintf(
             stderr,
             "Unable to find index on column '%s' on table '%s'\n",
-            p->left.fields[0].text,
+            p->left.field.text,
             table->name
         );
         return -1;
@@ -132,7 +132,7 @@ int executeSourceIndexSeek (
         &index_db,
         rowid_col,
         p->op,
-        p->right.fields[0].text,
+        p->right.field.text,
         getRowList(row_list),
         step->limit
     );
@@ -154,14 +154,14 @@ int executeSourceIndexScan (
         findIndex(
             &index_db,
             table->name,
-            p->left.fields[0].text,
+            p->left.field.text,
             INDEX_ANY
         ) == 0
     ) {
         fprintf(
             stderr,
             "Unable to find index on column '%s' on table '%s'\n",
-            p->left.fields[0].text,
+            p->left.field.text,
             table->name
         );
         return -1;
@@ -244,7 +244,7 @@ int executeSourceTableScan (
             return -1;
         }
 
-        if (step->predicates[0].right.fields[0].index != FIELD_CONSTANT) {
+        if (step->predicates[0].right.field.index != FIELD_CONSTANT) {
             fprintf(
                 stderr,
                 "Cannot compare rowid against non-constant value\n"
@@ -252,7 +252,7 @@ int executeSourceTableScan (
             return -1;
         }
 
-        int right_val = atoi(step->predicates[0].right.fields[0].text);
+        int right_val = atoi(step->predicates[0].right.field.text);
         enum Operator op = step->predicates[0].op;
 
         if (op == OPERATOR_EQ) {

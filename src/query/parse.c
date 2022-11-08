@@ -10,24 +10,24 @@
 
 #define MAX_CTES    10
 
-static int parseColumn (
+static int parseNode (
     const char * query,
     size_t * index,
-    struct ColumnNode *column
+    struct Node *node
 );
 
 static int parseFunctionParams (
     const char * query,
     size_t * index,
-    struct ColumnNode * column
+    struct Node *node
 );
 
-static int checkConstantField (struct Field * field);
+static int checkConstantField (struct Field *field);
 
-static int checkSimpleArithmeticOperator (
+static int checkSimpleOperators (
     const char *query,
     size_t *index,
-    struct ColumnNode *column
+    struct Node *node
 );
 
 static struct Table *findTable (
@@ -35,6 +35,8 @@ static struct Table *findTable (
     struct Table *tables,
     int table_count
 );
+
+static struct Node *addChildNode (struct Node *node);
 
 int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
     /*********************
@@ -228,9 +230,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
             int curr_index = 0;
             while (query[index] != '\0' && query[index] != ';') {
-                struct ColumnNode *column = &(q->columns[curr_index++]);
-
-                column->concat = 0;
+                struct Column *column = &(q->columns[curr_index++]);
 
                 if (curr_index >= MAX_FIELD_COUNT + 1) {
                     fprintf(stderr, "Too many columns\n");
@@ -241,7 +241,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                 int col_start_index = index;
 
-                int result = parseColumn(query, &index, column);
+                int result = parseNode(query, &index, (struct Node *)column);
 
                 if (result < 0) {
                     return result;
@@ -274,12 +274,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                     skipWhitespace(query, &index);
                 }
 
-                if (query[index] == '|' && query[index+1] == '|') {
-                    column->concat = 1;
-                    index++; // (will get another increment below)
-                    skipWhitespace(query, &index);
-                }
-                else if (query[index] != ',') {
+                if (query[index] != ',') {
                     break;
                 }
 
@@ -464,7 +459,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                     struct Predicate * p = &table->join;
 
-                    int result = parseColumn(query, &index, &p->left);
+                    int result = parseNode(query, &index, &p->left);
 
                     if (result < 0) {
                         return result;
@@ -488,7 +483,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                         }
                     }
 
-                    result = parseColumn(query, &index, &p->right);
+                    result = parseNode(query, &index, &p->right);
                     if (result < 0) {
                         return result;
                     }
@@ -500,19 +495,19 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                     struct Predicate * p = &table->join;
 
-                    // parse column (could have function and field name)
-                    int result = parseColumn(query, &index, &p->left);
+                    int result = parseNode(query, &index, &p->left);
                     if (result < 0) {
+                        fprintf(stderr, "Unable to parse USING node\n");
                         return result;
                     }
 
-                    // copy function and field name to right side of predicate
+                    // node from left to right side of predicate
                     memcpy(&p->right, &p->left, sizeof (p->left));
 
                     // One side (right) needs to be on this joined table
                     // The other side needs to be from any of the previous
                     // tables we don't which yet, but it will be filled in later
-                    p->right.fields[0].table_id = q->table_count - 1;
+                    p->right.field.table_id = q->table_count - 1;
 
                     // Set operator
                     p->op = OPERATOR_EQ;
@@ -574,7 +569,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                 struct Predicate *p = &(q->predicates[q->predicate_count++]);
 
-                int result = parseColumn(query, &index, &p->left);
+                int result = parseNode(query, &index, &p->left);
                 if (result < 0) {
                     return result;
                 }
@@ -599,7 +594,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                     }
                 }
 
-                result = parseColumn(query, &index, &p->right);
+                result = parseNode(query, &index, &p->right);
                 if (result < 0) {
                     return result;
                 }
@@ -685,13 +680,13 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                 skipWhitespace(query, &index);
 
-                int result = parseColumn(query, &index, &q->order_node[i]);
+                int result = parseNode(query, &index, &q->order_nodes[i]);
                 if (result < 0) {
                     return -1;
                 }
 
                 if (
-                    strcmp(q->order_node->fields[0].text, "PK") == 0
+                    strcmp(q->order_nodes[0].field.text, "PK") == 0
                     && query[index] == '('
                 ) {
                     // We've been asked to sort on primary key.
@@ -740,7 +735,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                 skipWhitespace(query, &index);
 
-                int result = parseColumn(query, &index, &q->group_node[i]);
+                int result = parseNode(query, &index, &q->group_nodes[i]);
                 if (result < 0) {
                     return -1;
                 }
@@ -778,31 +773,26 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
     return 0;
 }
 
-static int parseColumn (
+static int parseNode (
     const char * query,
     size_t * index,
-    struct ColumnNode *column
+    struct Node *node
 ) {
     char value[MAX_FIELD_LENGTH];
     int flags = 0;
 
     // Fill in defaults
-    column->function = FUNC_UNITY;
-    column->fields[0].index = FIELD_UNKNOWN;
-    column->fields[0].table_id = -1;
-    column->fields[0].text[0] = '\0';
-    column->fields[1].index = FIELD_UNKNOWN;
-    column->fields[1].table_id = -1;
-    column->fields[1].text[0] = '\0';
-
-    // First field
-    struct Field * field = &column->fields[0];
+    node->child_count = 0;
+    node->function = FUNC_UNITY;
+    node->field.index = FIELD_UNKNOWN;
+    node->field.table_id = -1;
+    node->field.text[0] = '\0';
 
     if (query[*index] == '*') {
-        field->index = FIELD_STAR;
+        node->field.index = FIELD_STAR;
 
         // '*' will default to ALL tables
-        field->table_id = -1;
+        node->field.table_id = -1;
 
         (*index)++;
 
@@ -811,13 +801,11 @@ static int parseColumn (
 
     int quoted_flag = getQuotedToken(query, index, value, MAX_FIELD_LENGTH);
 
-    strcpy(column->alias, value);
-
     if (quoted_flag == 2) {
         // Field is explicit, it can't be a function or special column name
-        strcpy(column->fields[0].text, value);
+        strcpy(node->field.text, value);
 
-        checkSimpleArithmeticOperator(query, index, column);
+        checkSimpleOperators(query, index, node);
 
         // Whether we found a simple operator or not, we're done here
 
@@ -831,16 +819,16 @@ static int parseColumn (
         }
         (*index) += 2;
 
-        field->index = FIELD_ROW_NUMBER;
+        node->field.index = FIELD_ROW_NUMBER;
 
         return flags;
     }
 
     if (strcmp(value, "rowid") == 0) {
-        field->index = FIELD_ROW_INDEX;
+        node->field.index = FIELD_ROW_INDEX;
 
         // default to first table
-        field->table_id = 0;
+        node->field.table_id = 0;
 
         return flags;
     }
@@ -853,59 +841,63 @@ static int parseColumn (
             char part[32];
             getToken(query, index, part, 32);
 
+            // EXTRACT functions only take one parameter.
+            // We'll use the self-node optimisation
+            node->child_count = -1;
+
             if (strcmp(part, "YEAR") == 0) {
-                column->function = FUNC_EXTRACT_YEAR;
+                node->function = FUNC_EXTRACT_YEAR;
             }
             else if (strcmp(part, "MONTH") == 0) {
-                column->function = FUNC_EXTRACT_MONTH;
+                node->function = FUNC_EXTRACT_MONTH;
             }
             else if (strcmp(part, "DAY") == 0) {
-                column->function = FUNC_EXTRACT_DAY;
+                node->function = FUNC_EXTRACT_DAY;
             }
             else if (strcmp(part, "WEEK") == 0) {
-                column->function = FUNC_EXTRACT_WEEK;
+                node->function = FUNC_EXTRACT_WEEK;
             }
             else if (strcmp(part, "WEEKYEAR") == 0) {
-                column->function = FUNC_EXTRACT_WEEKYEAR;
+                node->function = FUNC_EXTRACT_WEEKYEAR;
             }
             else if (strcmp(part, "WEEKDAY") == 0) {
-                column->function = FUNC_EXTRACT_WEEKDAY;
+                node->function = FUNC_EXTRACT_WEEKDAY;
             }
             else if (strcmp(part, "HEYEAR") == 0) {
-                column->function = FUNC_EXTRACT_HEYEAR;
+                node->function = FUNC_EXTRACT_HEYEAR;
             }
             else if (strcmp(part, "YEARDAY") == 0) {
-                column->function = FUNC_EXTRACT_YEARDAY;
+                node->function = FUNC_EXTRACT_YEARDAY;
             }
             else if (strcmp(part, "MILLENNIUM") == 0) {
-                column->function = FUNC_EXTRACT_MILLENNIUM;
+                node->function = FUNC_EXTRACT_MILLENNIUM;
             }
             else if (strcmp(part, "CENTURY") == 0) {
-                column->function = FUNC_EXTRACT_CENTURY;
+                node->function = FUNC_EXTRACT_CENTURY;
             }
             else if (strcmp(part, "DECADE") == 0) {
-                column->function = FUNC_EXTRACT_DECADE;
+                node->function = FUNC_EXTRACT_DECADE;
             }
             else if (strcmp(part, "QUARTER") == 0) {
-                column->function = FUNC_EXTRACT_QUARTER;
+                node->function = FUNC_EXTRACT_QUARTER;
             }
             else if (strcmp(part, "DATE") == 0) {
-                column->function = FUNC_EXTRACT_DATE;
+                node->function = FUNC_EXTRACT_DATE;
             }
             else if (strcmp(part, "DATETIME") == 0) {
-                column->function = FUNC_EXTRACT_DATETIME;
+                node->function = FUNC_EXTRACT_DATETIME;
             }
             else if (strcmp(part, "JULIAN") == 0) {
-                column->function = FUNC_EXTRACT_JULIAN;
+                node->function = FUNC_EXTRACT_JULIAN;
             }
             else if (strcmp(part, "MONTH_STRING") == 0) {
-                column->function = FUNC_EXTRACT_MONTH_STRING;
+                node->function = FUNC_EXTRACT_MONTH_STRING;
             }
             else if (strcmp(part, "WEEK_STRING") == 0) {
-                column->function = FUNC_EXTRACT_WEEK_STRING;
+                node->function = FUNC_EXTRACT_WEEK_STRING;
             }
             else if (strcmp(part, "YEARDAY_STRING") == 0) {
-                column->function = FUNC_EXTRACT_YEARDAY_STRING;
+                node->function = FUNC_EXTRACT_YEARDAY_STRING;
             }
             else {
                 fprintf(stderr, "expected valid extract part - got %s\n", part);
@@ -924,7 +916,7 @@ static int parseColumn (
 
             skipWhitespace(query, index);
 
-            getQuotedToken(query, index, field->text, MAX_FIELD_LENGTH);
+            getQuotedToken(query, index, node->field.text, MAX_FIELD_LENGTH);
 
             skipWhitespace(query, index);
 
@@ -935,112 +927,101 @@ static int parseColumn (
 
             (*index)++;
 
-            if (strlen(part) + strlen(field->text) + 15 < MAX_FIELD_LENGTH)
-                sprintf(
-                    column->alias,
-                    "EXTRACT(%s FROM %s)",
-                    part,
-                    field->text
-                );
-
-            if (checkConstantField(field) < 0) {
+            if (checkConstantField((struct Field *)node) < 0) {
                 return -1;
             }
 
             return flags;
         }
 
-        parseFunctionParams(query, index, column);
+        parseFunctionParams(query, index, node);
 
         if (strcmp(value, "PK") == 0) {
-            column->function = FUNC_PK;
+            node->function = FUNC_PK;
         }
         else if (strcmp(value, "UNIQUE") == 0) {
-            column->function = FUNC_UNIQUE;
+            node->function = FUNC_UNIQUE;
         }
         else if (strcmp(value, "INDEX") == 0) {
-            column->function = FUNC_INDEX;
+            node->function = FUNC_INDEX;
         }
         else if (strcmp(value, "CHR") == 0) {
-            column->function = FUNC_CHR;
+            node->function = FUNC_CHR;
         }
         else if (strcmp(value, "RANDOM") == 0) {
-            column->function = FUNC_RANDOM;
-            field->index = FIELD_CONSTANT;
-            field->table_id = -1;
+            node->function = FUNC_RANDOM;
+            node->field.index = FIELD_CONSTANT;
+            node->field.table_id = -1;
         }
         else if (strcmp(value, "ADD") == 0) {
-            column->function = FUNC_ADD;
+            node->function = FUNC_ADD;
         }
         else if (strcmp(value, "SUB") == 0) {
-            column->function = FUNC_SUB;
+            node->function = FUNC_SUB;
         }
         else if (strcmp(value, "MUL") == 0) {
-            column->function = FUNC_MUL;
+            node->function = FUNC_MUL;
         }
         else if (strcmp(value, "DIV") == 0) {
-            column->function = FUNC_DIV;
+            node->function = FUNC_DIV;
         }
         else if (strcmp(value, "MOD") == 0) {
-            column->function = FUNC_MOD;
+            node->function = FUNC_MOD;
         }
         else if (strcmp(value, "POW") == 0) {
-            column->function = FUNC_POW;
+            node->function = FUNC_POW;
         }
         else if (strcmp(value, "TO_HEX") == 0) {
-            column->function = FUNC_TO_HEX;
+            node->function = FUNC_TO_HEX;
         }
         else if (strcmp(value, "LENGTH") == 0) {
-            column->function = FUNC_LENGTH;
+            node->function = FUNC_LENGTH;
         }
         else if (strcmp(value, "LEFT") == 0) {
             // LEFT(<field>, <count>)
-            column->function = FUNC_LEFT;
+            node->function = FUNC_LEFT;
         }
         else if (strcmp(value, "RIGHT") == 0) {
             // RIGHT(<field>, <count>)
-            column->function = FUNC_RIGHT;
+            node->function = FUNC_RIGHT;
         }
         else if (strcmp(value, "DATE_ADD") == 0) {
-            column->function = FUNC_DATE_ADD;
+            node->function = FUNC_DATE_ADD;
         }
         else if (strcmp(value, "DATE_SUB") == 0) {
-            column->function = FUNC_DATE_SUB;
+            node->function = FUNC_DATE_SUB;
         }
         else if (strcmp(value, "DATE_DIFF") == 0) {
-            column->function = FUNC_DATE_DIFF;
+            node->function = FUNC_DATE_DIFF;
         }
         else if (strcmp(value, "COUNT") == 0) {
-            column->function = FUNC_AGG_COUNT;
+            node->function = FUNC_AGG_COUNT;
             flags |= FLAG_GROUP;
 
-            if (strlen(field->text) + 7 < MAX_FIELD_LENGTH)
-                sprintf(column->alias, "COUNT(%s)", field->text);
-
-            if (strcmp(field->text, "*") == 0) {
-                column->function = FUNC_UNITY;
-                column->fields[0].index = FIELD_COUNT_STAR;
-                column->fields[0].table_id = -1;
+            if (strcmp(node->field.text, "*") == 0) {
+                node->function = FUNC_UNITY;
+                node->field.index = FIELD_COUNT_STAR;
+                node->field.table_id = -1;
             }
         }
         else if (strcmp(value, "MAX") == 0) {
-            column->function = FUNC_AGG_MAX;
+            node->function = FUNC_AGG_MAX;
             flags |= FLAG_GROUP;
         }
         else if (strcmp(value, "MIN") == 0) {
-            column->function = FUNC_AGG_MIN;
+            node->function = FUNC_AGG_MIN;
             flags |= FLAG_GROUP;
         }
         else if (strcmp(value, "SUM") == 0) {
-            column->function = FUNC_AGG_SUM;
+            node->function = FUNC_AGG_SUM;
             flags |= FLAG_GROUP;
         }
         else if (strcmp(value, "AVG") == 0) {
-            column->function = FUNC_AGG_AVG;
+            node->function = FUNC_AGG_AVG;
             flags |= FLAG_GROUP;
         }
         else if (strcmp(value, "LISTAGG") == 0) {
-            column->function = FUNC_AGG_LISTAGG;
+            node->function = FUNC_AGG_LISTAGG;
             flags |= FLAG_GROUP;
         }
 
@@ -1048,15 +1029,15 @@ static int parseColumn (
     }
 
     // Just a regular bare field
-    strcpy(column->fields[0].text, value);
+    strcpy(node->field.text, value);
 
     // The bare field could be number literal, string literal or named
     // constant.
-    if (checkConstantField(field) < 0) {
+    if (checkConstantField((struct Field *)node) < 0) {
         return -1;
     }
 
-    checkSimpleArithmeticOperator(query, index, column);
+    checkSimpleOperators(query, index, node);
 
     return flags;
 }
@@ -1066,43 +1047,51 @@ static int parseColumn (
  *
  * @param query Whole query string
  * @param index Pointer to index value
- * @param column Pointer to column struct
- * @param name_length Length of function name (excluding opening bracket)
+ * @param node Pointer to column struct
  * @return int
  */
 static int parseFunctionParams (
     const char * query,
     size_t * index,
-    struct ColumnNode * column
+    struct Node *node
 ) {
-    struct Field *field1 = column->fields;
-
     // getQuotedToken won't get '*' so we'll check manually
     if (query[*index] == '*') {
-        field1->text[0] = '*';
-        field1->index = FIELD_STAR;
+        node->field.text[0] = '*';
+        node->field.index = FIELD_STAR;
 
         (*index)++;
     }
     else {
-        getQuotedToken(query, index, field1->text, MAX_FIELD_LENGTH);
+        // Default to self-child node
+        node->child_count = -1;
 
-        if (checkConstantField(field1) < 0) {
+        getQuotedToken(query, index, node->field.text, MAX_FIELD_LENGTH);
+
+        if (checkConstantField((struct Field *)node) < 0) {
             return -1;
         }
 
         skipWhitespace(query, index);
 
-        if (query[*index] == ',') {
+        while (query[*index] == ',') {
+            // We need to have multiple child nodes
+            struct Node *child_node = addChildNode(node);
+
+            // Parse second child node
+
             (*index)++;
 
             skipWhitespace(query, index);
 
-            struct Field *field2 = column->fields + 1;
+            getQuotedToken(
+                query,
+                index,
+                child_node->field.text,
+                sizeof(child_node->field.text)
+            );
 
-            getQuotedToken(query, index, field2->text, MAX_FIELD_LENGTH);
-
-            if (checkConstantField(field2) < 0) {
+            if (checkConstantField(&child_node->field) < 0) {
                 return -1;
             }
 
@@ -1120,7 +1109,7 @@ static int parseFunctionParams (
     return 0;
 }
 
-static int checkConstantField (struct Field * field) {
+static int checkConstantField (struct Field *field) {
 
     if (is_numeric(field->text)) {
         // Detected numeric constant
@@ -1169,45 +1158,72 @@ static int checkConstantField (struct Field * field) {
     return 0;
 }
 
-static int checkSimpleArithmeticOperator(
+static int checkSimpleOperators(
     const char *query,
     size_t *index,
-    struct ColumnNode *column
+    struct Node *node
 ) {
-    skipWhitespace(query, index);
 
-    char c = query[*index];
+    while (query[*index] != '\0' && query[*index] != ';') {
+        enum Function function = FUNC_UNITY;
 
-    if (c == '+' || c == '-' || c == '*' || c == '/' || c == '%') {
-        switch (c)
-        {
-        case '+':
-            column->function = FUNC_ADD;
-            break;
-        case '-':
-            column->function = FUNC_SUB;
-            break;
-        case '*':
-            column->function = FUNC_MUL;
-            break;
-        case '/':
-            column->function = FUNC_DIV;
-            break;
-        case '%':
-            column->function = FUNC_MOD;
-            break;
+        skipWhitespace(query, index);
 
-        default:
+        if (query[*index] == '|' && query[*index+1] == '|') {
+            function = FUNC_CONCAT;
+
+            // Will get one more increment below
+            (*index)++;
+        }
+        else {
+            switch (query[*index])
+            {
+            case '+':
+                function = FUNC_ADD;
+                break;
+            case '-':
+                function = FUNC_SUB;
+                break;
+            case '*':
+                function = FUNC_MUL;
+                break;
+            case '/':
+                function = FUNC_DIV;
+                break;
+            case '%':
+                function = FUNC_MOD;
+                break;
+
+            default:
+                break;
+            }
+        }
+
+        if (function == FUNC_UNITY) {
+            // We didn't find another operator
             break;
         }
+
+        // If this is the first operator, we set the node
+        if (node->function == FUNC_UNITY) {
+            node->function = function;
+        }
+
+        if (node->function != function) {
+            fprintf(stderr, "Complex expressions are not supported.\n");
+            return -1;
+        }
+
 
         (*index)++;
 
         skipWhitespace(query, index);
 
-        getQuotedToken(query, index, column->fields[1].text, MAX_FIELD_LENGTH);
+        struct Node *next_child = addChildNode(node);
 
-        checkConstantField(&column->fields[1]);
+        getQuotedToken(query, index, next_child->field.text, MAX_FIELD_LENGTH);
+
+        checkConstantField(&next_child->field);
     }
 
     return 0;
@@ -1231,4 +1247,35 @@ static struct Table *findTable (
     }
 
     return NULL;
+}
+
+static struct Node *addChildNode (struct Node *node) {
+    if (node->children == NULL) {
+        node->child_count = 2;
+
+        node->children = calloc(node->child_count, sizeof(*node));
+
+        // copy existing field to new child
+
+        struct Node *child_node = &node->children[0];
+        memcpy(&child_node->field, &node->field, sizeof(node->field));
+
+        // Clear current field
+        node->field.text[0] = '\0';
+    }
+    else {
+        node->child_count++;
+
+        node->children = realloc(
+            node->children,
+            sizeof(*node) * node->child_count
+        );
+
+        if (node->children == NULL) {
+            fprintf(stderr, "Unable to allocate memory.\n");
+            exit(-1);
+        }
+    }
+
+    return &node->children[node->child_count - 1];
 }

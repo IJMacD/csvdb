@@ -33,7 +33,7 @@ int executeQueryPlan (
     /*************************
      * Output headers
      ************************/
-    printPreamble(output, NULL, q->columns, q->column_count, output_flags);
+    printPreamble(output, NULL, 0, q->columns, q->column_count, output_flags);
 
     if (output_flags & OUTPUT_OPTION_HEADERS) {
         printHeaderLine(
@@ -434,6 +434,7 @@ int executeQueryPlan (
     printPostamble(
         output,
         NULL,
+        0,
         q->columns,
         q->column_count,
         row_count,

@@ -16,18 +16,16 @@ int executeSort (
     RowListIndex row_list = popRowList(result_set);
 
     enum Order sort_directions[10];
-    struct ColumnNode *columns = malloc(
-        sizeof(*columns) * step->predicate_count
-    );
+    struct Node *nodes = malloc(sizeof(*nodes) * step->predicate_count);
 
     for (int i = 0; i < step->predicate_count && i < 10; i++) {
-        memcpy(columns + i, &step->predicates[i].left, sizeof(*columns));
+        memcpy(nodes + i, &step->predicates[i].left, sizeof(*nodes));
         sort_directions[i] = (enum Order)step->predicates[i].op;
     }
 
     sortQuick(
-        query,
-        columns,
+        query->tables,
+        nodes,
         step->predicate_count,
         sort_directions,
         getRowList(row_list)
@@ -92,7 +90,7 @@ int executeGroupSorted (
 
     RowListIndex curr_list = -1;
 
-    struct ColumnNode *col = &step->predicates[0].left;
+    struct Node *col = &step->predicates[0].left;
 
     int join_count = getRowList(row_list)->join_count;
     int row_count = getRowList(row_list)->row_count;
@@ -104,7 +102,7 @@ int executeGroupSorted (
         char *prev_value = values[(i+1)%2];
 
         evaluateNode(
-            query,
+            query->tables,
             getRowList(row_list),
             i,
             col,
@@ -145,7 +143,7 @@ int executeGroupBucket (
 ) {
     // Prepare group nodes
 
-    struct ColumnNode *group_nodes
+    struct Node *group_nodes
         = malloc(sizeof(*group_nodes) * step->predicate_count);
 
     for (int i = 0; i < step->predicate_count; i++) {
@@ -173,7 +171,7 @@ int executeGroupBucket (
 
         // Evaluate group key
         evaluateNodeList(
-            query,
+            query->tables,
             getRowList(row_list),
             i,
             group_nodes,

@@ -1,9 +1,9 @@
 #include "../structs.h"
 
 void sortQuick (
-    struct Query *q,
-    struct ColumnNode *columns,
-    int column_count,
+    struct Table *tables,
+    struct Node *nodes,
+    int node_count,
     enum Order *sort_directions,
     struct RowList *row_list
 );

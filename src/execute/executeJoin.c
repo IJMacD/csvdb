@@ -24,7 +24,7 @@ int executeCrossJoin (
     RowListIndex row_list = popRowList(result_set);
 
     // Defined to be this table join ID on left
-    int table_id = step->predicates[0].left.fields[0].table_id;
+    int table_id = step->predicates[0].left.field.table_id;
 
     struct DB *next_db = query->tables[table_id].db;
 
@@ -81,12 +81,12 @@ int executeConstantJoin (
     RowListIndex row_list = popRowList(result_set);
 
     // Defined to be this table join ID on left
-    int table_id = step->predicates[0].left.fields[0].table_id;
+    int table_id = step->predicates[0].left.field.table_id;
 
     // Sanity check
     struct Predicate *p = step->predicates + 0;
-    if (p->left.fields[0].table_id != table_id &&
-        p->right.fields[0].table_id != table_id)
+    if (p->left.field.table_id != table_id &&
+        p->right.field.table_id != table_id)
     {
         fprintf(
             stderr,
@@ -200,7 +200,7 @@ int executeLoopJoin (
     RowListIndex row_list = popRowList(result_set);
 
     // Defined to be this table join ID on left
-    int table_id = step->predicates[0].left.fields[0].table_id;
+    int table_id = step->predicates[0].left.field.table_id;
 
     struct Table *table = &query->tables[table_id];
     struct DB *next_db = table->db;
@@ -224,21 +224,21 @@ int executeLoopJoin (
         struct Predicate p = step->predicates[0];
 
         // Fill in right value as constant from outer tables
-        if (p.right.fields[0].table_id < table_id) {
+        if (p.right.field.table_id < table_id) {
             evaluateNode(
-                query,
+                query->tables,
                 getRowList(row_list),
                 i,
                 &p.right,
-                p.right.fields[0].text,
+                p.right.field.text,
                 MAX_FIELD_LENGTH
             );
-            p.right.fields[0].index = FIELD_CONSTANT;
+            p.right.field.index = FIELD_CONSTANT;
             p.right.function = FUNC_UNITY;
 
             // We're only passing one table to fullTableScan so predicate will
             // be on first table
-            p.left.fields[0].table_id = 0;
+            p.left.field.table_id = 0;
         }
         else {
             fprintf(stderr, "Limitation of RowList: tables must be joined in "
@@ -314,7 +314,7 @@ int executeUniqueJoin (
     RowListIndex row_list = popRowList(result_set);
 
     // Defined to be this table join ID on left
-    int table_id = step->predicates[0].left.fields[0].table_id;
+    int table_id = step->predicates[0].left.field.table_id;
 
     struct Table *table = &query->tables[table_id];
 
@@ -327,10 +327,10 @@ int executeUniqueJoin (
 
     struct Predicate * p = &step->predicates[0];
 
-    struct ColumnNode * outer;
-    struct ColumnNode * inner;
+    struct Node * outer;
+    struct Node * inner;
 
-    if (p->left.fields[0].table_id == table_id) {
+    if (p->left.field.table_id == table_id) {
         outer = &p->right;
         inner = &p->left;
     } else {
@@ -338,7 +338,7 @@ int executeUniqueJoin (
         return -1;
     }
 
-    if (outer->fields[0].table_id >= table_id) {
+    if (outer->field.table_id >= table_id) {
         fprintf(stderr, "Unable to perform UNIQUE JOIN\n");
         return -1;
     }
@@ -348,7 +348,7 @@ int executeUniqueJoin (
         findIndex(
             &index_db,
             query->tables[table_id].name,
-            inner->fields[0].text,
+            inner->field.text,
             INDEX_UNIQUE
         ) == 0
     ) {
@@ -356,7 +356,7 @@ int executeUniqueJoin (
             stderr,
             "Couldn't find unique index on '%s(%s)'\n",
             query->tables[table_id].name,
-            inner->fields[0].text
+            inner->field.text
         );
         return -1;
     }
@@ -369,7 +369,7 @@ int executeUniqueJoin (
 
         // Fill in value as constant from outer tables
         evaluateNode(
-            query,
+            query->tables,
             getRowList(row_list),
             i,
             outer,
@@ -440,7 +440,7 @@ int executeIndexJoin (
     RowListIndex row_list = popRowList(result_set);
 
     // Defined to be this table join ID on left
-    int table_id = step->predicates[0].left.fields[0].table_id;
+    int table_id = step->predicates[0].left.field.table_id;
 
     struct Table *table = &query->tables[table_id];
 
@@ -453,10 +453,10 @@ int executeIndexJoin (
 
     struct Predicate * p = &step->predicates[0];
 
-    struct ColumnNode * outer;
-    struct ColumnNode * inner;
+    struct Node * outer;
+    struct Node * inner;
 
-    if (p->left.fields[0].table_id == table_id) {
+    if (p->left.field.table_id == table_id) {
         outer = &p->right;
         inner = &p->left;
     } else {
@@ -464,7 +464,7 @@ int executeIndexJoin (
         return -1;
     }
 
-    if (outer->fields[0].table_id >= table_id) {
+    if (outer->field.table_id >= table_id) {
         fprintf(stderr, "Unable to perform UNIQUE JOIN\n");
         return -1;
     }
@@ -474,7 +474,7 @@ int executeIndexJoin (
         findIndex(
             &index_db,
             query->tables[table_id].name,
-            inner->fields[0].text,
+            inner->field.text,
             INDEX_ANY
         ) == 0
     ) {
@@ -482,7 +482,7 @@ int executeIndexJoin (
             stderr,
             "Couldn't find index on '%s(%s)'\n",
             query->tables[table_id].name,
-            inner->fields[0].text
+            inner->field.text
         );
         return -1;
     }
@@ -497,7 +497,7 @@ int executeIndexJoin (
 
         // Fill in value as constant from outer tables
         evaluateNode(
-            query,
+            query->tables,
             getRowList(row_list),
             i,
             outer,

@@ -32,8 +32,8 @@ static void sort_walkTreeBackwards (
  * @param target_list
  */
 void sortResultRows (
-    struct Query *q,
-    struct ColumnNode *column,
+    struct Table *tables,
+    struct Node *node,
     int direction,
     struct RowList * source_list,
     struct RowList * target_list
@@ -48,38 +48,38 @@ void sortResultRows (
     int numeric_mode = 0;
 
     for (int i = 0; i < source_list->row_count; i++) {
-        struct TreeNode *node = &pool[i];
-        node->key = i;
+        struct TreeNode *treenode = &pool[i];
+        treenode->key = i;
 
         evaluateNode(
-            q,
+            tables,
             source_list,
             i,
-            column,
-            node->value,
-            sizeof(node->value)
+            node,
+            treenode->value,
+            sizeof(treenode->value)
         );
 
         // First value determines whether we're in numeric mode or not
         if (i == 0) {
-            numeric_mode = is_numeric(node->value);
+            numeric_mode = is_numeric(treenode->value);
         }
 
         // Numeric values need to be fixed width for comparison.
         // After testing it make no difference whether numeric values are
         // compared or strings are compared. (There are other slower steps).
         if (numeric_mode) {
-            long number = atol(node->value);
-            sprintf(node->value, "%020ld", number);
+            long number = atol(treenode->value);
+            sprintf(treenode->value, "%020ld", number);
         }
 
         // For first (root) node we do a dummy insert to make sure struct
         // has been initialised properly
-        insertNode(root, node);
+        insertNode(root, treenode);
 
         if (i == 0) {
             // Now set the root node to the first position in the pool
-            root = node;
+            root = treenode;
         }
         // When the range of sort values is small the tree becomes unbalanced
         // resulting in *increadibly* slow sorts.
@@ -107,16 +107,16 @@ void sortResultRows (
  * Warning! All sort directions must be the same.
  *
  * @param q
- * @param columns
- * @param column_count
+ * @param nodes
+ * @param node_count
  * @param direction
  * @param source_list
  * @param target_list
  */
 void sortResultRowsMultiple (
-    struct Query *q,
-    struct ColumnNode *columns,
-    int column_count,
+    struct Table *tables,
+    struct Node *nodes,
+    int node_count,
     int *sort_directions,
     RowListIndex source_list_id,
     RowListIndex target_list_id
@@ -131,11 +131,11 @@ void sortResultRowsMultiple (
         node->key = i;
 
         evaluateNodeList(
-            q,
+            tables,
             source_list,
             i,
-            columns,
-            column_count,
+            nodes,
+            node_count,
             node->value,
             sizeof(node->value)
         );
