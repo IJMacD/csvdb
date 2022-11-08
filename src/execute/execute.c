@@ -441,8 +441,9 @@ int executeQueryPlan (
         output_flags
     );
 
-    // destroyRowListPool();
+    destroyRowListPool();
 
+    free(result_set->row_list_indices);
     free(result_set);
 
     for (int i = 0; i < q->table_count; i++) {

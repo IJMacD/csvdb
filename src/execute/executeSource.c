@@ -89,6 +89,8 @@ int executeSourceUnique (
         step->limit
     );
 
+    closeDB(&index_db);
+
     return 0;
 }
 
@@ -137,6 +139,8 @@ int executeSourceIndexSeek (
         step->limit
     );
 
+    closeDB(&index_db);
+
     return 0;
 }
 
@@ -177,6 +181,8 @@ int executeSourceIndexScan (
     // table
     int rowid_col = getFieldIndex(&index_db, "rowid");
     indexScan(&index_db, rowid_col, getRowList(row_list), step->limit);
+
+    closeDB(&index_db);
 
     return 0;
 }

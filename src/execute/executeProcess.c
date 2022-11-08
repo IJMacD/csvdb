@@ -35,6 +35,8 @@ int executeSort (
 
     // debugRowList(getRowList(row_list), 2);
 
+    free(nodes);
+
     return 0;
 }
 
@@ -167,7 +169,7 @@ int executeGroupBucket (
     // Iterate rows
 
     for (int i = 0; i < getRowList(row_list)->row_count; i++) {
-        char value[MAX_VALUE_LENGTH];
+        char value[MAX_VALUE_LENGTH] = {0};
 
         // Evaluate group key
         evaluateNodeList(
@@ -229,6 +231,16 @@ int executeGroupBucket (
             getRowList(row_list),
             i
         );
+    }
+
+    free(group_nodes);
+
+    if (buckets != NULL) {
+        free(buckets);
+    }
+
+    if (bucket_keys != NULL) {
+        free(bucket_keys);
     }
 
     // Discard any buckets more than the limit

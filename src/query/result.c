@@ -403,3 +403,13 @@ struct ResultSet *createResultSet () {
 void destroyResultSet (struct ResultSet *results) {
     free(results);
 }
+
+/**
+ * @brief
+ *
+ * @param results
+ */
+void destroyRowListPool () {
+    free(row_list_pool);
+    row_list_pool = NULL;
+}

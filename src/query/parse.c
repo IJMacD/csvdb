@@ -1250,18 +1250,30 @@ static struct Table *findTable (
 }
 
 static struct Node *addChildNode (struct Node *node) {
+    struct Node *child_node;
+
     if (node->children == NULL) {
         node->child_count = 2;
 
         node->children = calloc(node->child_count, sizeof(*node));
 
         // copy existing field to new child
-
-        struct Node *child_node = &node->children[0];
-        memcpy(&child_node->field, &node->field, sizeof(node->field));
+        struct Node *first_child = &node->children[0];
+        memcpy(&first_child->field, &node->field, sizeof(node->field));
 
         // Clear current field
         node->field.text[0] = '\0';
+
+        // Return second child
+        child_node = &node->children[1];
+    }
+    else if (node->child_count == -1) {
+        fprintf(
+            stderr,
+            "You found a bug. node->child_count out of sync with "
+            "node->children.\n"
+        );
+        exit(-1);
     }
     else {
         node->child_count++;
@@ -1275,7 +1287,17 @@ static struct Node *addChildNode (struct Node *node) {
             fprintf(stderr, "Unable to allocate memory.\n");
             exit(-1);
         }
+
+        child_node = &node->children[node->child_count - 1];
+
+        // NULL out children to avoid uninitialized read and set defaults
+        child_node->children = NULL;
+        child_node->child_count = 0;
+        child_node->field.index = FIELD_UNKNOWN;
+        child_node->field.table_id = -1;
+        child_node->field.text[0] = '\0';
+        child_node->function = FUNC_UNITY;
     }
 
-    return &node->children[node->child_count - 1];
+    return child_node;
 }

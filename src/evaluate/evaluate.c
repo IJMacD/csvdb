@@ -158,6 +158,8 @@ int evaluateNodeList (
         bytes_written += count + 1;
     }
 
+    *output = '\0';
+
     return bytes_written;
 }
 

@@ -194,17 +194,23 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
             // If plan_type is set, that means we have an index
             if (step_type) {
+                struct Predicate *p = malloc(sizeof(*p));
+                memcpy(p, &q->predicates[0], sizeof(*p));
 
                 addStepWithPredicate(plan, step_type, p);
 
                 addJoinStepsIfRequired(plan, q);
 
                 if (q->predicate_count > 1) {
+                    int n = q->predicate_count - 1;
+                    struct Predicate *ps = malloc(sizeof(*ps) * n);
+                    memcpy(ps, q->predicates + 1, sizeof(*ps)  *n);
+
                     addStepWithPredicates(
                         plan,
                         PLAN_TABLE_ACCESS_ROWID,
-                        q->predicates + 1,
-                        q->predicate_count - 1
+                        ps,
+                        n
                     );
                 }
 
@@ -283,11 +289,15 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 }
 
                 if (skip_predicates > 0) {
+                    int n = skip_predicates;
+                    struct Predicate *ps = malloc(sizeof(*ps) * n);
+                    memcpy(ps, q->predicates, sizeof(*ps) * n);
+
                     addStepWithPredicates(
                         plan,
                         PLAN_TABLE_ACCESS_ROWID,
-                        q->predicates,
-                        skip_predicates
+                        ps,
+                        n
                     );
                 }
 
@@ -302,11 +312,19 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
                 // Add step for remaining predicates filter
                 if (q->predicate_count > skip_predicates) {
+                    int n = q->predicate_count - skip_predicates;
+                    struct Predicate *ps = malloc(sizeof(*ps) * n);
+                    memcpy(
+                        ps,
+                        q->predicates + skip_predicates,
+                        sizeof(*ps) * n
+                    );
+
                     addStepWithPredicates(
                         plan,
                         PLAN_TABLE_ACCESS_ROWID,
-                        q->predicates + skip_predicates,
-                        q->predicate_count - skip_predicates
+                        ps,
+                        n
                     );
                 }
             }
@@ -332,22 +350,34 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
                     addStepWithPredicate(plan, PLAN_INDEX_SCAN, group_p);
 
+                    int n = predicatesOnFirstTable;
+                    struct Predicate *ps = malloc(sizeof(*ps) * n);
+                    memcpy(ps, q->predicates, sizeof(*ps)  *n);
+
                     addStepWithPredicates(
                         plan,
                         PLAN_TABLE_ACCESS_ROWID,
-                        q->predicates,
-                        predicatesOnFirstTable
+                        ps,
+                        n
                     );
 
                     addJoinStepsIfRequired(plan, q);
 
                     if (q->predicate_count > predicatesOnFirstTable) {
+                        int n = q->predicate_count - predicatesOnFirstTable;
+                        struct Predicate *ps = malloc(sizeof(*ps) * n);
+                        memcpy(
+                            ps,
+                            q->predicates + predicatesOnFirstTable,
+                            sizeof(*ps) * n
+                        );
+
                         // Add the rest of the predicates after the join
                         addStepWithPredicates(
                             plan,
                             PLAN_TABLE_ACCESS_ROWID,
-                            q->predicates + predicatesOnFirstTable,
-                            q->predicate_count - predicatesOnFirstTable
+                            ps,
+                            n
                         );
                     }
 
@@ -361,22 +391,34 @@ int makePlan (struct Query *q, struct Plan *plan) {
                     }
 
                 } else {
+                    int n = predicatesOnFirstTable;
+                    struct Predicate *ps = malloc(sizeof(*ps) * n);
+                    memcpy(ps, q->predicates, sizeof(*ps)  *n);
+
                     addStepWithPredicates(
                         plan,
                         PLAN_TABLE_ACCESS_FULL,
-                        q->predicates,
-                        predicatesOnFirstTable
+                        ps,
+                        n
                     );
 
                     addJoinStepsIfRequired(plan, q);
 
                     if (q->predicate_count > predicatesOnFirstTable) {
+                        int n = q->predicate_count - predicatesOnFirstTable;
+                        struct Predicate *ps = malloc(sizeof(*ps) * n);
+                        memcpy(
+                            ps,
+                            q->predicates + predicatesOnFirstTable,
+                            sizeof(*ps) * n
+                        );
+
                         // Add the rest of the predicates after the join
                         addStepWithPredicates(
                             plan,
                             PLAN_TABLE_ACCESS_ROWID,
-                            q->predicates + predicatesOnFirstTable,
-                            q->predicate_count - predicatesOnFirstTable
+                            ps,
+                            n
                         );
                     }
                 }
@@ -386,33 +428,49 @@ int makePlan (struct Query *q, struct Plan *plan) {
              ********************/
             else {
                 if (q->table_count > 1) {
+                    int n = predicatesOnFirstTable;
+                    struct Predicate *ps = malloc(sizeof(*ps) * n);
+                    memcpy(ps, q->predicates, sizeof(*ps)  *n);
+
                     // First predicates are from first table
                     addStepWithPredicates(
                         plan,
                         PLAN_TABLE_ACCESS_FULL,
-                        q->predicates,
-                        predicatesOnFirstTable
+                        ps,
+                        n
                     );
 
                     // The join
                     addJoinStepsIfRequired(plan, q);
 
                     if (q->predicate_count > predicatesOnFirstTable) {
+                        int n = q->predicate_count + predicatesOnFirstTable;
+                        struct Predicate *ps = malloc(sizeof(*ps) * n);
+                        memcpy(
+                            ps,
+                            q->predicates + predicatesOnFirstTable,
+                            sizeof(*ps) * n
+                        );
+
                         // Add the rest of the predicates after the join
                         addStepWithPredicates(
                             plan,
                             PLAN_TABLE_ACCESS_ROWID,
-                            q->predicates + predicatesOnFirstTable,
-                            q->predicate_count - predicatesOnFirstTable
+                            ps,
+                            n
                         );
                     }
                 } else {
+                    int n = q->predicate_count;
+                    struct Predicate *ps = malloc(sizeof(*ps) * n);
+                    memcpy(ps, q->predicates, sizeof(*ps)  *n);
+
                     // Only one table so add all predicates together
                     addStepWithPredicates(
                         plan,
                         PLAN_TABLE_ACCESS_FULL,
-                        q->predicates,
-                        q->predicate_count
+                        ps,
+                        n
                     );
 
                 }
@@ -427,11 +485,15 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
             addJoinStepsIfRequired(plan, q);
 
+            int n = q->predicate_count;
+            struct Predicate *ps = malloc(sizeof(*ps) * n);
+            memcpy(ps, q->predicates, sizeof(*ps) * n);
+
             addStepWithPredicates(
                 plan,
                 PLAN_TABLE_ACCESS_ROWID,
-                q->predicates,
-                q->predicate_count
+                ps,
+                n
             );
 
             addOrderStepsIfRequired(plan, q);
@@ -539,9 +601,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
 void destroyPlan (struct Plan *plan) {
     for (int i = 0; i < plan->step_count; i++) {
-        // don't double free
-        // Most predicates will be free'd in destroyQuery
-        if (plan->steps[i].predicates == NULL) {
+        if (plan->steps[i].predicates != NULL) {
             free(plan->steps[i].predicates);
             plan->steps[i].predicates = NULL;
         }
@@ -561,6 +621,14 @@ static struct PlanStep *addStep (struct Plan *plan, int type) {
     return &plan->steps[i];
 }
 
+/**
+ * @brief
+ *
+ * @param plan
+ * @param type
+ * @param predicate MUST be malloc'd for this step
+ * @return struct PlanStep*
+ */
 static struct PlanStep *addStepWithPredicate (
     struct Plan *plan,
     int type, struct Predicate *p
@@ -651,7 +719,8 @@ static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
      *******************/
     for (int i = 1; i < q->table_count; i++) {
         struct Table * table = q->tables + i;
-        struct Predicate * join = &table->join;
+        struct Predicate *join = malloc(sizeof(*join));
+        memcpy(join, &table->join, sizeof(*join));
 
         if (join->op == OPERATOR_ALWAYS) {
             // Still need to include predicate to indicate to the executor

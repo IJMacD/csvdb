@@ -134,6 +134,8 @@ int main (int argc, char * argv[]) {
 
             size_t count = read_file(f, &buffer);
 
+            fclose(f);
+
             if (count == 0) {
                 fprintf(stderr, "File '%s' was empty\n", filename);
                 return -1;
@@ -220,7 +222,9 @@ int main (int argc, char * argv[]) {
     }
 
     if (buffer != NULL) {
-        return runQueries(buffer, flags, output);
+        int result = runQueries(buffer, flags, output);
+        free(buffer);
+        return result;
     }
 
     // If we're here it means we don't yet have a query.

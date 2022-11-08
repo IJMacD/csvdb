@@ -59,6 +59,10 @@ static int process_subquery(
 
 static void destroy_query (struct Query *q);
 
+static void freeNode (struct Node *node);
+
+static void copyNodeTree (struct Node *dest, struct Node *src);
+
 static int wrap_query (
     struct Query *query,
     enum OutputOption inner_options,
@@ -263,18 +267,6 @@ int select_query (
     destroy_query(&q);
 
     return result;
-}
-
-static void destroy_query (struct Query *query) {
-    if (query->predicates != NULL) {
-        free(query->predicates);
-        query->predicates = NULL;
-    }
-
-    if (query->tables != NULL) {
-        free(query->tables);
-        query->tables = NULL;
-    }
 }
 
 static int process_query (
@@ -534,6 +526,43 @@ int information_query (const char *table, FILE * output) {
     return 0;
 }
 
+static void destroy_query (struct Query *query) {
+    if (query->predicates != NULL) {
+        free(query->predicates);
+        query->predicates = NULL;
+    }
+
+    if (query->tables != NULL) {
+        free(query->tables);
+        query->tables = NULL;
+    }
+
+    for (int i = 0; i < query->column_count; i++) {
+        freeNode((struct Node *)&query->columns[i]);
+    }
+
+    for (int i = 0; i < query->order_count; i++) {
+        freeNode(&query->order_nodes[i]);
+    }
+
+    for (int i = 0; i < query->group_count; i++) {
+        freeNode(&query->group_nodes[i]);
+    }
+}
+
+static void freeNode (struct Node *node) {
+    if (node->child_count > 0) {
+        for (int i = 0; i < node->child_count; i++) {
+            freeNode(&node->children[i]);
+        }
+    }
+
+    if (node->children != NULL) {
+        free(node->children);
+        node->children = NULL;
+    }
+}
+
 static int populate_tables (struct Query *q, struct DB *dbs) {
 
     for (int i = 0; i < q->table_count; i++) {
@@ -764,7 +793,7 @@ int resolveNode (struct Query *query, struct Node *node, int allow_aliases) {
                 node != (struct Node *)&query->columns[i]
                 && strcmp(node->field.text, query->columns[i].alias) == 0
             ) {
-                memcpy(node, &query->columns[i], sizeof(*node));
+                copyNodeTree(node, (struct Node *)&query->columns[i]);
                 return 0;
             }
         }
@@ -865,4 +894,30 @@ static int wrap_query (
     destroy_query(&q2);
 
     return result;
+}
+
+/**
+ * @brief Copies a node tree recursively to avoid double FREE
+ *
+ * @param dest
+ * @param src
+ * @return int
+ */
+static void copyNodeTree (struct Node *dest, struct Node *src) {
+    memcpy(&dest->field, &src->field, sizeof(dest->field));
+
+    dest->function = src->function;
+
+    dest->child_count = src->child_count;
+
+    dest->children = NULL;
+
+    if (src->children != NULL && src->child_count > 0) {
+
+        dest->children = malloc(sizeof(*dest) * src->child_count);
+
+        for (int i = 0; i < src->child_count; i++) {
+            copyNodeTree(&dest->children[i], &src->children[i]);
+        }
+    }
 }

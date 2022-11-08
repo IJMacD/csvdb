@@ -414,6 +414,8 @@ int executeUniqueJoin (
         }
     }
 
+    closeDB(&index_db);
+
     destroyRowList(tmp_list);
     destroyRowList(row_list);
 
@@ -557,6 +559,8 @@ int executeIndexJoin (
         // clear tmp_list
         getRowList(tmp_list)->row_count = 0;
     }
+
+    closeDB(&index_db);
 
     destroyRowList(tmp_list);
     destroyRowList(row_list);

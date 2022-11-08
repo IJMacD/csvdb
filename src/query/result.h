@@ -47,3 +47,5 @@ struct RowList *getRowList (RowListIndex index);
 struct ResultSet *createResultSet ();
 
 void destroyResultSet (struct ResultSet *results);
+
+void destroyRowListPool ();
