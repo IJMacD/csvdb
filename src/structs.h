@@ -38,14 +38,8 @@ struct DB {
 
 enum Order {
     ORDER_UN =      0,
-    ORDER_ASC =     1,
-    ORDER_DESC =    2,
-};
-
-struct SortField {
-    int table_id;
-    int field;
-    enum Order order_direction;
+    ORDER_ASC =     '\x1e',
+    ORDER_DESC =    '\x1f',
 };
 
 struct TreeNode {
@@ -53,32 +47,6 @@ struct TreeNode {
     char value[MAX_TABLE_LENGTH];
     struct TreeNode *left;
     struct TreeNode *right;
-};
-
-// Operator bitmap
-//
-//          GT      LT      EQ
-// NV                           |   0   Never ??
-// EQ                       1   |   1
-// LT               1       0   |   2
-// LE               1       1   |   3
-// GT       1       0       0   |   4
-// GE       1       0       1   |   5
-// NE       1       1       0   |   6
-// AL       1       1       1   |   7   Always ??
-
-enum Operator {
-    OPERATOR_UN =       0,
-    OPERATOR_EQ =       1,
-    OPERATOR_LT =       2,
-    OPERATOR_LE =       3,
-    OPERATOR_GT =       4,
-    OPERATOR_GE =       5,
-    OPERATOR_NE =       6,
-    OPERATOR_LIKE =     128,
-
-    OPERATOR_NEVER =    0,
-    OPERATOR_ALWAYS =   7,
 };
 
 enum Function {
@@ -163,8 +131,31 @@ enum Function {
     FUNC_AGG_AVG =                  0xA5,
     FUNC_AGG_LISTAGG =              0xA6,
 
-    // Family 110x (0xC0) (Undefined)
-    FUNC_FAM_UNDEF_C0 =             0xC0,
+    // Family 110x (0xC0) (Comparison Operators)
+    // FUNC_FAM_OPERATOR =          0xC0,
+    // (Aliased below)
+
+    // Operator bitmap
+    //
+    //          GT      LT      EQ
+    // NV                           |   0   Never
+    // EQ                       1   |   1
+    // LT               1       0   |   2
+    // LE               1       1   |   3
+    // GT       1       0       0   |   4
+    // GE       1       0       1   |   5
+    // NE       1       1       0   |   6
+    // AL       1       1       1   |   7   Always
+
+    OPERATOR_NEVER =                0xC0,
+    OPERATOR_EQ =                   0xC1,
+    OPERATOR_LT =                   0xC2,
+    OPERATOR_LE =                   0xC3,
+    OPERATOR_GT =                   0xC4,
+    OPERATOR_GE =                   0xC5,
+    OPERATOR_NE =                   0xC6,
+    OPERATOR_ALWAYS =               0xC7,
+    OPERATOR_LIKE =                 0xC8,
 
     // Family 111x (0xE0) (Dummy)
     FUNC_FAM_DUMMY =                0xE0,
@@ -172,7 +163,11 @@ enum Function {
     FUNC_PK =                       0xE1,
     FUNC_UNIQUE =                   0xE2,
     FUNC_INDEX =                    0xE3,
+
+    FUNC_UNKNOWN =                  0xFF
 };
+
+#define FUNC_FAM_OPERATOR        OPERATOR_NEVER
 
 enum FieldIndex {
     FIELD_UNKNOWN =                     -1,
@@ -193,6 +188,7 @@ struct Field {
 struct Node {
     struct Field field;
     enum Function function;
+    char alias[MAX_FIELD_LENGTH];
     /**
      * @brief When function != FUNC_UNITY, child_count = -1 means this node is
      * it's own child.
@@ -202,18 +198,6 @@ struct Node {
     int child_count;
     /* Can only be used when function is not FUNC_UNITY */
     struct Node *children;
-};
-
-// Since Node is first field of Column, it means that Column can be cast to Node
-struct Column {
-    struct Node node;
-    char alias[MAX_FIELD_LENGTH];
-};
-
-struct Predicate {
-    enum Operator op;
-    struct Node left;
-    struct Node right;
 };
 
 enum IndexSearchResult {
@@ -268,6 +252,7 @@ enum PlanStepType {
     PLAN_SORT =                 0x30,
     PLAN_REVERSE =              0x31,
     PLAN_SLICE =                0x32,
+    PLAN_OFFSET =               0x33,
 
     // POP = 1, PUSH = N
     PLAN_GROUP_SORTED =         0x40,
@@ -285,8 +270,8 @@ enum PlanStepType {
 struct PlanStep {
     enum PlanStepType type;
     int limit;
-    int predicate_count;
-    struct Predicate *predicates;
+    int node_count;
+    struct Node *nodes;
 };
 
 struct Plan {
@@ -334,22 +319,21 @@ struct Table {
     char name[MAX_TABLE_LENGTH];
     char alias[MAX_TABLE_LENGTH];
     struct DB * db;
-    struct Predicate join;
+    struct Node join;
     enum JoinType join_type;
 };
 
 struct Query {
     struct Table *tables;
     int table_count;
-    struct Column columns[MAX_FIELD_COUNT];
+    struct Node columns[MAX_FIELD_COUNT];
     int column_count;
     enum QueryFlag flags;
     int offset_value;
     int limit_value;
-    struct Predicate *predicates;
+    struct Node *predicate_nodes;
     int predicate_count;
     struct Node order_nodes[MAX_FIELD_COUNT];
-    enum Order order_direction[MAX_FIELD_COUNT];
     int order_count;
     struct Node group_nodes[MAX_FIELD_COUNT];
     int group_count;
@@ -360,6 +344,7 @@ typedef int RowListIndex;
 struct RowList {
     int row_count;
     int join_count;
+    int group;
     int * row_ids;
 };
 
@@ -406,8 +391,8 @@ struct VFS {
     int (* fullTableAccess)(
         struct DB *db,
         struct RowList * row_list,
-        struct Predicate *predicates,
-        int predicate_count,
+        struct Node *nodes,
+        int node_count,
         int limit_value
     );
     int (* fullTableScan)(

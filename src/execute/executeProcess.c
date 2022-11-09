@@ -7,7 +7,7 @@
 #include "../evaluate/evaluate.h"
 
 int executeSort (
-    struct Query *query,
+    struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
@@ -15,19 +15,10 @@ int executeSort (
 
     RowListIndex row_list = popRowList(result_set);
 
-    enum Order sort_directions[10];
-    struct Node *nodes = malloc(sizeof(*nodes) * step->predicate_count);
-
-    for (int i = 0; i < step->predicate_count && i < 10; i++) {
-        memcpy(nodes + i, &step->predicates[i].left, sizeof(*nodes));
-        sort_directions[i] = (enum Order)step->predicates[i].op;
-    }
-
     sortQuick(
-        query->tables,
-        nodes,
-        step->predicate_count,
-        sort_directions,
+        tables,
+        step->nodes,
+        step->node_count,
         getRowList(row_list)
     );
 
@@ -35,13 +26,11 @@ int executeSort (
 
     // debugRowList(getRowList(row_list), 2);
 
-    free(nodes);
-
     return 0;
 }
 
 int executeReverse (
-    __attribute__((unused)) struct Query *query,
+    __attribute__((unused)) struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
@@ -63,7 +52,7 @@ int executeReverse (
  * @return int 0 for success
  */
 int executeGroupSorted (
-    struct Query *query,
+    struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
@@ -71,10 +60,10 @@ int executeGroupSorted (
     // Important! PLAN_GROUP_SORTED requires rows are already sorted in
     // GROUP BY order
 
-    if (step->predicate_count > 1) {
+    if (step->node_count > 1) {
         fprintf(
             stderr,
-            "Unable to do sorted group by with more than one predicate.\n"
+            "Unable to do sorted group by with more than one node.\n"
         );
         exit(-1);
     }
@@ -92,7 +81,7 @@ int executeGroupSorted (
 
     RowListIndex curr_list = -1;
 
-    struct Node *col = &step->predicates[0].left;
+    struct Node *col = &step->nodes[0].children[0];
 
     int join_count = getRowList(row_list)->join_count;
     int row_count = getRowList(row_list)->row_count;
@@ -104,7 +93,7 @@ int executeGroupSorted (
         char *prev_value = values[(i+1)%2];
 
         evaluateNode(
-            query->tables,
+            tables,
             getRowList(row_list),
             i,
             col,
@@ -139,21 +128,16 @@ int executeGroupSorted (
  * @return int 0 for success
  */
 int executeGroupBucket (
-    struct Query *query,
+    struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
-    // Prepare group nodes
-
-    struct Node *group_nodes
-        = malloc(sizeof(*group_nodes) * step->predicate_count);
-
-    for (int i = 0; i < step->predicate_count; i++) {
-        memcpy(
-            &group_nodes[i],
-            &step->predicates[i].left,
-            sizeof(*group_nodes)
-        );
+    // Aggregate function on entire row set
+    if (step->node_count == 0) {
+        RowListIndex row_list = popRowList(result_set);
+        getRowList(row_list)->group = 1;
+        pushRowList(result_set, row_list);
+        return 0;
     }
 
     // Get RowList
@@ -173,11 +157,11 @@ int executeGroupBucket (
 
         // Evaluate group key
         evaluateNodeList(
-            query->tables,
+            tables,
             getRowList(row_list),
             i,
-            group_nodes,
-            step->predicate_count,
+            step->nodes,
+            step->node_count,
             value,
             MAX_VALUE_LENGTH
         );
@@ -221,6 +205,8 @@ int executeGroupBucket (
             strcpy(bucket_keys[bucket_count], value);
             buckets[bucket_count] = createRowList(join_count, row_count - i);
 
+            getRowList(buckets[bucket_count])->group = 1;
+
             pushRowList(result_set, buckets[bucket_count]);
 
             bucket_index = bucket_count++;
@@ -232,8 +218,6 @@ int executeGroupBucket (
             i
         );
     }
-
-    free(group_nodes);
 
     if (buckets != NULL) {
         free(buckets);

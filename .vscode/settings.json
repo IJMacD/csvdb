@@ -22,6 +22,7 @@
         "output.h": "c",
         "indices.h": "c",
         "function.h": "c",
-        "result.h": "c"
+        "result.h": "c",
+        "predicates.h": "c"
     }
 }

@@ -9,17 +9,17 @@
 
 static struct PlanStep *addStep (struct Plan *plan, int type);
 
-static struct PlanStep *addStepWithPredicate (
+static struct PlanStep *addStepWithNode (
     struct Plan *plan,
     int type,
-    struct Predicate *p
+    struct Node *node
 );
 
-static struct PlanStep *addStepWithPredicates (
+static struct PlanStep *addStepWithNodes (
     struct Plan *plan,
     int type,
-    struct Predicate *p,
-    int predicate_count
+    struct Node *nodes,
+    int node_count
 );
 
 static struct PlanStep *addStepWithLimit (
@@ -36,15 +36,10 @@ static void addGroupStepIfRequired (struct Plan *plan, struct Query *query);
 
 static void addLimitStepIfRequired (struct Plan *plan, struct Query *query);
 
-static int optimisePredicates (
+static int optimiseNodes (
     struct Query *q,
-    struct Predicate * predicates,
+    struct Node * predicates,
     int count
-);
-
-static struct Predicate *makePredicate (
-    struct Node *node,
-    enum Operator op
 );
 
 static int applySortLogic (
@@ -61,17 +56,9 @@ int makePlan (struct Query *q, struct Plan *plan) {
     // If there's no table specified then it must be a
     // single-row-all-constant query
     if (q->table_count == 0) {
-        plan->step_count = 2;
+        addStep(plan, PLAN_DUMMY_ROW);
 
-        struct PlanStep * step = plan->steps;
-        step->type = PLAN_DUMMY_ROW;
-        step->predicate_count = 0;
-        step->predicates = NULL;
-
-        step = plan->steps + 1;
-        step->type = PLAN_SELECT;
-        step->predicate_count = 0;
-        step->predicates = NULL;
+        addStepWithNodes(plan, PLAN_SELECT, q->columns, q->column_count);
 
         return plan->step_count;
     }
@@ -79,9 +66,9 @@ int makePlan (struct Query *q, struct Plan *plan) {
     if (q->predicate_count > 0) {
 
         // Try to find a predicate on the first table
-        int predicatesOnFirstTable = optimisePredicates(
+        int predicatesOnFirstTable = optimiseNodes(
             q,
-            q->predicates,
+            q->predicate_nodes,
             q->predicate_count
         );
 
@@ -89,15 +76,20 @@ int makePlan (struct Query *q, struct Plan *plan) {
         struct Table *table = &q->tables[0];
 
         // First predicate
-        struct Predicate *p = &q->predicates[0];
+        struct Node *p = &q->predicate_nodes[0];
+        enum Function op = p->function;
 
-        struct Node *field_left = &p->left;
-        struct Node *field_right = &p->right;
+        struct Node *left = &p->children[0];
+        struct Field *field_left = (struct Field *)left;
+        struct Field *field_right = (struct Field *)&p->children[1];
+            // struct Node *predicate = &predicates[j];
+            // struct Node *left = &predicate->children[0];
+            // struct Node *right = &predicate->children[1];
 
         if (predicatesOnFirstTable > 0) {
 
             enum PlanStepType step_type = 0;
-            size_t len = strlen(field_right->field.text);
+            size_t len = strlen(field_right->text);
 
             int skip_index = 0;
 
@@ -109,45 +101,46 @@ int makePlan (struct Query *q, struct Plan *plan) {
             // In the future with real index ranges this special case could
             // probably be removed.
             if (predicatesOnFirstTable > 1 && table->db->vfs == VFS_CALENDAR) {
-                struct Predicate *p2 = &q->predicates[1];
+                struct Node *p2 = &q->predicate_nodes[1];
+                struct Field *p2_field_left = (struct Field *)&p2->children[0];
 
-                if (strcmp(field_left->field.text, p2->left.field.text) == 0) {
+                if (strcmp(field_left->text, p2_field_left->text) == 0) {
                     skip_index = 1;
                 }
             }
 
             if (skip_index == 0) {
-                if (p->left.field.index == FIELD_ROW_INDEX) {
+                if (field_left->index == FIELD_ROW_INDEX) {
                     step_type = PLAN_TABLE_SCAN;
                 }
                 // LIKE can only use index if '%' is at the end
                 else if (
-                    p->op == OPERATOR_LIKE
-                    && field_right->field.text[len-1] != '%'
+                    op == OPERATOR_LIKE
+                    && field_right->text[len-1] != '%'
                 ) {
                     // NOP
                     step_type = 0;
                 }
-                else if (p->left.function == FUNC_PK) {
+                else if (left->function == FUNC_PK) {
 
-                    if (p->op == OPERATOR_EQ) {
+                    if (op == OPERATOR_EQ) {
                         step_type = PLAN_PK;
                     }
                     // Can't use PK index for LIKE yet
-                    else if (p->op != OPERATOR_LIKE) {
+                    else if (op != OPERATOR_LIKE) {
                         step_type = PLAN_PK_RANGE;
                     }
 
                 }
                 // Can only do indexes on bare columns for now
-                else if (p->left.function == FUNC_UNITY) {
+                else if (left->function == FUNC_UNITY) {
 
                     // Remove qualified name so indexes can be searched etc.
-                    int dot_index = str_find_index(field_left->field.text, '.');
+                    int dot_index = str_find_index(field_left->text, '.');
                     if (dot_index >= 0) {
                         char value[MAX_FIELD_LENGTH];
-                        strcpy(value, field_left->field.text);
-                        strcpy(field_left->field.text, value + dot_index + 1);
+                        strcpy(value, field_left->text);
+                        strcpy(field_left->text, value + dot_index + 1);
                     }
 
                     /*******************
@@ -158,27 +151,27 @@ int makePlan (struct Query *q, struct Plan *plan) {
                     enum IndexSearchType find_result = findIndex(
                         NULL,
                         table->name,
-                        field_left->field.text,
+                        field_left->text,
                         INDEX_ANY
                     );
 
                     if (find_result) {
 
                         if (find_result == INDEX_PRIMARY) {
-                            if (p->op == OPERATOR_EQ) {
+                            if (op == OPERATOR_EQ) {
                                 step_type = PLAN_PK;
                             }
                             // Can't use PK index for LIKE yet
-                            else if (p->op != OPERATOR_LIKE) {
+                            else if (op != OPERATOR_LIKE) {
                                 step_type = PLAN_PK_RANGE;
                             }
                         }
                         // LIKE makes any INDEX automatically non-unique
                         else if (
                             find_result == INDEX_UNIQUE
-                            && p->op != OPERATOR_LIKE
+                            && op != OPERATOR_LIKE
                         ) {
-                            if (p->op == OPERATOR_EQ) {
+                            if (op == OPERATOR_EQ) {
                                 step_type = PLAN_UNIQUE;
                             } else {
                                 step_type = PLAN_UNIQUE_RANGE;
@@ -194,23 +187,16 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
             // If plan_type is set, that means we have an index
             if (step_type) {
-                struct Predicate *p = malloc(sizeof(*p));
-                memcpy(p, &q->predicates[0], sizeof(*p));
-
-                addStepWithPredicate(plan, step_type, p);
+                addStepWithNode(plan, step_type, &q->predicate_nodes[0]);
 
                 addJoinStepsIfRequired(plan, q);
 
                 if (q->predicate_count > 1) {
-                    int n = q->predicate_count - 1;
-                    struct Predicate *ps = malloc(sizeof(*ps) * n);
-                    memcpy(ps, q->predicates + 1, sizeof(*ps)  *n);
-
-                    addStepWithPredicates(
+                    addStepWithNodes(
                         plan,
                         PLAN_TABLE_ACCESS_ROWID,
-                        ps,
-                        n
+                        q->predicate_nodes + 1,
+                        q->predicate_count - 1
                     );
                 }
 
@@ -227,14 +213,14 @@ int makePlan (struct Query *q, struct Plan *plan) {
                         (q->order_count == 1)
                         && q->order_nodes[0].function == FUNC_UNITY
                         && strcmp(
-                            field_left->field.text,
+                            field_left->text,
                             q->order_nodes[0].field.text
                         ) == 0
                     ) {
 
                         // So a sort is not necessary but we might still need to
                         // reverse
-                        if (q->order_direction[0] == ORDER_DESC) {
+                        if (q->order_nodes[0].alias[0] == ORDER_DESC) {
                             addStep(plan, PLAN_REVERSE);
                         }
                     } else {
@@ -256,7 +242,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 // example times:
                 //  Index, then filter:     real    0m3.012s
                 //  Filter, then sort:      real    0m1.637s
-                && (p->op != OPERATOR_EQ)
+                && (op != OPERATOR_EQ)
                 && q->order_nodes[0].function == FUNC_UNITY
                 && findIndex(
                     NULL,
@@ -265,13 +251,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
                     INDEX_ANY
                 )
             ) {
-                struct Predicate *order_p = makePredicate(
-                    &q->order_nodes[0],
-                    OPERATOR_ALWAYS
-                );
-
                 // Add step for Sorted index access
-                addStepWithPredicate(plan, PLAN_INDEX_SCAN, order_p);
+                addStepWithNode(plan, PLAN_INDEX_SCAN, &q->order_nodes[0]);
 
                 // Optimisation: filter before join
                 int skip_predicates = 0;
@@ -279,8 +260,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
                     // If left and right are either constant or table 0 then we
                     // can filter
                     if (
-                        q->predicates[i].left.field.table_id <= 0
-                        && q->predicates[i].right.field.table_id <= 0
+                        q->predicate_nodes[i].children[0].field.table_id <= 0
+                        && q->predicate_nodes[i].children[1].field.table_id <= 0
                     ) {
                         skip_predicates++;
                     } else {
@@ -289,22 +270,18 @@ int makePlan (struct Query *q, struct Plan *plan) {
                 }
 
                 if (skip_predicates > 0) {
-                    int n = skip_predicates;
-                    struct Predicate *ps = malloc(sizeof(*ps) * n);
-                    memcpy(ps, q->predicates, sizeof(*ps) * n);
-
-                    addStepWithPredicates(
+                    addStepWithNodes(
                         plan,
                         PLAN_TABLE_ACCESS_ROWID,
-                        ps,
-                        n
+                        q->predicate_nodes,
+                        skip_predicates
                     );
                 }
 
                 addJoinStepsIfRequired(plan, q);
 
                 if (
-                    q->order_direction[0] == ORDER_DESC
+                    q->order_nodes[0].alias[0] == ORDER_DESC
                     && !(q->flags & FLAG_GROUP)
                 ) {
                     addStep(plan, PLAN_REVERSE);
@@ -312,19 +289,11 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
                 // Add step for remaining predicates filter
                 if (q->predicate_count > skip_predicates) {
-                    int n = q->predicate_count - skip_predicates;
-                    struct Predicate *ps = malloc(sizeof(*ps) * n);
-                    memcpy(
-                        ps,
-                        q->predicates + skip_predicates,
-                        sizeof(*ps) * n
-                    );
-
-                    addStepWithPredicates(
+                    addStepWithNodes(
                         plan,
                         PLAN_TABLE_ACCESS_ROWID,
-                        ps,
-                        n
+                        q->predicate_nodes + skip_predicates,
+                        q->predicate_count - skip_predicates
                     );
                 }
             }
@@ -343,41 +312,24 @@ int makePlan (struct Query *q, struct Plan *plan) {
                     INDEX_ANY
                 )) {
 
-                    struct Predicate *group_p = makePredicate(
-                        &q->group_nodes[0],
-                        OPERATOR_ALWAYS
-                    );
+                    addStepWithNode(plan, PLAN_INDEX_SCAN, &q->group_nodes[0]);
 
-                    addStepWithPredicate(plan, PLAN_INDEX_SCAN, group_p);
-
-                    int n = predicatesOnFirstTable;
-                    struct Predicate *ps = malloc(sizeof(*ps) * n);
-                    memcpy(ps, q->predicates, sizeof(*ps)  *n);
-
-                    addStepWithPredicates(
+                    addStepWithNodes(
                         plan,
                         PLAN_TABLE_ACCESS_ROWID,
-                        ps,
-                        n
+                        q->predicate_nodes,
+                        predicatesOnFirstTable
                     );
 
                     addJoinStepsIfRequired(plan, q);
 
                     if (q->predicate_count > predicatesOnFirstTable) {
-                        int n = q->predicate_count - predicatesOnFirstTable;
-                        struct Predicate *ps = malloc(sizeof(*ps) * n);
-                        memcpy(
-                            ps,
-                            q->predicates + predicatesOnFirstTable,
-                            sizeof(*ps) * n
-                        );
-
                         // Add the rest of the predicates after the join
-                        addStepWithPredicates(
+                        addStepWithNodes(
                             plan,
                             PLAN_TABLE_ACCESS_ROWID,
-                            ps,
-                            n
+                            q->predicate_nodes + predicatesOnFirstTable,
+                            q->predicate_count - predicatesOnFirstTable
                         );
                     }
 
@@ -391,34 +343,22 @@ int makePlan (struct Query *q, struct Plan *plan) {
                     }
 
                 } else {
-                    int n = predicatesOnFirstTable;
-                    struct Predicate *ps = malloc(sizeof(*ps) * n);
-                    memcpy(ps, q->predicates, sizeof(*ps)  *n);
-
-                    addStepWithPredicates(
+                    addStepWithNodes(
                         plan,
                         PLAN_TABLE_ACCESS_FULL,
-                        ps,
-                        n
+                        q->predicate_nodes,
+                        predicatesOnFirstTable
                     );
 
                     addJoinStepsIfRequired(plan, q);
 
                     if (q->predicate_count > predicatesOnFirstTable) {
-                        int n = q->predicate_count - predicatesOnFirstTable;
-                        struct Predicate *ps = malloc(sizeof(*ps) * n);
-                        memcpy(
-                            ps,
-                            q->predicates + predicatesOnFirstTable,
-                            sizeof(*ps) * n
-                        );
-
                         // Add the rest of the predicates after the join
-                        addStepWithPredicates(
+                        addStepWithNodes(
                             plan,
                             PLAN_TABLE_ACCESS_ROWID,
-                            ps,
-                            n
+                            q->predicate_nodes + predicatesOnFirstTable,
+                            q->predicate_count - predicatesOnFirstTable
                         );
                     }
                 }
@@ -428,82 +368,62 @@ int makePlan (struct Query *q, struct Plan *plan) {
              ********************/
             else {
                 if (q->table_count > 1) {
-                    int n = predicatesOnFirstTable;
-                    struct Predicate *ps = malloc(sizeof(*ps) * n);
-                    memcpy(ps, q->predicates, sizeof(*ps)  *n);
 
                     // First predicates are from first table
-                    addStepWithPredicates(
+                    addStepWithNodes(
                         plan,
                         PLAN_TABLE_ACCESS_FULL,
-                        ps,
-                        n
+                        q->predicate_nodes,
+                        predicatesOnFirstTable
                     );
 
                     // The join
                     addJoinStepsIfRequired(plan, q);
 
                     if (q->predicate_count > predicatesOnFirstTable) {
-                        int n = q->predicate_count + predicatesOnFirstTable;
-                        struct Predicate *ps = malloc(sizeof(*ps) * n);
-                        memcpy(
-                            ps,
-                            q->predicates + predicatesOnFirstTable,
-                            sizeof(*ps) * n
-                        );
-
                         // Add the rest of the predicates after the join
-                        addStepWithPredicates(
+                        addStepWithNodes(
                             plan,
                             PLAN_TABLE_ACCESS_ROWID,
-                            ps,
-                            n
+                            q->predicate_nodes + predicatesOnFirstTable,
+                            q->predicate_count - predicatesOnFirstTable
                         );
                     }
                 } else {
-                    int n = q->predicate_count;
-                    struct Predicate *ps = malloc(sizeof(*ps) * n);
-                    memcpy(ps, q->predicates, sizeof(*ps)  *n);
-
                     // Only one table so add all predicates together
-                    addStepWithPredicates(
+                    addStepWithNodes(
                         plan,
                         PLAN_TABLE_ACCESS_FULL,
-                        ps,
-                        n
+                        q->predicate_nodes,
+                        q->predicate_count
                     );
-
                 }
 
                 addOrderStepsIfRequired(plan, q);
             }
         } else {
 
-            // Predicate isn't on the first table need to do full access
+            // Node isn't on the first table need to do full access
 
             addStep(plan, PLAN_TABLE_SCAN);
 
             addJoinStepsIfRequired(plan, q);
 
-            int n = q->predicate_count;
-            struct Predicate *ps = malloc(sizeof(*ps) * n);
-            memcpy(ps, q->predicates, sizeof(*ps) * n);
-
-            addStepWithPredicates(
+            addStepWithNodes(
                 plan,
                 PLAN_TABLE_ACCESS_ROWID,
-                ps,
-                n
+                q->predicate_nodes,
+                q->predicate_count
             );
 
             addOrderStepsIfRequired(plan, q);
         }
     }
     else if (
-            q->order_count >= 1
-            && q->order_nodes[0].function == FUNC_UNITY
-            && !(q->flags & FLAG_GROUP)
-        ) {
+        q->order_count >= 1
+        && q->order_nodes[0].function == FUNC_UNITY
+        && !(q->flags & FLAG_GROUP)
+    ) {
         // Before we do a full table scan... we have one more opportunity to use
         // an index to save a sort later, see if we can use an index for
         // ordering now.
@@ -518,16 +438,11 @@ int makePlan (struct Query *q, struct Plan *plan) {
         );
 
         if (index_type != INDEX_NONE) {
-            struct Predicate *order_p = makePredicate(
-                &q->order_nodes[0],
-                OPERATOR_ALWAYS
-            );
-
             if (index_type == INDEX_UNIQUE) {
-                addStepWithPredicate(plan, PLAN_UNIQUE_RANGE, order_p);
+                addStepWithNode(plan, PLAN_UNIQUE_RANGE, &q->order_nodes[0]);
             }
             else {
-                addStepWithPredicate(plan, PLAN_INDEX_SCAN, order_p);
+                addStepWithNode(plan, PLAN_INDEX_SCAN, &q->order_nodes[0]);
             }
 
             addJoinStepsIfRequired(plan, q);
@@ -558,12 +473,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
             INDEX_ANY
         )) {
 
-            struct Predicate *group_p = makePredicate(
-                &q->group_nodes[0],
-                OPERATOR_ALWAYS
-            );
-
-            addStepWithPredicate(plan, PLAN_INDEX_SCAN, group_p);
+            addStepWithNode(plan, PLAN_INDEX_SCAN, &q->group_nodes[0]);
 
             addJoinStepsIfRequired(plan, q);
 
@@ -594,16 +504,20 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
     addLimitStepIfRequired(plan, q);
 
-    addStep(plan, PLAN_SELECT);
+    if (q->offset_value > 0) {
+        addStepWithLimit(plan, PLAN_OFFSET, q->offset_value);
+    }
+
+    addStepWithNodes(plan, PLAN_SELECT, q->columns, q->column_count);
 
     return plan->step_count;
 }
 
 void destroyPlan (struct Plan *plan) {
     for (int i = 0; i < plan->step_count; i++) {
-        if (plan->steps[i].predicates != NULL) {
-            free(plan->steps[i].predicates);
-            plan->steps[i].predicates = NULL;
+        if (plan->steps[i].nodes != NULL) {
+            free(plan->steps[i].nodes);
+            plan->steps[i].nodes = NULL;
         }
     }
 }
@@ -611,8 +525,8 @@ void destroyPlan (struct Plan *plan) {
 static struct PlanStep *addStep (struct Plan *plan, int type) {
     int i = plan->step_count;
 
-    plan->steps[i].predicate_count = 0;
-    plan->steps[i].predicates = NULL;
+    plan->steps[i].node_count = 0;
+    plan->steps[i].nodes = NULL;
     plan->steps[i].type = type;
     plan->steps[i].limit = -1;
 
@@ -626,26 +540,39 @@ static struct PlanStep *addStep (struct Plan *plan, int type) {
  *
  * @param plan
  * @param type
- * @param predicate MUST be malloc'd for this step
+ * @param node addStep() will malloc a copy of this node
  * @return struct PlanStep*
  */
-static struct PlanStep *addStepWithPredicate (
-    struct Plan *plan,
-    int type, struct Predicate *p
-) {
-    return addStepWithPredicates(plan, type, p, 1);
-}
-
-static struct PlanStep *addStepWithPredicates (
+static struct PlanStep *addStepWithNode (
     struct Plan *plan,
     int type,
-    struct Predicate *p,
-    int predicate_count
+    struct Node *node
 ) {
+    return addStepWithNodes(plan, type, node, 1);
+}
+
+/**
+ * @brief
+ *
+ * @param plan
+ * @param type
+ * @param nodes addStep() will malloc a copy of these nodes
+ * @param node_count
+ * @return struct PlanStep*
+ */
+static struct PlanStep *addStepWithNodes (
+    struct Plan *plan,
+    int type,
+    struct Node *nodes,
+    int node_count
+) {
+    struct Node *ps = malloc(sizeof(*ps) * node_count);
+    memcpy(ps, nodes, sizeof(*ps) * node_count);
+
     int i = plan->step_count;
 
-    plan->steps[i].predicate_count = predicate_count;
-    plan->steps[i].predicates = p;
+    plan->steps[i].node_count = node_count;
+    plan->steps[i].nodes = ps;
     plan->steps[i].type = type;
     plan->steps[i].limit = -1;
 
@@ -657,8 +584,8 @@ static struct PlanStep *addStepWithPredicates (
 static struct PlanStep *addStepWithLimit (struct Plan *plan, int type, int limit) {
     int i = plan->step_count;
 
-    plan->steps[i].predicate_count = 0;
-    plan->steps[i].predicates = NULL;
+    plan->steps[i].node_count = 0;
+    plan->steps[i].nodes = NULL;
     plan->steps[i].type = type;
     plan->steps[i].limit = limit;
 
@@ -677,7 +604,6 @@ static void addOrderStepsIfRequired (struct Plan *plan, struct Query *q) {
         return;
     }
 
-    // At the moment grouping queries cannot be sorted in the same process
     if (q->flags & FLAG_GROUP) {
         return;
     }
@@ -696,20 +622,23 @@ static void addOrderStepsIfRequired (struct Plan *plan, struct Query *q) {
         addStep(plan, PLAN_REVERSE);
     }
     else {
-        struct Predicate *predicates = malloc(
-            sizeof(*predicates) * sorts_added
+        struct Node *tmp_node_list = malloc(
+            sizeof(*tmp_node_list) * sorts_added
         );
-        struct Predicate *p = predicates;
 
         for (int i = 0; i < sorts_added; i++) {
             int idx = sorts_needed[i];
 
-            memcpy(&p->left, &q->order_nodes[idx], sizeof(p->left));
-            p->op = (enum Operator)q->order_direction[idx];
-            p++;
+            memcpy(
+                &tmp_node_list[i],
+                &q->order_nodes[idx],
+                sizeof(*tmp_node_list)
+            );
         }
 
-        addStepWithPredicates(plan, PLAN_SORT, predicates, sorts_added);
+        addStepWithNodes(plan, PLAN_SORT, tmp_node_list, sorts_added);
+
+        free(tmp_node_list);
     }
 }
 
@@ -718,68 +647,73 @@ static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
      * JOIN
      *******************/
     for (int i = 1; i < q->table_count; i++) {
-        struct Table * table = q->tables + i;
-        struct Predicate *join = malloc(sizeof(*join));
-        memcpy(join, &table->join, sizeof(*join));
+        struct Table *table = q->tables + i;
+        struct Node *join = &table->join;
 
-        if (join->op == OPERATOR_ALWAYS) {
+        enum Function op = join->function;
+
+        if (op == OPERATOR_ALWAYS) {
             // Still need to include predicate to indicate to the executor
             // which table to join.
-            join->left.field.table_id = i;
-            addStepWithPredicate(plan, PLAN_CROSS_JOIN, join);
+            join->field.table_id = i;
+            addStepWithNode(plan, PLAN_CROSS_JOIN, join);
         }
         else {
+
+            struct Field *left_field = (struct Field *)&join->children[0];
+            struct Field *right_field = (struct Field *)&join->children[1];
+
             // We'll define that table-to-be-joined MUST be on left
-            if (join->left.field.table_id != i) {
-                if (join->right.field.table_id != i) {
+            if (left_field->table_id != i) {
+                if (right_field->table_id != i) {
                     fprintf(stderr, "At least one of the predicates must be on "
                         "the joined table.\n");
                     exit(-1);
                 }
 
                 // Swap left and right so that preciate looks like this:
-                //  A JOIN B ON B.field.index = A.field
+                //  A JOIN B ON B.field = A.field
                 flipPredicate(join);
             }
 
             // Constant must be on right if there is one
-            if (join->right.field.index == FIELD_CONSTANT)
+            if (right_field->index == FIELD_CONSTANT)
             {
-                addStepWithPredicate(plan, PLAN_CONSTANT_JOIN, join);
+                addStepWithNode(plan, PLAN_CONSTANT_JOIN, join);
             }
-            else if (join->right.field.table_id == i) {
+            else if (right_field->table_id == i) {
                 // Both sides of predicate are on same table
                 // We can do contsant join
-                addStepWithPredicate(plan, PLAN_CONSTANT_JOIN, join);
+                addStepWithNode(plan, PLAN_CONSTANT_JOIN, join);
             }
             else {
                 int index_result = findIndex(
                     NULL,
                     table->name,
-                    join->left.field.text,
+                    left_field->text,
                     INDEX_ANY
                 );
 
-                if (join->op == OPERATOR_EQ) {
+                if (op == OPERATOR_EQ) {
                     if (
                         index_result == INDEX_UNIQUE
                         || index_result == INDEX_PRIMARY
                     ) {
-                        addStepWithPredicate(plan, PLAN_UNIQUE_JOIN, join);
+                        addStepWithNode(plan, PLAN_UNIQUE_JOIN, join);
                     }
                     else if (index_result == INDEX_REGULAR) {
-                        addStepWithPredicate(plan, PLAN_INDEX_JOIN, join);
+                        addStepWithNode(plan, PLAN_INDEX_JOIN, join);
                     }
                     else {
-                        addStepWithPredicate(plan, PLAN_LOOP_JOIN, join);
+                        addStepWithNode(plan, PLAN_LOOP_JOIN, join);
                     }
                 }
                 else {
                     if (index_result != INDEX_NONE) {
-                        addStepWithPredicate(plan, PLAN_INDEX_JOIN, join);
+                        addStepWithNode(plan, PLAN_INDEX_JOIN, join);
                     }
                     else {
-                        addStepWithPredicate(plan, PLAN_LOOP_JOIN, join);
+                        addStepWithNode(plan, PLAN_LOOP_JOIN, join);
                     }
                 }
             }
@@ -792,24 +726,34 @@ static void addGroupStepIfRequired (struct Plan *plan, struct Query *q) {
     /*******************
      * Grouping
      *******************/
+
+    // Aggregate function on all rows, single row output
+    if (q->flags & FLAG_GROUP && q->group_count == 0) {
+        struct PlanStep *prev = addStep(plan, PLAN_GROUP);
+
+        if (q->limit_value >= 0) {
+            prev->limit = q->offset_value + q->limit_value;
+        }
+
+        return;
+    }
+
     if (q->flags & FLAG_GROUP && q->group_count > 0) {
         struct Node *group_node = &q->group_nodes[0];
 
-        struct Predicate *group_predicate = makePredicate(
-            group_node,
-            (enum Operator)ORDER_ASC
-        );
-
         // Check if we can use sorted grouping first
-        struct PlanStep *first = &plan->steps[0];
-        if (first->type == PLAN_INDEX_RANGE || first->type == PLAN_INDEX_SCAN) {
-            struct Node *first_node = &first->predicates[0].left;
+        struct PlanStep *first_step = &plan->steps[0];
+        if (
+            first_step->type == PLAN_INDEX_RANGE
+            || first_step->type == PLAN_INDEX_SCAN
+        ) {
+            struct Node *first_node = &first_step->nodes[0];
 
             if (areNodesEqual(first_node, group_node)) {
-                struct PlanStep *prev = addStepWithPredicate(
+                struct PlanStep *prev = addStepWithNode(
                     plan,
                     PLAN_GROUP_SORTED,
-                    group_predicate
+                    group_node
                 );
 
                 if (q->limit_value > -1) {
@@ -820,8 +764,7 @@ static void addGroupStepIfRequired (struct Plan *plan, struct Query *q) {
             }
         }
 
-        struct PlanStep *prev
-            = addStepWithPredicate(plan, PLAN_GROUP, group_predicate);
+        struct PlanStep *prev = addStepWithNode(plan, PLAN_GROUP, group_node);
 
         if (q->limit_value >= 0) {
             prev->limit = q->offset_value + q->limit_value;
@@ -858,8 +801,10 @@ static void addLimitStepIfRequired (struct Plan *plan, struct Query *query) {
 
                 if (plan->steps[i].type == PLAN_UNIQUE_JOIN) {
                     // Defined to be this table join ID on left
-                    int table_id
-                        = plan->steps[i].predicates[0].left.field.table_id;
+                    struct Field *join_field
+                        = (struct Field *)&plan->steps[i].nodes[0];
+
+                    int table_id = join_field->table_id;
 
                     if (query->tables[table_id].join_type != JOIN_LEFT) {
                         all_left_unique = 0;
@@ -911,9 +856,9 @@ static void addLimitStepIfRequired (struct Plan *plan, struct Query *query) {
  * @param count
  * @return int N, number of predicates on first table
  */
-static int optimisePredicates (
+static int optimiseNodes (
     __attribute__((unused)) struct Query *q,
-    struct Predicate * predicates,
+    struct Node * predicates,
     int count
 ) {
     int chosen_predicate_index = -1;
@@ -923,10 +868,9 @@ static int optimisePredicates (
         // Swap left and right if necessary
         normalisePredicate(predicates + i);
 
-        if (
-            predicates[i].left.function == FUNC_PK
-            && predicates[i].left.field.table_id == 0
-        ) {
+        struct Node *left = &predicates[i].children[0];
+
+        if (left->function == FUNC_PK && left->field.table_id == 0) {
             chosen_predicate_index = i;
             break;
         }
@@ -936,9 +880,11 @@ static int optimisePredicates (
     // step.
     if (chosen_predicate_index < 0) {
         for (int i = 0; i < count; i++) {
+            struct Node *left = &predicates[i].children[0];
+
             // Any predicate on the first table is fine
             // Comment: Only checking left?
-            if (predicates[i].left.field.table_id == 0) {
+            if (left->field.table_id == 0) {
                 chosen_predicate_index = i;
                 break;
             }
@@ -947,7 +893,7 @@ static int optimisePredicates (
 
     // Swap predicates so first predicate is on first table
     if (chosen_predicate_index > 0) {
-        struct Predicate tmp;
+        struct Node tmp;
         memcpy(&tmp, &predicates[0], sizeof(tmp));
         memcpy(
             &predicates[0],
@@ -961,31 +907,13 @@ static int optimisePredicates (
     // many are already in place
     if (chosen_predicate_index >= 0) {
         int i = 1;
-        while (i < count && predicates[i].left.field.table_id == 0) {
+        while (i < count && predicates[i].children[0].field.table_id == 0) {
             i++;
         }
         return i;
     }
 
     return 0;
-}
-
-static struct Predicate *makePredicate (
-    struct Node *node,
-    enum Operator op
-) {
-    // free'd in destroyPlan()
-    struct Predicate *predicate = malloc(sizeof(*predicate));
-
-    memcpy(&predicate->left, node, sizeof(*node));
-
-    predicate->op = op;
-
-    predicate->right.field.table_id = -1;
-    predicate->right.field.index = FIELD_UNKNOWN;
-    predicate->right.field.text[0] = '\0';
-
-    return predicate;
 }
 
 /**
@@ -1026,14 +954,14 @@ static int applySortLogic (
         // If there is an equality predicate on this column then there is no
         // need to ever sort by it.
         for (int j = 0; j < q->predicate_count; j++) {
+            struct Node *predicate = &q->predicate_nodes[j];
+            struct Node *left = &predicate->children[0];
+
             if (
-                q->predicates[j].op == OPERATOR_EQ
-                && q->predicates[j].left.function
-                    == q->order_nodes[i].function
-                && q->predicates[j].left.field.table_id
-                    == q->order_nodes[i].field.table_id
-                && q->predicates[j].left.field.index
-                    == q->order_nodes[i].field.index
+                predicate->function == OPERATOR_EQ
+                && left->function == q->order_nodes[i].function
+                && left->field.table_id == q->order_nodes[i].field.table_id
+                && left->field.index == q->order_nodes[i].field.index
             ) {
                 // OK we don't need to sort by this field
 
@@ -1053,14 +981,16 @@ static int applySortLogic (
     if (sorts_added > 0 && non_unique_joins == 0) {
         int primary_sort_idx = sorts_needed[0];
         struct Node *primary_sort_col = &q->order_nodes[primary_sort_idx];
-        enum Order primary_sort_dir = q->order_direction[primary_sort_idx];
+        enum Order primary_sort_dir = primary_sort_col->alias[0];
 
-        struct PlanStep *first = &plan->steps[0];
-        struct Node *first_node = &first->predicates[0].left;
+        struct PlanStep *first_step = &plan->steps[0];
 
         // If we're sorting on rowid or PK on single table then we can optimse
         // Only works if results were retrieved in table order
-        if (first->type == PLAN_TABLE_SCAN || first->type == PLAN_TABLE_SCAN) {
+        if (
+            first_step->type == PLAN_TABLE_SCAN
+            || first_step->type == PLAN_TABLE_SCAN
+        ) {
 
             if (
                 primary_sort_col->function == FUNC_UNITY
@@ -1077,46 +1007,71 @@ static int applySortLogic (
             }
         }
 
-        if (
-            (first->type == PLAN_UNIQUE || first->type == PLAN_UNIQUE_RANGE)
-            && first_node->function == FUNC_UNITY
-            && first_node->field.table_id
-                == primary_sort_col->field.table_id
-            && first_node->field.index == primary_sort_col->field.index
-        ) {
-            // Rows were returned in INDEX order.
-            // The first order column is the index column,
-            // and since it is a UNIQUE index there can never be more than one
-            // row returned for the first sort column so,
-            // we never need to sort.
+        if (first_step->node_count > 0) {
+            struct Node *predicate = &first_step->nodes[0];
+            struct Node *left;
 
-            if (primary_sort_dir == ORDER_DESC) {
-                // Just need to reverse
-                return -1;
+            if (predicate->function == FUNC_UNITY) {
+                // INDEX SCAN just takes a single node, not a predicate
+                left = predicate;
+            }
+            else if (predicate->child_count == 2) {
+                // Looks like a real predicate
+                left = &predicate->children[0];
+            }
+            else {
+                // Not a predicate, just bail
+                return sorts_added;
             }
 
-            return 0;
-        }
+            if (
+                (
+                    first_step->type == PLAN_UNIQUE
+                    || first_step->type == PLAN_UNIQUE_RANGE
+                )
+                && left->field.table_id
+                    == primary_sort_col->field.table_id
+                && left->field.index
+                    == primary_sort_col->field.index
+            ) {
+                // Rows were returned in INDEX order.
+                // The first order column is the index column,
+                // and since it is a UNIQUE index there can never be more
+                // than one row returned for the first sort column so,
+                // we never need to sort.
 
-        if (
-            (first->type == PLAN_INDEX_RANGE || first->type == PLAN_INDEX_SCAN)
-            && sorts_added == 1
-            && first_node->function == primary_sort_col->function
-            && first_node->field.table_id
-                == primary_sort_col->field.table_id
-            && first_node->field.index == primary_sort_col->field.index
-        ) {
-            // Rows were returned in INDEX order.
-            // The first order column is the index column,
-            // and since it is only one sort column,
-            // we never need to sort.
+                if (primary_sort_dir == ORDER_DESC) {
+                    // Just need to reverse
+                    return -1;
+                }
 
-            if (primary_sort_dir == ORDER_DESC) {
-                // Just need to reverse
-                return -1;
+                return 0;
             }
 
-            return 0;
+            if (
+                (
+                    first_step->type == PLAN_INDEX_RANGE
+                    || first_step->type == PLAN_INDEX_SCAN
+                )
+                && sorts_added == 1
+                && left->function == primary_sort_col->function
+                && left->field.table_id
+                    == primary_sort_col->field.table_id
+                && left->field.index
+                    == primary_sort_col->field.index
+            ) {
+                // Rows were returned in INDEX order.
+                // The first order column is the index column,
+                // and since it is only one sort column,
+                // we never need to sort.
+
+                if (primary_sort_dir == ORDER_DESC) {
+                    // Just need to reverse
+                    return -1;
+                }
+
+                return 0;
+            }
         }
     }
 

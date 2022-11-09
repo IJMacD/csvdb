@@ -63,7 +63,7 @@ void printResultLine (
     FILE *f,
     struct Table *tables,
     int table_count,
-    struct Column columns[],
+    struct Node columns[],
     int column_count,
     int result_index,
     struct RowList * row_list,
@@ -79,9 +79,8 @@ void printResultLine (
     printRecordStart(f, format, result_index == 0, is_single_column);
 
     for (int j = 0; j < column_count; j++) {
-        struct Column *column = &columns[j];
+        struct Node *node = &columns[j];
 
-        struct Node *node = &column->node;
         if (node->function == FUNC_UNITY) {
 
             if (node->field.index == FIELD_STAR) {
@@ -116,7 +115,7 @@ void printResultLine (
                     f,
                     format,
                     NULL,
-                    column->alias,
+                    node->alias,
                     row_list->row_count
                 );
             }
@@ -126,7 +125,7 @@ void printResultLine (
                     f,
                     format,
                     NULL,
-                    column->alias,
+                    node->alias,
                     result_index + 1
                 );
             }
@@ -137,7 +136,7 @@ void printResultLine (
                     node->field.table_id,
                     result_index
                 );
-                printColumnValueNumber(f, format, NULL, column->alias, rowid);
+                printColumnValueNumber(f, format, NULL, node->alias, rowid);
             }
             else {
                 char output[MAX_VALUE_LENGTH];
@@ -159,7 +158,7 @@ void printResultLine (
                     return;
                 }
 
-                printColumnValue(f, format, NULL, column->alias, output);
+                printColumnValue(f, format, NULL, node->alias, output);
             }
         }
         else if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_AGG) {
@@ -177,7 +176,7 @@ void printResultLine (
                 f,
                 format,
                 NULL,
-                column->alias,
+                node->alias,
                 result < 0 ? "BADFUNC" : output
             );
         }
@@ -189,7 +188,7 @@ void printResultLine (
                 tables,
                 row_list,
                 result_index,
-                (struct Node *)(columns + j),
+                node,
                 output,
                 MAX_VALUE_LENGTH
             );
@@ -198,7 +197,7 @@ void printResultLine (
                 f,
                 format,
                 NULL,
-                column->alias,
+                node->alias,
                 result < 0 ? "BADFUNC" : output
             );
         }
@@ -226,7 +225,7 @@ void printHeaderLine (
     FILE *f,
     struct Table *tables,
     int table_count,
-    struct Column columns[],
+    struct Node columns[],
     int column_count,
     enum OutputOption flags
 ) {
@@ -271,8 +270,7 @@ void printHeaderLine (
      ********************/
 
     for (int j = 0; j < column_count; j++) {
-        struct Column *column = &columns[j];
-        struct Node *node = &column->node;
+        struct Node *node = &columns[j];
 
         if (
             (
@@ -313,8 +311,8 @@ void printHeaderLine (
                 }
             }
         }
-        else if (column->alias[0] != '\0') {
-            printHeaderName(f, format, NULL, column->alias);
+        else if (node->alias[0] != '\0') {
+            printHeaderName(f, format, NULL, node->alias);
         }
         else if (node->field.index == FIELD_COUNT_STAR) {
             printHeaderName(f, format, NULL, "COUNT(*)");
@@ -357,8 +355,7 @@ void printHeaderLine (
         fprintf(f, "|\n");
 
         for (int i = 0; i < column_count; i++) {
-            struct Column *col = columns + i;
-            struct Node *node = &col->node;
+            struct Node *node = &columns[i];
 
             if (node->field.index == FIELD_STAR) {
                 if (node->field.table_id >= 0) {
@@ -388,7 +385,7 @@ void printPreamble (
     FILE *f,
     __attribute__((unused)) struct Table *table,
     __attribute__((unused)) int table_count,
-    __attribute__((unused)) struct Column columns[],
+    __attribute__((unused)) struct Node columns[],
     __attribute__((unused)) int column_count,
     enum OutputOption flags
 ) {
@@ -421,7 +418,7 @@ void printPostamble (
     FILE *f,
     __attribute__((unused)) struct Table *table,
     __attribute__((unused)) int table_count,
-    __attribute__((unused)) struct Column columns[],
+    __attribute__((unused)) struct Node columns[],
     __attribute__((unused)) int column_count,
     __attribute__((unused)) int result_count,
     enum OutputOption flags

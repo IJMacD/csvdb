@@ -4,16 +4,16 @@
 #include "../evaluate/predicates.h"
 
 /**
- * @brief Every row of result set is checked against predicates and
+ * @brief Every row of result set is checked against nodes and
  * those which pass are added to the output result set.
  *
- * @param query
+ * @param tables
  * @param step
  * @param result_set
  * @return int
  */
 int executeTableAccessRowid (
-    struct Query *query,
+    struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
@@ -27,30 +27,30 @@ int executeTableAccessRowid (
     for (int i = 0; i < source_count; i++) {
         int match = 1;
 
-        for (int j = 0; j < step->predicate_count; j++) {
-            struct Predicate * p = step->predicates + j;
+        for (int j = 0; j < step->node_count; j++) {
+            struct Node * p = step->nodes + j;
 
             char value_left[MAX_VALUE_LENGTH] = {0};
             char value_right[MAX_VALUE_LENGTH] = {0};
 
             evaluateNode(
-                query->tables,
+                tables,
                 getRowList(row_list),
                 i,
-                &p->left,
+                &p->children[0],
                 value_left,
                 MAX_VALUE_LENGTH
             );
             evaluateNode(
-                query->tables,
+                tables,
                 getRowList(row_list),
                 i,
-                &p->right,
+                &p->children[1],
                 value_right,
                 MAX_VALUE_LENGTH
             );
 
-            if (!evaluateExpression(p->op, value_left, value_right)) {
+            if (!evaluateExpression(p->function, value_left, value_right)) {
                 match = 0;
                 break;
             }
@@ -75,7 +75,7 @@ int executeTableAccessRowid (
 }
 
 int executeSlice (
-    __attribute__((unused)) struct Query *query,
+    __attribute__((unused)) struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
@@ -89,6 +89,31 @@ int executeSlice (
     }
 
     pushRowList(result_set, row_list);
+
+    return 0;
+}
+
+int executeOffset (
+    __attribute__((unused)) struct Table *tables,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
+    // Offset is taken care of in PLAN_SELECT
+
+    RowListIndex src_list = popRowList(result_set);
+
+    int join_count = getRowList(src_list)->join_count;
+    int row_count = getRowList(src_list)->row_count;
+
+    RowListIndex dest_list = createRowList(join_count, row_count);
+
+    for (int i = step->limit; i < row_count; i++) {
+        copyResultRow(getRowList(dest_list), getRowList(src_list), i);
+    }
+
+    pushRowList(result_set, dest_list);
+
+    destroyRowList(src_list);
 
     return 0;
 }

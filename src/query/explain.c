@@ -8,7 +8,7 @@
 long log_10 (long value);
 
 int explain_select_query (
-    struct Query *q,
+    struct Table *tables,
     struct Plan *plan,
     int output_flags,
     FILE * output
@@ -24,10 +24,6 @@ int explain_select_query (
 
     int row_estimate = 1;
 
-    if (q->table_count > 0) {
-        row_estimate = getRecordCount(q->tables[join_count].db);
-    }
-
     int log_rows = log_10(row_estimate);
 
 
@@ -38,12 +34,12 @@ int explain_select_query (
         char table[MAX_FIELD_LENGTH] = {0};
         char predicate[MAX_FIELD_LENGTH] = {0};
 
-        if (s.predicate_count == 0) {
+        if (s.node_count == 0) {
             predicate[0] = '\0';
         }
-        else {
+        else if (s.type != PLAN_SELECT) {
             char *ptr = predicate;
-            for (int i = 0; i < s.predicate_count; i++) {
+            for (int i = 0; i < s.node_count; i++) {
                 size_t remaining = MAX_FIELD_LENGTH - (ptr - predicate);
 
                 if (i > 0) {
@@ -51,20 +47,32 @@ int explain_select_query (
                     *(ptr++) = ' ';
                 }
 
-                if (s.predicates[i].left.function == FUNC_UNITY) {
+                struct Node *node = &s.nodes[i];
+
+                if (node->child_count > 1) {
+                    node = &node->children[0];
+                }
+
+                char *name = node->field.text;
+
+                if (node->field.index == FIELD_ROW_INDEX) {
+                    name = "rowid";
+                }
+
+                if (node->function == FUNC_UNITY) {
                     ptr += snprintf(
                         ptr,
                         remaining,
                         "%s",
-                        s.predicates[i].left.field.text
+                        name
                     );
                 }
-                else {
+                else if (node->function != OPERATOR_ALWAYS) {
                     ptr += snprintf(
                         ptr,
                         remaining,
                         "F(%s)",
-                        s.predicates[i].left.field.text
+                        name
                     );
                 }
 
@@ -74,11 +82,11 @@ int explain_select_query (
 
         if (s.type == PLAN_TABLE_ACCESS_FULL){
             operation = "TABLE ACCESS FULL";
-            rows = row_estimate;
+            rows = getRecordCount(tables[join_count].db);
             cost = rows;
 
-            for (int i = 0; i < s.predicate_count; i++) {
-                if (s.predicates[i].op == OPERATOR_EQ) {
+            for (int i = 0; i < s.node_count; i++) {
+                if (s.nodes[i].function == OPERATOR_EQ) {
                     rows = rows / 1000;
                 } else {
                     rows = rows / 2;
@@ -89,16 +97,16 @@ int explain_select_query (
                 rows = (s.limit < rows) ? s.limit : rows;
             }
 
-            strncpy(table, q->tables[join_count].alias, MAX_FIELD_LENGTH);
+            strncpy(table, tables[join_count].alias, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
         }
         else if (s.type == PLAN_TABLE_SCAN){
             operation = "TABLE SCAN";
-            rows = row_estimate;
+            rows = getRecordCount(tables[join_count].db);
             cost = rows;
 
-            for (int i = 0; i < s.predicate_count; i++) {
-                if (s.predicates[i].op == OPERATOR_EQ) {
+            for (int i = 0; i < s.node_count; i++) {
+                if (s.nodes[i].function == OPERATOR_EQ) {
                     rows = 1;
                 } else {
                     rows = rows / 2;
@@ -109,7 +117,7 @@ int explain_select_query (
                 rows = (s.limit < rows) ? s.limit : rows;
             }
 
-            strncpy(table, q->tables[join_count].alias, MAX_FIELD_LENGTH);
+            strncpy(table, tables[join_count].alias, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
         }
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
@@ -119,8 +127,8 @@ int explain_select_query (
                 cost = rows;
             }
 
-            for (int i = 0; i < s.predicate_count; i++) {
-                if (s.predicates[i].op == OPERATOR_EQ) {
+            for (int i = 0; i < s.node_count; i++) {
+                if (s.nodes[i].function == OPERATOR_EQ) {
                     rows = rows / 1000;
                 } else {
                     rows = rows / 2;
@@ -131,10 +139,10 @@ int explain_select_query (
                 rows = (s.limit < rows) ? s.limit : rows;
             }
 
-            if (s.predicate_count > 0) {
-                int table_id = s.predicates->left.field.table_id;
+            if (s.node_count > 0) {
+                int table_id = s.nodes[0].field.table_id;
 
-                strncpy(table, q->tables[table_id].alias, MAX_FIELD_LENGTH);
+                strncpy(table, tables[table_id].alias, MAX_FIELD_LENGTH);
                 table[MAX_FIELD_LENGTH - 1] = '\0';
             }
         }
@@ -143,8 +151,8 @@ int explain_select_query (
             sprintf(
                 table,
                 "%s__%s",
-                q->tables[join_count].name,
-                s.predicates[0].left.field.text
+                tables[join_count].name,
+                s.nodes[0].children[0].field.text
             );
             rows = 1;
             cost = log_rows;
@@ -154,10 +162,10 @@ int explain_select_query (
             sprintf(
                 table,
                 "%s__%s",
-                q->tables[join_count].name,
-                s.predicates[0].left.field.text
+                tables[join_count].name,
+                s.nodes[0].children[0].field.text
             );
-            rows = row_estimate / 2;
+            rows = getRecordCount(tables[join_count].db) / 2;
             cost = rows;
         }
         else if (s.type == PLAN_UNIQUE) {
@@ -165,8 +173,8 @@ int explain_select_query (
             sprintf(
                 table,
                 "%s__%s",
-                q->tables[join_count].name,
-                s.predicates[0].left.field.text
+                tables[join_count].name,
+                s.nodes[0].children[0].field.text
             );
             rows = 1;
             cost = log_rows;
@@ -176,19 +184,20 @@ int explain_select_query (
             sprintf(
                 table,
                 "%s__%s",
-                q->tables[join_count].name,
-                s.predicates[0].left.field.text
+                tables[join_count].name,
+                s.nodes[0].children[0].field.text
             );
-            if (s.predicate_count > 0) {
+            int row_estimate = getRecordCount(tables[join_count].db);
+            if (s.node_count > 0) {
                 if (s.limit >= 0) {
                     rows = (s.limit < row_estimate) ? s.limit : row_estimate;
                     cost = rows;
                 }
-                else if (s.predicates[0].op == OPERATOR_EQ) {
+                else if (s.nodes[0].function == OPERATOR_EQ) {
                     rows = row_estimate / 1000;
                     cost = log_rows * 2;
                 }
-                else if (s.predicates[0].op == OPERATOR_UN) {
+                else if (s.nodes[0].function == FUNC_UNKNOWN) {
                     rows = row_estimate;
                     cost = rows;
                 }
@@ -206,20 +215,20 @@ int explain_select_query (
             sprintf(
                 table,
                 "%s__%s",
-                q->tables[join_count].name,
-                s.predicates[0].left.field.text
+                tables[join_count].name,
+                s.nodes[0].children[0].field.text
             );
-
-            if (s.predicate_count > 0) {
+            int row_estimate = getRecordCount(tables[join_count].db);
+            if (s.node_count > 0) {
                 if (s.limit >= 0) {
                     rows = (s.limit < row_estimate) ? s.limit : row_estimate;
                     cost = rows;
                 }
-                else if (s.predicates[0].op == OPERATOR_EQ) {
+                else if (s.nodes[0].function == OPERATOR_EQ) {
                     rows = row_estimate / 1000;
                     cost = log_rows * 2;
                 }
-                else if (s.predicates[0].op == OPERATOR_UN) {
+                else if (s.nodes[0].function == FUNC_UNKNOWN) {
                     rows = row_estimate;
                     cost = rows;
                 }
@@ -237,8 +246,8 @@ int explain_select_query (
             sprintf(
                 table,
                 "%s__%s",
-                q->tables[join_count].name,
-                s.predicates[0].left.field.text
+                tables[join_count].name,
+                s.nodes[0].field.text
             );
         }
         else if (s.type == PLAN_SORT) {
@@ -250,9 +259,9 @@ int explain_select_query (
         }
         else if (s.type == PLAN_REVERSE) {
             operation = "REVERSE";
-            // if (cost < rows) {
-            //     cost = rows;
-            // }
+            if (cost < rows) {
+                cost = rows;
+            }
         }
         else if (s.type == PLAN_SLICE) {
             operation = "SLICE";
@@ -263,7 +272,7 @@ int explain_select_query (
         else if (s.type == PLAN_GROUP_SORTED) {
             operation = "GROUP SORTED";
 
-            if (s.predicate_count > 0) {
+            if (s.node_count > 0) {
                 rows /= 10;
             } else {
                 rows = 1;
@@ -272,23 +281,26 @@ int explain_select_query (
         else if (s.type == PLAN_GROUP) {
             operation = "GROUP";
 
-            if (s.predicate_count > 0) {
+            if (s.node_count > 0) {
                 rows /= 10;
             } else {
                 rows = 1;
             }
         }
+        else if (s.type == PLAN_OFFSET) {
+            operation = "OFFSET";
+
+            rows -= s.limit;
+        }
         else if (s.type == PLAN_SELECT) {
             operation = "SELECT";
-
-            rows -= q->offset_value;
         }
         else if (s.type == PLAN_CROSS_JOIN) {
             operation = "CROSS JOIN";
 
             join_count++;
 
-            struct Table *t = &q->tables[join_count];
+            struct Table *t = &tables[join_count];
 
             strncpy(table, t->alias, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
@@ -304,23 +316,23 @@ int explain_select_query (
 
             join_count++;
 
-            struct Table *t = &q->tables[join_count];
+            struct Table *t = &tables[join_count];
 
             strncpy(table, t->alias, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
 
             int record_count = getRecordCount(t->db);
 
-            if (s.predicate_count > 0) {
-                if (s.predicates[0].op == OPERATOR_EQ) {
+            if (s.node_count > 0) {
+                if (s.nodes[0].function == OPERATOR_EQ) {
                     rows += record_count / 1000;
                 } else {
                     rows += record_count / 10;
                 }
 
                 // We might have been too hasty copying predicate name
-                if (s.predicates[0].left.field.table_id != join_count) {
-                    strcpy(predicate, s.predicates[0].right.field.text);
+                if (s.nodes[0].children[0].field.table_id != join_count) {
+                    strcpy(predicate, s.nodes[0].children[1].field.text);
                 }
             } else {
                 rows += record_count;
@@ -335,23 +347,23 @@ int explain_select_query (
 
             join_count++;
 
-            struct Table *t = &q->tables[join_count];
+            struct Table *t = &tables[join_count];
 
             strncpy(table, t->alias, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
 
             int record_count = getRecordCount(t->db);
 
-            if (s.predicate_count > 0) {
-                if (s.predicates[0].op == OPERATOR_EQ) {
+            if (s.node_count > 0) {
+                if (s.nodes[0].function == OPERATOR_EQ) {
                     rows *= record_count / 1000;
                 } else {
                     rows *= record_count / 10;
                 }
 
                 // We might have been too hasty copying predicate name
-                if (s.predicates[0].left.field.table_id != join_count) {
-                    strcpy(predicate, s.predicates[0].right.field.text);
+                if (s.nodes[0].children[0].field.table_id != join_count) {
+                    strcpy(predicate, s.nodes[0].children[1].field.text);
                 }
             } else {
                 rows *= record_count;
@@ -366,7 +378,7 @@ int explain_select_query (
 
             join_count++;
 
-            struct Table *t = &q->tables[join_count];
+            struct Table *t = &tables[join_count];
 
             strncpy(table, t->alias, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
@@ -380,7 +392,7 @@ int explain_select_query (
 
             join_count++;
 
-            struct Table *t = &q->tables[join_count];
+            struct Table *t = &tables[join_count];
 
             strncpy(table, t->alias, MAX_FIELD_LENGTH);
             table[MAX_FIELD_LENGTH - 1] = '\0';
@@ -398,7 +410,7 @@ int explain_select_query (
             sprintf(table, "%d", s.type);
         }
 
-        if (s.limit >= 0) {
+        if (s.type != PLAN_OFFSET && s.limit >= 0) {
             rows = (s.limit < rows) ? s.limit : rows;
         }
 

@@ -176,7 +176,7 @@ static int create_index (
         return -1;
     }
 
-    struct Column *columns = malloc(sizeof(*columns) * (field_count + 1));
+    struct Node *columns = malloc(sizeof(*columns) * (field_count + 1));
 
     for (int i = 0; i < field_count; i++) {
         int index_field_index = getFieldIndex(&db, index_field[i]);
@@ -186,16 +186,22 @@ static int create_index (
             return -1;
         }
 
-        columns[i].node.function = FUNC_UNITY;
+        // Defaults to ASC
+        // columns[i].alias[0] = ORDER_ASC;
+        columns[i].function = FUNC_UNITY;
         strcpy(columns[i].alias, index_field[i]);
-        columns[i].node.field.table_id = 0;
-        columns[i].node.field.index = index_field_index;
+        columns[i].field.table_id = 0;
+        columns[i].field.index = index_field_index;
+        columns[i].child_count = 0;
+        columns[i].children = NULL;
     }
 
-    columns[field_count].node.function = FUNC_UNITY;
+    columns[field_count].function = FUNC_UNITY;
     strcpy(columns[field_count].alias, "rowid");
-    columns[field_count].node.field.table_id = 0;
-    columns[field_count].node.field.index = FIELD_ROW_INDEX;
+    columns[field_count].field.table_id = 0;
+    columns[field_count].field.index = FIELD_ROW_INDEX;
+    columns[field_count].child_count = 0;
+    columns[field_count].children = NULL;
 
     char file_name[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12];
     sprintf(
@@ -219,18 +225,7 @@ static int create_index (
     // Fill row list with every sequential rowid
     fullTableScan(&db, getRowList(row_list), 0, -1);
 
-    enum Order order_directions[] = {
-        ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC,
-        ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC, ORDER_ASC,
-    };
-
-    struct Node **nodes = malloc(sizeof(*nodes) * field_count);
-
-    for (int i = 0; i < field_count; i++) {
-        nodes[i] = (struct Node *)&columns[i];
-    }
-
-    sortQuick(&table, *nodes, field_count, order_directions, getRowList(row_list));
+    sortQuick(&table, columns, field_count, getRowList(row_list));
 
     // Output functions assume array of DBs
     printHeaderLine(
@@ -251,7 +246,7 @@ static int create_index (
             getRecordValue(
                 &db,
                 row_id,
-                columns[0].node.field.index,
+                columns[0].field.index,
                 values[i % 2],
                 MAX_VALUE_LENGTH
             );

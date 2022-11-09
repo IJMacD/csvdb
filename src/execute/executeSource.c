@@ -6,7 +6,7 @@
 #include "../db/indices.h"
 
 int executeSourceDummyRow (
-    __attribute__((unused)) struct Query *query,
+    __attribute__((unused)) struct Table *tables,
     __attribute__((unused)) struct PlanStep *step,
     struct ResultSet *result_set
 ) {
@@ -17,24 +17,24 @@ int executeSourceDummyRow (
 }
 
 int executeSourcePK (
-    struct Query *query,
+    struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
     int record_count = (step->limit > -1)
-        ? step->limit : getRecordCount(query->tables[0].db);
+        ? step->limit : getRecordCount(tables[0].db);
 
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);
 
     // First table
-    struct Table * table = query->tables;
-    struct Predicate *p = &step->predicates[0];
+    struct Table * table = tables;
+    struct Node *p = &step->nodes[0];
 
     indexPrimarySeek(
         table->db,
-        p->op,
-        p->right.field.text,
+        p->function,
+        p->children[1].field.text,
         getRowList(row_list),
         step->limit
     );
@@ -43,27 +43,27 @@ int executeSourcePK (
 }
 
 int executeSourceUnique (
-    struct Query *query,
+    struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
     // First table
-    struct Table * table = query->tables;
-    struct Predicate *p = &step->predicates[0];
+    struct Table * table = tables;
+    struct Node *p = &step->nodes[0];
     struct DB index_db;
 
     if (
         findIndex(
             &index_db,
             table->name,
-            p->left.field.text,
+            p->children[0].field.text,
             INDEX_UNIQUE
         ) == 0
     ) {
         fprintf(
             stderr,
             "Unable to find unique index on column '%s' on table '%s'\n",
-            p->left.field.text,
+            p->children[0].field.text,
             table->name
         );
         return -1;
@@ -71,7 +71,7 @@ int executeSourceUnique (
 
     int record_count = (step->limit > -1)
         ? step->limit : (
-            (p->op == OPERATOR_EQ) ? 1 : getRecordCount(&index_db)
+            (p->function == OPERATOR_EQ) ? 1 : getRecordCount(&index_db)
         );
 
     RowListIndex row_list = createRowList(1, record_count);
@@ -83,8 +83,8 @@ int executeSourceUnique (
     indexUniqueSeek(
         &index_db,
         rowid_col,
-        p->op,
-        p->right.field.text,
+        p->function,
+        p->children[1].field.text,
         getRowList(row_list),
         step->limit
     );
@@ -95,27 +95,27 @@ int executeSourceUnique (
 }
 
 int executeSourceIndexSeek (
-    struct Query *query,
+    struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
     // First table
-    struct Table * table = query->tables;
-    struct Predicate *p = &step->predicates[0];
+    struct Table * table = tables;
+    struct Node *p = &step->nodes[0];
     struct DB index_db;
 
     if (
         findIndex(
             &index_db,
             table->name,
-            p->left.field.text,
+            p->children[0].field.text,
             INDEX_ANY
         ) == 0
     ) {
         fprintf(
             stderr,
             "Unable to find index on column '%s' on table '%s'\n",
-            p->left.field.text,
+            p->children[0].field.text,
             table->name
         );
         return -1;
@@ -133,8 +133,8 @@ int executeSourceIndexSeek (
     indexSeek(
         &index_db,
         rowid_col,
-        p->op,
-        p->right.field.text,
+        p->function,
+        p->children[1].field.text,
         getRowList(row_list),
         step->limit
     );
@@ -145,27 +145,27 @@ int executeSourceIndexSeek (
 }
 
 int executeSourceIndexScan (
-    struct Query *query,
+    struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
     // First table
-    struct Table * table = query->tables;
-    struct Predicate *p = &step->predicates[0];
+    struct Table * table = tables;
+    struct Node *p = &step->nodes[0];
     struct DB index_db;
 
     if (
         findIndex(
             &index_db,
             table->name,
-            p->left.field.text,
+            p->field.text,
             INDEX_ANY
         ) == 0
     ) {
         fprintf(
             stderr,
             "Unable to find index on column '%s' on table '%s'\n",
-            p->left.field.text,
+            p->field.text,
             table->name
         );
         return -1;
@@ -189,7 +189,7 @@ int executeSourceIndexScan (
 
 /**
  * @brief Sequentially access every row of the table applying the
- * predicates to each row accessed.
+ * nodes to each row accessed.
  *
  * @param query
  * @param step
@@ -197,24 +197,24 @@ int executeSourceIndexScan (
  * @return int
  */
 int executeSourceTableFull (
-    struct Query *query,
+    struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
     int record_count = (step->limit >= 0)
-        ? step->limit : getRecordCount(query->tables[0].db);
+        ? step->limit : getRecordCount(tables[0].db);
 
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);
 
     // First table
-    struct Table * table = query->tables;
+    struct Table * table = tables;
 
     fullTableAccess(
         table->db,
         getRowList(row_list),
-        step->predicates,
-        step->predicate_count,
+        step->nodes,
+        step->node_count,
         step->limit
     );
 
@@ -223,7 +223,7 @@ int executeSourceTableFull (
 
 /**
  * @brief Iterate a range of rowids adding each one to the RowList.
- * Any predicates on this step must ONLY be rowid predicates.
+ * Any nodes on this step must ONLY be rowid nodes.
  *
  * @param query
  * @param step
@@ -231,18 +231,18 @@ int executeSourceTableFull (
  * @return int
  */
 int executeSourceTableScan (
-    struct Query *query,
+    struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
     // First table
-    struct Table * table = query->tables;
+    struct Table * table = tables;
 
     int start_rowid = 0;
     int limit = step->limit;
 
-    if (step->predicate_count > 0) {
-        if (step->predicate_count > 1) {
+    if (step->node_count > 0) {
+        if (step->node_count > 1) {
             fprintf(
                 stderr,
                 "Unable to do FULL TABLE SCAN with more than one predicate\n"
@@ -250,42 +250,42 @@ int executeSourceTableScan (
             return -1;
         }
 
-        if (step->predicates[0].right.field.index != FIELD_CONSTANT) {
+        if (step->nodes[0].children[1].field.index != FIELD_CONSTANT) {
             fprintf(
-                stderr,
+                stderr,\
                 "Cannot compare rowid against non-constant value\n"
             );
             return -1;
         }
 
-        int right_val = atoi(step->predicates[0].right.field.text);
-        enum Operator op = step->predicates[0].op;
+        int left_val = atoi(step->nodes[0].children[1].field.text);
+        enum Function function = step->nodes[0].function;
 
-        if (op == OPERATOR_EQ) {
-            start_rowid = right_val;
+        if (function == OPERATOR_EQ) {
+            start_rowid = left_val;
             limit = 1;
         }
-        else if (op == OPERATOR_LT) {
+        else if (function == OPERATOR_LT) {
             start_rowid = 0;
-            limit = limit > -1 ? MIN(limit, right_val) : right_val;
+            limit = limit > -1 ? MIN(limit, left_val) : left_val;
         }
-        else if (op == OPERATOR_LE) {
+        else if (function == OPERATOR_LE) {
             start_rowid = 0;
-            limit = limit > -1 ? MIN(limit, right_val + 1) : (right_val + 1);
+            limit = limit > -1 ? MIN(limit, left_val + 1) : (left_val + 1);
         }
-        else if (op == OPERATOR_GT) {
-            start_rowid = right_val + 1;
+        else if (function == OPERATOR_GT) {
+            start_rowid = left_val + 1;
             limit = -1;
         }
-        else if (op == OPERATOR_GE) {
-            start_rowid = right_val;
+        else if (function == OPERATOR_GE) {
+            start_rowid = left_val;
             limit = -1;
         }
         else {
             fprintf(
                 stderr,
-                "Unable to do FULL TABLE SCAN with operator %d\n",
-                op
+                "Unable to do FULL TABLE SCAN with functionerator %d\n",
+                function
             );
             return -1;
         }
@@ -294,7 +294,7 @@ int executeSourceTableScan (
     int record_count = limit;
 
     if (record_count < 0) {
-        record_count = getRecordCount(query->tables[0].db) - start_rowid;
+        record_count = getRecordCount(tables[0].db) - start_rowid;
     }
 
     RowListIndex row_list = createRowList(1, record_count);

@@ -279,6 +279,7 @@ RowListIndex createRowList (int join_count, int max_rows) {
     // Prepare RowList for use.
     row_list->join_count = join_count;
     row_list->row_count = 0;
+    row_list->group = 0;
 
     if (join_count == 0) {
         // Special case for constant-only table-less query

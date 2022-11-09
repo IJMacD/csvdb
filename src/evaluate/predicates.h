@@ -2,8 +2,8 @@
 
 int parseOperator (const char *input);
 
-int evaluateExpression (enum Operator op, const char *left, const char *right);
+int evaluateExpression (enum Function op, const char *left, const char *right);
 
-void normalisePredicate (struct Predicate *p);
+void normalisePredicate (struct Node *p);
 
-int flipPredicate (struct Predicate *p);
+int flipPredicate (struct Node *p);

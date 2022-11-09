@@ -23,10 +23,10 @@ int parseOperator (const char *input) {
         return OPERATOR_GE;
     if (strcmp(input, "LIKE") == 0)
         return OPERATOR_LIKE;
-    return OPERATOR_UN;
+    return FUNC_UNKNOWN;
 }
 
-int evaluateExpression (enum Operator op, const char *left, const char *right) {
+int evaluateExpression (enum Function op, const char *left, const char *right) {
     // printf("Evaluating %s OP %s\n", left, right);
 
     struct DateTime dt_left, dt_right;
@@ -105,37 +105,47 @@ int evaluateExpression (enum Operator op, const char *left, const char *right) {
  *
  * @param p
  */
-void normalisePredicate (struct Predicate *p) {
-    if (p->left.field.index == FIELD_CONSTANT && p->right.field.index >= 0) {
-        flipPredicate(p);
-    } else if (p->left.function != FUNC_PK && p->right.function == FUNC_PK) {
-        flipPredicate(p);
+void normalisePredicate (struct Node *predicate) {
+    struct Node *left = &predicate->children[0];
+    struct Node *right = &predicate->children[1];
+
+    if (left->field.index == FIELD_CONSTANT && right->field.index >= 0) {
+        flipPredicate(predicate);
+    } else if (left->function != FUNC_PK && right->function == FUNC_PK) {
+        flipPredicate(predicate);
     }
 }
 
-int flipPredicate (struct Predicate *p) {
+int flipPredicate (struct Node *predicate) {
+    struct Node *left = &predicate->children[0];
+    struct Node *right = &predicate->children[1];
+
     // copy struct automatically
-    struct Node tmp = p->left;
+    struct Node tmp = *left;
 
     // swap
-    memcpy(&p->left, &p->right, sizeof(tmp));
-    memcpy(&p->right, &tmp, sizeof(tmp));
+    memcpy(left, right, sizeof(tmp));
+    memcpy(right, &tmp, sizeof(tmp));
+
+    enum Function op = predicate->function;
 
     // flip operator as necessary
-    if (p->op == OPERATOR_LT) {
-        p->op = OPERATOR_GT;
-    } else if (p->op == OPERATOR_LE) {
-        p->op = OPERATOR_GE;
-    } else if (p->op == OPERATOR_GT) {
-        p->op = OPERATOR_LT;
-    } else if (p->op == OPERATOR_GE) {
-        p->op = OPERATOR_LE;
-    } else if (p->op == OPERATOR_EQ) {
+    if (op == OPERATOR_LT) {
+        op = OPERATOR_GT;
+    } else if (op == OPERATOR_LE) {
+        op = OPERATOR_GE;
+    } else if (op == OPERATOR_GT) {
+        op = OPERATOR_LT;
+    } else if (op == OPERATOR_GE) {
+        op = OPERATOR_LE;
+    } else if (op == OPERATOR_EQ) {
         // no op
     } else {
         // Unable to swap
         return -1;
     }
+
+    predicate->function = op;
 
     return 0;
 }

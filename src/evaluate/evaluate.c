@@ -67,9 +67,14 @@ int evaluateNode (
         return evaluateFunction(output, node->function, (char **)values, 1);
     }
 
-    char *values = malloc(node->child_count * MAX_VALUE_LENGTH);
-    char **values_ptrs = malloc(node->child_count * sizeof(values));
-    for (int i = 0; i < node->child_count; i++) {
+    int n = node->child_count;
+    if (n == 0) {
+        n = 1;
+    }
+
+    char *values = malloc(n * MAX_VALUE_LENGTH);
+    char **values_ptrs = malloc(n * sizeof(values));
+    for (int i = 0; i < n; i++) {
         values_ptrs[i] = values + MAX_FIELD_LENGTH * i;
     }
 
@@ -77,8 +82,8 @@ int evaluateNode (
         fprintf(
             stderr,
             "Unable to allocate %d bytes for %d child node values\n",
-            node->child_count * MAX_VALUE_LENGTH,
-            node->child_count
+            n * MAX_VALUE_LENGTH,
+            n
         );
         exit(-1);
     }
@@ -149,7 +154,7 @@ int evaluateNodeList (
             count = sprintf(output, "%020ld", atol(value));
         }
         else {
-            strcpy(output, value);
+            count = strlen(strcpy(output, value));
         }
 
         output += count;

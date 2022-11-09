@@ -230,7 +230,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
             int curr_index = 0;
             while (query[index] != '\0' && query[index] != ';') {
-                struct Column *column = &(q->columns[curr_index++]);
+                struct Node *node = &(q->columns[curr_index++]);
 
                 if (curr_index >= MAX_FIELD_COUNT + 1) {
                     fprintf(stderr, "Too many columns\n");
@@ -241,7 +241,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                 int col_start_index = index;
 
-                int result = parseNode(query, &index, (struct Node *)column);
+                int result = parseNode(query, &index, node);
 
                 if (result < 0) {
                     return result;
@@ -251,7 +251,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                 int len = index - col_start_index;
                 if (len < MAX_FIELD_LENGTH) {
                     whitespaceCollapse(
-                        column->alias,
+                        node->alias,
                         query + col_start_index,
                         len
                     );
@@ -267,7 +267,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                     getQuotedToken(
                         query,
                         &index,
-                        column->alias,
+                        node->alias,
                         MAX_FIELD_LENGTH
                     );
 
@@ -314,6 +314,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                 struct Table *table = &q->tables[q->table_count - 1];
 
+                table->join.function = OPERATOR_ALWAYS;
                 table->join_type = next_join_flag;
                 next_join_flag = 0;
 
@@ -457,9 +458,15 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                     index += 3;
                     skipWhitespace(query, &index);
 
-                    struct Predicate * p = &table->join;
+                    struct Node *p = &table->join;
 
-                    int result = parseNode(query, &index, &p->left);
+                    p->children = malloc(sizeof(*p) * 2);
+                    p->child_count = 2;
+
+                    struct Node *left = &p->children[0];
+                    struct Node *right = &p->children[1];
+
+                    int result = parseNode(query, &index, left);
 
                     if (result < 0) {
                         return result;
@@ -468,8 +475,8 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                     char op[5];
                     getOperatorToken(query, &index, op, 5);
 
-                    p->op = parseOperator(op);
-                    if (p->op == OPERATOR_UN) {
+                    p->function = parseOperator(op);
+                    if (p->function == FUNC_UNKNOWN) {
                         fprintf(stderr, "expected =|!=|<|<=|>|>=\n");
                         return -1;
                     }
@@ -478,12 +485,12 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                     if (strcmp(op, "IS") == 0) {
                         skipWhitespace(query, &index);
                         if (strncmp(query + index, "NOT ", 4) == 0) {
-                            p->op = OPERATOR_NE;
+                            p->function = OPERATOR_NE;
                             index += 4;
                         }
                     }
 
-                    result = parseNode(query, &index, &p->right);
+                    result = parseNode(query, &index, right);
                     if (result < 0) {
                         return result;
                     }
@@ -493,26 +500,32 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                     index += 6;
                     skipWhitespace(query, &index);
 
-                    struct Predicate * p = &table->join;
+                    struct Node * p = &table->join;
 
-                    int result = parseNode(query, &index, &p->left);
+                    p->children = malloc(sizeof(*p) * 2);
+                    p->child_count = 2;
+
+                    struct Node *left = &p->children[0];
+                    struct Node *right = &p->children[1];
+
+                    int result = parseNode(query, &index, left);
                     if (result < 0) {
                         fprintf(stderr, "Unable to parse USING node\n");
                         return result;
                     }
 
                     // node from left to right side of predicate
-                    memcpy(&p->right, &p->left, sizeof (p->left));
+                    memcpy(right, left, sizeof (*left));
 
                     // One side (right) needs to be on this joined table
                     // The other side needs to be from any of the previous
                     // tables we don't which yet, but it will be filled in later
-                    p->right.field.table_id = q->table_count - 1;
+                    right->field.table_id = q->table_count - 1;
 
                     // Set operator
-                    p->op = OPERATOR_EQ;
+                    p->function = OPERATOR_EQ;
                 } else {
-                    table->join.op = OPERATOR_ALWAYS;
+                    table->join.function = OPERATOR_ALWAYS;
                 }
 
                 if (query[index] == ',') {
@@ -552,11 +565,11 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                 void *mem;
 
                 if (q->predicate_count == 0) {
-                    mem = malloc(sizeof (*q->predicates));
+                    mem = malloc(sizeof (*q->predicate_nodes));
                 } else {
                     mem = realloc(
-                        q->predicates,
-                        sizeof (*q->predicates) * (q->predicate_count + 1)
+                        q->predicate_nodes,
+                        sizeof(*q->predicate_nodes) * (q->predicate_count + 1)
                     );
                 }
 
@@ -565,11 +578,17 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                     return -1;
                 }
 
-                q->predicates = mem;
+                q->predicate_nodes = mem;
 
-                struct Predicate *p = &(q->predicates[q->predicate_count++]);
+                struct Node *p = &(q->predicate_nodes[q->predicate_count++]);
 
-                int result = parseNode(query, &index, &p->left);
+                p->children = malloc(sizeof(*p) * 2);
+                p->child_count = 2;
+
+                struct Node *left = &p->children[0];
+                struct Node *right = &p->children[1];
+
+                int result = parseNode(query, &index, left);
                 if (result < 0) {
                     return result;
                 }
@@ -579,8 +598,8 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                 char op[5];
                 getOperatorToken(query, &index, op, 5);
 
-                p->op = parseOperator(op);
-                if (p->op == OPERATOR_UN) {
+                p->function = parseOperator(op);
+                if (p->function == FUNC_UNKNOWN) {
                     fprintf(stderr, "expected =|!=|<|<=|>|>=\n");
                     return -1;
                 }
@@ -589,12 +608,12 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                 if (strcmp(op, "IS") == 0) {
                     skipWhitespace(query, &index);
                     if (strncmp(query + index, "NOT ", 4) == 0) {
-                        p->op = OPERATOR_NE;
+                        p->function = OPERATOR_NE;
                         index += 4;
                     }
                 }
 
-                result = parseNode(query, &index, &p->right);
+                result = parseNode(query, &index, right);
                 if (result < 0) {
                     return result;
                 }
@@ -701,11 +720,11 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                 getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
                 if (strcmp(keyword, "ASC") == 0) {
-                    q->order_direction[i] = ORDER_ASC;
+                    q->order_nodes[i].alias[0] = ORDER_ASC;
                 } else if (strcmp(keyword, "DESC") == 0) {
-                    q->order_direction[i] = ORDER_DESC;
+                    q->order_nodes[i].alias[0] = ORDER_DESC;
                 } else {
-                    q->order_direction[i] = ORDER_ASC;
+                    q->order_nodes[i].alias[0] = ORDER_ASC;
                     // backtrack
                     index = original_index;
                 }

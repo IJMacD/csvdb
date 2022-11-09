@@ -1,6 +1,7 @@
 #include <stdlib.h>
 
 #include "../structs.h"
+#include "../query/query.h"
 #include "../query/result.h"
 #include "../db/db.h"
 #include "../evaluate/evaluate.h"
@@ -10,23 +11,26 @@
  * @brief Every row of left table is unconditionally joined to every
  * row of right table.
  *
- * @param query
+ * @param tables
  * @param step
  * @param result_set
  * @return int
  */
 int executeCrossJoin (
-    struct Query *query,
+    struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
 
     RowListIndex row_list = popRowList(result_set);
 
-    // Defined to be this table join ID on left
-    int table_id = step->predicates[0].left.field.table_id;
+    int table_id = step->nodes[0].child_count == 0
+        // Defined to be this table join ID in node field
+        ? step->nodes[0].field.table_id
+        // Defined to be this table join ID or left field
+        : step->nodes[0].children[0].field.table_id;
 
-    struct DB *next_db = query->tables[table_id].db;
+    struct DB *next_db = tables[table_id].db;
 
     int record_count = getRecordCount(next_db);
 
@@ -73,7 +77,7 @@ int executeCrossJoin (
  * @return int 0 on success
  */
 int executeConstantJoin (
-    struct Query *query,
+    struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
@@ -81,12 +85,12 @@ int executeConstantJoin (
     RowListIndex row_list = popRowList(result_set);
 
     // Defined to be this table join ID on left
-    int table_id = step->predicates[0].left.field.table_id;
+    int table_id = step->nodes[0].children[0].field.table_id;
 
     // Sanity check
-    struct Predicate *p = step->predicates + 0;
-    if (p->left.field.table_id != table_id &&
-        p->right.field.table_id != table_id)
+    struct Node *p = step->nodes + 0;
+    if (p->children[0].field.table_id != table_id &&
+        p->children[1].field.table_id != table_id)
     {
         fprintf(
             stderr,
@@ -96,7 +100,7 @@ int executeConstantJoin (
         return -1;
     }
 
-    struct DB *next_db = query->tables[table_id].db;
+    struct DB *next_db = tables[table_id].db;
 
     int record_count = getRecordCount(next_db);
     RowListIndex tmp_list = createRowList(1, record_count);
@@ -106,8 +110,8 @@ int executeConstantJoin (
     fullTableAccess(
         next_db,
         getRowList(tmp_list),
-        step->predicates,
-        step->predicate_count,
+        step->nodes,
+        step->node_count,
         -1
     );
 
@@ -117,7 +121,7 @@ int executeConstantJoin (
     int new_length = old_count * tmp_count;
 
     // Check for LEFT JOIN
-    if (tmp_count == 0 && query->tables[table_id].join_type == JOIN_LEFT) {
+    if (tmp_count == 0 && tables[table_id].join_type == JOIN_LEFT) {
         new_length = old_count;
     }
 
@@ -136,7 +140,7 @@ int executeConstantJoin (
         // If it's a LEFT JOIN and the right table was empty we
         // need to add each row to the new row list with NULLs for
         // the right table
-        if (tmp_count == 0 && query->tables[table_id].join_type == JOIN_LEFT) {
+        if (tmp_count == 0 && tables[table_id].join_type == JOIN_LEFT) {
             appendJoinedRowID(
                 getRowList(new_list),
                 getRowList(row_list),
@@ -182,9 +186,9 @@ int executeConstantJoin (
 
 
 /**
- * @brief Every row of left table is tested with predicates against
+ * @brief Every row of left table is tested with nodes against
  * every row of right table and only added to the result set
- * if all predicates compare true.
+ * if all nodes compare true.
  *
  * @param query
  * @param step
@@ -192,7 +196,7 @@ int executeConstantJoin (
  * @return int
  */
 int executeLoopJoin (
-    struct Query *query,
+    struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
@@ -200,9 +204,9 @@ int executeLoopJoin (
     RowListIndex row_list = popRowList(result_set);
 
     // Defined to be this table join ID on left
-    int table_id = step->predicates[0].left.field.table_id;
+    int table_id = step->nodes[0].children[0].field.table_id;
 
-    struct Table *table = &query->tables[table_id];
+    struct Table *table = &tables[table_id];
     struct DB *next_db = table->db;
 
     int record_count = getRecordCount(next_db);
@@ -221,24 +225,25 @@ int executeLoopJoin (
         int done = 0;
 
         // Make a local copy of predicate
-        struct Predicate p = step->predicates[0];
+        struct Node p;
+        copyNodeTree(&p, &step->nodes[0]);
 
         // Fill in right value as constant from outer tables
-        if (p.right.field.table_id < table_id) {
+        if (p.children[1].field.table_id < table_id) {
             evaluateNode(
-                query->tables,
+                tables,
                 getRowList(row_list),
                 i,
-                &p.right,
-                p.right.field.text,
+                &p.children[1],
+                p.children[1].field.text,
                 MAX_FIELD_LENGTH
             );
-            p.right.field.index = FIELD_CONSTANT;
-            p.right.function = FUNC_UNITY;
+            p.children[1].field.index = FIELD_CONSTANT;
+            p.children[1].function = FUNC_UNITY;
 
             // We're only passing one table to fullTableScan so predicate will
             // be on first table
-            p.left.field.table_id = 0;
+            p.children[0].field.table_id = 0;
         }
         else {
             fprintf(stderr, "Limitation of RowList: tables must be joined in "
@@ -251,6 +256,8 @@ int executeLoopJoin (
         // Populate the temp list with all rows which match our special
         // predicate
         fullTableAccess(next_db, getRowList(tmp_list), &p, 1, -1);
+
+        freeNode(&p);
 
         // Append each row we've just found to the main getRowList(row_list)
         for (int j = 0; j < getRowList(tmp_list)->row_count; j++) {
@@ -306,7 +313,7 @@ int executeLoopJoin (
  * @return int 0 on success
  */
 int executeUniqueJoin (
-    struct Query *query,
+    struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
@@ -314,9 +321,9 @@ int executeUniqueJoin (
     RowListIndex row_list = popRowList(result_set);
 
     // Defined to be this table join ID on left
-    int table_id = step->predicates[0].left.field.table_id;
+    int table_id = step->nodes[0].children[0].field.table_id;
 
-    struct Table *table = &query->tables[table_id];
+    struct Table *table = &tables[table_id];
 
     RowListIndex new_list = createRowList(
         getRowList(row_list)->join_count + 1,
@@ -325,14 +332,14 @@ int executeUniqueJoin (
 
     RowListIndex tmp_list = createRowList(1, 1);
 
-    struct Predicate * p = &step->predicates[0];
+    struct Node * p = &step->nodes[0];
 
     struct Node * outer;
     struct Node * inner;
 
-    if (p->left.field.table_id == table_id) {
-        outer = &p->right;
-        inner = &p->left;
+    if (p->children[0].field.table_id == table_id) {
+        outer = &p->children[1];
+        inner = &p->children[0];
     } else {
         fprintf(stderr, "UNIQUE JOIN table must be on left\n");
         return -1;
@@ -347,7 +354,7 @@ int executeUniqueJoin (
     if (
         findIndex(
             &index_db,
-            query->tables[table_id].name,
+            tables[table_id].name,
             inner->field.text,
             INDEX_UNIQUE
         ) == 0
@@ -355,7 +362,7 @@ int executeUniqueJoin (
         fprintf(
             stderr,
             "Couldn't find unique index on '%s(%s)'\n",
-            query->tables[table_id].name,
+            tables[table_id].name,
             inner->field.text
         );
         return -1;
@@ -369,7 +376,7 @@ int executeUniqueJoin (
 
         // Fill in value as constant from outer tables
         evaluateNode(
-            query->tables,
+            tables,
             getRowList(row_list),
             i,
             outer,
@@ -434,7 +441,7 @@ int executeUniqueJoin (
  * @return int 0 on success
  */
 int executeIndexJoin (
-    struct Query *query,
+    struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
@@ -442,9 +449,9 @@ int executeIndexJoin (
     RowListIndex row_list = popRowList(result_set);
 
     // Defined to be this table join ID on left
-    int table_id = step->predicates[0].left.field.table_id;
+    int table_id = step->nodes[0].children[0].field.table_id;
 
-    struct Table *table = &query->tables[table_id];
+    struct Table *table = &tables[table_id];
 
     RowListIndex new_list = createRowList(
         getRowList(row_list)->join_count + 1,
@@ -453,14 +460,14 @@ int executeIndexJoin (
 
     RowListIndex tmp_list = createRowList(1, getRecordCount(table->db));
 
-    struct Predicate * p = &step->predicates[0];
+    struct Node * p = &step->nodes[0];
 
     struct Node * outer;
     struct Node * inner;
 
-    if (p->left.field.table_id == table_id) {
-        outer = &p->right;
-        inner = &p->left;
+    if (p->children[0].field.table_id == table_id) {
+        outer = &p->children[1];
+        inner = &p->children[0];
     } else {
         fprintf(stderr, "UNIQUE JOIN table must be on left\n");
         return -1;
@@ -475,7 +482,7 @@ int executeIndexJoin (
     if (
         findIndex(
             &index_db,
-            query->tables[table_id].name,
+            tables[table_id].name,
             inner->field.text,
             INDEX_ANY
         ) == 0
@@ -483,7 +490,7 @@ int executeIndexJoin (
         fprintf(
             stderr,
             "Couldn't find index on '%s(%s)'\n",
-            query->tables[table_id].name,
+            tables[table_id].name,
             inner->field.text
         );
         return -1;
@@ -499,7 +506,7 @@ int executeIndexJoin (
 
         // Fill in value as constant from outer tables
         evaluateNode(
-            query->tables,
+            tables,
             getRowList(row_list),
             i,
             outer,
@@ -510,7 +517,7 @@ int executeIndexJoin (
         int sub_row_count = indexSeek(
             &index_db,
             rowid_col,
-            p->op,
+            p->function,
             value,
             getRowList(tmp_list),
             -1

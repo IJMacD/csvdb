@@ -8,7 +8,7 @@
 
 static int countFields (const char *ptr);
 
-static void prepareHeaders (struct DB *db);
+static int prepareHeaders (struct DB *db);
 
 static int indexLines (struct DB *db);
 
@@ -21,7 +21,10 @@ int csvMem_makeDB (struct DB *db, FILE *f) {
     // realistically possible. We will just read the entire stream into memory.
     consumeStream(db, f);
 
-    prepareHeaders(db);
+    int result = prepareHeaders(db);
+    if (result < 0) {
+        return -1;
+    }
 
     db->_record_count = -1;
 
@@ -205,7 +208,7 @@ int csvMem_getRecordValue (
     return -1;
 }
 
-static void prepareHeaders (struct DB *db) {
+static int prepareHeaders (struct DB *db) {
     db->field_count = 1;
 
     db->fields = db->data;
@@ -213,6 +216,12 @@ static void prepareHeaders (struct DB *db) {
     int i = 0;
 
     while (db->data[i] != '\n') {
+
+        if (db->data[i] == '\0') {
+            fprintf(stderr, "Empty file\n");
+            return -1;
+        }
+
         if (db->data[i] == ',') {
             db->fields[i] = '\0';
             db->field_count++;
@@ -224,6 +233,8 @@ static void prepareHeaders (struct DB *db) {
     db->fields[i] = '\0';
 
     db->data += i + 1;
+
+    return 0;
 }
 
 static int indexLines (struct DB *db) {

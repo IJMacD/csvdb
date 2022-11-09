@@ -257,7 +257,7 @@ enum IndexSearchType findIndex(
 int fullTableAccess (
     struct DB *db,
     struct RowList * row_list,
-    struct Predicate *predicates,
+    struct Node *predicates,
     int predicate_count,
     int limit_value
 ) {
@@ -269,7 +269,7 @@ int fullTableAccess (
     int (*vfs_fullTableAccess) (
         struct DB *,
         struct RowList *,
-        struct Predicate *,
+        struct Node *,
         int,
         int
     ) = VFS_Table[db->vfs].fullTableAccess;
@@ -297,20 +297,26 @@ int fullTableAccess (
 
         // Perform filtering if necessary
         for (int j = 0; j < predicate_count && matching; j++) {
-            struct Predicate *predicate = predicates + j;
+            struct Node *predicate = &predicates[j];
+            struct Node *left = &predicate->children[0];
+            struct Node *right = &predicate->children[1];
 
             // All fields in predicates MUST be on this table or constant
 
-            result = evaluateTableNode(db, i, &predicate->left, value_left);
+            result = evaluateTableNode(db, i, left, value_left);
             if (result < 0) {
                 return -1;
             }
-            result = evaluateTableNode(db, i, &predicate->right, value_right);
+            result = evaluateTableNode(db, i, right, value_right);
             if (result < 0) {
                 return -1;
             }
 
-            if (!evaluateExpression(predicate->op, value_left, value_right)) {
+            if (!evaluateExpression(
+                predicate->function,
+                value_left,
+                value_right
+            )) {
                 matching = 0;
                 break;
             }

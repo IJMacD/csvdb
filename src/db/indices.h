@@ -2,7 +2,7 @@
 
 enum IndexSearchResult indexPrimarySeek (
     struct DB *db,
-    enum Operator predicate_op,
+    enum Function predicate_op,
     const char *predicate_value,
     struct RowList * row_list,
     int limit
@@ -10,7 +10,7 @@ enum IndexSearchResult indexPrimarySeek (
 enum IndexSearchResult indexUniqueSeek (
     struct DB *index_db,
     int rowid_column,
-    enum Operator predicate_op,
+    enum Function predicate_op,
     const char *predicate_value,
     struct RowList * row_list,
     int limit
@@ -24,7 +24,7 @@ enum IndexSearchResult indexScan (
 enum IndexSearchResult indexSeek (
     struct DB *index_db,
     int rowid_column,
-    enum Operator predicate_op,
+    enum Function predicate_op,
     const char *predicate_value,
     struct RowList * row_list,
     int limit

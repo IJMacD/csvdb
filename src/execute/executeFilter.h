@@ -1,13 +1,19 @@
 #include "../structs.h"
 
 int executeTableAccessRowid (
-    struct Query *query,
+    struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 );
 
 int executeSlice (
-    struct Query *query,
+    struct Table *tables,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+);
+
+int executeOffset (
+    struct Table *tables,
     struct PlanStep *step,
     struct ResultSet *result_set
 );

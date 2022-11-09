@@ -59,10 +59,6 @@ static int process_subquery(
 
 static void destroy_query (struct Query *q);
 
-static void freeNode (struct Node *node);
-
-static void copyNodeTree (struct Node *dest, struct Node *src);
-
 static int wrap_query (
     struct Query *query,
     enum OutputOption inner_options,
@@ -238,12 +234,6 @@ int select_query (
         q2b.limit_value = -1;
 
         memcpy(
-            q2b.order_direction,
-            q.order_direction,
-            sizeof(q.order_direction)
-        );
-
-        memcpy(
             q2b.order_nodes,
             q.order_nodes,
             sizeof(q.order_nodes)
@@ -317,7 +307,7 @@ static int process_query (
         q->tables[0].db = NULL;
 
         result = information_query(
-            q->predicates[0].right.field.text,
+            q->predicate_nodes[0].children[1].field.text,
             output
         );
 
@@ -338,9 +328,9 @@ static int process_query (
 
     if (q->column_count == 0) {
         // Allow SELECT to be optional and default to SELECT *
-        q->columns[0].node.function = FUNC_UNITY;
-        q->columns[0].node.field.index = FIELD_STAR;
-        q->columns[0].node.field.table_id = -1;
+        q->columns[0].function = FUNC_UNITY;
+        q->columns[0].field.index = FIELD_STAR;
+        q->columns[0].field.table_id = -1;
         q->column_count = 1;
     }
 
@@ -357,7 +347,7 @@ static int process_query (
 
     // Populate SELECT Columns
     for (int i = 0; i < q->column_count; i++) {
-        result = resolveNode(q, (struct Node *)&q->columns[i], 0);
+        result = resolveNode(q, &q->columns[i], 0);
         if (result < 0) {
             fprintf(stderr, "Unable to resolve SELECT column %d\n", i);
             return result;
@@ -366,12 +356,12 @@ static int process_query (
 
     // Populate WHERE columns
     for (int i = 0; i < q->predicate_count; i++) {
-        result = resolveNode(q, &q->predicates[i].left, 1);
+        result = resolveNode(q, &q->predicate_nodes[i].children[0], 1);
         if (result < 0) {
             fprintf(stderr, "Unable to resolve WHERE node (%d left)\n", i);
             return result;
         }
-        result = resolveNode(q, &q->predicates[i].right, 1);
+        result = resolveNode(q, &q->predicate_nodes[i].children[1], 1);
         if (result < 0) {
             fprintf(stderr, "Unable to resolve WHERE node (%i right)\n", i);
             return result;
@@ -421,13 +411,25 @@ static int process_query (
     }
 
     if (q->flags & FLAG_EXPLAIN) {
-        result =  explain_select_query(q, &plan, output_flags, output);
+        result =  explain_select_query(q->tables, &plan, output_flags, output);
         destroyPlan(&plan);
         return result;
     }
 
-    result = executeQueryPlan(q, &plan, output_flags, output);
+    result = executeQueryPlan(
+        q->tables,
+        q->table_count,
+        &plan,
+        output_flags,
+        output
+    );
+
+    for (int i = 0; i < q->table_count; i++) {
+        closeDB(q->tables[i].db);
+    }
+
     destroyPlan(&plan);
+
     return result;
 }
 
@@ -527,9 +529,9 @@ int information_query (const char *table, FILE * output) {
 }
 
 static void destroy_query (struct Query *query) {
-    if (query->predicates != NULL) {
-        free(query->predicates);
-        query->predicates = NULL;
+    if (query->predicate_nodes != NULL) {
+        free(query->predicate_nodes);
+        query->predicate_nodes = NULL;
     }
 
     if (query->tables != NULL) {
@@ -547,19 +549,6 @@ static void destroy_query (struct Query *query) {
 
     for (int i = 0; i < query->group_count; i++) {
         freeNode(&query->group_nodes[i]);
-    }
-}
-
-static void freeNode (struct Node *node) {
-    if (node->child_count > 0) {
-        for (int i = 0; i < node->child_count; i++) {
-            freeNode(&node->children[i]);
-        }
-    }
-
-    if (node->children != NULL) {
-        free(node->children);
-        node->children = NULL;
     }
 }
 
@@ -645,12 +634,15 @@ static int populate_tables (struct Query *q, struct DB *dbs) {
 
         int result;
 
-        if (table->join.op != OPERATOR_ALWAYS) {
-            result = resolveNode(q, &table->join.left, 0);
+        if (
+            table->join.function != OPERATOR_ALWAYS
+            && table->join.function != FUNC_UNITY
+        ) {
+            result = resolveNode(q, &table->join.children[0], 0);
             if (result < 0) {
                 return result;
             }
-            result = resolveNode(q, &table->join.right, 0);
+            result = resolveNode(q, &table->join.children[1], 0);
             if (result < 0) {
                 return result;
             }
@@ -898,12 +890,13 @@ static int wrap_query (
 
 /**
  * @brief Copies a node tree recursively to avoid double FREE
+ * Will malloc for children
  *
  * @param dest
  * @param src
- * @return int
+ * @return void
  */
-static void copyNodeTree (struct Node *dest, struct Node *src) {
+void copyNodeTree (struct Node *dest, struct Node *src) {
     memcpy(&dest->field, &src->field, sizeof(dest->field));
 
     dest->function = src->function;
@@ -919,5 +912,18 @@ static void copyNodeTree (struct Node *dest, struct Node *src) {
         for (int i = 0; i < src->child_count; i++) {
             copyNodeTree(&dest->children[i], &src->children[i]);
         }
+    }
+}
+
+void freeNode (struct Node *node) {
+    if (node->child_count > 0) {
+        for (int i = 0; i < node->child_count; i++) {
+            freeNode(&node->children[i]);
+        }
+    }
+
+    if (node->children != NULL) {
+        free(node->children);
+        node->children = NULL;
     }
 }

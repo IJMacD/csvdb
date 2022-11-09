@@ -10,7 +10,6 @@ struct SortContext {
     struct Table *tables;
     struct Node *nodes;
     int node_count;
-    enum Order *sort_directions;
     struct RowList *row_list;
 };
 
@@ -23,14 +22,12 @@ void sortQuick (
     struct Table *tables,
     struct Node *nodes,
     int node_count,
-    enum Order *sort_directions,
     struct RowList *row_list
 ) {
     struct SortContext context = {
         .tables = tables,
         .nodes = nodes,
         .node_count = node_count,
-        .sort_directions = sort_directions,
         .row_list = row_list,
     };
 
@@ -104,7 +101,7 @@ static int compare (struct SortContext *context, int index_a, int index_b) {
         }
 
         if (result != 0) {
-            if (context->sort_directions[i] == ORDER_DESC) {
+            if (context->nodes[i].alias[0] == ORDER_DESC) {
                 result *= -1;
             }
 

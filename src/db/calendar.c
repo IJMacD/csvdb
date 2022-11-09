@@ -71,7 +71,7 @@ static char *field_names[] = {
 const int month_lengths[] = {31,28,31,30,31,30,31,31,30,31,30,31};
 
 static void getJulianRange (
-    struct Predicate *predicates,
+    struct Node *predicates,
     int predicate_count,
     int *julian_start,
     int *julian_end
@@ -415,7 +415,7 @@ enum IndexSearchType calendar_findIndex(
 int calendar_fullTableAccess (
     struct DB *db,
     struct RowList *row_list,
-    struct Predicate *predicates,
+    struct Node *predicates,
     int predicate_count,
     int limit_value
 ) {
@@ -452,24 +452,30 @@ int calendar_fullTableAccess (
 
         // Perform filtering if necessary
         for (int j = 0; j < predicate_count && matching; j++) {
-            struct Predicate *predicate = predicates + j;
+            struct Node *predicate = &predicates[j];
+            struct Node *left = &predicate->children[0];
+            struct Node *right = &predicate->children[1];
 
             calendar_evaluateField(
                 db,
-                (struct Field *)&predicate->left,
+                (struct Field *)left,
                 julian,
                 value_left,
                 MAX_VALUE_LENGTH
             );
             calendar_evaluateField(
                 db,
-                (struct Field *)&predicate->right,
+                (struct Field *)right,
                 julian,
                 value_right,
                 MAX_VALUE_LENGTH
             );
 
-            if (!evaluateExpression(predicate->op, value_left, value_right)) {
+            if (!evaluateExpression(
+                predicate->function,
+                value_left,
+                value_right
+            )) {
                 matching = 0;
                 break;
             }
@@ -490,21 +496,22 @@ int calendar_fullTableAccess (
 }
 
 static void getJulianRange (
-    struct Predicate *predicates,
+    struct Node *predicates,
     int predicate_count,
     int *julian_start,
     int *julian_end
 ) {
 
     for (int i = 0; i < predicate_count; i++) {
-        struct Predicate *p = predicates + i;
-
-        struct Field * field_left = (struct Field *)&p->left;
-        struct Field * field_right = (struct Field *)&p->right;
+        struct Node *predicate = &predicates[i];
+        struct Field *field_left = (struct Field *)&predicate->children[0];
+        struct Field *field_right = (struct Field *)&predicate->children[1];
 
         // Prep: We need field on the left and constant on the right, swap if
         // necessary
-        normalisePredicate(p);
+        normalisePredicate(predicate);
+
+        enum Function op = predicate->function;
 
         // Prep: We're only looking for constants
         if (field_right->index != FIELD_CONSTANT) {
@@ -519,26 +526,26 @@ static void getJulianRange (
         // Check what kind of predicate we have
         if (field_left->index == FIELD_ROW_INDEX) {
             // An exact Julian
-            if( p->op == OPERATOR_EQ) {
+            if (op == OPERATOR_EQ) {
                 *julian_start = atoi(field_right->text);
                 *julian_end = *julian_start + 1;
             }
 
             // Dates after a specific Julian
-            else if (p->op & OPERATOR_GT) {
+            else if (op & OPERATOR_GT) {
                 *julian_start = atoi(field_right->text);
 
-                if (!(p->op & OPERATOR_EQ)) {
+                if (!(op & OPERATOR_EQ)) {
                     (*julian_start)++;
                 }
             }
 
             // Dates before a specific Julian
-            else if (p->op & OPERATOR_LT) {
+            else if (op & OPERATOR_LT) {
                 *julian_end = atoi(field_right->text);
 
                 // End is exclusive
-                if (p->op & OPERATOR_EQ) {
+                if (op & OPERATOR_EQ) {
                     (*julian_end)++;
                 }
             }
@@ -547,7 +554,7 @@ static void getJulianRange (
         else if (field_left->index == COL_DATE) {
 
             // An exact date
-            if (p->op == OPERATOR_EQ) {
+            if (op == OPERATOR_EQ) {
                 struct DateTime dt = {0};
                 parseDateTime(field_right->text, &dt);
                 *julian_start = datetimeGetJulian(&dt);
@@ -555,24 +562,24 @@ static void getJulianRange (
             }
 
             // Dates after a specific date
-            else if (p->op & OPERATOR_GT) {
+            else if (op & OPERATOR_GT) {
                 struct DateTime dt = {0};
                 parseDateTime(field_right->text, &dt);
                 *julian_start = datetimeGetJulian(&dt);
 
-                if (!(p->op & OPERATOR_EQ)) {
+                if (!(op & OPERATOR_EQ)) {
                     (*julian_start)++;
                 }
             }
 
             // Dates before a specific date
-            if (p->op & OPERATOR_LT) {
+            if (op & OPERATOR_LT) {
                 struct DateTime dt = {0};
                 parseDateTime(field_right->text, &dt);
                 *julian_end = datetimeGetJulian(&dt);
 
                 // End is exclusive
-                if (p->op & OPERATOR_EQ) {
+                if (op & OPERATOR_EQ) {
                     (*julian_end)++;
                 }
             }
@@ -580,7 +587,7 @@ static void getJulianRange (
         else if (field_left->index == COL_YEAR) {
 
             // All dates in the given year
-            if (p->op == OPERATOR_EQ) {
+            if (op == OPERATOR_EQ) {
                 struct DateTime dt = {0};
 
                 dt.year = atoi(field_right->text);
@@ -596,7 +603,7 @@ static void getJulianRange (
             }
 
             // All dates up to (but not including) the given year
-            else if (p->op == OPERATOR_LT) {
+            else if (op == OPERATOR_LT) {
                 struct DateTime dt = {0};
 
                 // End is exclusive
@@ -608,7 +615,7 @@ static void getJulianRange (
             }
 
             // All dates up to and including the given year
-            else if (p->op == OPERATOR_LE) {
+            else if (op == OPERATOR_LE) {
                 struct DateTime dt = {0};
 
                 // End is exclusive
@@ -620,7 +627,7 @@ static void getJulianRange (
             }
 
             // All dates starting from the beginning of next year
-            else if (p->op == OPERATOR_GT) {
+            else if (op == OPERATOR_GT) {
                 struct DateTime dt = {0};
 
                 dt.year = atoi(field_right->text) + 1;
@@ -631,7 +638,7 @@ static void getJulianRange (
             }
 
             // All dates starting from the beginning of the given year
-            else if (p->op == OPERATOR_GE) {
+            else if (op == OPERATOR_GE) {
                 struct DateTime dt = {0};
 
                 dt.year = atoi(field_right->text);

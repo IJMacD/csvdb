@@ -21,3 +21,7 @@ int select_query (
 );
 
 int select_subquery(const char *query, char *filename);
+
+void copyNodeTree (struct Node *dest, struct Node *src);
+
+void freeNode (struct Node *node);

@@ -11,7 +11,7 @@
 #include "executeJoin.h"
 #include "executeFilter.h"
 #include "executeProcess.h"
-#include "../query/output.h"
+#include "executeSelect.h"
 #include "../query/result.h"
 #include "../db/indices.h"
 #include "../db/db.h"
@@ -25,27 +25,12 @@ extern int query_count;
 #endif
 
 int executeQueryPlan (
-    struct Query *q,
+    struct Table *tables,
+    int table_count,
     struct Plan *plan,
     enum OutputOption output_flags,
     FILE * output
 ) {
-    /*************************
-     * Output headers
-     ************************/
-    printPreamble(output, NULL, 0, q->columns, q->column_count, output_flags);
-
-    if (output_flags & OUTPUT_OPTION_HEADERS) {
-        printHeaderLine(
-            output,
-            q->tables,
-            q->table_count,
-            q->columns,
-            q->column_count,
-            output_flags
-        );
-    }
-
     // struct ResultSet results;
 
     // results.list_count = 1;
@@ -61,8 +46,6 @@ int executeQueryPlan (
 
     struct ResultSet *result_set = createResultSet();
 
-    int row_count = 0;
-
     int result = 0;
 
     for (int i = 0; i < plan->step_count; i++) {
@@ -70,7 +53,7 @@ int executeQueryPlan (
 
         switch (s->type) {
             case PLAN_DUMMY_ROW:
-                result = executeSourceDummyRow(q, s, result_set);
+                result = executeSourceDummyRow(tables, s, result_set);
                 break;
             case PLAN_PK:
             case PLAN_PK_RANGE: {
@@ -78,7 +61,7 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d.%d: PLAN_PK\n", getpid(), query_count);
                 #endif
 
-                result = executeSourcePK(q, s, result_set);
+                result = executeSourcePK(tables, s, result_set);
 
                 break;
             }
@@ -89,7 +72,7 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d.%d: PLAN_UNIQUE\n", getpid(), query_count);
                 #endif
 
-                result = executeSourceUnique(q, s, result_set);
+                result = executeSourceUnique(tables, s, result_set);
 
                 break;
             }
@@ -104,7 +87,7 @@ int executeQueryPlan (
                 );
                 #endif
 
-                result = executeSourceIndexSeek(q, s, result_set);
+                result = executeSourceIndexSeek(tables, s, result_set);
 
                 break;
             }
@@ -119,7 +102,7 @@ int executeQueryPlan (
                 );
                 #endif
 
-                result = executeSourceIndexScan(q, s, result_set);
+                result = executeSourceIndexScan(tables, s, result_set);
 
                 break;
             }
@@ -140,7 +123,7 @@ int executeQueryPlan (
                 );
                 #endif
 
-                result = executeSourceTableFull(q, s, result_set);
+                result = executeSourceTableFull(tables, s, result_set);
 
                 break;
             }
@@ -161,7 +144,7 @@ int executeQueryPlan (
                 );
                 #endif
 
-                result = executeSourceTableScan(q, s, result_set);
+                result = executeSourceTableScan(tables, s, result_set);
 
                 break;
             }
@@ -181,7 +164,7 @@ int executeQueryPlan (
                 );
                 #endif
 
-                result = executeTableAccessRowid(q, s, result_set);
+                result = executeTableAccessRowid(tables, s, result_set);
 
                 break;
             }
@@ -201,7 +184,7 @@ int executeQueryPlan (
                 );
                 #endif
 
-                result = executeCrossJoin(q, s, result_set);
+                result = executeCrossJoin(tables, s, result_set);
 
                 break;
             }
@@ -222,7 +205,7 @@ int executeQueryPlan (
                 );
                 #endif
 
-                result = executeConstantJoin(q, s, result_set);
+                result = executeConstantJoin(tables, s, result_set);
 
                 break;
             }
@@ -242,7 +225,7 @@ int executeQueryPlan (
                 );
                 #endif
 
-                result = executeLoopJoin(q, s, result_set);
+                result = executeLoopJoin(tables, s, result_set);
 
                 break;
             }
@@ -262,7 +245,7 @@ int executeQueryPlan (
                 );
                 #endif
 
-                result = executeUniqueJoin(q, s, result_set);
+                result = executeUniqueJoin(tables, s, result_set);
 
                 break;
             }
@@ -284,7 +267,7 @@ int executeQueryPlan (
                 );
                 #endif
 
-                result = executeIndexJoin(q, s, result_set);
+                result = executeIndexJoin(tables, s, result_set);
 
                 break;
             }
@@ -294,7 +277,7 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d.%d: PLAN_SORT\n", getpid(), query_count);
                 #endif
 
-                result = executeSort(q, s, result_set);
+                result = executeSort(tables, s, result_set);
 
                 break;
             }
@@ -309,7 +292,7 @@ int executeQueryPlan (
                 );
                 #endif
 
-                result = executeReverse(q, s, result_set);
+                result = executeReverse(tables, s, result_set);
 
                 break;
             }
@@ -319,7 +302,17 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d.%d: PLAN_SLICE\n", getpid(), query_count);
                 #endif
 
-                result = executeSlice(q, s, result_set);
+                result = executeSlice(tables, s, result_set);
+
+                break;
+            }
+
+            case PLAN_OFFSET: {
+                #ifdef DEBUG
+                fprintf(stderr, "Q%d.%d: PLAN_OFFSET\n", getpid(), query_count);
+                #endif
+
+                result = executeOffset(tables, s, result_set);
 
                 break;
             }
@@ -329,7 +322,7 @@ int executeQueryPlan (
                 fprintf(stderr, "Q%d.%d: PLAN_GROUP_SORTED\n", getpid(), query_count);
                 #endif
 
-                result = executeGroupSorted(q, s, result_set);
+                result = executeGroupSorted(tables, s, result_set);
 
                 break;
             }
@@ -344,7 +337,7 @@ int executeQueryPlan (
                 );
                 #endif
 
-                result = executeGroupBucket(q, s, result_set);
+                result = executeGroupBucket(tables, s, result_set);
 
                 break;
             }
@@ -353,51 +346,15 @@ int executeQueryPlan (
                 #ifdef DEBUG
                 fprintf(stderr, "Q%d.%d: PLAN_SELECT\n", getpid(), query_count);
                 #endif
-                /*******************
-                 * Output result set
-                 *******************/
 
-
-                RowListIndex list_id;
-
-                while ((list_id = popRowList(result_set)) >= 0) {
-                    struct RowList *row_list = getRowList(list_id);
-
-                    // Aggregate functions will print just one row
-                    if (q->flags & FLAG_GROUP) {
-                        printResultLine(
-                            output,
-                            q->tables,
-                            q->table_count,
-                            q->columns,
-                            q->column_count,
-                            row_list->row_count > 0
-                                ? q->offset_value : RESULT_NO_ROWS,
-                            row_list,
-                            output_flags
-                        );
-                        row_count++;
-                    }
-                    else for (
-                        int i = q->offset_value;
-                        i < row_list->row_count;
-                        i++
-                    ) {
-                        printResultLine(
-                            output,
-                            q->tables,
-                            q->table_count,
-                            q->columns,
-                            q->column_count,
-                            i,
-                            row_list,
-                            output_flags
-                        );
-                        row_count++;
-                    }
-
-                    destroyRowList(list_id);
-                }
+                result = executeSelect(
+                    output,
+                    output_flags,
+                    tables,
+                    table_count,
+                    s,
+                    result_set
+                );
 
                 break;
             }
@@ -431,24 +388,10 @@ int executeQueryPlan (
         fclose(fstats);
     }
 
-    printPostamble(
-        output,
-        NULL,
-        0,
-        q->columns,
-        q->column_count,
-        row_count,
-        output_flags
-    );
-
     destroyRowListPool();
 
     free(result_set->row_list_indices);
     free(result_set);
-
-    for (int i = 0; i < q->table_count; i++) {
-        closeDB(q->tables[i].db);
-    }
 
     return 0;
 }

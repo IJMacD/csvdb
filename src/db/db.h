@@ -37,8 +37,8 @@ int uniqueIndexSearch(struct DB *db, const char *value, int * output_flag);
 int fullTableAccess (
     struct DB *db,
     struct RowList * row_list,
-    struct Predicate *predicates,
-    int predicate_count,
+    struct Node *nodes,
+    int node_count,
     int limit_value
 );
 
