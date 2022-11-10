@@ -56,6 +56,10 @@ int main (int argc, char * argv[]) {
     // Default: with headers
     flags |= OUTPUT_OPTION_HEADERS;
 
+    #ifdef DEBUG
+    flags |= OUTPUT_OPTION_VERBOSE;
+    #endif
+
     FILE * output = stdout;
     const char * format_val = NULL;
     const char * output_name = NULL;
@@ -102,6 +106,9 @@ int main (int argc, char * argv[]) {
             }
 
             output_name = argv[++argi];
+        }
+        else if (strcmp(arg, "-v") == 0) {
+            flags |= OUTPUT_OPTION_VERBOSE;
         }
         else if (strncmp(arg, "--output=", 9) == 0) {
             output_name = arg + 9;

@@ -170,11 +170,11 @@ int select_query (
         return -1;
     }
 
-    #ifdef DEBUG
-    size_t query_len = *end_ptr - query;
-    fwrite(query, 1, query_len, stderr);
-    fprintf(stderr, "\n");
-    #endif
+    if (output_flags & OUTPUT_OPTION_VERBOSE) {
+        size_t query_len = *end_ptr - query;
+        fwrite(query, 1, query_len, stderr);
+        fprintf(stderr, "\n");
+    }
 
     if (output_flags & OUTPUT_OPTION_STATS) {
         gettimeofday(&stop, NULL);

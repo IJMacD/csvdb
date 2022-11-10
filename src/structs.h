@@ -282,11 +282,13 @@ struct Plan {
 // hsxx aaaa
 // h         - headers
 //  s        - stats
+//   v       - verbose
 //      aaaa - format
 
 enum OutputOption {
     OUTPUT_OPTION_HEADERS =     1 << 7,
     OUTPUT_OPTION_STATS =       1 << 6,
+    OUTPUT_OPTION_VERBOSE =     1 << 5,
 
     OUTPUT_MASK_FORMAT =        0x0F,
 
