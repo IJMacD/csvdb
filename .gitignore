@@ -6,3 +6,4 @@ gen
 *.index.csv
 *.unique.csv
 *.xlsx
+src/gitversion.c

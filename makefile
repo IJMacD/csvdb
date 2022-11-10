@@ -11,7 +11,7 @@ SRCDIR = src
 SUBDIRS = db query execute evaluate sort functions
 SRCDIRS = $(addprefix $(SRCDIR)/, $(SUBDIRS))
 RAWSRCS = main.c $(wildcard $(addsuffix /*.c, $(SRCDIRS)))
-SRCS = $(RAWSRCS:src/%=%)
+SRCS = $(RAWSRCS:src/%=%) gitversion.c
 OBJS = $(SRCS:.c=.o)
 EXE  = csvdb
 GENEXE = gen
@@ -106,6 +106,9 @@ $(GENEXE): $(GENOBJS)
 #
 prep:
 	@mkdir -p $(DBGDIR) $(addprefix $(DBGDIR)/, $(SRCDIRS)) $(RELDIR) $(addprefix $(RELDIR)/, $(SRCDIRS))
+
+$(SRCDIR)/gitversion.c: .git/HEAD .git/index
+	echo "const char *gitversion = \"$(shell git rev-parse HEAD)$(shell git diff-index --quiet HEAD || echo "-dirty") ($(shell git show -s --format=%cd --date=iso-strict))\";" > $@
 
 remake: clean all
 

@@ -11,6 +11,8 @@
 
 static int read_file(FILE *file, char **output);
 
+extern char* gitversion;
+
 void printUsage (const char* name) {
     printf(
         "Usage:\n"
@@ -45,7 +47,9 @@ void printUsage (const char* name) {
         "\t[(-F |--format=)(tsv|csv|html|json|json_array|sql|sql_values|xml|"
         "record)]\n"
         "\t[(-o |--output=)<filename>]\n"
-    , name);
+        "\n"
+        "Version: %2$s\n"
+    , name, gitversion);
 }
 
 int main (int argc, char * argv[]) {
@@ -239,6 +243,11 @@ int main (int argc, char * argv[]) {
     // then we will assume the following query:
     if (!isatty(fileno(stdin))) {
         return query("SELECT * FROM stdin", flags, output, NULL);
+    }
+
+    if (flags & OUTPUT_OPTION_VERBOSE) {
+        printf("%s\n", gitversion);
+        return 0;
     }
 
     printUsage(argv[0]);
