@@ -50,6 +50,12 @@ static int applySortLogic (
 
 static int areNodesEqual (struct Node *nodeA, struct Node *nodeB);
 
+static int haveNonUniqueJoins (struct Plan *plan);
+
+static void addPredicateSource (struct Plan *plan, struct Query *query);
+
+static enum PlanStepType findIndexSource (struct Query *query);
+
 int makePlan (struct Query *q, struct Plan *plan) {
     plan->step_count = 0;
 
@@ -63,366 +69,20 @@ int makePlan (struct Query *q, struct Plan *plan) {
         return plan->step_count;
     }
 
-    if (q->predicate_count > 0) {
+    int have_predicates = q->predicate_count > 0;
+    int have_group_by = q->group_count > 0;
+    int have_grouping = have_group_by || (q->flags & FLAG_GROUP);
 
-        // Try to find a predicate on the first table
-        int predicatesOnFirstTable = optimiseNodes(
-            q,
-            q->predicate_nodes,
-            q->predicate_count
-        );
-
-        // First table
-        struct Table *table = &q->tables[0];
-
-        // First predicate
-        struct Node *p = &q->predicate_nodes[0];
-        enum Function op = p->function;
-
-        struct Node *left = &p->children[0];
-        struct Field *field_left = (struct Field *)left;
-        struct Field *field_right = (struct Field *)&p->children[1];
-            // struct Node *predicate = &predicates[j];
-            // struct Node *left = &predicate->children[0];
-            // struct Node *right = &predicate->children[1];
-
-        if (predicatesOnFirstTable > 0) {
-
-            enum PlanStepType step_type = 0;
-            size_t len = strlen(field_right->text);
-
-            int skip_index = 0;
-
-            // We know that CALENDAR can perform super efficient full table
-            // scans with predicates.
-            // Currently Index access can only use a single predicate at a
-            // time which makes CALENDAR access much slower than it needs to
-            // be.
-            // In the future with real index ranges this special case could
-            // probably be removed.
-            if (predicatesOnFirstTable > 1 && table->db->vfs == VFS_CALENDAR) {
-                struct Node *p2 = &q->predicate_nodes[1];
-                struct Field *p2_field_left = (struct Field *)&p2->children[0];
-
-                if (strcmp(field_left->text, p2_field_left->text) == 0) {
-                    skip_index = 1;
-                }
-            }
-
-            if (skip_index == 0) {
-                if (field_left->index == FIELD_ROW_INDEX) {
-                    step_type = PLAN_TABLE_SCAN;
-                }
-                // LIKE can only use index if '%' is at the end
-                else if (
-                    op == OPERATOR_LIKE
-                    && field_right->text[len-1] != '%'
-                ) {
-                    // NOP
-                    step_type = 0;
-                }
-                else if (left->function == FUNC_PK) {
-
-                    if (op == OPERATOR_EQ) {
-                        step_type = PLAN_PK;
-                    }
-                    // Can't use PK index for LIKE yet
-                    else if (op != OPERATOR_LIKE) {
-                        step_type = PLAN_PK_RANGE;
-                    }
-
-                }
-                // Can only do indexes on bare columns for now
-                else if (left->function == FUNC_UNITY) {
-
-                    // Remove qualified name so indexes can be searched etc.
-                    int dot_index = str_find_index(field_left->text, '.');
-                    if (dot_index >= 0) {
-                        char value[MAX_FIELD_LENGTH];
-                        strcpy(value, field_left->text);
-                        strcpy(field_left->text, value + dot_index + 1);
-                    }
-
-                    /*******************
-                     * INDEX SCAN
-                     *******************/
-
-                    // Try to find any index
-                    enum IndexSearchType find_result = findIndex(
-                        NULL,
-                        table->name,
-                        field_left->text,
-                        INDEX_ANY
-                    );
-
-                    if (find_result) {
-
-                        if (find_result == INDEX_PRIMARY) {
-                            if (op == OPERATOR_EQ) {
-                                step_type = PLAN_PK;
-                            }
-                            // Can't use PK index for LIKE yet
-                            else if (op != OPERATOR_LIKE) {
-                                step_type = PLAN_PK_RANGE;
-                            }
-                        }
-                        // LIKE makes any INDEX automatically non-unique
-                        else if (
-                            find_result == INDEX_UNIQUE
-                            && op != OPERATOR_LIKE
-                        ) {
-                            if (op == OPERATOR_EQ) {
-                                step_type = PLAN_UNIQUE;
-                            } else {
-                                step_type = PLAN_UNIQUE_RANGE;
-                            }
-                        }
-                        // INDEX RANGE can handle LIKE
-                        else {
-                            step_type = PLAN_INDEX_RANGE;
-                        }
-                    }
-                }
-            }
-
-            // If plan_type is set, that means we have an index
-            if (step_type) {
-                addStepWithNode(plan, step_type, &q->predicate_nodes[0]);
-
-                addJoinStepsIfRequired(plan, q);
-
-                if (q->predicate_count > 1) {
-                    addStepWithNodes(
-                        plan,
-                        PLAN_TABLE_ACCESS_ROWID,
-                        q->predicate_nodes + 1,
-                        q->predicate_count - 1
-                    );
-                }
-
-                if (step_type == PLAN_PK || step_type == PLAN_UNIQUE) {
-                    // Reverse is never required if the plan is PLAN_PK or
-                    // PLAN_UNIQUE.
-                } else if (q->flags & FLAG_GROUP){
-                    // Reverse is not required if we're grouping.
-                } else if (q->order_count > 0) {
-                    // Follow our own logic to add an order step
-                    // We can avoid it if we're just going to sort on the same
-                    // column we've just scanned.
-                    if (
-                        (q->order_count == 1)
-                        && q->order_nodes[0].function == FUNC_UNITY
-                        && strcmp(
-                            field_left->text,
-                            q->order_nodes[0].field.text
-                        ) == 0
-                    ) {
-
-                        // So a sort is not necessary but we might still need to
-                        // reverse
-                        if (q->order_nodes[0].alias[0] == ORDER_DESC) {
-                            addStep(plan, PLAN_REVERSE);
-                        }
-                    } else {
-                        addOrderStepsIfRequired(plan, q);
-                    }
-                }
-            }
-            // Before we do a full table scan... we have one more opportunity to
-            // use an index to save a sort later, see if we can use an index for
-            // ordering now.
-            else if (
-                skip_index == 0
-                && q->order_count == 1
-                // If we're selecting a lot of rows this optimisation is
-                // probably worth it. If we have an EQ operator then it's
-                // probably cheaper to filter first.
-                //
-                // Tested with `WHERE score = 42 ORDER BY name`
-                // example times:
-                //  Index, then filter:     real    0m3.012s
-                //  Filter, then sort:      real    0m1.637s
-                && (op != OPERATOR_EQ)
-                && q->order_nodes[0].function == FUNC_UNITY
-                && findIndex(
-                    NULL,
-                    table->name,
-                    q->order_nodes[0].field.text,
-                    INDEX_ANY
-                )
-            ) {
-                // Add step for Sorted index access
-                addStepWithNode(plan, PLAN_INDEX_SCAN, &q->order_nodes[0]);
-
-                // Optimisation: filter before join
-                int skip_predicates = 0;
-                for (int i = 0; i < q->predicate_count; i++) {
-                    // If left and right are either constant or table 0 then we
-                    // can filter
-                    if (
-                        q->predicate_nodes[i].children[0].field.table_id <= 0
-                        && q->predicate_nodes[i].children[1].field.table_id <= 0
-                    ) {
-                        skip_predicates++;
-                    } else {
-                        break;
-                    }
-                }
-
-                if (skip_predicates > 0) {
-                    addStepWithNodes(
-                        plan,
-                        PLAN_TABLE_ACCESS_ROWID,
-                        q->predicate_nodes,
-                        skip_predicates
-                    );
-                }
-
-                addJoinStepsIfRequired(plan, q);
-
-                if (
-                    q->order_nodes[0].alias[0] == ORDER_DESC
-                    && !(q->flags & FLAG_GROUP)
-                ) {
-                    addStep(plan, PLAN_REVERSE);
-                }
-
-                // Add step for remaining predicates filter
-                if (q->predicate_count > skip_predicates) {
-                    addStepWithNodes(
-                        plan,
-                        PLAN_TABLE_ACCESS_ROWID,
-                        q->predicate_nodes + skip_predicates,
-                        q->predicate_count - skip_predicates
-                    );
-                }
-            }
-            else if (
-                (q->flags & FLAG_GROUP)
-                && q->group_nodes[0].function == FUNC_UNITY
-            ) {
-                // Before we do a full table scan... we have one more
-                // opportunity to use an index to save a sort later, see if we
-                // can use an index for ordering now
-                struct Table *table = &q->tables[0];
-                if (findIndex(
-                    NULL,
-                    table->name,
-                    q->group_nodes[0].field.text,
-                    INDEX_ANY
-                )) {
-
-                    addStepWithNode(plan, PLAN_INDEX_SCAN, &q->group_nodes[0]);
-
-                    addStepWithNodes(
-                        plan,
-                        PLAN_TABLE_ACCESS_ROWID,
-                        q->predicate_nodes,
-                        predicatesOnFirstTable
-                    );
-
-                    addJoinStepsIfRequired(plan, q);
-
-                    if (q->predicate_count > predicatesOnFirstTable) {
-                        // Add the rest of the predicates after the join
-                        addStepWithNodes(
-                            plan,
-                            PLAN_TABLE_ACCESS_ROWID,
-                            q->predicate_nodes + predicatesOnFirstTable,
-                            q->predicate_count - predicatesOnFirstTable
-                        );
-                    }
-
-                    // In this case it's OK to apply limit optimisation to Join
-                    // step even though we have an ORDER BY clause.
-                    struct PlanStep *prev = &plan->steps[plan->step_count - 1];
-                    if (q->limit_value >= 0) {
-                        // Usually this can't be done with ORDER BY but in this
-                        // case we can since there are no predicates.
-                        prev->limit = q->offset_value + q->limit_value;
-                    }
-
-                } else {
-                    addStepWithNodes(
-                        plan,
-                        PLAN_TABLE_ACCESS_FULL,
-                        q->predicate_nodes,
-                        predicatesOnFirstTable
-                    );
-
-                    addJoinStepsIfRequired(plan, q);
-
-                    if (q->predicate_count > predicatesOnFirstTable) {
-                        // Add the rest of the predicates after the join
-                        addStepWithNodes(
-                            plan,
-                            PLAN_TABLE_ACCESS_ROWID,
-                            q->predicate_nodes + predicatesOnFirstTable,
-                            q->predicate_count - predicatesOnFirstTable
-                        );
-                    }
-                }
-            }
-            /********************
-             * TABLE ACCESS FULL
-             ********************/
-            else {
-                if (q->table_count > 1) {
-
-                    // First predicates are from first table
-                    addStepWithNodes(
-                        plan,
-                        PLAN_TABLE_ACCESS_FULL,
-                        q->predicate_nodes,
-                        predicatesOnFirstTable
-                    );
-
-                    // The join
-                    addJoinStepsIfRequired(plan, q);
-
-                    if (q->predicate_count > predicatesOnFirstTable) {
-                        // Add the rest of the predicates after the join
-                        addStepWithNodes(
-                            plan,
-                            PLAN_TABLE_ACCESS_ROWID,
-                            q->predicate_nodes + predicatesOnFirstTable,
-                            q->predicate_count - predicatesOnFirstTable
-                        );
-                    }
-                } else {
-                    // Only one table so add all predicates together
-                    addStepWithNodes(
-                        plan,
-                        PLAN_TABLE_ACCESS_FULL,
-                        q->predicate_nodes,
-                        q->predicate_count
-                    );
-                }
-
-                addOrderStepsIfRequired(plan, q);
-            }
-        } else {
-
-            // Node isn't on the first table need to do full access
-
-            addStep(plan, PLAN_TABLE_SCAN);
-
-            addJoinStepsIfRequired(plan, q);
-
-            addStepWithNodes(
-                plan,
-                PLAN_TABLE_ACCESS_ROWID,
-                q->predicate_nodes,
-                q->predicate_count
-            );
-
-            addOrderStepsIfRequired(plan, q);
-        }
+    if (have_predicates) {
+        addPredicateSource(plan, q);
     }
     else if (
+        // We need at least one ORDER BY node,
         q->order_count >= 1
+        // it needs to be on a UNITY function,
         && q->order_nodes[0].function == FUNC_UNITY
-        && !(q->flags & FLAG_GROUP)
+        // without grouping
+        && !have_grouping
     ) {
         // Before we do a full table scan... we have one more opportunity to use
         // an index to save a sort later, see if we can use an index for
@@ -437,28 +97,27 @@ int makePlan (struct Query *q, struct Plan *plan) {
             INDEX_ANY
         );
 
-        if (index_type != INDEX_NONE) {
-            if (index_type == INDEX_UNIQUE) {
-                addStepWithNode(plan, PLAN_UNIQUE_RANGE, &q->order_nodes[0]);
-            }
-            else {
-                addStepWithNode(plan, PLAN_INDEX_SCAN, &q->order_nodes[0]);
-            }
-
-            addJoinStepsIfRequired(plan, q);
-
-            addOrderStepsIfRequired(plan, q);
-
-        } else {
-            addStep(plan, PLAN_TABLE_SCAN);
-
-            addJoinStepsIfRequired(plan, q);
-
-            addOrderStepsIfRequired(plan, q);
+        // If the first ORDER BY node is a unique index then we can make use of
+        // it here if we're sure that there each row on the first table can only
+        // result in exactly one row in the output.
+        if (index_type == INDEX_UNIQUE && haveNonUniqueJoins(plan) == 0) {
+            addStepWithNode(plan, PLAN_UNIQUE_RANGE, &q->order_nodes[0]);
         }
+        // Nearly sorted sorts are *really* expensive, if there's more than one
+        // ORDER BY node then it's probably not worth it
+        else if (index_type != INDEX_NONE && q->order_count == 1) {
+            addStepWithNode(plan, PLAN_INDEX_SCAN, &q->order_nodes[0]);
+        }
+        else {
+            addStep(plan, PLAN_TABLE_SCAN);
+        }
+
+        addJoinStepsIfRequired(plan, q);
+
+        addOrderStepsIfRequired(plan, q);
     }
     else if (
-        (q->flags & FLAG_GROUP)
+        have_group_by
         && q->group_nodes[0].function == FUNC_UNITY
     ) {
         // Before we do a full table scan... we have one more opportunity to use
@@ -511,6 +170,383 @@ int makePlan (struct Query *q, struct Plan *plan) {
     addStepWithNodes(plan, PLAN_SELECT, q->columns, q->column_count);
 
     return plan->step_count;
+}
+
+static void addPredicateSource (struct Plan *plan, struct Query *query) {
+    int have_order_by = query->order_count > 0;
+    int have_group_by = query->group_count > 0;
+    int have_grouping = have_group_by || (query->flags & FLAG_GROUP);
+
+    // Try to find a predicate on the first table
+    int predicatesOnFirstTable = optimiseNodes(
+        query,
+        query->predicate_nodes,
+        query->predicate_count
+    );
+
+    // First table
+    struct Table *table = &query->tables[0];
+
+    // First predicate
+    struct Node *p = &query->predicate_nodes[0];
+    enum Function op = p->function;
+
+    struct Node *left = &p->children[0];
+    struct Field *field_left = (struct Field *)left;
+
+    if (predicatesOnFirstTable == 0) {
+        // None of the predicates are on the first table, we'll need to do full
+        // table scan
+
+        addStep(plan, PLAN_TABLE_SCAN);
+
+        addJoinStepsIfRequired(plan, query);
+
+        addStepWithNodes(
+            plan,
+            PLAN_TABLE_ACCESS_ROWID,
+            query->predicate_nodes,
+            query->predicate_count
+        );
+
+        addOrderStepsIfRequired(plan, query);
+
+        return;
+    }
+
+    enum PlanStepType step_type = 0;
+
+    int skip_index = 0;
+
+    // We know that CALENDAR can perform super efficient full table
+    // scans with predicates.
+    // Currently Index access can only use a single predicate at a
+    // time which makes CALENDAR access much slower than it needs to
+    // be.
+    // In the future with real index ranges this special case could
+    // probably be removed.
+    if (predicatesOnFirstTable > 1 && table->db->vfs == VFS_CALENDAR) {
+        struct Node *p2 = &query->predicate_nodes[1];
+        struct Field *p2_field_left = (struct Field *)&p2->children[0];
+
+        if (strcmp(field_left->text, p2_field_left->text) == 0) {
+            skip_index = 1;
+        }
+    }
+
+    if (skip_index == 0) {
+        step_type = findIndexSource(query);
+    }
+
+    // If plan_type is set, that means we have an index
+    if (step_type) {
+        addStepWithNode(plan, step_type, &query->predicate_nodes[0]);
+
+        addJoinStepsIfRequired(plan, query);
+
+        if (query->predicate_count > 1) {
+            addStepWithNodes(
+                plan,
+                PLAN_TABLE_ACCESS_ROWID,
+                query->predicate_nodes + 1,
+                query->predicate_count - 1
+            );
+        }
+
+        if (step_type == PLAN_PK || step_type == PLAN_UNIQUE) {
+            // Reverse is never required if the plan is PLAN_PK or
+            // PLAN_UNIQUE.
+        } else if (have_grouping){
+            // Reverse is not required if we're grouping.
+        } else if (have_order_by) {
+            // Follow our own logic to add an order step
+            // We can avoid it if we're just going to sort on the same
+            // column we've just scanned.
+            if (
+                (query->order_count == 1)
+                && query->order_nodes[0].function == FUNC_UNITY
+                && strcmp(
+                    field_left->text,
+                    query->order_nodes[0].field.text
+                ) == 0
+            ) {
+
+                // So a sort is not necessary but we might still need to
+                // reverse
+                if (query->order_nodes[0].alias[0] == ORDER_DESC) {
+                    addStep(plan, PLAN_REVERSE);
+                }
+            } else {
+                addOrderStepsIfRequired(plan, query);
+            }
+        }
+
+        return;
+    }
+
+    // Before we do a full table scan... we have one more opportunity to
+    // use an index to save a sort later, see if we can use an index for
+    // ordering now.
+    if (
+        skip_index == 0
+        && query->order_count == 1
+        // If we're selecting a lot of rows this optimisation is
+        // probably worth it. If we have an EQ operator then it's
+        // probably cheaper to filter first.
+        //
+        // Tested with `WHERE score = 42 ORDER BY name`
+        // example times:
+        //  Index, then filter:     real    0m3.012s
+        //  Filter, then sort:      real    0m1.637s
+        && (op != OPERATOR_EQ)
+        && query->order_nodes[0].function == FUNC_UNITY
+        && findIndex(
+            NULL,
+            table->name,
+            query->order_nodes[0].field.text,
+            INDEX_ANY
+        )
+    ) {
+        // Add step for Sorted index access
+        addStepWithNode(plan, PLAN_INDEX_SCAN, &query->order_nodes[0]);
+
+        if (predicatesOnFirstTable > 0) {
+            addStepWithNodes(
+                plan,
+                PLAN_TABLE_ACCESS_ROWID,
+                query->predicate_nodes,
+                predicatesOnFirstTable
+            );
+        }
+
+        addJoinStepsIfRequired(plan, query);
+
+        // Add step for remaining predicates filter
+        if (query->predicate_count > predicatesOnFirstTable) {
+            addStepWithNodes(
+                plan,
+                PLAN_TABLE_ACCESS_ROWID,
+                query->predicate_nodes + predicatesOnFirstTable,
+                query->predicate_count - predicatesOnFirstTable
+            );
+        }
+
+        if (
+            query->order_nodes[0].alias[0] == ORDER_DESC
+            && !have_grouping
+        ) {
+            addStep(plan, PLAN_REVERSE);
+        }
+
+        return;
+    }
+
+    if (
+        skip_index == 0
+        && have_group_by
+        && query->group_nodes[0].function == FUNC_UNITY
+    ) {
+        // Before we do a full table scan... we have one more
+        // opportunity to use an index to save a sort later, see if we
+        // can use an index for ordering now
+        struct Table *table = &query->tables[0];
+        if (findIndex(
+            NULL,
+            table->name,
+            query->group_nodes[0].field.text,
+            INDEX_ANY
+        )) {
+
+            addStepWithNode(plan, PLAN_INDEX_SCAN, &query->group_nodes[0]);
+
+            addStepWithNodes(
+                plan,
+                PLAN_TABLE_ACCESS_ROWID,
+                query->predicate_nodes,
+                predicatesOnFirstTable
+            );
+
+            addJoinStepsIfRequired(plan, query);
+
+            if (query->predicate_count > predicatesOnFirstTable) {
+                // Add the rest of the predicates after the join
+                addStepWithNodes(
+                    plan,
+                    PLAN_TABLE_ACCESS_ROWID,
+                    query->predicate_nodes + predicatesOnFirstTable,
+                    query->predicate_count - predicatesOnFirstTable
+                );
+            }
+
+            // In this case it's OK to apply limit optimisation to Join
+            // step even though we have an ORDER BY clause.
+            struct PlanStep *prev = &plan->steps[plan->step_count - 1];
+            if (query->limit_value >= 0) {
+                // Usually this can't be done with ORDER BY but in this
+                // case we can since there are no predicates.
+                prev->limit = query->offset_value + query->limit_value;
+            }
+
+        } else {
+            addStepWithNodes(
+                plan,
+                PLAN_TABLE_ACCESS_FULL,
+                query->predicate_nodes,
+                predicatesOnFirstTable
+            );
+
+            addJoinStepsIfRequired(plan, query);
+
+            if (query->predicate_count > predicatesOnFirstTable) {
+                // Add the rest of the predicates after the join
+                addStepWithNodes(
+                    plan,
+                    PLAN_TABLE_ACCESS_ROWID,
+                    query->predicate_nodes + predicatesOnFirstTable,
+                    query->predicate_count - predicatesOnFirstTable
+                );
+            }
+        }
+
+        return;
+    }
+
+    /********************
+     * TABLE ACCESS FULL
+     ********************/
+    if (query->table_count > 1) {
+
+        // First predicates are from first table
+        addStepWithNodes(
+            plan,
+            PLAN_TABLE_ACCESS_FULL,
+            query->predicate_nodes,
+            predicatesOnFirstTable
+        );
+
+        // The join
+        addJoinStepsIfRequired(plan, query);
+
+        if (query->predicate_count > predicatesOnFirstTable) {
+            // Add the rest of the predicates after the join
+            addStepWithNodes(
+                plan,
+                PLAN_TABLE_ACCESS_ROWID,
+                query->predicate_nodes + predicatesOnFirstTable,
+                query->predicate_count - predicatesOnFirstTable
+            );
+        }
+
+        addOrderStepsIfRequired(plan, query);
+    } else { /* table_count == 1 */
+
+        // Only one table so add all predicates together
+        addStepWithNodes(
+            plan,
+            PLAN_TABLE_ACCESS_FULL,
+            query->predicate_nodes,
+            query->predicate_count
+        );
+
+        addOrderStepsIfRequired(plan, query);
+    }
+}
+
+static enum PlanStepType findIndexSource (struct Query *query) {
+    // First predicate
+    struct Node *p = &query->predicate_nodes[0];
+    enum Function op = p->function;
+
+    struct Node *left = &p->children[0];
+    struct Field *field_left = (struct Field *)left;
+    struct Field *field_right = (struct Field *)&p->children[1];
+
+    size_t len = strlen(field_right->text);
+
+    if (field_left->index == FIELD_ROW_INDEX) {
+        return PLAN_TABLE_SCAN;
+    }
+
+    // LIKE can only use index if '%' is at the end
+    if (
+        op == OPERATOR_LIKE
+        && field_right->text[len-1] != '%'
+    ) {
+        // Unable to use index
+        return 0;
+    }
+
+    if (left->function == FUNC_PK) {
+        if (op == OPERATOR_EQ) {
+            return PLAN_PK;
+        }
+
+        // Can't use PK index for LIKE yet
+        if (op != OPERATOR_LIKE) {
+            return PLAN_PK_RANGE;
+        }
+
+        return 0;
+    }
+
+    // Can only do indexes on bare columns for now
+    if (left->function != FUNC_UNITY) {
+        return 0;
+    }
+
+    // Remove qualified name so indexes can be searched etc.
+    int dot_index = str_find_index(field_left->text, '.');
+    if (dot_index >= 0) {
+        char value[MAX_FIELD_LENGTH];
+        strcpy(value, field_left->text);
+        strcpy(field_left->text, value + dot_index + 1);
+    }
+
+    /*******************
+     * INDEX SCAN
+     *******************/
+    // First table
+    struct Table *table = &query->tables[0];
+
+    // Try to find any index
+    enum IndexSearchType find_result = findIndex(
+        NULL,
+        table->name,
+        field_left->text,
+        INDEX_ANY
+    );
+
+    if (find_result == INDEX_NONE) {
+        return 0;
+    }
+
+    if (find_result == INDEX_PRIMARY) {
+        if (op == OPERATOR_EQ) {
+            return PLAN_PK;
+        }
+
+        // Can't use PK index for LIKE yet
+        if (op != OPERATOR_LIKE) {
+            return PLAN_PK_RANGE;
+        }
+
+        return 0;
+    }
+
+    // LIKE makes any INDEX automatically non-unique
+    if (
+        find_result == INDEX_UNIQUE
+        && op != OPERATOR_LIKE
+    ) {
+        if (op == OPERATOR_EQ) {
+            return PLAN_UNIQUE;
+        }
+
+        return PLAN_UNIQUE_RANGE;
+    }
+
+    // INDEX RANGE can handle LIKE
+    return PLAN_INDEX_RANGE;
 }
 
 void destroyPlan (struct Plan *plan) {
@@ -932,17 +968,6 @@ static int applySortLogic (
     struct Plan *plan,
     int *sorts_needed
 ) {
-    int non_unique_joins = 0;
-    for (int i = 0; i < plan->step_count; i++) {
-        enum PlanStepType type = plan->steps[i].type;
-        if (
-            type == PLAN_LOOP_JOIN
-            || type == PLAN_CONSTANT_JOIN
-            || type == PLAN_CROSS_JOIN
-        ) {
-            non_unique_joins++;
-        }
-    }
 
     // Now start to iterate the sort columns to
     // decide which sorts are actually needed
@@ -978,7 +1003,7 @@ static int applySortLogic (
     // These assumptions work if the rows are from exactly one table, they can
     // however be from additional tables if they are uniquely joined to the
     // first table.
-    if (sorts_added > 0 && non_unique_joins == 0) {
+    if (sorts_added > 0 && haveNonUniqueJoins(plan) == 0) {
         int primary_sort_idx = sorts_needed[0];
         struct Node *primary_sort_col = &q->order_nodes[primary_sort_idx];
         enum Order primary_sort_dir = primary_sort_col->alias[0];
@@ -1084,4 +1109,25 @@ static int areNodesEqual (struct Node *nodeA, struct Node *nodeB) {
             == nodeB->field.table_id
         && nodeA->field.index
             == nodeB->field.index;
+}
+
+/**
+ * @brief Is is possible to have more rows than only those on the first table?
+ *
+ * @param plan
+ * @return int
+ */
+static int haveNonUniqueJoins (struct Plan *plan) {
+    int non_unique_joins = 0;
+    for (int i = 0; i < plan->step_count; i++) {
+        enum PlanStepType type = plan->steps[i].type;
+        if (
+            type == PLAN_LOOP_JOIN
+            || type == PLAN_CONSTANT_JOIN
+            || type == PLAN_CROSS_JOIN
+        ) {
+            non_unique_joins++;
+        }
+    }
+    return non_unique_joins;
 }
