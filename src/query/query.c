@@ -449,12 +449,14 @@ static int process_query (
  * @param filename Char buffer to write temp filename to. Must be at least 32
  * chars. Consumer is responsible for deleting file from disk when no longer
  * needed.
+ * @param end_ptr can be NULL if you don't care about the end of the parsed
+ * query
  * @return int 0 for success; -1 for failure
  */
-int select_subquery(const char *query, char *filename) {
+int select_subquery(const char *query, char *filename, const char **end_ptr) {
     struct Query q = {0};
 
-    int result = parseQuery(&q, query, NULL);
+    int result = parseQuery(&q, query, end_ptr);
     if (result < 0) {
         return -1;
     }
@@ -605,7 +607,7 @@ static int populate_tables (struct Query *q, struct DB *dbs) {
         if (found == 0 && table->db == DB_SUBQUERY) {
             char filename[MAX_TABLE_LENGTH];
 
-            int result = select_subquery(table->name, filename);
+            int result = select_subquery(table->name, filename, NULL);
             if (result < 0) {
                 remove(filename);
                 return -1;

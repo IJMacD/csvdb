@@ -5,6 +5,7 @@
 #include "../structs.h"
 #include "token.h"
 #include "../db/db.h"
+#include "../db/temp.h"
 #include "result.h"
 #include "../sort/sort-quick.h"
 #include "output.h"
@@ -24,6 +25,8 @@ static int create_index (
     int unique_flag
 );
 
+static int create_temp_table_query (const char * query, const char **end_ptr);
+
 int create_query (const char *query, const char **end_ptr) {
     size_t index = 0;
 
@@ -37,6 +40,19 @@ int create_query (const char *query, const char **end_ptr) {
     }
 
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
+
+    if (strcmp(keyword, "TEMP") == 0) {
+
+        getToken(query, &index, keyword, MAX_FIELD_LENGTH);
+
+        if (strcmp(keyword, "TABLE") == 0) {
+            return create_temp_table_query(query, end_ptr);
+        }
+        else {
+            fprintf(stderr, "Expected 'TEMP TABLE' got 'TEMP %s'\n", keyword);
+            return -1;
+        }
+    }
 
     if (strcmp(keyword, "TABLE") == 0) {
         return create_table_query(query, end_ptr);
@@ -334,6 +350,51 @@ static int create_table_query (const char * query, const char **end_ptr) {
     fclose(f);
 
     return result;
+}
+
+static int create_temp_table_query (const char * query, const char **end_ptr) {
+
+    size_t index = 0;
+
+    char keyword[MAX_FIELD_LENGTH] = {0};
+
+    char table_name[MAX_TABLE_LENGTH] = {0};
+
+    getToken(query, &index, keyword, MAX_FIELD_LENGTH);
+
+    if (strcmp(keyword, "CREATE") != 0) {
+        fprintf(stderr, "Expected CREATE got '%s'\n", keyword);
+        return -1;
+    }
+
+    getToken(query, &index, keyword, MAX_FIELD_LENGTH);
+
+    if (strcmp(keyword, "TEMP") != 0) {
+        fprintf(stderr, "Expected TEMP got '%s'\n", keyword);
+        return -1;
+    }
+
+    getToken(query, &index, keyword, MAX_FIELD_LENGTH);
+
+    if (strcmp(keyword, "TABLE") != 0) {
+        fprintf(stderr, "Expected TABLE got '%s'\n", keyword);
+        return -1;
+    }
+
+    skipWhitespace(query, &index);
+
+    getQuotedToken(query, &index, table_name, MAX_TABLE_LENGTH);
+
+    getToken(query, &index, keyword, MAX_FIELD_LENGTH);
+
+    if (strcmp(keyword, "AS") != 0) {
+        fprintf(stderr, "Expected AS got '%s'\n", keyword);
+        return -1;
+    }
+
+    skipWhitespace(query, &index);
+
+    return temp_create(table_name, query + index, end_ptr);
 }
 
 static int create_view_query (const char * query, const char **end_ptr) {

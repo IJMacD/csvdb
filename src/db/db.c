@@ -11,6 +11,7 @@
 #include "sample.h"
 #include "dir.h"
 #include "view.h"
+#include "temp.h"
 #include "../evaluate/predicates.h"
 #include "../evaluate/evaluate.h"
 #include "../query/result.h"
@@ -33,9 +34,11 @@ static int evaluateTableField (
 );
 
 struct VFS VFS_Table[VFS_COUNT] = {
+    // 0 = VFS_NULL
     {
         0
     },
+    // 1 = VFS_CSV
     {
         .openDB = &csv_openDB,
         .closeDB = &csv_closeDB,
@@ -45,6 +48,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordValue = &csv_getRecordValue,
         .findIndex = &csv_findIndex,
     },
+    // 2 = VFS_CSV_MEM
     {
         .openDB = &csvMem_openDB,
         .closeDB = &csvMem_closeDB,
@@ -53,9 +57,11 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordCount = &csvMem_getRecordCount,
         .getRecordValue = &csvMem_getRecordValue,
     },
+    // 3 = VFS_VIEW
     {
         .openDB = &view_openDB,
     },
+    // 4 = VFS_CALENDAR
     {
         .openDB = &calendar_openDB,
         .closeDB = &calendar_closeDB,
@@ -67,6 +73,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .fullTableAccess = &calendar_fullTableAccess,
         .indexSearch = &calendar_indexSearch,
     },
+    // 5 = VFS_SEQUENCE
     {
         .openDB = &sequence_openDB,
         .getFieldIndex = &sequence_getFieldIndex,
@@ -74,6 +81,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordCount = &sequence_getRecordCount,
         .getRecordValue = &sequence_getRecordValue,
     },
+    // 6 = VFS_SAMPLE
     {
         .openDB = &sample_openDB,
         .getFieldIndex = &sample_getFieldIndex,
@@ -81,6 +89,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordCount = &sample_getRecordCount,
         .getRecordValue = &sample_getRecordValue,
     },
+    // 7 = VFS_DIR
     {
         .openDB = &dir_openDB,
         .closeDB = &dir_closeDB,
@@ -89,6 +98,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordCount = &dir_getRecordCount,
         .getRecordValue = &dir_getRecordValue,
     },
+    // 8 = VFS_CSV_MMAP
     {
         .openDB = &csvMmap_openDB,
         .closeDB = &csvMmap_closeDB,
@@ -96,6 +106,10 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getFieldName = &csvMmap_getFieldName,
         .getRecordCount = &csvMmap_getRecordCount,
         .getRecordValue = &csvMmap_getRecordValue,
+    },
+    // 9 = VFS_TEMP
+    {
+        .openDB = &temp_openDB,
     },
 };
 

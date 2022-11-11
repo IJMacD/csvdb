@@ -7,3 +7,4 @@
 #define MAX_TABLE_COUNT     10
 #define MEMORY_FILE_LIMIT   (100 * 1024 * 1024)
 #define MAX_ROWLIST_COUNT   512
+#define MAX_TEMP_TABLES 10

@@ -8,6 +8,7 @@
 #include "structs.h"
 #include "query/query.h"
 #include "query/output.h"
+#include "db/temp.h"
 #include "repl.h"
 
 static int read_file(FILE *file, char **output);
@@ -236,6 +237,7 @@ int main (int argc, char * argv[]) {
 
         int result = runQueries(buffer, flags, output);
         free(buffer);
+        temp_dropAll();
         return result;
     }
 
@@ -256,6 +258,7 @@ int main (int argc, char * argv[]) {
     }
 
     repl();
+    temp_dropAll();
 
     return 0;
 }

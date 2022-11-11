@@ -20,7 +20,7 @@ int select_query (
     const char **end_ptr
 );
 
-int select_subquery(const char *query, char *filename);
+int select_subquery(const char *query, char *filename, const char **end_ptr);
 
 void copyNodeTree (struct Node *dest, struct Node *src);
 

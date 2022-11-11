@@ -12,18 +12,19 @@
 
 #define MIN(a,b)    ((a<b)?(a):(b))
 
-#define VFS_COUNT   9
+#define VFS_COUNT   10
 
 enum VFSType {
-    VFS_NULL =      0,
-    VFS_CSV =       1,
-    VFS_CSV_MEM =   2,
-    VFS_VIEW =      3,
-    VFS_CALENDAR =  4,
-    VFS_SEQUENCE =  5,
-    VFS_SAMPLE =    6,
-    VFS_DIR =       7,
-    VFS_CSV_MMAP =  8,
+    VFS_NULL        = 0,
+    VFS_CSV         = 1,
+    VFS_CSV_MEM     = 2,
+    VFS_VIEW        = 3,
+    VFS_CALENDAR    = 4,
+    VFS_SEQUENCE    = 5,
+    VFS_SAMPLE      = 6,
+    VFS_DIR         = 7,
+    VFS_CSV_MMAP    = 8,
+    VFS_TEMP        = 9,
 };
 
 struct DB {

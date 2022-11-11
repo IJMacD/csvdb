@@ -5,6 +5,13 @@
 #include "../query/query.h"
 #include "csv-mem.h"
 
+/**
+ * @brief
+ *
+ * @param db
+ * @param filename
+ * @return int 0 on success; -1 on failure
+ */
 int view_openDB (struct DB *db, const char *filename) {
     char filename_buffer[FILENAME_MAX] = {0};
     char query_buffer[FILENAME_MAX] = {0};
@@ -35,7 +42,7 @@ int view_openDB (struct DB *db, const char *filename) {
 
     // select_subquery() execute the view, write the results to a temp file and
     // write the tmp filename to filename_buffer.
-    int result = select_subquery(query_buffer, filename_buffer);
+    int result = select_subquery(query_buffer, filename_buffer, NULL);
     if (result < 0) {
         remove(filename_buffer);
         return -1;
