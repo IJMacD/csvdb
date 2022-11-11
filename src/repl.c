@@ -6,8 +6,13 @@
 #include "query/query.h"
 #include "query/token.h"
 
+extern char *gitversion;
+
+static void printHelp ();
+
 void repl () {
     enum OutputOption options = OUTPUT_OPTION_HEADERS | OUTPUT_FORMAT_TABLE;
+    printf("CSVDB REPL\nType \".help\" for help.\n\n");
 
     while(1) {
         printf("> ");
@@ -33,6 +38,48 @@ void repl () {
             break;
         }
 
+        if (strcmp(token, ".help") == 0) {
+            printHelp();
+            continue;
+        }
+
+        if (strcmp(token, ".version") == 0) {
+            printf("Version: %s\n", gitversion);
+            continue;
+        }
+
+        if (strcmp(token, ".format") == 0) {
+            getToken(line_buffer, &index, token, 32);
+
+            options &= ~OUTPUT_MASK_FORMAT;
+
+            if(strcmp(token, "tsv") == 0) {
+                options |= OUTPUT_FORMAT_TAB;
+            } else if (strcmp(token, "csv") == 0) {
+                options |= OUTPUT_FORMAT_COMMA;
+            } else if (strcmp(token, "html") == 0) {
+                options |= OUTPUT_FORMAT_HTML;
+            } else if (strcmp(token, "json_array") == 0) {
+                options |= OUTPUT_FORMAT_JSON_ARRAY;
+            } else if (strcmp(token, "json") == 0) {
+                options |= OUTPUT_FORMAT_JSON;
+            } else if (strcmp(token, "sql") == 0) {
+                options |= OUTPUT_FORMAT_SQL_INSERT;
+            } else if (strcmp(token, "table") == 0) {
+                options |= OUTPUT_FORMAT_TABLE;
+            } else if (strcmp(token, "record") == 0) {
+                options |= OUTPUT_FORMAT_INFO_SEP;
+            } else if (strcmp(token, "xml") == 0) {
+                options |= OUTPUT_FORMAT_XML;
+            } else if (strcmp(token, "sql_values") == 0) {
+                options |= OUTPUT_FORMAT_SQL_VALUES;
+            } else {
+                options |= OUTPUT_FORMAT_TABLE;
+            }
+
+            continue;
+        }
+
         const char *end_ptr;
 
         query(line_buffer, options, stdout, &end_ptr);
@@ -41,4 +88,15 @@ void repl () {
 
         printf("\n");
     }
+}
+
+static void printHelp () {
+    printf(
+        "Single line query execution supported\n\n"
+        "Commands in REPL:\n"
+        "\t.help\n"
+        "\t.version\n"
+        "\t.exit\n"
+        "\t.format tsv|csv|html|json|json_array|sql|sql_values|xml|record\n"
+    );
 }
