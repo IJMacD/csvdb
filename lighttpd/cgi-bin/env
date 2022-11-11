@@ -1,4 +1,5 @@
 #!/bin/sh
+# @source https://www.htmlhelp.com/faq/cgifaq.2.html
 echo "Content-type: text/plain"
 echo
 set

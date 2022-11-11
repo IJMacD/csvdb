@@ -146,8 +146,10 @@ int query (
     if (output_flags & OUTPUT_OPTION_STATS) {
         // start stats file
         FILE *fstats = fopen("stats.csv", "w");
-        fputs("operation,duration\n",fstats);
-        fclose(fstats);
+        if (fstats) {
+            fputs("operation,duration\n",fstats);
+            fclose(fstats);
+        }
     }
 
     return select_query(query, output_flags, output, end_ptr);
@@ -181,11 +183,13 @@ int select_query (
 
         FILE *fstats = fopen("stats.csv", "a");
 
-        fprintf(fstats, "PARSE,%ld\n", dt(stop, start));
+        if (fstats) {
+            fprintf(fstats, "PARSE,%ld\n", dt(stop, start));
 
-        // Will be opened again with a fresh handle in processQuery() and
-        // executeQueryPlan()
-        fclose(fstats);
+            // Will be opened again with a fresh handle in processQuery() and
+            // executeQueryPlan()
+            fclose(fstats);
+        }
     }
 
     int explain = (q.flags & FLAG_EXPLAIN) || (output_flags & FLAG_EXPLAIN);
@@ -197,7 +201,7 @@ int select_query (
     if (format != OUTPUT_FORMAT_COMMA && explain) {
         return wrap_query(
             &q,
-            FLAG_EXPLAIN,
+            (enum OutputOption)FLAG_EXPLAIN,
             format | (output_flags & OUTPUT_OPTION_HEADERS),
             output
         );
@@ -389,7 +393,9 @@ static int process_query (
     if (output_flags & OUTPUT_OPTION_STATS) {
         gettimeofday(&stop, NULL);
 
-        fprintf(fstats, "LOAD TABLES,%ld\n", dt(stop, start));
+        if (fstats) {
+            fprintf(fstats, "LOAD TABLES,%ld\n", dt(stop, start));
+        }
 
         start = stop;
     }
@@ -404,10 +410,12 @@ static int process_query (
     if (output_flags & OUTPUT_OPTION_STATS) {
         gettimeofday(&stop, NULL);
 
-        fprintf(fstats, "MAKE PLAN,%ld\n", dt(stop, start));
+        if (fstats) {
+            fprintf(fstats, "MAKE PLAN,%ld\n", dt(stop, start));
 
-        // Will be opened again with a fresh handle in executeQueryPlan()
-        fclose(fstats);
+            // Will be opened again with a fresh handle in executeQueryPlan()
+            fclose(fstats);
+        }
     }
 
     if (q->flags & FLAG_EXPLAIN) {

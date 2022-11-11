@@ -24,7 +24,7 @@
 
 static void urldecode2(char *dst, const char *src);
 
-static void setDataDir (const char * datadir);
+static int setDataDir (const char * datadir);
 
 static void printError (int format, FILE *error);
 
@@ -47,7 +47,13 @@ int main () {
     // char dirname[255];
     // fprintf(stderr, "debug: cwd %s\n", getcwd(dirname, 255));
 
-    setDataDir("/data"); // Hardcoded in Dockerfile getenv("CSVDB_DATA_DIR");
+    char *data_dir = getenv("CSVDB_DATA_DIR");
+    if (data_dir) {
+        if (setDataDir(data_dir) < 0) {
+            fclose(error);
+            return -1;
+        }
+    }
 
     char *accept_env = getenv("HTTP_ACCEPT");
 
@@ -79,6 +85,8 @@ int main () {
         printf("HTTP/1.1 500 Server Error\n");
         printf("Content-Type: text/plain\n\n");
         printf("No query string was provided\n");
+
+        fclose(error);
         return -1;
     }
 
@@ -132,6 +140,8 @@ int main () {
         printf("Access-Control-Allow-Origin: *\n");
         printf("Content-Type: text/plain\n\n");
         printf("No query was provided in the query string\n");
+
+        fclose(error);
         return -1;
     }
 
@@ -173,9 +183,11 @@ int main () {
     if (query(query_buffer, flags, output, NULL)) {
         // Write errors to stdout now
         printError(format, error);
+        fclose(error);
         return -1;
     }
 
+    fclose(error);
     return 0;
 }
 
@@ -210,7 +222,7 @@ static void urldecode2(char *dst, const char *src)
     *dst++ = '\0';
 }
 
-static void setDataDir (const char * datadir) {
+static int setDataDir (const char * datadir) {
     if (datadir != NULL) {
         if (chdir(datadir)) {
             if (errno == ENOENT) {
@@ -218,7 +230,7 @@ static void setDataDir (const char * datadir) {
                     printf("HTTP/1.1 500 Server Error\n");
                     printf("Content-Type: text/plain\n\n");
                     printf("%s\n", strerror(errno));
-                    exit(-1);
+                    return -1;
                 }
                 // fprintf(stderr, "[DEBUG] created dir: %s\n", datadir);
                 if (chdir(datadir)) {
@@ -226,18 +238,19 @@ static void setDataDir (const char * datadir) {
                     printf("Content-Type: text/plain\n\n");
                     printf("%s\n", strerror(errno));
                     perror("chdir");
-                    exit(-1);
+                    return -1;
                 }
             }
             else  {
                 printf("HTTP/1.1 500 Server Error\n");
                 printf("Content-Type: text/plain\n\n");
                 printf("%s\n", strerror(errno));
-                exit(-1);
+                return -1;
             }
         }
         // fprintf(stderr, "debug: cwd %s\n", getcwd(dirname, 255));
     }
+    return 0;
 }
 
 static void printError (int format, FILE *error) {

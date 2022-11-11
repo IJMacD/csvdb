@@ -16,6 +16,12 @@
             "type": "shell",
             "command": "make debug",
             "problemMatcher": [],
+        },
+        {
+            "label": "make cgi-debug",
+            "type": "shell",
+            "command": "make cgi-debug",
+            "problemMatcher": [],
         }
     ]
 }

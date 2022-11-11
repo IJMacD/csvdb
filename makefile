@@ -11,7 +11,7 @@ SRCDIR = src
 SUBDIRS = db query execute evaluate sort functions
 SRCDIRS = $(addprefix $(SRCDIR)/, $(SUBDIRS))
 RAWSRCS = main.c $(wildcard $(addsuffix /*.c, $(SRCDIRS)))
-SRCS = $(RAWSRCS:src/%=%) repl.c gitversion.c
+SRCS = $(RAWSRCS:src/%=%)
 OBJS = $(SRCS:.c=.o)
 EXE  = csvdb
 GENEXE = gen
@@ -22,7 +22,8 @@ INSTALL_DIR = /usr/local/bin
 #
 DBGDIR = debug
 DBGEXE = $(DBGDIR)/$(EXE)
-DBGOBJS = $(addprefix $(DBGDIR)/, $(OBJS)) $(DBGDIR)/debug.o
+DBGSRCS = $(SRCS) repl.c gitversion.c debug.c
+DBGOBJS = $(addprefix $(DBGDIR)/, $(DBGSRCS:.c=.o))
 DBGCFLAGS = -g -O0 -DDEBUG -DJSON_NULL
 
 #
@@ -30,7 +31,8 @@ DBGCFLAGS = -g -O0 -DDEBUG -DJSON_NULL
 #
 RELDIR = release
 RELEXE = $(RELDIR)/$(EXE)
-RELOBJS = $(addprefix $(RELDIR)/, $(OBJS))
+RELSRCS = $(SRCS) repl.c gitversion.c
+RELOBJS = $(addprefix $(RELDIR)/, $(RELSRCS:.c=.o))
 RELCFLAGS = -O3 -DNDEBUG -DJSON_NULL
 
 #
@@ -41,6 +43,15 @@ CGIEXE = $(CGIDIR)/$(EXE).cgi
 CGISRCS = $(filter-out main.c, $(SRCS)) main-cgi.c
 CGIOBJS = $(addprefix $(CGIDIR)/, $(CGISRCS:.c=.o))
 CGICFLAGS = -O3 -DNDEBUG -DJSON_NULL
+
+#
+# CGI Debug build settings
+#
+CGIDDIR = debug
+CGIDEXE = $(CGIDDIR)/$(EXE).cgi
+CGIDSRCS = $(filter-out main.c, $(SRCS)) debug.c main-cgi.c
+CGIDOBJS = $(addprefix $(CGIDDIR)/, $(CGIDSRCS:.c=.o))
+CGIDCFLAGS = -g -O0 -DDEBUG -DJSON_NULL
 
 #
 # GEN build settings
@@ -90,6 +101,17 @@ $(CGIDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) -c $(CFLAGS) $(CGICFLAGS) -o $@ $<
 
 #
+# CGI DEBUG rules
+#
+cgi-debug: prep $(CGIDEXE)
+
+$(CGIDEXE): $(CGIDOBJS)
+	$(CC) $(CFLAGS) $(CGIDCFLAGS) -o $(CGIDEXE) $^
+
+$(CGIDDIR)/%.o: $(SRCDIR)/%.c
+	$(CC) -c $(CFLAGS) $(CGIDCFLAGS) -o $@ $<
+
+#
 # Test rules
 #
 test: prep release test.csv
@@ -105,7 +127,7 @@ $(GENEXE): $(GENOBJS)
 # Other rules
 #
 prep:
-	@mkdir -p $(DBGDIR) $(addprefix $(DBGDIR)/, $(SRCDIRS)) $(RELDIR) $(addprefix $(RELDIR)/, $(SRCDIRS))
+	@mkdir -p $(DBGDIR) $(addprefix $(DBGDIR)/, $(SUBDIRS)) $(RELDIR) $(addprefix $(RELDIR)/, $(SUBDIRS))
 
 $(SRCDIR)/gitversion.c: .git/HEAD .git/index
 	echo "const char *gitversion = \"$(shell git rev-parse HEAD)$(shell git diff-index --quiet HEAD || echo "-dirty") ($(shell git show -s --format=%cd --date=iso-strict))\";" > $@
@@ -113,7 +135,7 @@ $(SRCDIR)/gitversion.c: .git/HEAD .git/index
 remake: clean all
 
 clean:
-	rm -f $(RELEXE) $(RELOBJS) $(DBGEXE) $(DBGOBJS) $(CGIEXE) ${CGIOBJS} ${GENOBJS} ${GENEXE}
+	rm -f $(RELEXE) $(RELOBJS) $(DBGEXE) $(DBGOBJS) $(CGIEXE) ${CGIOBJS} ${GENOBJS} ${GENEXE} $(SRCDIR)/gitversion.c
 
 install: release
 	cp $(RELEXE) $(INSTALL_DIR)
