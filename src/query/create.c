@@ -491,7 +491,13 @@ int insert_query (const char * query, const char **end_ptr) {
     skipWhitespace(query, &index);
 
     char file_name[MAX_TABLE_LENGTH + 4];
-    sprintf(file_name, "%s.csv", table_name);
+
+    // try temp tables first
+    int result = temp_findTable(table_name, file_name);
+    if (result < 0) {
+        // Now try a file in the current directory
+        sprintf(file_name, "%s.csv", table_name);
+    }
 
     FILE *f = fopen(file_name, "a");
 
@@ -502,7 +508,7 @@ int insert_query (const char * query, const char **end_ptr) {
 
     int flags = OUTPUT_FORMAT_COMMA;
 
-    int result = select_query(query + index, flags, f, end_ptr);
+    result = select_query(query + index, flags, f, end_ptr);
 
     fclose(f);
 

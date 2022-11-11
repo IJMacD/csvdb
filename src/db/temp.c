@@ -12,12 +12,12 @@ static char file_names[MAX_TEMP_TABLES][32] = {0};
  * @brief
  *
  * @param db
- * @param filename
+ * @param table_name
  * @return int 0 on success; -1 on failure
  */
-int temp_openDB (struct DB *db, const char *filename) {
+int temp_openDB (struct DB *db, const char *table_name) {
     for (int i = 0; i < MAX_TEMP_TABLES; i++) {
-        if (strcmp(filename, table_names[i]) == 0) {
+        if (strcmp(table_name, table_names[i]) == 0) {
             return csvMmap_openDB(db, file_names[i]);
         }
     }
@@ -67,4 +67,14 @@ void temp_dropAll () {
            remove(file_names[i]);
         }
     }
+}
+
+int temp_findTable (const char *name, char *filename) {
+    for (int i = 0; i < MAX_TEMP_TABLES; i++) {
+        if (strcmp(name, table_names[i]) == 0) {
+           strcpy(filename, file_names[i]);
+           return 0;
+        }
+    }
+    return -1;
 }
