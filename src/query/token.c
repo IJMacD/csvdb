@@ -120,7 +120,7 @@ int getToken (
     if (string[*index] == '\0') {
         // clear output value
         token[0] = '\0';
-        return -1;
+        return 0;
     }
     int start_index = *index;
 

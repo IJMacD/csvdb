@@ -8,6 +8,7 @@
 #include "structs.h"
 #include "query/query.h"
 #include "query/output.h"
+#include "repl.h"
 
 static int read_file(FILE *file, char **output);
 
@@ -59,10 +60,6 @@ int main (int argc, char * argv[]) {
 
     // Default: with headers
     flags |= OUTPUT_OPTION_HEADERS;
-
-    #ifdef DEBUG
-    flags |= OUTPUT_OPTION_VERBOSE;
-    #endif
 
     FILE * output = stdout;
     const char * format_val = NULL;
@@ -233,6 +230,10 @@ int main (int argc, char * argv[]) {
     }
 
     if (buffer != NULL) {
+        #ifdef DEBUG
+        flags |= OUTPUT_OPTION_VERBOSE;
+        #endif
+
         int result = runQueries(buffer, flags, output);
         free(buffer);
         return result;
@@ -242,6 +243,10 @@ int main (int argc, char * argv[]) {
     // If stdin is something more than a tty (i.e pipe or redirected file)
     // then we will assume the following query:
     if (!isatty(fileno(stdin))) {
+        #ifdef DEBUG
+        flags |= OUTPUT_OPTION_VERBOSE;
+        #endif
+
         return query("SELECT * FROM stdin", flags, output, NULL);
     }
 
@@ -250,8 +255,9 @@ int main (int argc, char * argv[]) {
         return 0;
     }
 
-    printUsage(argv[0]);
-    return -1;
+    repl();
+
+    return 0;
 }
 
 /**

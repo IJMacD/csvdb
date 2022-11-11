@@ -11,7 +11,7 @@ SRCDIR = src
 SUBDIRS = db query execute evaluate sort functions
 SRCDIRS = $(addprefix $(SRCDIR)/, $(SUBDIRS))
 RAWSRCS = main.c $(wildcard $(addsuffix /*.c, $(SRCDIRS)))
-SRCS = $(RAWSRCS:src/%=%) gitversion.c
+SRCS = $(RAWSRCS:src/%=%) repl.c gitversion.c
 OBJS = $(SRCS:.c=.o)
 EXE  = csvdb
 GENEXE = gen

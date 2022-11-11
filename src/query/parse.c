@@ -154,7 +154,12 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
         int token_length = getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-        if (token_length <= 0) {
+        if (token_length == 0) {
+            // This means it consumed whitespace then found the end of the input
+            break;
+        }
+
+        if (token_length < 0) {
             fprintf(
                 stderr,
                 "Unable to get next token but not at end of query. Remaining: "
