@@ -5,6 +5,7 @@
 #include "../structs.h"
 #include "db.h"
 #include "csv-mem.h"
+#include "../query/query.h"
 
 static int makeDB (struct DB *db, FILE *f);
 
@@ -22,28 +23,6 @@ static int makeDB (struct DB *db, FILE *f) {
     db->vfs = VFS_CSV;
     db->file = f;
 
-    // Try to seek to see if we have a stream
-    if (fseek(db->file, 0, SEEK_SET)) {
-        // File is not seekable
-        // Fallback to VFS_CSV_MEM
-        int result = csvMem_makeDB(db, f);
-        fclose(f);
-        return result;
-    }
-
-    // OK so we don't have a stream but memory access could still be 20x faster
-    // Seek to end get file size; if it's below limit then use faster memory
-    // implementation.
-    fseek(db->file, 0, SEEK_END);
-    size_t size = ftell(db->file);
-    rewind(db->file);
-    if (size < MEMORY_FILE_LIMIT) {
-        // Use faster VFS_CSV_MEM
-        int result = csvMem_makeDB(db, f);
-        fclose(f);
-        return result;
-    }
-
     prepareHeaders(db);
 
     db->_record_count = -1;
@@ -55,19 +34,12 @@ static int makeDB (struct DB *db, FILE *f) {
  * Returns 0 on success; -1 on failure
  */
 int csv_openDB (struct DB *db, const char *filename) {
-    FILE *f;
-
-    if (strcmp(filename, "stdin") == 0) {
-        f = stdin;
-    }
-    else {
-        f = fopen(filename, "r");
-    }
+    FILE *f = fopen(filename, "r+");
 
     if (!f) {
         char buffer[FILENAME_MAX];
         sprintf(buffer, "%s.csv", filename);
-        f = fopen(buffer, "r");
+        f = fopen(buffer, "r+");
 
         if (!f) {
             return -1;
@@ -185,13 +157,15 @@ static int measureLine (FILE *f, size_t byte_offset) {
     return count + read_size;
 }
 
-/**
- * Indices must point to enough memory to contain all the indices
- */
 static int indexLines (struct DB *db) {
     int line_count = countLines(db->file);
 
     db->_record_count = line_count - 1;
+
+    // Might be re-indexing due to insert
+    if (db->line_indices != NULL) {
+        free(db->line_indices);
+    }
 
     db->line_indices = malloc((sizeof db->line_indices[0]) * (line_count + 1));
 
@@ -510,4 +484,46 @@ enum IndexSearchType csv_findIndex(
     }
 
     return INDEX_NONE;
+}
+
+int csv_insertRow (struct DB *db, const char *row) {
+    fseek(db->file, -1, SEEK_END);
+
+    // Make sure previous record ended with \n
+    if (fgetc(db->file) != '\n') {
+        fseek(db->file, 0, SEEK_END);
+        fputc('\n', db->file);
+    }
+
+    fseek(db->file, 0, SEEK_END);
+
+    if (fputs(row, db->file) < 0) {
+        return -1;
+    }
+
+    fputc('\n', db->file);
+
+    indexLines(db);
+
+    return 0;
+}
+
+int csv_insertFromQuery (
+    struct DB *db,
+    const char *query,
+    const char **end_ptr
+) {
+    int flags = OUTPUT_FORMAT_COMMA;
+
+    fseek(db->file, 0, SEEK_END);
+
+    int result = select_query(query, flags, db->file, end_ptr);
+
+    if (result < 0) {
+        return -1;
+    }
+
+    indexLines(db);
+
+    return 0;
 }

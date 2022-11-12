@@ -410,4 +410,13 @@ struct VFS {
         int mode,
         int * output_flag
     );
+    int (* insertRow)(
+        struct DB *db,
+        const char *row
+    );
+    int (* insertFromQuery)(
+        struct DB *db,
+        const char *query,
+        const char **end_ptr
+    );
 };

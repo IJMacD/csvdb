@@ -5,6 +5,7 @@
 #include "../structs.h"
 #include "token.h"
 #include "../db/db.h"
+#include "../db/csv.h"
 #include "../db/temp.h"
 #include "result.h"
 #include "../sort/sort-quick.h"
@@ -490,27 +491,16 @@ int insert_query (const char * query, const char **end_ptr) {
 
     skipWhitespace(query, &index);
 
-    char file_name[MAX_TABLE_LENGTH + 4];
+    struct DB db = {0};
 
-    // try temp tables first
-    int result = temp_findTable(table_name, file_name);
-    if (result < 0) {
-        // Now try a file in the current directory
-        sprintf(file_name, "%s.csv", table_name);
+    // Must force VFS_CSV to make sure changes are persisted
+    int result = csv_openDB(&db, table_name);
+
+    if (result == 0) {
+        result = insertFromQuery(&db, query + index, end_ptr);
     }
 
-    FILE *f = fopen(file_name, "a");
-
-    if (!f) {
-        fprintf(stderr, "Unable to open file for insertion: '%s'\n", file_name);
-        return -1;
-    }
-
-    int flags = OUTPUT_FORMAT_COMMA;
-
-    result = select_query(query + index, flags, f, end_ptr);
-
-    fclose(f);
+    closeDB(&db);
 
     return result;
 

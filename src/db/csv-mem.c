@@ -14,6 +14,8 @@ static int indexLines (struct DB *db);
 
 static void consumeStream (struct DB *db, FILE *stream);
 
+static char * get_end_of_data (struct DB *db);
+
 int csvMem_makeDB (struct DB *db, FILE *f) {
     db->vfs = VFS_CSV_MEM;
 
@@ -215,12 +217,12 @@ static int prepareHeaders (struct DB *db) {
 
     int i = 0;
 
-    while (db->data[i] != '\n') {
+    if (db->data[0] == '\0') {
+        fprintf(stderr, "Empty file\n");
+        return -1;
+    }
 
-        if (db->data[i] == '\0') {
-            fprintf(stderr, "Empty file\n");
-            return -1;
-        }
+    while (db->data[i] != '\n' && db->data[i] != '\0') {
 
         if (db->data[i] == ',') {
             db->fields[i] = '\0';
@@ -462,6 +464,30 @@ const char *csvMem_fromValues(struct DB *db, const char *input, int length) {
     return in_ptr;
 }
 
+/**
+ * @brief Creates an empty table from a string of headers
+ *
+ * @param db
+ * @param headers "col1,col2" etc.
+ */
+void csvMem_fromHeaders (struct DB *db, const char *headers) {
+    db->vfs = VFS_CSV_MEM;
+
+    db->data = malloc(strlen(headers) + 1);
+
+    strcpy(db->data, headers);
+
+    // prepareHeaders() copies pointer to db->fields and adjusts db->data to be
+    // after the headers.
+    prepareHeaders(db);
+
+    db->line_indices = malloc(sizeof(*db->line_indices) * 32);
+
+    db->line_indices[0] = 0;
+
+    db->_record_count = 0;
+}
+
 static int countFields (const char *ptr) {
     int count = 1;
 
@@ -479,4 +505,44 @@ static int countFields (const char *ptr) {
     }
 
     return count;
+}
+
+int csvMem_insertRow (struct DB *db, const char *row) {
+    int len = strlen(row);
+    char *data_end = get_end_of_data(db);
+    int data_len = data_end - db->data;
+    int header_len = db->data - db->fields;
+
+    int new_size = header_len + data_len + len;
+
+    db->fields = realloc(db->fields, new_size);
+
+    if (db->fields == NULL) {
+        fprintf(stderr, "Unable to allocate %d for csv_insertRow\n", new_size);
+        exit(-1);
+    }
+
+    db->data = db->fields + header_len;
+
+    // After realloc data_end might have changed
+    data_end = get_end_of_data(db);
+
+    strcpy(data_end, row);
+    data_end[len] = '\n';
+
+    db->_record_count++;
+
+    // IF THERE'S A BUG CHECK HERE!
+    // We're not checking if db->line_inidices is big enough
+    db->line_indices[db->_record_count] = data_len + len + 1;
+
+    return 0;
+}
+
+static char * get_end_of_data (struct DB *db) {
+    if (db->_record_count == -1) {
+        indexLines(db);
+    }
+
+    return db->data + db->line_indices[db->_record_count];
 }

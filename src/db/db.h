@@ -48,3 +48,14 @@ int fullTableScan (
     int rowid_start,
     int limit
 );
+
+int insertRow (
+    struct DB *db,
+    const char *row
+);
+
+int insertFromQuery (
+    struct DB *db,
+    const char *query,
+    const char **end_ptr
+);

@@ -47,6 +47,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordCount = &csv_getRecordCount,
         .getRecordValue = &csv_getRecordValue,
         .findIndex = &csv_findIndex,
+        .insertRow = &csv_insertRow,
     },
     // 2 = VFS_CSV_MEM
     {
@@ -56,6 +57,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getFieldName = &csvMem_getFieldName,
         .getRecordCount = &csvMem_getRecordCount,
         .getRecordValue = &csvMem_getRecordValue,
+        .insertRow = &csvMem_insertRow,
     },
     // 3 = VFS_VIEW
     {
@@ -140,7 +142,50 @@ int openDB (struct DB *db, const char *filename) {
         }
     }
 
-    // None of the other VFSs wanted to open the file
+    // None of the other VFSs wanted to open this DB.
+    // Now we'll determine whether to use VFS_CSV or VFS_CSV_MEM.
+
+    FILE *f;
+
+    if (strcmp(filename, "stdin") == 0) {
+        f = stdin;
+    }
+    else {
+        f = fopen(filename, "r");
+    }
+
+    if (!f) {
+        char buffer[FILENAME_MAX];
+        sprintf(buffer, "%s.csv", filename);
+        f = fopen(buffer, "r");
+
+        if (!f) {
+            return -1;
+        }
+    }
+
+    // Try to seek to see if we have a stream
+    if (fseek(f, 0, SEEK_SET)) {
+        // File is not seekable
+        // Must use VFS_CSV_MEM
+        int result = csvMem_makeDB(db, f);
+        fclose(f);
+        return result;
+    }
+
+    // OK so we don't have a stream but memory access could still be 20x faster
+    // Seek to end get file size; if it's below limit then use faster memory
+    // implementation.
+    fseek(db->file, 0, SEEK_END);
+    size_t size = ftell(db->file);
+    rewind(db->file);
+    if (size < MEMORY_FILE_LIMIT) {
+        // Use faster VFS_CSV_MEM
+        int result = csvMem_makeDB(db, f);
+        fclose(f);
+        return result;
+    }
+
     // Fallback to CSV
     return csv_openDB(db, filename);
 }
@@ -276,7 +321,7 @@ int fullTableAccess (
     int limit_value
 ) {
     if (db->vfs == 0) {
-        fprintf(stderr, "Trying to access unititialised DB\n");
+        fprintf(stderr, "Trying to access uninitialised DB\n");
         exit(-1);
     }
 
@@ -365,7 +410,7 @@ int fullTableScan (
     // VFS-agnostic implementation
 
     if (db->vfs == 0) {
-        fprintf(stderr, "Trying to access unititialised DB\n");
+        fprintf(stderr, "Trying to access uninitialised DB\n");
         exit(-1);
     }
 
@@ -426,7 +471,7 @@ int indexSearch (
     int * output_flag
 ) {
     if (db->vfs == 0) {
-        fprintf(stderr, "Trying to perform index search on unititialised DB\n");
+        fprintf(stderr, "Trying to perform index search on uninitialised DB\n");
         exit(-1);
     }
 
@@ -724,4 +769,38 @@ static int evaluateTableField (
         output,
         MAX_VALUE_LENGTH
     ) > 0;
+}
+
+int insertRow (struct DB *db, const char *row) {
+    if (db->vfs == 0) {
+        fprintf(stderr, "Trying to perform insert on uninitialised DB\n");
+        exit(-1);
+    }
+
+    int (*vfs_insertRow) (struct DB *, const char *)
+        = VFS_Table[db->vfs].insertRow;
+
+    if (vfs_insertRow != NULL) {
+        return vfs_insertRow(db, row);
+    }
+
+    fprintf(stderr, "VFS doesn't support insertion\n");
+    exit(-1);
+}
+
+int insertFromQuery (struct DB *db, const char *query, const char **end_ptr) {
+    if (db->vfs == 0) {
+        fprintf(stderr, "Trying to perform insert on uninitialised DB\n");
+        exit(-1);
+    }
+
+    int (*vfs_insertFromQuery) (struct DB *, const char *, const char **)
+        = VFS_Table[db->vfs].insertFromQuery;
+
+    if (vfs_insertFromQuery != NULL) {
+        return vfs_insertFromQuery(db, query, end_ptr);
+    }
+
+    fprintf(stderr, "VFS doesn't support insertion\n");
+    exit(-1);
 }

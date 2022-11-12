@@ -393,7 +393,7 @@ void printPreamble (
 
     if (format == OUTPUT_FORMAT_HTML) {
         fputs(
-            "<STYLE>.csvdb{font-family:sans-serif;width:100%%;border-collapse:"
+            "<STYLE>.csvdb{font-family:sans-serif;width:100%;border-collapse:"
             "collapse}.csvdb th{border-bottom:1px solid #333}.csvdb td{padding:"
             ".5em}.csvdb tr:hover td{background-color:#f8f8f8}</STYLE>\n<TABLE "
             "CLASS=\"csvdb\">\n",
