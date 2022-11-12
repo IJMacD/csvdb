@@ -230,6 +230,10 @@ int main (int argc, char * argv[]) {
         }
     }
 
+    #ifdef PERSISTANT_TEMP
+    temp_setMappingDB(temp_openMappingDB("/tmp/csvdb.session.0000.temp.csv"));
+    #endif
+
     if (buffer != NULL) {
         #ifdef DEBUG
         flags |= OUTPUT_OPTION_VERBOSE;
@@ -237,7 +241,11 @@ int main (int argc, char * argv[]) {
 
         int result = runQueries(buffer, flags, output);
         free(buffer);
+
+        #ifndef PERSISTANT_TEMP
         temp_dropAll();
+        #endif
+
         return result;
     }
 
@@ -258,7 +266,10 @@ int main (int argc, char * argv[]) {
     }
 
     repl();
+
+    #ifndef PERSISTANT_TEMP
     temp_dropAll();
+    #endif
 
     return 0;
 }

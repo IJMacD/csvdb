@@ -3,10 +3,13 @@
 
 #include "../structs.h"
 #include "../query/query.h"
+#include "db.h"
+#include "temp.h"
+#include "csv-mem.h"
 #include "csv-mmap.h"
+#include "csv.h"
 
-static char table_names[MAX_TEMP_TABLES][32] = {0};
-static char file_names[MAX_TEMP_TABLES][32] = {0};
+struct DB *temp_mapping = NULL;
 
 /**
  * @brief
@@ -16,13 +19,17 @@ static char file_names[MAX_TEMP_TABLES][32] = {0};
  * @return int 0 on success; -1 on failure
  */
 int temp_openDB (struct DB *db, const char *table_name) {
-    for (int i = 0; i < MAX_TEMP_TABLES; i++) {
-        if (strcmp(table_name, table_names[i]) == 0) {
-            return csvMmap_openDB(db, file_names[i]);
-        }
+    char filename[MAX_TABLE_LENGTH];
+
+    if (temp_findTable(table_name, filename) == 0) {
+        return csvMmap_openDB(db, filename);
     }
 
     return -1;
+}
+
+void temp_setMappingDB (struct DB *db) {
+    temp_mapping = db;
 }
 
 /**
@@ -33,48 +40,142 @@ int temp_openDB (struct DB *db, const char *table_name) {
  * @return int 0 on success; -1 on failure
  */
 int temp_create (const char *name, const char *query, const char ** end_ptr) {
-    int next_index = 0;
+    if (temp_mapping == NULL) {
+        temp_mapping = temp_openMappingDB(NULL);
+    }
 
-    while (table_names[next_index][0] != '\0') next_index++;
-
-    strcpy(table_names[next_index], name);
+    char filename[MAX_TABLE_LENGTH];
 
     // select_subquery() execute the creation query, write the results to a temp
     // file and save the filename to file_names array.
-    int result = select_subquery(query, file_names[next_index], end_ptr);
+    int result = select_subquery(query, filename, end_ptr);
 
     // failed to open so just delete temp file
     if (result < 0) {
-        remove(file_names[next_index]);
+        remove(filename);
         return -1;
     }
+
+    char *row = malloc(MAX_TABLE_LENGTH * 2 + 1);
+    sprintf(row, "%s,%s", name, filename);
+
+    insertRow(temp_mapping, row);
+
+    free(row);
 
     return 0;
 }
 
 void temp_drop (const char *name) {
-    for (int i = 0; i < MAX_TEMP_TABLES; i++) {
-        if (strcmp(name, table_names[i]) == 0) {
-           remove(file_names[i]);
-           return;
-        }
+    if (temp_mapping == NULL) {
+        return;
+    }
+
+    char filename[MAX_TABLE_LENGTH];
+
+    if (temp_findTable(name, filename) == 0) {
+        remove(filename);
     }
 }
 
 void temp_dropAll () {
-    for (int i = 0; i < MAX_TEMP_TABLES; i++) {
-        if (table_names[i][0] != '\0') {
-           remove(file_names[i]);
-        }
+    if (temp_mapping == NULL) {
+        return;
+    }
+
+    int filename_index = getFieldIndex(temp_mapping, "filename");
+
+    char filename[MAX_TABLE_LENGTH];
+
+    for (int i = 0; i < getRecordCount(temp_mapping); i++) {
+        getRecordValue(
+            temp_mapping,
+            i,
+            filename_index,
+            filename,
+            MAX_TABLE_LENGTH
+        );
+
+        remove(filename);
     }
 }
 
-int temp_findTable (const char *name, char *filename) {
-    for (int i = 0; i < MAX_TEMP_TABLES; i++) {
-        if (strcmp(name, table_names[i]) == 0) {
-           strcpy(filename, file_names[i]);
-           return 0;
+/**
+ * @brief Searches mapping db for table named `table_name`. If it finds one it
+ * writes the corresponding filename to `filename`.
+ *
+ * @param table_name
+ * @param filename
+ * @return int 0 if found; -1 if not found
+ */
+int temp_findTable (const char *table_name, char *filename) {
+    if (temp_mapping == NULL) {
+        temp_mapping = temp_openMappingDB(NULL);
+    }
+
+    int table_index = getFieldIndex(temp_mapping, "table");
+    int filename_index = getFieldIndex(temp_mapping, "filename");
+
+    char value[MAX_FIELD_LENGTH];
+
+    for (int i = 0; i < getRecordCount(temp_mapping); i++) {
+        getRecordValue(temp_mapping, i, table_index, value, MAX_FIELD_LENGTH);
+
+        if (strcmp(table_name, value) == 0) {
+            getRecordValue(
+                temp_mapping,
+                i,
+                filename_index,
+                filename,
+                MAX_TABLE_LENGTH
+            );
+
+            return 0;
         }
     }
+
     return -1;
+}
+
+/**
+ * @brief Open or create a mapping DB at the filename. if filename is NULL then
+ * an in memory mapping DB will be created which needs to be closed and free'd
+ * later.
+ *
+ * @param filename
+ * @return struct DB*
+ */
+struct DB *temp_openMappingDB (const char *filename) {
+    struct DB *db = malloc(sizeof(*db));
+
+    if (filename == NULL) {
+        csvMem_fromHeaders(db, "table,filename");
+        return db;
+    }
+
+    // Must specifically choose VFS_CSV to make sure changes are persisted to
+    // disk.
+    if (csv_openDB(db, filename) == 0) {
+        return db;
+    }
+
+    // Would be nice to have, but not certain on API yet
+    // csv_createDB(filename, "table,filename");
+
+    FILE *f = fopen(filename, "w");
+
+    if (f == NULL) {
+        fprintf(stderr, "Unable to create mapping DB at %s\n", filename);
+        exit(-1);
+    }
+
+    fputs("table,filename", f);
+    fclose(f);
+
+    // Must specifically choose VFS_CSV to make sure it is persisted to disk.
+    if (csv_openDB(db, filename) < 0) {
+        fprintf(stderr, "Unable to open mapping DB %s\n", filename);
+    }
+
+    return db;
 }

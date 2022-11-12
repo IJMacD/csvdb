@@ -29,6 +29,10 @@ static int setDataDir (const char * datadir);
 
 static void printError (int format, FILE *error);
 
+static char *getSession ();
+
+void set_session_temp_db (const char * session_id);
+
 int main () {
 
     char query_buffer[1024];
@@ -146,6 +150,14 @@ int main () {
         return -1;
     }
 
+    char *session = getSession();
+
+    if (session == NULL) {
+        return -1;
+    }
+
+    set_session_temp_db(session);
+
     flags |= format;
 
     printf("Access-Control-Allow-Origin: *\n");
@@ -182,14 +194,12 @@ int main () {
     printf("\n");
 
     if (query(query_buffer, flags, output, NULL)) {
-        temp_dropAll();
         // Write errors to stdout now
         printError(format, error);
         fclose(error);
         return -1;
     }
 
-    temp_dropAll();
     fclose(error);
     return 0;
 }
@@ -291,4 +301,65 @@ static void printError (int format, FILE *error) {
     else if (format == OUTPUT_FORMAT_XML) {
         printf("</error></results>");
     }
+}
+
+/**
+ * @brief Get the session identifier
+ *
+ * @return char* a malloc'd pointer. Caller must free.
+ */
+static char *getSession () {
+    char *session_id = malloc(32);
+
+    char *cookie = getenv("HTTP_COOKIE");
+
+    if (cookie != NULL) {
+        char *start_ptr = strstr(cookie, "CSVDB_SESSION=");
+        if (start_ptr != NULL) {
+            start_ptr += sizeof("CSVDB_SESSION=");
+
+            char *end_ptr = strstr(start_ptr, ";");
+
+            if (end_ptr) {
+                int len = end_ptr - start_ptr;
+                strncpy(session_id, start_ptr, len);
+                session_id[len] = '\0';
+            }
+            else {
+                strcpy(session_id, start_ptr);
+            }
+
+            return session_id;
+        }
+    }
+
+    unsigned int r1 = rand();
+    unsigned int r2 = rand();
+
+    sprintf(session_id, "%08x%08x", r1, r2);
+
+    time_t t = time(NULL);
+    t += 7 * 24 * 60 * 60;
+
+    struct tm *expires = localtime(&t);
+
+    fprintf(
+        stdout,
+        // asctime() adds \n at end
+        "Set-Cookie: CSVDB_SESSION=%s; path=/; expires=%s",
+        session_id,
+        asctime(expires)
+    );
+
+    return session_id;
+}
+
+void set_session_temp_db (const char * session_id) {
+    char temp_mapping_filename[MAX_TABLE_LENGTH];
+
+    sprintf(temp_mapping_filename, "/tmp/csvdb.session.%s.temp.csv", session_id);
+
+    struct DB *temp_mapping = temp_openMappingDB(temp_mapping_filename);
+
+    temp_setMappingDB(temp_mapping);
 }
