@@ -10,6 +10,7 @@
 
 #include "structs.h"
 #include "query/query.h"
+#include "db/temp.h"
 
 /*
  * CGI Spec:
@@ -181,12 +182,14 @@ int main () {
     printf("\n");
 
     if (query(query_buffer, flags, output, NULL)) {
+        temp_dropAll();
         // Write errors to stdout now
         printError(format, error);
         fclose(error);
         return -1;
     }
 
+    temp_dropAll();
     fclose(error);
     return 0;
 }
