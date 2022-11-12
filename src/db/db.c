@@ -48,6 +48,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordValue = &csv_getRecordValue,
         .findIndex = &csv_findIndex,
         .insertRow = &csv_insertRow,
+        .insertFromQuery = &csv_insertFromQuery,
     },
     // 2 = VFS_CSV_MEM
     {

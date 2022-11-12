@@ -483,6 +483,11 @@ int insert_query (const char * query, const char **end_ptr) {
 
     struct DB db = {0};
 
+    // Try temp first. If it finds a valid TEMP db it'll write the filename to
+    // the location pointed to by the second param, otherwise it'll leave it
+    // alone.
+    temp_findTable(table_name, table_name);
+
     // Must force VFS_CSV to make sure changes are persisted
     int result = csv_openDB(&db, table_name);
 
