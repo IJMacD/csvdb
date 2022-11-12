@@ -334,21 +334,11 @@ static int create_table_query (const char * query, const char **end_ptr) {
 
     skipWhitespace(query, &index);
 
-    char file_name[MAX_TABLE_LENGTH + 4];
-    sprintf(file_name, "%s.csv", table_name);
+    struct DB db = {0};
 
-    FILE *f = fopen(file_name, "w");
+    int result = csv_fromQuery(&db, table_name, query + index, end_ptr);
 
-    if (!f) {
-        fprintf(stderr, "Unable to create file for table: '%s'\n", file_name);
-        return -1;
-    }
-
-    int flags = OUTPUT_FORMAT_COMMA | OUTPUT_OPTION_HEADERS;
-
-    int result = select_query(query + index, flags, f, end_ptr);
-
-    fclose(f);
+    closeDB(&db);
 
     return result;
 }

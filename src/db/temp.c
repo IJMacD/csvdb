@@ -159,22 +159,12 @@ struct DB *temp_openMappingDB (const char *filename) {
         return db;
     }
 
-    // Would be nice to have, but not certain on API yet
-    // csv_createDB(filename, "table,filename");
+    // Must specifically choose VFS_CSV to make sure it is persisted to disk.
+    int result = csv_fromHeaders(db, filename, "table,filename");
 
-    FILE *f = fopen(filename, "w");
-
-    if (f == NULL) {
+    if (result < 0) {
         fprintf(stderr, "Unable to create mapping DB at %s\n", filename);
         exit(-1);
-    }
-
-    fputs("table,filename", f);
-    fclose(f);
-
-    // Must specifically choose VFS_CSV to make sure it is persisted to disk.
-    if (csv_openDB(db, filename) < 0) {
-        fprintf(stderr, "Unable to open mapping DB %s\n", filename);
     }
 
     return db;

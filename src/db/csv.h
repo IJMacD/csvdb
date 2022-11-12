@@ -28,6 +28,19 @@ enum IndexSearchType csv_findIndex(
     int index_type_flags
 );
 
+int csv_fromHeaders (
+    struct DB *db,
+    const char *name,
+    const char *headers
+);
+
+int csv_fromQuery (
+    struct DB *db,
+    const char *name,
+    const char *query,
+    const char **end_ptr
+);
+
 int csv_insertRow (struct DB *db, const char *row);
 
 int csv_insertFromQuery (

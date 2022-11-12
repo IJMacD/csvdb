@@ -486,6 +486,88 @@ enum IndexSearchType csv_findIndex(
     return INDEX_NONE;
 }
 
+/**
+ * @brief Creates an empty table from a string of headers
+ *
+ * @param db
+ * @param name Name of the table. Will have '.csv' appended if it doesn't have
+ * already.
+ * @param headers "col1,col2" etc.
+ * @returns int 0 on success; -1 on failure
+ */
+int csv_fromHeaders (
+    struct DB *db,
+    const char *name,
+    const char *headers
+) {
+    char filename[MAX_TABLE_LENGTH];
+
+    int len = strlen(name);
+    if (strcmp(name + len - 4, ".csv") == 0) {
+        strcpy(filename, name);
+    }
+    else {
+        sprintf(filename, "%s.csv", name);
+    }
+
+    FILE *f = fopen(filename, "w");
+
+    if (f == NULL) {
+        return -1;
+    }
+
+    fputs(headers, f);
+    fclose(f);
+
+    return csv_openDB(db, filename);
+}
+
+/**
+ * @brief Creates a table from the results of a query
+ *
+ * @param db
+ * @param name Name of the table. Will have '.csv' appended if it doesn't have
+ * already.
+ * @param query
+ * @param end_ptr
+ * @returns int 0 on success; -1 on failure
+ */
+int csv_fromQuery (
+    struct DB *db,
+    const char *name,
+    const char *query,
+    const char **end_ptr
+) {
+    char filename[MAX_TABLE_LENGTH];
+
+    int len = strlen(name);
+    if (strcmp(name + len - 4, ".csv") == 0) {
+        strcpy(filename, name);
+    }
+    else {
+        sprintf(filename, "%s.csv", name);
+    }
+
+    FILE *f = fopen(filename, "w");
+
+    if (!f) {
+        fprintf(stderr, "Unable to create file for table: '%s'\n", filename);
+        return -1;
+    }
+
+    int flags = OUTPUT_FORMAT_COMMA | OUTPUT_OPTION_HEADERS;
+
+    int result = select_query(query, flags, f, end_ptr);
+
+    fclose(f);
+
+    if (result < 0) {
+        return -1;
+    }
+
+    return csv_openDB(db, filename);
+}
+
 int csv_insertRow (struct DB *db, const char *row) {
     fseek(db->file, -1, SEEK_END);
 
