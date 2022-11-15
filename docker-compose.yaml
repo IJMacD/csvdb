@@ -8,5 +8,5 @@ services:
     restart: unless-stopped
     volumes:
       - /var/www/csvdb.ijmacd.com/data:/data
-    # environment:
-    #   - CSVDB_DATA_DIR=/data
+    environment:
+       - CSVDB_DATA_DIR=/data
