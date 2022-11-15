@@ -31,7 +31,7 @@ int basic_select_query (
 
 int information_query (const char *table, FILE * output);
 
-static int populate_tables (struct Query *q, struct DB * dbs);
+static int populate_tables (struct Query *q);
 
 int resolveNode (struct Query *query, struct Node *node, int allow_aliases);
 
@@ -332,12 +332,9 @@ int process_query (
         q->column_count = 1;
     }
 
-    // Create array on stack to hold DB structs
-    struct DB dbs[MAX_TABLE_COUNT] = {0};
-
     // Populate Tables
     // (including JOIN predicate columns)
-    result = populate_tables(q, dbs);
+    result = populate_tables(q);
     if (result < 0) {
         fprintf(stderr, "Unable to populate tables\n");
         return result;
@@ -425,10 +422,6 @@ int process_query (
         output_flags,
         output
     );
-
-    for (int i = 0; i < q->table_count; i++) {
-        closeDB(q->tables[i].db);
-    }
 
     destroyPlan(&plan);
 
@@ -571,6 +564,23 @@ static void destroy_query (struct Query *query) {
     }
 
     if (query->tables != NULL) {
+        for (int i = 0; i < query->table_count; i++) {
+            closeDB(query->tables[i].db);
+
+            if (query->tables[i].db != NULL) {
+                // DB might be duplicated. Check if the pointer is shared by any
+                // other tables first.
+                void *ptr = query->tables[i].db;
+                for (int j = i; j < query->table_count; j++) {
+                    if (query->tables[j].db == ptr) {
+                        query->tables[j].db = NULL;
+                    }
+                }
+
+                free(ptr);
+            }
+        }
+
         free(query->tables);
         query->tables = NULL;
     }
@@ -588,7 +598,7 @@ static void destroy_query (struct Query *query) {
     }
 }
 
-static int populate_tables (struct Query *q, struct DB *dbs) {
+static int populate_tables (struct Query *q) {
 
     for (int i = 0; i < q->table_count; i++) {
         struct Table *table = &q->tables[i];
@@ -599,15 +609,7 @@ static int populate_tables (struct Query *q, struct DB *dbs) {
 
         if (table->db != NULL && table->db != DB_SUBQUERY) {
             // DB has already been opened for us. This is most probably a
-            // VALUES "subquery". We need to copy the db to our stack then free
-            // the previously opened DB.
-
-            memcpy(&dbs[i], table->db, sizeof(dbs[i]));
-
-            free(table->db);
-
-            table->db = &dbs[i];
-
+            // VALUES "subquery". There's nothing we need to do.
             found = 1;
         }
 
@@ -617,9 +619,6 @@ static int populate_tables (struct Query *q, struct DB *dbs) {
                 if (strcmp(q->tables[j].name, table->name) == 0) {
                     // Copy pointer
                     table->db = q->tables[j].db;
-
-                    // Make actual copy of DB for output functions
-                    memcpy(&dbs[i], &dbs[j], sizeof (dbs[i]));
 
                     found = 1;
                     break;
@@ -631,14 +630,12 @@ static int populate_tables (struct Query *q, struct DB *dbs) {
 
         // Check for subquery first
         if (found == 0 && table->db == DB_SUBQUERY) {
-            struct DB *db = &dbs[i];
+            table->db = calloc(1, sizeof(*table->db));
 
-            int result = select_subquery_mem(table->name, db, NULL);
+            int result = select_subquery_mem(table->name, table->db, NULL);
             if (result < 0) {
                 return -1;
             }
-
-            table->db = &dbs[i];
 
             found = 1;
         }
@@ -646,12 +643,12 @@ static int populate_tables (struct Query *q, struct DB *dbs) {
         // Must be a regular table
         // Not a special table and not already open
         if (found == 0) {
-            if (openDB(&dbs[i], table->name) != 0) {
+            table->db = calloc(1, sizeof(*table->db));
+
+            if (openDB(table->db, table->name) != 0) {
                 fprintf(stderr, "Unable to use file: '%s'\n", table->name);
                 return -1;
             }
-
-            table->db = &dbs[i];
         }
 
         check_column_aliases(table);
