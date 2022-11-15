@@ -40,19 +40,12 @@ int view_openDB (struct DB *db, const char *filename) {
 
     query_buffer[count] = '\0';
 
-    // select_subquery() execute the view, write the results to a temp file and
-    // write the tmp filename to filename_buffer.
-    int result = select_subquery(query_buffer, filename_buffer, NULL);
+    // select_subquery_mem() will execute the view, and write the results to a
+    // memory buffer handing off to CSV_MEM
+    int result = select_subquery_mem(query_buffer, db, NULL);
     if (result < 0) {
-        remove(filename_buffer);
         return -1;
     }
-
-    // Pass the temp filename to CSV VFS
-    result = csvMem_openDB(db, filename_buffer);
-
-    // Delete the temp file from disk
-    remove(filename_buffer);
 
     return result;
 }

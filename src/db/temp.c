@@ -48,7 +48,7 @@ int temp_create (const char *name, const char *query, const char ** end_ptr) {
 
     // select_subquery() execute the creation query, write the results to a temp
     // file and save the filename to file_names array.
-    int result = select_subquery(query, filename, end_ptr);
+    int result = select_subquery_file(query, filename, end_ptr);
 
     // failed to open so just delete temp file
     if (result < 0) {

@@ -45,12 +45,6 @@ static int find_field (
 
 static void check_column_aliases (struct Table * table);
 
-static int process_query (
-    struct Query *q,
-    enum OutputOption output_flags,
-    FILE * output
-);
-
 static int process_subquery(
     struct Query *query,
     enum OutputOption options,
@@ -263,7 +257,7 @@ int select_query (
     return result;
 }
 
-static int process_query (
+int process_query (
     struct Query *q,
     enum OutputOption output_flags,
     FILE * output
@@ -453,7 +447,11 @@ static int process_query (
  * query
  * @return int 0 for success; -1 for failure
  */
-int select_subquery(const char *query, char *filename, const char **end_ptr) {
+int select_subquery_file (
+    const char *query,
+    char *filename,
+    const char **end_ptr
+) {
     struct Query q = {0};
 
     int result = parseQuery(&q, query, end_ptr);
@@ -462,6 +460,34 @@ int select_subquery(const char *query, char *filename, const char **end_ptr) {
     }
 
     result = process_subquery(&q, 0, filename);
+
+    destroy_query(&q);
+
+    return result;
+}
+
+/**
+ * @brief Execute the query, write the results to a CSV_MEM database.
+ *
+ * @param query Query string to process.
+ * @param db A DB that will be initialised by CSV_MEM
+ * @param end_ptr can be NULL if you don't care about the end of the parsed
+ * query
+ * @return int 0 for success; -1 for failure
+ */
+int select_subquery_mem (
+    const char *query,
+    struct DB *db,
+    const char **end_ptr
+) {
+    struct Query q = {0};
+
+    int result = parseQuery(&q, query, end_ptr);
+    if (result < 0) {
+        return -1;
+    }
+
+    result = csvMem_fromQuery(db, &q);
 
     destroy_query(&q);
 
@@ -605,21 +631,9 @@ static int populate_tables (struct Query *q, struct DB *dbs) {
 
         // Check for subquery first
         if (found == 0 && table->db == DB_SUBQUERY) {
-            char filename[MAX_TABLE_LENGTH];
-
-            int result = select_subquery(table->name, filename, NULL);
-            if (result < 0) {
-                remove(filename);
-                return -1;
-            }
-
             struct DB *db = &dbs[i];
 
-            // hand off to CSV Mem
-            result = csvMem_openDB(db, filename);
-
-            remove(filename);
-
+            int result = select_subquery_mem(table->name, db, NULL);
             if (result < 0) {
                 return -1;
             }

@@ -36,4 +36,6 @@ const char *csvMem_fromValues (struct DB *db, const char *values, int length);
 
 void csvMem_fromHeaders (struct DB *db, const char *headers);
 
+int csvMem_fromQuery (struct DB *db, struct Query *query);
+
 int csvMem_insertRow (struct DB *db, const char *row);

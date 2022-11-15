@@ -5,6 +5,7 @@
 
 #include "../structs.h"
 #include "../functions/util.h"
+#include "../query/query.h"
 
 static int countFields (const char *ptr);
 
@@ -486,6 +487,32 @@ void csvMem_fromHeaders (struct DB *db, const char *headers) {
     db->line_indices[0] = 0;
 
     db->_record_count = 0;
+}
+
+int csvMem_fromQuery (struct DB *db, struct Query *query) {
+    db->vfs = VFS_CSV_MEM;
+
+    size_t size;
+
+    FILE *f = open_memstream(&db->data, &size);
+
+    int result = process_query(
+        query,
+        OUTPUT_OPTION_HEADERS | OUTPUT_FORMAT_COMMA,
+        f
+    );
+
+    fclose(f);
+
+    if (result < 0) {
+        return -1;
+    }
+
+    prepareHeaders(db);
+
+    db->_record_count = -1;
+
+    return 0;
 }
 
 static int countFields (const char *ptr) {
