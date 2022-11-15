@@ -250,6 +250,15 @@ int explain_select_query (
                 s.nodes[0].field.text
             );
         }
+        else if (s.type == PLAN_COVERING_INDEX_SEEK) {
+            operation = "COVERING INDEX SEEK";
+            sprintf(
+                table,
+                "%s__%s",
+                tables[join_count].name,
+                s.nodes[0].children[0].field.text
+            );
+        }
         else if (s.type == PLAN_SORT) {
             operation = "SORT";
             long new_cost = rows * rows;

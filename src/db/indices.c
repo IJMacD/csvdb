@@ -35,6 +35,28 @@ enum IndexSearchResult indexPrimarySeek (
 }
 
 /**
+ * Just a non-unique seek but we know that [index rowid] == [table rowid].
+ * Useful when the index is a covering index so we want the *index* rowid to be
+ * returned.
+ */
+enum IndexSearchResult indexCoveringSeek (
+    struct DB *db,
+    enum Function predicate_op,
+    const char *predicate_value,
+    struct RowList * row_list,
+    int limit
+) {
+    return indexSeek(
+        db,
+        FIELD_ROW_INDEX,
+        predicate_op,
+        predicate_value,
+        row_list,
+        limit
+    );
+}
+
+/**
  * Pretty much duplicated from indexSeek but telling the underlying DB VFS that
  * the index is unique.
  * Also: only need to do one index search, rather than two.

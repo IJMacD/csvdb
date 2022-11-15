@@ -4,9 +4,6 @@ int openDB (struct DB *db, const char *filename);
 
 void closeDB (struct DB *db);
 
-/**
- * Max header length 1024 characters
- */
 int getFieldIndex (struct DB *db, const char *field);
 
 char * getFieldName (struct DB *db, int field_index);

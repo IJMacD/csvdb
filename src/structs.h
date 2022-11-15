@@ -237,9 +237,10 @@ enum PlanStepType {
     PLAN_UNIQUE_RANGE =         0x07,
     PLAN_INDEX_RANGE =          0x08,
     PLAN_INDEX_SCAN =           0x09,
-    PLAN_DUMMY_ROW =            0x0A,
+    PLAN_COVERING_INDEX_SEEK =  0x0A,
+    PLAN_DUMMY_ROW =            0x0F,
 
-    // POP = 1(n), PUSH = 1(n') n' < n
+    // POP = 1(n), PUSH = 1(n'); n' < n
     PLAN_TABLE_ACCESS_ROWID =   0x10,
 
     // POP = 1(n x m), PUSH = 1(n' x m+1)

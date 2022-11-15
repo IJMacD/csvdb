@@ -107,6 +107,21 @@ int executeQueryPlan (
                 break;
             }
 
+            case PLAN_COVERING_INDEX_SEEK: {
+                #ifdef DEBUG
+                fprintf(
+                    stderr,
+                    "Q%d.%d: PLAN_COVERING_INDEX_SEEK\n",
+                    getpid(),
+                    query_count
+                );
+                #endif
+
+                result = executeSourceCoveringIndexSeek(tables, s, result_set);
+
+                break;
+            }
+
             case PLAN_TABLE_ACCESS_FULL:
             {
                 /*************************************************************

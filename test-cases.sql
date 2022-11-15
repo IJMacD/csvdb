@@ -3,7 +3,7 @@ SELECT name, score FROM test FETCH FIRST ROW ONLY;
 SELECT name, score FROM test FETCH FIRST 5 ROWS ONLY;
 SELECT name, score FROM test OFFSET 2 ROWS FETCH NEXT 5 ROWS ONLY;
 -- Create indexes
-CREATE INDEX ON test (name);
+CREATE INDEX ON test (name, birth_date);
 CREATE UNIQUE INDEX ON test (birth_date);
 -- Test indexes
 SELECT name FROM test ORDER BY name FETCH FIRST 5 ROWS ONLY;

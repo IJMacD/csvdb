@@ -29,6 +29,13 @@ enum IndexSearchResult indexSeek (
     struct RowList * row_list,
     int limit
 );
+enum IndexSearchResult indexCoveringSeek (
+    struct DB *db,
+    enum Function predicate_op,
+    const char *predicate_value,
+    struct RowList * row_list,
+    int limit
+);
 // int indexRangeScan (
 //     struct DB *index_db,
 //     int rowid_column,

@@ -48,6 +48,11 @@ static int applySortLogic (
     int *sorts_needed
 );
 
+static void checkCoveringIndex (
+    struct Query *q,
+    struct Plan *plan
+);
+
 static int areNodesEqual (struct Node *nodeA, struct Node *nodeB);
 
 static int haveNonUniqueJoins (struct Plan *plan);
@@ -55,6 +60,8 @@ static int haveNonUniqueJoins (struct Plan *plan);
 static void addPredicateSource (struct Plan *plan, struct Query *query);
 
 static enum PlanStepType findIndexSource (struct Query *query);
+
+static const char *getNodeFieldName (struct Node *node);
 
 int makePlan (struct Query *q, struct Plan *plan) {
     plan->step_count = 0;
@@ -166,6 +173,8 @@ int makePlan (struct Query *q, struct Plan *plan) {
     if (q->offset_value > 0) {
         addStepWithLimit(plan, PLAN_OFFSET, q->offset_value);
     }
+
+    checkCoveringIndex(q, plan);
 
     addStepWithNodes(plan, PLAN_SELECT, q->columns, q->column_count);
 
@@ -1130,4 +1139,164 @@ static int haveNonUniqueJoins (struct Plan *plan) {
         }
     }
     return non_unique_joins;
+}
+
+static void checkCoveringIndex (
+    struct Query *q,
+    struct Plan *plan
+) {
+
+    // Don't bother with joins yet
+    if (q->table_count > 1) {
+        return;
+    }
+
+    struct PlanStep *firstStep = &plan->steps[0];
+
+    // Check if we have an index access
+    if (
+        firstStep->type != PLAN_INDEX_RANGE
+        && firstStep->type != PLAN_INDEX_SCAN
+        && firstStep->type != PLAN_UNIQUE
+        && firstStep->type != PLAN_UNIQUE_RANGE
+    ) {
+        return;
+    }
+
+    // If we need to access the table anyway then there's no point in using a
+    // covering index
+    for (int i = 1; i < plan->step_count; i++) {
+        if (plan->steps[i].type == PLAN_TABLE_ACCESS_ROWID) {
+            return;
+        }
+    }
+
+    const char *col_name = getNodeFieldName(&firstStep->nodes[0]);
+
+    struct Table *firstTable = &q->tables[0];
+
+    struct DB *db = malloc(sizeof(*db));
+
+    if (
+        findIndex(db, firstTable->name, col_name, INDEX_ANY)
+            == INDEX_NONE
+    ) {
+        fprintf(
+            stderr,
+            "We were told there's an index but we can't find it now.\n"
+        );
+        free(db);
+        return;
+    }
+
+    int *mapped_cols = malloc(sizeof(*mapped_cols) * q->column_count);
+
+    // Every column in the SELECT clause must be present in the index
+    for (int i = 0; i < q->column_count; i++) {
+        const char *col_name = getNodeFieldName(&q->columns[i]);
+
+        mapped_cols[i] = getFieldIndex(db, col_name);
+
+        if (mapped_cols[i] < 0) {
+            free(db);
+            free(mapped_cols);
+            return;
+        }
+    }
+
+    // Every column in the ORDER BY clause must be present in the index
+    for (int i = 0; i < q->order_count; i++) {
+        const char *col_name = getNodeFieldName(&q->order_nodes[i]);
+
+        int result = getFieldIndex(db, col_name);
+
+        if (result < 0) {
+            free(db);
+            free(mapped_cols);
+            return;
+        }
+    }
+
+    // Every column in the GROUP BY clause must be present in the index
+    for (int i = 0; i < q->group_count; i++) {
+        const char *col_name = getNodeFieldName(&q->group_nodes[i]);
+
+        int result = getFieldIndex(db, col_name);
+
+        if (result < 0) {
+            free(db);
+            free(mapped_cols);
+            return;
+        }
+    }
+
+    // Success!
+
+    // If we were going to do an INDEX SCAN then it can simply be swapped for a
+    // TABLE SCAN
+    if (firstStep->type == PLAN_INDEX_SCAN) {
+        firstStep->type = PLAN_TABLE_SCAN;
+        firstStep->node_count = 0;
+
+        // This is mainly for EXPLAIN
+        char table_name[MAX_TABLE_LENGTH];
+        sprintf(table_name, "%s__%s", q->tables[0].name, col_name);
+        strcpy(q->tables[0].name, table_name);
+        strcpy(q->tables[0].alias, table_name);
+    }
+    else {
+        firstStep->type = PLAN_COVERING_INDEX_SEEK;
+    }
+
+    q->tables[0].db = db;
+
+
+    // Replace the SELECT nodes with references to the index
+    for (int i = 0; i < q->column_count; i++) {
+        q->columns[i].field.index = mapped_cols[i];
+    }
+
+    // Replace the ORDER BY nodes with references to the index
+    for (int i = 0; i < plan->step_count; i++) {
+        struct PlanStep *step = &plan->steps[i];
+        if (step->type == PLAN_SORT) {
+            for (int j = 0; j < step->node_count; j++) {
+                const char *field_name = getNodeFieldName(&step->nodes[j]);
+                int field_index = getFieldIndex(db, field_name);
+                if (step->nodes[j].child_count <= 0) {
+                    step->nodes[j].field.index = field_index;
+                }
+                else {
+                    step->nodes[j].children[0].field.index = field_index;
+                }
+            }
+        }
+    }
+
+    // Replace the GROUP BY nodes with references to the index
+    for (int i = 0; i < plan->step_count; i++) {
+        struct PlanStep *step = &plan->steps[i];
+        if (step->type == PLAN_GROUP) {
+            for (int j = 0; j < step->node_count; j++) {
+                const char *field_name = getNodeFieldName(&step->nodes[j]);
+                int field_index = getFieldIndex(db, field_name);
+                if (step->nodes[j].child_count <= 0) {
+                    step->nodes[j].field.index = field_index;
+                }
+                else {
+                    step->nodes[j].children[0].field.index = field_index;
+                }
+            }
+        }
+    }
+
+    free(mapped_cols);
+}
+
+static const char *getNodeFieldName (struct Node *node) {
+    if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR) {
+        return node->children[0].field.text;
+    }
+
+    return node->field.text;
 }

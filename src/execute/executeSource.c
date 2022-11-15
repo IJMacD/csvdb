@@ -144,6 +144,33 @@ int executeSourceIndexSeek (
     return 0;
 }
 
+int executeSourceCoveringIndexSeek (
+    struct Table *tables,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+) {
+    // Table *is* the index
+    struct Table *table = tables;
+    struct Node *p = &step->nodes[0];
+    struct DB *index_db = table->db;
+
+    int record_count = (step->limit > -1)
+        ? step->limit : getRecordCount(index_db);
+
+    RowListIndex row_list = createRowList(1, record_count);
+    pushRowList(result_set, row_list);
+
+    indexCoveringSeek(
+        index_db,
+        p->function,
+        p->children[1].field.text,
+        getRowList(row_list),
+        step->limit
+    );
+
+    return 0;
+}
+
 int executeSourceIndexScan (
     struct Table *tables,
     struct PlanStep *step,

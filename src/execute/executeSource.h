@@ -41,3 +41,9 @@ int executeSourceTableScan (
     struct PlanStep *step,
     struct ResultSet *result_set
 );
+
+int executeSourceCoveringIndexSeek (
+    struct Table *tables,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+);
