@@ -8,8 +8,8 @@ NC='\033[0m' # No Color
 
 readarray -t lines < ./test-cases.sql
 
+CSVDB=../release/csvdb
 OUTFILE=/tmp/test.out
-
 STATFILE=test-cases-stats.csv
 
 stats=""
@@ -30,12 +30,12 @@ for sql in "${lines[@]}"; do
 
     printf "\n$GREY -- Plan: --\n"
 
-    ./release/csvdb -E "$sql"
+    $CSVDB -E "$sql"
 
     printf "$NC"
 
     start=`date +%s%N`
-    ./release/csvdb -o $OUTFILE $stats "$sql"
+    $CSVDB -o $OUTFILE $stats "$sql"
     result=$?
     end=`date +%s%N`
 
