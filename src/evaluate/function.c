@@ -5,6 +5,7 @@
 #include "../structs.h"
 #include "../functions/util.h"
 #include "../functions/date.h"
+#include "../evaluate/evaluate.h"
 #include "../query/result.h"
 #include "../db/db.h"
 
@@ -14,7 +15,7 @@
  * @param output
  * @param function
  * @param values
- * @return int number of bytes written
+ * @return int number of bytes written; -1 for error
  */
 int evaluateFunction(
     char * output,
@@ -58,33 +59,47 @@ int evaluateFunction(
         }
     }
     else if (function == FUNC_ADD) {
-        long val1 = atol(values[0]);
-        long val2 = atol(values[1]);
+        long val = 0;
 
-        return sprintf(output, "%ld", val1 + val2);
-    }
-    else if (function == FUNC_SUB) {
-        long val1 = atol(values[0]);
-        long val2 = atol(values[1]);
-
-        return sprintf(output, "%ld", val1 - val2);
-    }
-    else if (function == FUNC_MUL) {
-        long val1 = atol(values[0]);
-        long val2 = atol(values[1]);
-
-        return sprintf(output, "%ld", val1 * val2);
-    }
-    else if (function == FUNC_DIV) {
-        long val1 = atol(values[0]);
-        long val2 = atol(values[1]);
-
-        if (val2 == 0) {
-            output[0] = '\0';
-            return 0;
+        for (int i = 0; i < value_count; i++) {
+            val += atol(values[i]);
         }
 
-        return sprintf(output, "%ld", val1 / val2);
+        return sprintf(output, "%ld", val);
+    }
+    else if (function == FUNC_SUB) {
+        long val = atol(values[0]);
+
+        for (int i = 1; i < value_count; i++) {
+            val -= atol(values[i]);
+        }
+
+        return sprintf(output, "%ld", val);
+    }
+    else if (function == FUNC_MUL) {
+        long val = 1;
+
+        for (int i = 0; i < value_count; i++) {
+            val *= atol(values[i]);
+        }
+
+        return sprintf(output, "%ld", val);
+    }
+    else if (function == FUNC_DIV) {
+        long val = atol(values[0]);
+
+        for (int i = 1; i < value_count; i++) {
+            long val2 = atol(values[i]);
+
+            if (val2 == 0) {
+                output[0] = '\0';
+                return 0;
+            }
+
+            val /= val2;
+        }
+
+        return sprintf(output, "%ld", val);
     }
     else if (function == FUNC_MOD) {
         long val1 = atol(values[0]);
@@ -289,16 +304,44 @@ int evaluateFunction(
     return 0;
 }
 
+/**
+ * @brief
+ *
+ * @param output
+ * @param tables
+ * @param node
+ * @param row_list
+ * @return int bytes written; -1 for error
+ */
 int evaluateAggregateFunction (
     char * output,
     struct Table *tables,
     struct Node *node,
     struct RowList * row_list
 ) {
-
     char value[MAX_VALUE_LENGTH];
 
     if ((node->function & MASK_FUNC_FAMILY) != FUNC_FAM_AGG) {
+        return -1;
+    }
+
+    // Aggregate functions can only work on a single field at the moment
+    if (node->child_count != -1) {
+        fprintf(
+            stderr,
+            "Aggregate function %d must have a field\n",
+            node->function
+        );
+        return -1;
+    }
+
+    // Check there's a valid field to use
+    if (node->field.table_id < 0) {
+        fprintf(
+            stderr,
+            "Aggregate function %d must have a field\n",
+            node->function
+        );
         return -1;
     }
 

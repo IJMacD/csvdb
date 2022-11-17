@@ -6,10 +6,15 @@
 #include "../functions/util.h"
 
 int getRowID (struct RowList * row_list, int join_id, int index) {
+    if (join_id < 0) return -1;
     return row_list->row_ids[index * row_list->join_count + join_id];
 }
 
 void writeRowID (struct RowList * row_list, int join_id, int index, int value) {
+    if (join_id < 0) {
+        fprintf(stderr, "Error writing rowid: join=%d\n", join_id);
+        exit(-1);
+    }
     row_list->row_ids[index * row_list->join_count + join_id] = value;
 }
 
