@@ -71,12 +71,13 @@ void printResultLine (
 ) {
     enum OutputOption format = flags & OUTPUT_MASK_FORMAT;
 
-    int have_aggregate = 0;
-
     int is_single_column
         = column_count == 1 && strcmp(columns[0].alias, "_") == 0;
 
     printRecordStart(f, format, result_index == 0, is_single_column);
+
+    // Arbitrarily choose index 0 for agg rows
+    int rowlist_row_index = row_list->group ? 0 : result_index;
 
     for (int j = 0; j < column_count; j++) {
         struct Node *node = &columns[j];
@@ -90,7 +91,7 @@ void printResultLine (
                     int rowid = getRowID(
                         row_list,
                         node->field.table_id,
-                        result_index
+                        rowlist_row_index
                     );
                     const char *prefix = table_count > 1
                         ? tables[node->field.table_id].alias : NULL;
@@ -99,7 +100,7 @@ void printResultLine (
                     // e.g. *
                     for (int m = 0; m < table_count; m++) {
                         struct DB *db = tables[m].db;
-                        int rowid = getRowID(row_list, m, result_index);
+                        int rowid = getRowID(row_list, m, rowlist_row_index);
                         const char *prefix = table_count > 1
                             ? tables[m].alias : NULL;
                         printAllColumnValues(f, db, prefix, rowid, format);
@@ -134,16 +135,17 @@ void printResultLine (
                 int rowid = getRowID(
                     row_list,
                     node->field.table_id,
-                    result_index
+                    rowlist_row_index
                 );
                 printColumnValueNumber(f, format, NULL, node->alias, rowid);
             }
+            // Raw FUNC_UNITY field
             else {
                 char output[MAX_VALUE_LENGTH];
                 int result = evaluateNode(
                     tables,
                     row_list,
-                    result_index,
+                    rowlist_row_index,
                     node,
                     output,
                     MAX_VALUE_LENGTH
@@ -170,8 +172,6 @@ void printResultLine (
                 row_list
             );
 
-            have_aggregate = 1;
-
             printColumnValue(
                 f,
                 format,
@@ -187,7 +187,7 @@ void printResultLine (
             int result = evaluateNode(
                 tables,
                 row_list,
-                result_index,
+                rowlist_row_index,
                 node,
                 output,
                 MAX_VALUE_LENGTH
@@ -211,8 +211,11 @@ void printResultLine (
 
     }
 
-    int is_last
-        = result_index == row_list->row_count - 1 || have_aggregate == 1;
+    int is_last =
+        result_index == row_list->row_count - 1
+        // TODO: Not actually correct, expect bugs in agg queries with record
+        // end formatting (e.g. JSON)
+        && row_list->group == 0;
 
     printRecordEnd(f, format, is_last, is_single_column);
 
