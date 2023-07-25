@@ -114,8 +114,8 @@ $(CGIDDIR)/%.o: $(SRCDIR)/%.c
 #
 # Test rules
 #
-test: prep release test.csv
-	./test.sh
+test: prep release test/test.csv
+	cd test && ./test.sh
 
 test.csv: $(GENEXE)
 	${GENEXE} 1000000 test.csv

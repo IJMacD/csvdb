@@ -2,6 +2,8 @@
 
 int parseDateTime(const char *input, struct DateTime *output);
 
+int sprintDate (char *output, struct DateTime *dt);
+
 int isLeapYear(int year);
 
 int datetimeGetYearDay(struct DateTime *dt);

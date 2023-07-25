@@ -60,18 +60,65 @@ int evaluateFunction(
     }
     else if (function == FUNC_ADD) {
         long val = 0;
+        struct DateTime dt = {0};
+        int is_date = 0;
 
         for (int i = 0; i < value_count; i++) {
-            val += atol(values[i]);
+            if (parseDateTime(values[i], &dt)) {
+                if (i == 0) {
+                    val = datetimeGetJulian(&dt);
+                    is_date = 1;
+                }
+                else {
+                    fprintf(stderr, "Unexpected Date: %s\n", values[i]);
+                    output[0] = 0;
+                    return 0;
+                }
+            } else {
+                val += atol(values[i]);
+            }
+        }
+
+        if (is_date) {
+            datetimeFromJulian(&dt, val);
+            return sprintDate(output, &dt);
         }
 
         return sprintf(output, "%ld", val);
     }
     else if (function == FUNC_SUB) {
-        long val = atol(values[0]);
+        long val = 0;
+        struct DateTime dt = {0};
+        int is_date = 0;
+
+        if (parseDateTime(values[0], &dt)) {
+            val = datetimeGetJulian(&dt);
+            is_date = 1;
+        }
+        else {
+            val = atol(values[0]);
+        }
 
         for (int i = 1; i < value_count; i++) {
-            val -= atol(values[i]);
+            if (parseDateTime(values[i], &dt)) {
+                if (i == 1) {
+                    val -= datetimeGetJulian(&dt);
+                    is_date = 0;
+                }
+                else {
+                    fprintf(stderr, "Unexpected Date: %s\n", values[i]);
+                    output[0] = 0;
+                    return 0;
+                }
+            }
+            else {
+                val -= atol(values[i]);
+            }
+        }
+
+        if (is_date) {
+            datetimeFromJulian(&dt, val);
+            return sprintDate(output, &dt);
         }
 
         return sprintf(output, "%ld", val);
@@ -214,7 +261,7 @@ int evaluateFunction(
             return sprintf(output, "%d", datetimeGetJulian(&dt));
         }
         else if (function == FUNC_EXTRACT_DATE) {
-            return sprintf(output, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
+            return sprintDate(output, &dt);
         }
         else if (function == FUNC_EXTRACT_DATETIME) {
             return sprintf(
@@ -261,7 +308,7 @@ int evaluateFunction(
 
         datetimeFromJulian(&dt2, julian2);
 
-        return sprintf(output, "%04d-%02d-%02d", dt2.year, dt2.month, dt2.day);
+        return sprintDate(output, &dt2);
     }
     else if (function == FUNC_DATE_SUB) {
         struct DateTime dt1;
@@ -278,7 +325,7 @@ int evaluateFunction(
 
         datetimeFromJulian(&dt2, julian2);
 
-        return sprintf(output, "%04d-%02d-%02d", dt2.year, dt2.month, dt2.day);
+        return sprintDate(output, &dt2);
     }
     else if (function == FUNC_DATE_DIFF) {
         struct DateTime dt1;

@@ -123,6 +123,10 @@ int parseDateTime(const char *input, struct DateTime *output) {
     return 0;
 }
 
+int sprintDate (char *output, struct DateTime *dt) {
+    return sprintf(output, "%04d-%02d-%02d", dt->year, dt->month, dt->day);
+}
+
 /**
  * Verifies input matches format.
  * 'n' matches a digit

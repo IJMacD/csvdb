@@ -15,6 +15,12 @@ static int read_file(FILE *file, char **output);
 
 extern char* gitversion;
 
+#ifdef DEBUG
+const char debug[] = "DEBUG";
+#else
+const char debug[] = "";
+#endif
+
 void printUsage (const char* name) {
     printf(
         "Usage:\n"
@@ -50,8 +56,8 @@ void printUsage (const char* name) {
         "record)]\n"
         "\t[(-o |--output=)<filename>]\n"
         "\n"
-        "Version: %2$s\n"
-    , name, gitversion);
+        "Version: %2$s %3$s\n"
+    , name, gitversion, debug);
 }
 
 int main (int argc, char * argv[]) {
@@ -261,7 +267,7 @@ int main (int argc, char * argv[]) {
     }
 
     if (flags & OUTPUT_OPTION_VERBOSE) {
-        printf("%s\n", gitversion);
+        printf("%s %s\n", gitversion, debug);
         return 0;
     }
 
