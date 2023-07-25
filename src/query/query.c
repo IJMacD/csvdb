@@ -193,12 +193,16 @@ int select_query (
     // In order to support different output formats for EXPLAIN we wrap the
     // whole query in a subquery.
     if (format != OUTPUT_FORMAT_COMMA && explain) {
-        return wrap_query(
+        int result = wrap_query(
             &q,
             (enum OutputOption)FLAG_EXPLAIN,
             format | (output_flags & OUTPUT_OPTION_HEADERS),
             output
         );
+
+        destroy_query(&q);
+
+        return result;
     }
 
     // Cannot group and sort in the same query.
@@ -246,6 +250,8 @@ int select_query (
         q2b.tables = NULL;
 
         destroy_query(&q2b);
+
+        // destroy_query(&q);
 
         return result;
     }

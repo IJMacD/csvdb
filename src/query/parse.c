@@ -434,13 +434,17 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                     if (query[index] == '(') {
                         int start_index = index;
 
-                        while (query[index] != '\0' && query[index] != ';' && query[index] != ')') {
+                        while (
+                            query[index] != '\0'
+                            && query[index] != ';'
+                            && query[index] != ')'
+                        ) {
                             index++;
                         }
 
                         index++;
 
-                        char * c = strncpy(
+                        char *c = strncpy(
                             table->alias + strlen(table->alias) + 1,
                             query + start_index,
                             index - start_index

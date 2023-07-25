@@ -177,9 +177,9 @@ int openDB (struct DB *db, const char *filename) {
     // OK so we don't have a stream but memory access could still be 20x faster
     // Seek to end get file size; if it's below limit then use faster memory
     // implementation.
-    fseek(db->file, 0, SEEK_END);
-    size_t size = ftell(db->file);
-    rewind(db->file);
+    fseek(f, 0, SEEK_END);
+    size_t size = ftell(f);
+    rewind(f);
     if (size < MEMORY_FILE_LIMIT) {
         // Use faster VFS_CSV_MEM
         int result = csvMem_makeDB(db, f);

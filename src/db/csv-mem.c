@@ -540,7 +540,8 @@ int csvMem_insertRow (struct DB *db, const char *row) {
     int data_len = data_end - db->data;
     int header_len = db->data - db->fields;
 
-    int new_size = header_len + data_len + len;
+    // Extra bytes for '\n' and '\0'
+    int new_size = header_len + data_len + len + 2;
 
     db->fields = realloc(db->fields, new_size);
 
@@ -555,13 +556,17 @@ int csvMem_insertRow (struct DB *db, const char *row) {
     data_end = get_end_of_data(db);
 
     strcpy(data_end, row);
-    data_end[len] = '\n';
+    if (row[len - 1] != '\n') {
+        data_end[len] = '\n';
+        data_end[len + 1] = '\0';
+        len++;
+    }
 
     db->_record_count++;
 
     // IF THERE'S A BUG CHECK HERE!
     // We're not checking if db->line_inidices is big enough
-    db->line_indices[db->_record_count] = data_len + len + 1;
+    db->line_indices[db->_record_count] = data_len + len;
 
     return 0;
 }

@@ -18,7 +18,7 @@ int view_openDB (struct DB *db, const char *filename) {
     FILE *f;
 
     int len = strlen(filename);
-    if (strcmp(filename + len - 4, ".sql") == 0) {
+    if (len > 4 && strcmp(filename + len - 4, ".sql") == 0) {
         f = fopen(filename, "r");
     } else {
         sprintf(filename_buffer, "%s.sql", filename);
