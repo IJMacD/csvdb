@@ -1,0 +1,5 @@
+- [ ] [bug] "FROM CALENDAR" will try to open calendar.csv and calendar.sql before attempting to use built in DB
+- [x] Investigate julian predicate ranges
+- [ ] Avoid double processing julian predicates?
+- [ ] Add more julian predicate ranges
+- [ ] Expression tree support in ON clause
