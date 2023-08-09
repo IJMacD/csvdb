@@ -37,6 +37,8 @@ const int month_index[] = {
  *  - 01 JAN 2023
  *  - 2023-001
  *  - 2023‐001 (U+2010)
+ *  - 2023-W08-6
+ *  - 2023‐W08‐6 (U+2010)
  *
  * Returns 1 on success; 0 on failure
  */
@@ -57,19 +59,9 @@ int parseDateTime(const char *input, struct DateTime *output) {
     }
 
     if (checkFormat(input, "nnnn-nn-nn")) {
-        char v[5] = {0};
-
-        memcpy(v, input, 4);
-        v[4] = '\0';
-        output->year = atoi(v);
-
-        memcpy(v, input + 5, 2);
-        v[2] = '\0';
-        output->month = atoi(v);
-
-        memcpy(v, input + 8, 2);
-        v[2] = '\0';
-        output->day = atoi(v);
+        output->year = atoi(input);
+        output->month = atoi(input + 5);
+        output->day = atoi(input + 8);
 
         output->hour = 0;
         output->minute = 0;
@@ -79,19 +71,9 @@ int parseDateTime(const char *input, struct DateTime *output) {
     }
 
     if (checkFormat(input, "nnnn\xe2\x80\x90nn\xe2\x80\x90nn")) {
-        char v[5] = {0};
-
-        memcpy(v, input, 4);
-        v[4] = '\0';
-        output->year = atoi(v);
-
-        memcpy(v, input + 7, 2);
-        v[2] = '\0';
-        output->month = atoi(v);
-
-        memcpy(v, input + 12, 2);
-        v[2] = '\0';
-        output->day = atoi(v);
+        output->year = atoi(input);
+        output->month = atoi(input + 7);
+        output->day = atoi(input + 12);
 
         output->hour = 0;
         output->minute = 0;
@@ -100,45 +82,18 @@ int parseDateTime(const char *input, struct DateTime *output) {
         return 1;
     }
 
-    if (checkFormat(input, "nnnn-nnn")) {
-        char v[5] = {0};
+    if (checkFormat(input, "nnnn-nnn")
+        || checkFormat(input, "nnnn\xe2\x80\x90nnn")
+    ) {
+        output->year = atoi(input);
+        int yearday;
 
-        memcpy(v, input, 4);
-        v[4] = '\0';
-        output->year = atoi(v);
-
-        memcpy(v, input + 5, 3);
-        v[3] = '\0';
-        int yearday = atoi(v);
-
-        int i = 0;
-        for (; i < 12; i++) {
-            if (month_index[i] > yearday) {
-                break;
-            }
+        if (input[4] == '-') {
+            yearday = atoi(input + 5);
         }
-
-        output->month = i;
-
-        output->day = yearday - month_index[i - 1];
-
-        output->hour = 0;
-        output->minute = 0;
-        output->second = 0;
-
-        return 1;
-    }
-
-    if (checkFormat(input, "nnnn\xe2\x80\x90nnn")) {
-        char v[5] = {0};
-
-        memcpy(v, input, 4);
-        v[4] = '\0';
-        output->year = atoi(v);
-
-        memcpy(v, input + 7, 3);
-        v[3] = '\0';
-        int yearday = atoi(v);
+        else {
+            yearday = atoi(input + 7);
+        }
 
         int i = 0;
         for (; i < 12; i++) {
@@ -159,19 +114,9 @@ int parseDateTime(const char *input, struct DateTime *output) {
     }
 
     if (checkFormat(input, "-nnnn-nn-nn")) {
-        char v[5] = {0};
-
-        memcpy(v, input + 1, 4);
-        v[4] = '\0';
-        output->year = -atoi(v);
-
-        memcpy(v, input + 6, 2);
-        v[2] = '\0';
-        output->month = atoi(v);
-
-        memcpy(v, input + 9, 2);
-        v[2] = '\0';
-        output->day = atoi(v);
+        output->year = atoi(input);
+        output->month = atoi(input + 6);
+        output->day = atoi(input + 9);
 
         output->hour = 0;
         output->minute = 0;
@@ -181,19 +126,9 @@ int parseDateTime(const char *input, struct DateTime *output) {
     }
 
     if (checkFormat(input, "\xe2\x88\x92nnnn\xe2\x80\x90nn\xe2\x80\x90nn")) {
-        char v[5] = {0};
-
-        memcpy(v, input + 3, 4);
-        v[4] = '\0';
-        output->year = -atoi(v);
-
-        memcpy(v, input + 10, 2);
-        v[2] = '\0';
-        output->month = atoi(v);
-
-        memcpy(v, input + 15, 2);
-        v[2] = '\0';
-        output->day = atoi(v);
+        output->year = -atoi(input + 3);
+        output->month = atoi(input + 10);
+        output->day = atoi(input + 15);
 
         output->hour = 0;
         output->minute = 0;
@@ -205,23 +140,9 @@ int parseDateTime(const char *input, struct DateTime *output) {
     if (checkFormat(input, "+nnnnn-nn-nn")
         || checkFormat(input, "-nnnnn-nn-nn")
     ) {
-        char v[6] = {0};
-
-        memcpy(v, input + 1, 5);
-        v[5] = '\0';
-        output->year = atoi(v);
-
-        if (input[0] == '-') {
-            output->year *= -1;
-        }
-
-        memcpy(v, input + 7, 2);
-        v[2] = '\0';
-        output->month = atoi(v);
-
-        memcpy(v, input + 10, 2);
-        v[2] = '\0';
-        output->day = atoi(v);
+        output->year = atoi(input);
+        output->month = atoi(input + 7);
+        output->day = atoi(input + 10);
 
         output->hour = 0;
         output->minute = 0;
@@ -231,19 +152,9 @@ int parseDateTime(const char *input, struct DateTime *output) {
     }
 
     if (checkFormat(input, "+nnnnn\xe2\x80\x90nn\xe2\x80\x90nn")) {
-        char v[6] = {0};
-
-        memcpy(v, input + 1, 5);
-        v[5] = '\0';
-        output->year = atoi(v);
-
-        memcpy(v, input + 9, 2);
-        v[2] = '\0';
-        output->month = atoi(v);
-
-        memcpy(v, input + 14, 2);
-        v[2] = '\0';
-        output->day = atoi(v);
+        output->year = atoi(input);
+        output->month = atoi(input + 9);
+        output->day = atoi(input + 12);
 
         output->hour = 0;
         output->minute = 0;
@@ -253,19 +164,9 @@ int parseDateTime(const char *input, struct DateTime *output) {
     }
 
     if (checkFormat(input, "\xe2\x88\x92nnnnn\xe2\x80\x90nn\xe2\x80\x90nn")) {
-        char v[6] = {0};
-
-        memcpy(v, input + 3, 5);
-        v[5] = '\0';
-        output->year = -atoi(v);
-
-        memcpy(v, input + 11, 2);
-        v[2] = '\0';
-        output->month = atoi(v);
-
-        memcpy(v, input + 16, 2);
-        v[2] = '\0';
-        output->day = atoi(v);
+        output->year = -atoi(input + 3);
+        output->month = atoi(input + 11);
+        output->day = atoi(input + 16);
 
         output->hour = 0;
         output->minute = 0;
@@ -278,32 +179,26 @@ int parseDateTime(const char *input, struct DateTime *output) {
         checkFormat(input, "nn-aaa-nnnn")
         || checkFormat(input, "nn aaa nnnn")
     ) {
-        char v[5] = {0};
+        output->day = atoi(input);
 
-        memcpy(v, input, 2);
-        v[2] = '\0';
-        output->day = atoi(v);
+        const char *c = input + 3;
 
-        char m = 0;
-        memcpy(v, input + 3, 3);
-        v[3] = '\0';
-             if (strcmp(v, "Jan") == 0 || strcmp(v, "JAN") == 0) m = 1;
-        else if (strcmp(v, "Feb") == 0 || strcmp(v, "FEB") == 0) m = 2;
-        else if (strcmp(v, "Mar") == 0 || strcmp(v, "MAR") == 0) m = 3;
-        else if (strcmp(v, "Apr") == 0 || strcmp(v, "APR") == 0) m = 4;
-        else if (strcmp(v, "May") == 0 || strcmp(v, "MAY") == 0) m = 5;
-        else if (strcmp(v, "Jun") == 0 || strcmp(v, "JUN") == 0) m = 6;
-        else if (strcmp(v, "Jul") == 0 || strcmp(v, "JUL") == 0) m = 7;
-        else if (strcmp(v, "Aug") == 0 || strcmp(v, "AUG") == 0) m = 8;
-        else if (strcmp(v, "Sep") == 0 || strcmp(v, "SEP") == 0) m = 9;
-        else if (strcmp(v, "Oct") == 0 || strcmp(v, "OCT") == 0) m = 10;
-        else if (strcmp(v, "Nov") == 0 || strcmp(v, "NOV") == 0) m = 11;
-        else if (strcmp(v, "Dec") == 0 || strcmp(v, "DEC") == 0) m = 12;
+        int m;
+             if (strncmp(c, "Jan", 3) == 0 || strncmp(c, "JAN", 3) == 0) m = 1;
+        else if (strncmp(c, "Feb", 3) == 0 || strncmp(c, "FEB", 3) == 0) m = 2;
+        else if (strncmp(c, "Mar", 3) == 0 || strncmp(c, "MAR", 3) == 0) m = 3;
+        else if (strncmp(c, "Apr", 3) == 0 || strncmp(c, "APR", 3) == 0) m = 4;
+        else if (strncmp(c, "May", 3) == 0 || strncmp(c, "MAY", 3) == 0) m = 5;
+        else if (strncmp(c, "Jun", 3) == 0 || strncmp(c, "JUN", 3) == 0) m = 6;
+        else if (strncmp(c, "Jul", 3) == 0 || strncmp(c, "JUL", 3) == 0) m = 7;
+        else if (strncmp(c, "Aug", 3) == 0 || strncmp(c, "AUG", 3) == 0) m = 8;
+        else if (strncmp(c, "Sep", 3) == 0 || strncmp(c, "SEP", 3) == 0) m = 9;
+        else if (strncmp(c, "Oct", 3) == 0 || strncmp(c, "OCT", 3) == 0) m = 10;
+        else if (strncmp(c, "Nov", 3) == 0 || strncmp(c, "NOV", 3) == 0) m = 11;
+        else if (strncmp(c, "Dec", 3) == 0 || strncmp(c, "DEC", 3) == 0) m = 12;
         output->month = m;
 
-        memcpy(v, input + 7, 4);
-        v[4] = '\0';
-        output->year = atoi(v);
+        output->year = atoi(input + 7);
 
         output->hour = 0;
         output->minute = 0;
@@ -312,9 +207,52 @@ int parseDateTime(const char *input, struct DateTime *output) {
         return 1;
     }
 
+    if (checkFormat(input, "nnnn-Wnn-n")
+        || checkFormat(input, "nnnn\xe2\x80\x90Wnn\xe2\x80\x90n")
+    ) {
+        int weekyear = atoi(input);
+        int week, weekday;
+
+        if (input[4] == '-') {
+            week = atoi(input + 6);
+            weekday = input[9] - '0';
+        }
+        else {
+            week = atoi(input + 8);
+            weekday = input[13] - '0';
+        }
+
+        output->year = weekyear;
+        output->month = 1;
+        output->day = 1;
+
+        output->hour = 0;
+        output->minute = 0;
+        output->second = 0;
+
+        int julian = datetimeGetJulian(output);
+
+        int weekdayFirst = datetimeGetWeekDay(output);
+
+        int days = (week - 1) * 7 + weekday;
+
+        julian += days - weekdayFirst;
+
+        if (weekdayFirst >= 4) {
+            julian += 7;
+        }
+
+        datetimeFromJulian(output, julian);
+
+        return 1;
+    }
+
     return 0;
 }
 
+/**
+ * `output` must be at least 11 chars long
+ */
 int sprintDate (char *output, struct DateTime *dt) {
     return sprintf(output, "%04d-%02d-%02d", dt->year, dt->month, dt->day);
 }

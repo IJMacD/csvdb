@@ -557,7 +557,7 @@ static void getJulianRange (
         }
 
         #ifdef DEBUG
-        fprintf(stderr, "CALENDAR: julian start: %d end: %d\n", *julian_start, *julian_end);
+        fprintf(stderr, "[CALENDAR] julian start: %d end: %d\n", *julian_start, *julian_end);
         #endif
     }
 }
@@ -596,12 +596,15 @@ static void getSingleJulianRange (
         return;
     }
 
-    // Exact calendar date or ordinal date
+    // Exact calendar date, ordinal date, or week date
     if (
         field_left->index == COL_DATE
 
         // Does not support years outside range 0000 - 9999
         || field_left->index == COL_YEARDAY_STRING
+
+        // Does not support years outside range 0000 - 9999
+        || field_left->index == COL_WEEKDAY_STRING
     ) {
         struct DateTime dt = {0};
         parseDateTime(field_right->text, &dt);
