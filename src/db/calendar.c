@@ -596,8 +596,13 @@ static void getSingleJulianRange (
         return;
     }
 
-    // Exact calendar date
-    if (field_left->index == COL_DATE) {
+    // Exact calendar date or ordinal date
+    if (
+        field_left->index == COL_DATE
+
+        // Does not support years outside range 0000 - 9999
+        || field_left->index == COL_YEARDAY_STRING
+    ) {
         struct DateTime dt = {0};
         parseDateTime(field_right->text, &dt);
         *julian_start = datetimeGetJulian(&dt);
@@ -650,27 +655,6 @@ static void getSingleJulianRange (
         }
 
         return;
-    }
-
-    if (field_left->index == COL_YEARDAY_STRING) {
-        // Does not support years outside range 0000 - 9999
-        if (strlen(field_right->text) == 8) {
-            char year[5];
-            strncpy(year, field_right->text, 4);
-            year[4] = 0;
-
-            struct DateTime dt = {0};
-
-            dt.year = atoi(year);
-            dt.month = 1;
-            dt.day = 1;
-
-            *julian_start = datetimeGetJulian(&dt);
-
-            *julian_start += atoi(field_right->text + 5) - 1;
-
-            *julian_end = *julian_start + 1;
-        }
     }
 
     if (field_left->index == COL_MILLENIUM) {

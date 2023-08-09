@@ -20,6 +20,21 @@ const int month_index[] = {
 };
 
 /**
+ * Parses a single date into a DateTime struct
+ *
+ * Supports the following formats:
+ *  - TODAY()
+ *  - CURRENT_DATE
+ *  - 2023-01-01
+ *  - 2023‐01‐01 (U+2010)
+ *  - +02023-01-01
+ *  - -02023-01-01
+ *  - -2023-01-01
+ *  - 01-JAN-2023
+ *  - 01 JAN 2023
+ *  - 2023-001
+ *  - 2023‐001 (U+2010)
+ *
  * Returns 1 on success; 0 on failure
  */
 int parseDateTime(const char *input, struct DateTime *output) {
@@ -30,28 +45,6 @@ int parseDateTime(const char *input, struct DateTime *output) {
         output->year = local->tm_year + 1900;
         output->month = local->tm_mon + 1;
         output->day = local->tm_mday;
-
-        output->hour = 0;
-        output->minute = 0;
-        output->second = 0;
-
-        return 1;
-    }
-
-    if (checkFormat(input, "+nnnnn-nn-nn")) {
-        char v[6] = {0};
-
-        memcpy(v, input + 1, 5);
-        v[5] = '\0';
-        output->year = atoi(v);
-
-        memcpy(v, input + 7, 2);
-        v[2] = '\0';
-        output->month = atoi(v);
-
-        memcpy(v, input + 10, 2);
-        v[2] = '\0';
-        output->day = atoi(v);
 
         output->hour = 0;
         output->minute = 0;
@@ -94,6 +87,114 @@ int parseDateTime(const char *input, struct DateTime *output) {
         output->month = atoi(v);
 
         memcpy(v, input + 12, 2);
+        v[2] = '\0';
+        output->day = atoi(v);
+
+        output->hour = 0;
+        output->minute = 0;
+        output->second = 0;
+
+        return 1;
+    }
+
+    if (checkFormat(input, "nnnn-nnn")) {
+        char v[5] = {0};
+
+        memcpy(v, input, 4);
+        v[4] = '\0';
+        output->year = atoi(v);
+
+        memcpy(v, input + 5, 3);
+        v[3] = '\0';
+        int yearday = atoi(v);
+
+        int i = 0;
+        for (; i < 12; i++) {
+            if (month_index[i] > yearday) {
+                break;
+            }
+        }
+
+        output->month = i;
+
+        output->day = yearday - month_index[i - 1];
+
+        output->hour = 0;
+        output->minute = 0;
+        output->second = 0;
+
+        return 1;
+    }
+
+    if (checkFormat(input, "nnnn\xe2\x80\x90nnn")) {
+        char v[5] = {0};
+
+        memcpy(v, input, 4);
+        v[4] = '\0';
+        output->year = atoi(v);
+
+        memcpy(v, input + 7, 3);
+        v[3] = '\0';
+        int yearday = atoi(v);
+
+        int i = 0;
+        for (; i < 12; i++) {
+            if (month_index[i] > yearday) {
+                break;
+            }
+        }
+
+        output->month = i;
+
+        output->day = yearday - month_index[i - 1];
+
+        output->hour = 0;
+        output->minute = 0;
+        output->second = 0;
+
+        return 1;
+    }
+
+    if (checkFormat(input, "+nnnnn-nn-nn")
+        || checkFormat(input, "-nnnnn-nn-nn")
+    ) {
+        char v[6] = {0};
+
+        memcpy(v, input + 1, 5);
+        v[5] = '\0';
+        output->year = atoi(v);
+
+        if (input[0] == '-') {
+            output->year *= -1;
+        }
+
+        memcpy(v, input + 7, 2);
+        v[2] = '\0';
+        output->month = atoi(v);
+
+        memcpy(v, input + 10, 2);
+        v[2] = '\0';
+        output->day = atoi(v);
+
+        output->hour = 0;
+        output->minute = 0;
+        output->second = 0;
+
+        return 1;
+    }
+
+    if (checkFormat(input, "-nnnn-nn-nn")) {
+        char v[5] = {0};
+
+        memcpy(v, input + 1, 4);
+        v[4] = '\0';
+        output->year = -atoi(v);
+
+        memcpy(v, input + 6, 2);
+        v[2] = '\0';
+        output->month = atoi(v);
+
+        memcpy(v, input + 9, 2);
         v[2] = '\0';
         output->day = atoi(v);
 
