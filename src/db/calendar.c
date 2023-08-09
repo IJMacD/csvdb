@@ -484,6 +484,7 @@ int calendar_fullTableAccess (
         if (matching) {
             // Add to result set
             appendRowID(row_list, julian);
+            count++;
         }
 
         // Implement early exit FETCH FIRST/LIMIT for cases with no ORDER clause
@@ -532,21 +533,29 @@ static void getJulianRange (
             }
 
             // Dates after a specific Julian
-            else if (op & OPERATOR_GT) {
-                *julian_start = atoi(field_right->text);
+            else if (op & OPERATOR_GT & ~OPERATOR_NEVER) {
+                int j = atoi(field_right->text);
 
-                if (!(op & OPERATOR_EQ)) {
-                    (*julian_start)++;
+                if (*julian_start == -1 || j > *julian_start) {
+                    *julian_start = j;
+
+                    if (!(op & OPERATOR_EQ)) {
+                        (*julian_start)++;
+                    }
                 }
             }
 
             // Dates before a specific Julian
             else if (op & OPERATOR_LT) {
-                *julian_end = atoi(field_right->text);
+                int j = atoi(field_right->text);
 
-                // End is exclusive
-                if (op & OPERATOR_EQ) {
-                    (*julian_end)++;
+                if (*julian_end == -1 || j < *julian_end) {
+                    *julian_end = j;
+
+                    // End is exclusive
+                    if (op & OPERATOR_EQ) {
+                        (*julian_end)++;
+                    }
                 }
             }
         }
@@ -562,25 +571,33 @@ static void getJulianRange (
             }
 
             // Dates after a specific date
-            else if (op & OPERATOR_GT) {
+            else if (op & OPERATOR_GT & ~OPERATOR_NEVER) {
                 struct DateTime dt = {0};
                 parseDateTime(field_right->text, &dt);
-                *julian_start = datetimeGetJulian(&dt);
+                int j = datetimeGetJulian(&dt);
 
-                if (!(op & OPERATOR_EQ)) {
-                    (*julian_start)++;
+                if (*julian_start == -1 || j > *julian_start) {
+                    *julian_start = j;
+
+                    if (!(op & OPERATOR_EQ)) {
+                        (*julian_start)++;
+                    }
                 }
             }
 
             // Dates before a specific date
-            if (op & OPERATOR_LT) {
+            else if (op & OPERATOR_LT) {
                 struct DateTime dt = {0};
                 parseDateTime(field_right->text, &dt);
-                *julian_end = datetimeGetJulian(&dt);
+                int j = datetimeGetJulian(&dt);
 
-                // End is exclusive
-                if (op & OPERATOR_EQ) {
-                    (*julian_end)++;
+                if (*julian_end == -1 || j < *julian_end) {
+                    *julian_end = j;
+
+                    // End is exclusive
+                    if (op & OPERATOR_EQ) {
+                        (*julian_end)++;
+                    }
                 }
             }
         }
@@ -648,8 +665,11 @@ static void getJulianRange (
                 *julian_start = datetimeGetJulian(&dt);
             }
         }
-    }
 
+        #ifdef DEBUG
+        fprintf(stderr, "CALENDAR: julian start: %d end: %d\n", *julian_start, *julian_end);
+        #endif
+    }
 }
 
 static int printDate (char *value, int max_length, struct DateTime date) {
