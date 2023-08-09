@@ -77,6 +77,12 @@ static void getJulianRange (
     int *julian_end
 );
 
+static void getSingleJulianRange (
+    struct Node *predicate,
+    int *julian_start,
+    int *julian_end
+);
+
 static int printDate (
     char *value,
     int max_length,
@@ -505,170 +511,116 @@ static void getJulianRange (
 
     for (int i = 0; i < predicate_count; i++) {
         struct Node *predicate = &predicates[i];
-        struct Field *field_left = (struct Field *)&predicate->children[0];
-        struct Field *field_right = (struct Field *)&predicate->children[1];
 
-        // Prep: We need field on the left and constant on the right, swap if
-        // necessary
-        normalisePredicate(predicate);
+        int j_start = -1;
+        int j_end = -1;
+
+        getSingleJulianRange(predicate, &j_start, &j_end);
 
         enum Function op = predicate->function;
 
-        // Prep: We're only looking for constants
-        if (field_right->index != FIELD_CONSTANT) {
-            continue;
-        }
+        if (j_start != -1 && j_end != -1) {
 
-        // Prep: This should already have been taken care of
-        if (strcmp(field_left->text, "julian") == 0) {
-            field_left->index = FIELD_ROW_INDEX;
-        }
-
-        // Check what kind of predicate we have
-        if (field_left->index == FIELD_ROW_INDEX) {
-            // An exact Julian
             if (op == OPERATOR_EQ) {
-                *julian_start = atoi(field_right->text);
-                *julian_end = *julian_start + 1;
-            }
+                if (*julian_start == -1 || j_start > *julian_start) {
+                    *julian_start = j_start;
+                }
 
-            // Dates after a specific Julian
-            else if (op & OPERATOR_GT & ~OPERATOR_NEVER) {
-                int j = atoi(field_right->text);
-
-                if (*julian_start == -1 || j > *julian_start) {
-                    *julian_start = j;
-
-                    if (!(op & OPERATOR_EQ)) {
-                        (*julian_start)++;
-                    }
+                if (*julian_end == -1 || j_end < *julian_end) {
+                    *julian_end = j_end;
                 }
             }
 
-            // Dates before a specific Julian
-            else if (op & OPERATOR_LT) {
-                int j = atoi(field_right->text);
-
-                if (*julian_end == -1 || j < *julian_end) {
-                    *julian_end = j;
-
-                    // End is exclusive
-                    if (op & OPERATOR_EQ) {
-                        (*julian_end)++;
-                    }
-                }
-            }
-        }
-
-        else if (field_left->index == COL_DATE) {
-
-            // An exact date
-            if (op == OPERATOR_EQ) {
-                struct DateTime dt = {0};
-                parseDateTime(field_right->text, &dt);
-                *julian_start = datetimeGetJulian(&dt);
-                *julian_end = *julian_start + 1;
-            }
-
-            // Dates after a specific date
-            else if (op & OPERATOR_GT & ~OPERATOR_NEVER) {
-                struct DateTime dt = {0};
-                parseDateTime(field_right->text, &dt);
-                int j = datetimeGetJulian(&dt);
-
-                if (*julian_start == -1 || j > *julian_start) {
-                    *julian_start = j;
-
-                    if (!(op & OPERATOR_EQ)) {
-                        (*julian_start)++;
-                    }
-                }
-            }
-
-            // Dates before a specific date
-            else if (op & OPERATOR_LT) {
-                struct DateTime dt = {0};
-                parseDateTime(field_right->text, &dt);
-                int j = datetimeGetJulian(&dt);
-
-                if (*julian_end == -1 || j < *julian_end) {
-                    *julian_end = j;
-
-                    // End is exclusive
-                    if (op & OPERATOR_EQ) {
-                        (*julian_end)++;
-                    }
-                }
-            }
-        }
-        else if (field_left->index == COL_YEAR) {
-
-            // All dates in the given year
-            if (op == OPERATOR_EQ) {
-                struct DateTime dt = {0};
-
-                dt.year = atoi(field_right->text);
-                dt.month = 1;
-                dt.day = 1;
-
-                *julian_start = datetimeGetJulian(&dt);
-
-                // End is exclusive
-                dt.year++;
-
-                *julian_end = datetimeGetJulian(&dt);
-            }
-
-            // All dates up to (but not including) the given year
-            else if (op == OPERATOR_LT) {
-                struct DateTime dt = {0};
-
-                // End is exclusive
-                dt.year = atoi(field_right->text);
-                dt.month = 1;
-                dt.day = 1;
-
-                *julian_end = datetimeGetJulian(&dt);
-            }
-
-            // All dates up to and including the given year
-            else if (op == OPERATOR_LE) {
-                struct DateTime dt = {0};
-
-                // End is exclusive
-                dt.year = atoi(field_right->text) + 1;
-                dt.month = 1;
-                dt.day = 1;
-
-                *julian_end = datetimeGetJulian(&dt);
-            }
-
-            // All dates starting from the beginning of next year
             else if (op == OPERATOR_GT) {
-                struct DateTime dt = {0};
-
-                dt.year = atoi(field_right->text) + 1;
-                dt.month = 1;
-                dt.day = 1;
-
-                *julian_start = datetimeGetJulian(&dt);
+                if (*julian_start == -1 || j_end > *julian_start) {
+                    *julian_start = j_end;
+                }
             }
 
-            // All dates starting from the beginning of the given year
             else if (op == OPERATOR_GE) {
-                struct DateTime dt = {0};
+                if (*julian_start == -1 || j_start > *julian_start) {
+                    *julian_start = j_start;
+                }
+            }
 
-                dt.year = atoi(field_right->text);
-                dt.month = 1;
-                dt.day = 1;
+            else if (op == OPERATOR_LT) {
+                if (*julian_end == -1 || j_start < *julian_end) {
+                    *julian_end = j_start;
+                }
+            }
 
-                *julian_start = datetimeGetJulian(&dt);
+            else if (op == OPERATOR_LE) {
+                if (*julian_end == -1 || j_end < *julian_end) {
+                    *julian_end = j_end;
+                }
             }
         }
 
         #ifdef DEBUG
         fprintf(stderr, "CALENDAR: julian start: %d end: %d\n", *julian_start, *julian_end);
         #endif
+    }
+}
+
+static void getSingleJulianRange (
+    struct Node *predicate,
+    int *julian_start,
+    int *julian_end
+) {
+
+    struct Field *field_left = (struct Field *)&predicate->children[0];
+    struct Field *field_right = (struct Field *)&predicate->children[1];
+
+    // Prep: We need field on the left and constant on the right, swap if
+    // necessary
+    normalisePredicate(predicate);
+
+    // Prep: We're only looking for constants
+    if (field_right->index != FIELD_CONSTANT) {
+        return;
+    }
+
+    // Prep: This should already have been taken care of
+    if (strcmp(field_left->text, "julian") == 0) {
+        field_left->index = FIELD_ROW_INDEX;
+    }
+
+    /**************************************
+     * Check what kind of predicate we have
+     **************************************/
+
+    // Single Julian value
+    if (field_left->index == FIELD_ROW_INDEX) {
+        *julian_start = atoi(field_right->text);
+        *julian_end = *julian_start + 1;
+        return;
+    }
+
+    // Exact calendar date
+    if (field_left->index == COL_DATE) {
+        struct DateTime dt = {0};
+        parseDateTime(field_right->text, &dt);
+        *julian_start = datetimeGetJulian(&dt);
+        *julian_end = *julian_start + 1;
+        return;
+    }
+
+    // Single year
+    if (field_left->index == COL_YEAR) {
+        struct DateTime dt = {0};
+
+        dt.year = atoi(field_right->text);
+        dt.month = 1;
+        dt.day = 1;
+
+        *julian_start = datetimeGetJulian(&dt);
+
+        // End is exclusive
+        dt.year++;
+
+        *julian_end = datetimeGetJulian(&dt);
+
+        return;
     }
 }
 
