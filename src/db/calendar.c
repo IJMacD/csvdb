@@ -63,9 +63,9 @@ static char *field_names[] = {
     "weekdayInMonth",
     "isWeekend",
     "monthString",
-    "yeardayString",
+    "ordinalDate",
     "weekString",
-    "weekdayString"
+    "weekDate"
 };
 
 const int month_lengths[] = {31,28,31,30,31,30,31,31,30,31,30,31};
