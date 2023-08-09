@@ -82,6 +82,28 @@ int parseDateTime(const char *input, struct DateTime *output) {
         return 1;
     }
 
+    if (checkFormat(input, "nnnn\xe2\x80\x90nn\xe2\x80\x90nn")) {
+        char v[5] = {0};
+
+        memcpy(v, input, 4);
+        v[4] = '\0';
+        output->year = atoi(v);
+
+        memcpy(v, input + 7, 2);
+        v[2] = '\0';
+        output->month = atoi(v);
+
+        memcpy(v, input + 12, 2);
+        v[2] = '\0';
+        output->day = atoi(v);
+
+        output->hour = 0;
+        output->minute = 0;
+        output->second = 0;
+
+        return 1;
+    }
+
     if (
         checkFormat(input, "nn-aaa-nnnn")
         || checkFormat(input, "nn aaa nnnn")
