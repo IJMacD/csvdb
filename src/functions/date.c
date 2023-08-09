@@ -27,6 +27,7 @@ const int month_index[] = {
  *  - CURRENT_DATE
  *  - 2023-01-01
  *  - 2023‐01‐01 (U+2010)
+ *  - 20230101
  *  - -2023-01-01
  *  - −2023‐01‐01 (U+2212, U+2010)
  *  - +02023-01-01
@@ -37,8 +38,10 @@ const int month_index[] = {
  *  - 01 JAN 2023
  *  - 2023-001
  *  - 2023‐001 (U+2010)
+ *  - 2023001
  *  - 2023-W08-6
  *  - 2023‐W08‐6 (U+2010)
+ *  - 2023W086
  *
  * Returns 1 on success; 0 on failure
  */
@@ -82,17 +85,37 @@ int parseDateTime(const char *input, struct DateTime *output) {
         return 1;
     }
 
+    if (checkFormat(input, "nnnnnnnn")) {
+        int val = atoi(input);
+        output->year = val / 10000;
+        output->month = (val / 100) % 100;
+        output->day = val % 100;
+
+        output->hour = 0;
+        output->minute = 0;
+        output->second = 0;
+
+        return 1;
+    }
+
     if (checkFormat(input, "nnnn-nnn")
         || checkFormat(input, "nnnn\xe2\x80\x90nnn")
+        || checkFormat(input, "nnnnnnn")
     ) {
-        output->year = atoi(input);
+        int val = atoi(input);
         int yearday;
 
         if (input[4] == '-') {
+            output->year = val;
             yearday = atoi(input + 5);
         }
-        else {
+        else if (input[4] == '\xe2') {
+            output->year = val;
             yearday = atoi(input + 7);
+        }
+        else {
+            yearday = val % 1000;
+            output->year = val / 1000;
         }
 
         int i = 0;
@@ -209,6 +232,7 @@ int parseDateTime(const char *input, struct DateTime *output) {
 
     if (checkFormat(input, "nnnn-Wnn-n")
         || checkFormat(input, "nnnn\xe2\x80\x90Wnn\xe2\x80\x90n")
+        || checkFormat(input, "nnnnWnnn")
     ) {
         int weekyear = atoi(input);
         int week, weekday;
@@ -217,9 +241,14 @@ int parseDateTime(const char *input, struct DateTime *output) {
             week = atoi(input + 6);
             weekday = input[9] - '0';
         }
-        else {
+        else if (input[4] == '\xe2') {
             week = atoi(input + 8);
             weekday = input[13] - '0';
+        }
+        else {
+            int val = atoi(input + 5);
+            week = val / 10;
+            weekday = val % 10;
         }
 
         output->year = weekyear;
