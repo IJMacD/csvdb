@@ -27,9 +27,12 @@ const int month_index[] = {
  *  - CURRENT_DATE
  *  - 2023-01-01
  *  - 2023‐01‐01 (U+2010)
- *  - +02023-01-01
- *  - -02023-01-01
  *  - -2023-01-01
+ *  - −2023‐01‐01 (U+2212, U+2010)
+ *  - +02023-01-01
+ *  - +02023‐01‐01 (U+2010)
+ *  - -02023-01-01
+ *  - −02023‐01‐01 (U+2212, U+2010)
  *  - 01-JAN-2023
  *  - 01 JAN 2023
  *  - 2023-001
@@ -155,6 +158,50 @@ int parseDateTime(const char *input, struct DateTime *output) {
         return 1;
     }
 
+    if (checkFormat(input, "-nnnn-nn-nn")) {
+        char v[5] = {0};
+
+        memcpy(v, input + 1, 4);
+        v[4] = '\0';
+        output->year = -atoi(v);
+
+        memcpy(v, input + 6, 2);
+        v[2] = '\0';
+        output->month = atoi(v);
+
+        memcpy(v, input + 9, 2);
+        v[2] = '\0';
+        output->day = atoi(v);
+
+        output->hour = 0;
+        output->minute = 0;
+        output->second = 0;
+
+        return 1;
+    }
+
+    if (checkFormat(input, "\xe2\x88\x92nnnn\xe2\x80\x90nn\xe2\x80\x90nn")) {
+        char v[5] = {0};
+
+        memcpy(v, input + 3, 4);
+        v[4] = '\0';
+        output->year = -atoi(v);
+
+        memcpy(v, input + 10, 2);
+        v[2] = '\0';
+        output->month = atoi(v);
+
+        memcpy(v, input + 15, 2);
+        v[2] = '\0';
+        output->day = atoi(v);
+
+        output->hour = 0;
+        output->minute = 0;
+        output->second = 0;
+
+        return 1;
+    }
+
     if (checkFormat(input, "+nnnnn-nn-nn")
         || checkFormat(input, "-nnnnn-nn-nn")
     ) {
@@ -183,18 +230,40 @@ int parseDateTime(const char *input, struct DateTime *output) {
         return 1;
     }
 
-    if (checkFormat(input, "-nnnn-nn-nn")) {
-        char v[5] = {0};
+    if (checkFormat(input, "+nnnnn\xe2\x80\x90nn\xe2\x80\x90nn")) {
+        char v[6] = {0};
 
-        memcpy(v, input + 1, 4);
-        v[4] = '\0';
-        output->year = -atoi(v);
+        memcpy(v, input + 1, 5);
+        v[5] = '\0';
+        output->year = atoi(v);
 
-        memcpy(v, input + 6, 2);
+        memcpy(v, input + 9, 2);
         v[2] = '\0';
         output->month = atoi(v);
 
-        memcpy(v, input + 9, 2);
+        memcpy(v, input + 14, 2);
+        v[2] = '\0';
+        output->day = atoi(v);
+
+        output->hour = 0;
+        output->minute = 0;
+        output->second = 0;
+
+        return 1;
+    }
+
+    if (checkFormat(input, "\xe2\x88\x92nnnnn\xe2\x80\x90nn\xe2\x80\x90nn")) {
+        char v[6] = {0};
+
+        memcpy(v, input + 3, 5);
+        v[5] = '\0';
+        output->year = -atoi(v);
+
+        memcpy(v, input + 11, 2);
+        v[2] = '\0';
+        output->month = atoi(v);
+
+        memcpy(v, input + 16, 2);
         v[2] = '\0';
         output->day = atoi(v);
 
