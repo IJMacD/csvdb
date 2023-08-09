@@ -130,7 +130,7 @@ int sprintDate (char *output, struct DateTime *dt) {
 /**
  * Verifies input matches format.
  * 'n' matches a digit
- * 'a' matches a character
+ * 'a' matches a letter
  * Other characters match exactly
  * Returns 0 if the input does not match the format
  * Returns 1 if the input does match the format

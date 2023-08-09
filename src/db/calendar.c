@@ -622,6 +622,98 @@ static void getSingleJulianRange (
 
         return;
     }
+
+    // Month string
+    if (field_left->index == COL_MONTH_STRING) {
+        // Does not support years outside range 0000 - 9999
+        if (strlen(field_right->text) == 7) {
+            char year[5];
+            strncpy(year, field_right->text, 4);
+            year[4] = 0;
+
+            struct DateTime dt = {0};
+
+            dt.year = atoi(year);
+            dt.month = atoi(field_right->text + 5);
+            dt.day = 1;
+
+            *julian_start = datetimeGetJulian(&dt);
+
+            dt.month++;
+
+            if (dt.month > 12) {
+                dt.year++;
+                dt.month = 1;
+            }
+
+            *julian_end = datetimeGetJulian(&dt);
+        }
+
+        return;
+    }
+
+    if (field_left->index == COL_YEARDAY_STRING) {
+        // Does not support years outside range 0000 - 9999
+        if (strlen(field_right->text) == 8) {
+            char year[5];
+            strncpy(year, field_right->text, 4);
+            year[4] = 0;
+
+            struct DateTime dt = {0};
+
+            dt.year = atoi(year);
+            dt.month = 1;
+            dt.day = 1;
+
+            *julian_start = datetimeGetJulian(&dt);
+
+            *julian_start += atoi(field_right->text + 5) - 1;
+
+            *julian_end = *julian_start + 1;
+        }
+    }
+
+    if (field_left->index == COL_MILLENIUM) {
+        struct DateTime dt = {0};
+
+        dt.year = atoi(field_right->text) * 1000;
+        dt.month = 1;
+        dt.day = 1;
+
+        *julian_start = datetimeGetJulian(&dt);
+
+        dt.year += 1000;
+
+        *julian_end = datetimeGetJulian(&dt);
+    }
+
+    if (field_left->index == COL_CENTURY) {
+        struct DateTime dt = {0};
+
+        dt.year = atoi(field_right->text) * 100;
+        dt.month = 1;
+        dt.day = 1;
+
+        *julian_start = datetimeGetJulian(&dt);
+
+        dt.year += 100;
+
+        *julian_end = datetimeGetJulian(&dt);
+    }
+
+    if (field_left->index == COL_DECADE) {
+        struct DateTime dt = {0};
+
+        dt.year = atoi(field_right->text) * 10;
+        dt.month = 1;
+        dt.day = 1;
+
+        *julian_start = datetimeGetJulian(&dt);
+
+        dt.year += 10;
+
+        *julian_end = datetimeGetJulian(&dt);
+    }
 }
 
 static int printDate (char *value, int max_length, struct DateTime date) {
