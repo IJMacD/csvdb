@@ -635,13 +635,9 @@ static void getSingleJulianRange (
     if (field_left->index == COL_MONTH_STRING) {
         // Does not support years outside range 0000 - 9999
         if (strlen(field_right->text) == 7) {
-            char year[5];
-            strncpy(year, field_right->text, 4);
-            year[4] = 0;
-
             struct DateTime dt = {0};
 
-            dt.year = atoi(year);
+            dt.year = atoi(field_right->text);
             dt.month = atoi(field_right->text + 5);
             dt.day = 1;
 
@@ -655,6 +651,23 @@ static void getSingleJulianRange (
             }
 
             *julian_end = datetimeGetJulian(&dt);
+        }
+
+        return;
+    }
+
+    // Week string
+    if (field_left->index == COL_WEEK_STRING) {
+        // Does not support years outside range 0000 - 9999
+        if (strlen(field_right->text) == 8) {
+            char buffer[12] = {0};
+            sprintf(buffer, "%s-1", field_right->text);
+
+            struct DateTime dt;
+            parseDateTime(buffer, &dt);
+
+            *julian_start = datetimeGetJulian(&dt);
+            *julian_end = *julian_start + 7;
         }
 
         return;

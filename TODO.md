@@ -2,5 +2,5 @@
 - [x] Investigate julian predicate ranges
 - [ ] Avoid double processing julian predicates?
 - [x] Add more julian predicate ranges
-- [ ] Add week based julian predicate ranges
+- [x] Add week based julian predicate ranges
 - [ ] Expression tree support in ON clause
