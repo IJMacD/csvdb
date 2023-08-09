@@ -42,7 +42,6 @@ CGIDIR = release
 CGIEXE = $(CGIDIR)/$(EXE).cgi
 CGISRCS = $(filter-out main.c, $(SRCS)) main-cgi.c
 CGIOBJS = $(addprefix $(CGIDIR)/, $(CGISRCS:.c=.o))
-CGICFLAGS = -O3 -DNDEBUG -DJSON_NULL
 
 #
 # CGI Debug build settings
@@ -51,7 +50,6 @@ CGIDDIR = debug
 CGIDEXE = $(CGIDDIR)/$(EXE).cgi
 CGIDSRCS = $(filter-out main.c, $(SRCS)) debug.c main-cgi.c
 CGIDOBJS = $(addprefix $(CGIDDIR)/, $(CGIDSRCS:.c=.o))
-CGIDCFLAGS = -g -O0 -DDEBUG -DJSON_NULL
 
 #
 # GEN build settings
@@ -70,18 +68,19 @@ all: prep release
 #
 # Debug rules
 #
-debug: $(DBGEXE)
+debug: prep $(DBGEXE)
 
 $(DBGEXE): $(DBGOBJS)
 	$(CC) $(CFLAGS) $(DBGCFLAGS) -o $(DBGEXE) $^
 
+# Warning: overlaps with $(CGIDDIR)/%.o: $(SRCDIR)/%.c
 $(DBGDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) -c $(CFLAGS) $(DBGCFLAGS) -o $@ $<
 
 #
 # Release rules
 #
-release: $(RELEXE)
+release: prep $(RELEXE)
 
 $(RELEXE): $(RELOBJS)
 	$(CC) $(CFLAGS) $(RELCFLAGS) -o $(RELEXE) $^
@@ -95,10 +94,10 @@ $(RELDIR)/%.o: $(SRCDIR)/%.c
 cgi: prep $(CGIEXE)
 
 $(CGIEXE): $(CGIOBJS)
-	$(CC) $(CFLAGS) $(CGICFLAGS) -o $(CGIEXE) $^
+	$(CC) $(CFLAGS) -o $(CGIEXE) $^
 
 $(CGIDIR)/%.o: $(SRCDIR)/%.c
-	$(CC) -c $(CFLAGS) $(CGICFLAGS) -o $@ $<
+	$(CC) -c $(CFLAGS) -o $@ $<
 
 #
 # CGI DEBUG rules
@@ -106,10 +105,11 @@ $(CGIDIR)/%.o: $(SRCDIR)/%.c
 cgi-debug: prep $(CGIDEXE)
 
 $(CGIDEXE): $(CGIDOBJS)
-	$(CC) $(CFLAGS) $(CGIDCFLAGS) -o $(CGIDEXE) $^
+	$(CC) $(CFLAGS) $(DBGCFLAGS) -o $(CGIDEXE) $^
 
+# Warnging: overlaps with $(DBGDIR)/%.o: $(SRCDIR)/%.c
 $(CGIDDIR)/%.o: $(SRCDIR)/%.c
-	$(CC) -c $(CFLAGS) $(CGIDCFLAGS) -o $@ $<
+	$(CC) -c $(CFLAGS) $(DBGCFLAGS) -o $@ $<
 
 #
 # Test rules
@@ -130,7 +130,7 @@ prep:
 	@mkdir -p $(DBGDIR) $(addprefix $(DBGDIR)/, $(SUBDIRS)) $(RELDIR) $(addprefix $(RELDIR)/, $(SUBDIRS))
 
 $(SRCDIR)/gitversion.c: .git/HEAD .git/index
-	echo "const char *gitversion = \"$(shell git rev-parse HEAD)$(shell git diff-index --quiet HEAD || echo "-dirty") ($(shell git show -s --format=%cd --date=iso-strict))\";" > $@
+	echo "const char *gitversion = \"$(shell git rev-parse HEAD)$(shell git diff-index --quiet HEAD && git show -s --format=' %cd' --date=iso-strict || (echo "-dirty" && date -Iseconds))\";" > $@
 
 remake: clean all
 
