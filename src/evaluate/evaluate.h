@@ -9,6 +9,11 @@ int evaluateNode (
     int max_length
 );
 
+int evaluateConstantNode (
+    struct Node *node,
+    char *output
+);
+
 int evaluateNodeList (
     struct Table *tables,
     struct RowList *rowlist,
@@ -19,6 +24,6 @@ int evaluateNodeList (
     int max_length
 );
 
-int evaluateConstantField (char * value, struct Field *field);
+int evaluateConstantField (char * output, struct Field *field);
 
 int isConstantNode (struct Node *node);

@@ -114,6 +114,54 @@ int evaluateNode (
     return result;
 }
 
+// Evaluates functions on nodes with purely constant children
+int evaluateConstantNode (
+    struct Node *node,
+    char *output
+) {
+    int n = node->child_count;
+    if (n == 0) {
+        n = 1;
+    }
+
+    char *values = malloc(n * MAX_VALUE_LENGTH);
+    char **values_ptrs = malloc(n * sizeof(values));
+    for (int i = 0; i < n; i++) {
+        values_ptrs[i] = values + MAX_FIELD_LENGTH * i;
+    }
+
+    if (values == NULL) {
+        fprintf(
+            stderr,
+            "Unable to allocate %d bytes for %d child node values\n",
+            n * MAX_VALUE_LENGTH,
+            n
+        );
+        exit(-1);
+    }
+
+    for (int i = 0; i < node->child_count; i++) {
+        evaluateConstantField(
+            values_ptrs[i],
+            &node->children[i].field
+        );
+        // fprintf(stderr, "[EVALUATE] operand = '%s'\n", values_ptrs[i]);
+    }
+
+    int result = evaluateFunction(
+        output,
+        node->function,
+        values_ptrs,
+        node->child_count
+    );
+    // fprintf(stderr, "[EVALUATE] return value = '%s'\n", output);
+
+    free(values);
+    free(values_ptrs);
+
+    return result;
+}
+
 /**
  * @brief Evaluate a set of nodes into a single sortable string using \x1f to
  * separate fields.
@@ -219,11 +267,11 @@ static int evaluateField (
 /**
  * @brief
  *
- * @param value
+ * @param output
  * @param field
  * @return int Number of chars written
  */
-int evaluateConstantField (char * value, struct Field *field) {
+int evaluateConstantField (char * output, struct Field *field) {
 
     if (field->index != FIELD_CONSTANT) {
         fprintf(
@@ -239,7 +287,7 @@ int evaluateConstantField (char * value, struct Field *field) {
         && field->text[1] == 'x'
     ) {
         long val = strtol(field->text, NULL, 16);
-        return sprintf(value, "%ld", val);
+        return sprintf(output, "%ld", val);
     }
 
     if (strcmp(field->text, "CURRENT_DATE") == 0
@@ -247,16 +295,16 @@ int evaluateConstantField (char * value, struct Field *field) {
     {
         struct DateTime dt;
         parseDateTime("CURRENT_DATE", &dt);
-        return sprintf(value, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
+        return sprintf(output, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
     }
 
     // Alpine doesn't like sprintf'ing a buffer into itself
-    if (value == field->text) {
+    if (output == field->text) {
         // fprintf(stderr, "[DEBUG] src = dest\n");
-        return strlen(value);
+        return strlen(output);
     }
 
-    return sprintf(value, "%s", field->text);
+    return sprintf(output, "%s", field->text);
 }
 
 int isConstantNode (struct Node *node) {

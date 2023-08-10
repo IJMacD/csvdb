@@ -14,6 +14,7 @@
 #include "parse.h"
 #include "explain.h"
 #include "plan.h"
+#include "optimise.h"
 #include "../db/db.h"
 #include "../db/csv-mem.h"
 #include "../functions/util.h"
@@ -362,11 +363,16 @@ int process_query (
             fprintf(stderr, "Unable to resolve WHERE node (%d left)\n", i);
             return result;
         }
+
+        optimiseCollapseConstantNode(&q->predicate_nodes[i].children[0]);
+
         result = resolveNode(q, &q->predicate_nodes[i].children[1], 1);
         if (result < 0) {
             fprintf(stderr, "Unable to resolve WHERE node (%i right)\n", i);
             return result;
         }
+
+        optimiseCollapseConstantNode(&q->predicate_nodes[i].children[1]);
     }
 
     // Populate ORDER BY columns
