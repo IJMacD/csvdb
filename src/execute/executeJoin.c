@@ -338,13 +338,13 @@ int executeUniqueJoin (
     struct Node * outer;
     struct Node * inner;
 
-    if (p->children[0].field.table_id == table_id) {
-        outer = &p->children[1];
-        inner = &p->children[0];
-    } else {
+    if (p->children[0].field.table_id != table_id) {
         fprintf(stderr, "UNIQUE JOIN table must be on left\n");
         return -1;
     }
+
+    outer = &p->children[1];
+    inner = &p->children[0];
 
     if (outer->field.table_id >= table_id) {
         fprintf(stderr, "Unable to perform UNIQUE JOIN\n");

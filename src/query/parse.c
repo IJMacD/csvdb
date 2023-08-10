@@ -1242,12 +1242,10 @@ static int checkSimpleOperators(
         if (node->function == FUNC_UNITY) {
             node->function = function;
         }
-
-        if (node->function != function) {
+        else if (node->function != function) {
             fprintf(stderr, "Complex expressions are not supported.\n");
             return -1;
         }
-
 
         (*index)++;
 
@@ -1283,6 +1281,11 @@ static struct Table *findTable (
     return NULL;
 }
 
+/**
+ * mallocs a new node and adds it as a child of the provided node.
+ * Also returns the new child for convenience.
+ * If there aren't any children yet then the node is turned into a new parent.
+ */
 static struct Node *addChildNode (struct Node *node) {
     struct Node *child_node;
 
@@ -1297,6 +1300,9 @@ static struct Node *addChildNode (struct Node *node) {
 
         // Clear current field
         node->field.text[0] = '\0';
+
+        // Clear field index
+        node->field.index = FIELD_UNKNOWN;
 
         // Return second child
         child_node = &node->children[1];
