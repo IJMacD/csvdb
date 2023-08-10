@@ -27,7 +27,6 @@ const int month_index[] = {
  *  - CURRENT_DATE
  *  - 2023-01-01
  *  - 2023‐01‐01 (U+2010)
- *  - 20230101
  *  - -2023-01-01
  *  - −2023‐01‐01 (U+2212, U+2010)
  *  - +02023-01-01
@@ -38,7 +37,6 @@ const int month_index[] = {
  *  - 01 JAN 2023
  *  - 2023-001
  *  - 2023‐001 (U+2010)
- *  - 2023001
  *  - 2023-W08-6
  *  - 2023‐W08‐6 (U+2010)
  *  - 2023W086
@@ -85,22 +83,25 @@ int parseDateTime(const char *input, struct DateTime *output) {
         return 1;
     }
 
-    if (checkFormat(input, "nnnnnnnn")) {
-        int val = atoi(input);
-        output->year = val / 10000;
-        output->month = (val / 100) % 100;
-        output->day = val % 100;
+    // We should only parse formats that are clearly and explicity dates.
+    // e.g. FUNC_ADD always tests if its operands are dates.
+    // This breaks when trying to add 7 or 8 digit numbers
+    // if (checkFormat(input, "nnnnnnnn")) {
+    //     int val = atoi(input);
+    //     output->year = val / 10000;
+    //     output->month = (val / 100) % 100;
+    //     output->day = val % 100;
 
-        output->hour = 0;
-        output->minute = 0;
-        output->second = 0;
+    //     output->hour = 0;
+    //     output->minute = 0;
+    //     output->second = 0;
 
-        return 1;
-    }
+    //     return 1;
+    // }
 
     if (checkFormat(input, "nnnn-nnn")
         || checkFormat(input, "nnnn\xe2\x80\x90nnn")
-        || checkFormat(input, "nnnnnnn")
+        // || checkFormat(input, "nnnnnnn")
     ) {
         int val = atoi(input);
         int yearday;

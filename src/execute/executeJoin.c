@@ -6,6 +6,7 @@
 #include "../db/db.h"
 #include "../evaluate/evaluate.h"
 #include "../db/indices.h"
+#include "../debug.h"
 
 /**
  * @brief Every row of left table is unconditionally joined to every
@@ -373,6 +374,8 @@ int executeUniqueJoin (
     for (int i = 0; i < getRowList(row_list)->row_count; i++) {
         char value[MAX_VALUE_LENGTH];
         int output_status;
+
+        // debugNode(outer);
 
         // Fill in value as constant from outer tables
         evaluateNode(

@@ -97,6 +97,7 @@ int evaluateNode (
             values_ptrs[i],
             MAX_VALUE_LENGTH
         );
+        // fprintf(stderr, "[EVALUATE] operand = '%s'\n", values_ptrs[i]);
     }
 
     int result = evaluateFunction(
@@ -105,6 +106,7 @@ int evaluateNode (
         values_ptrs,
         node->child_count
     );
+    // fprintf(stderr, "[EVALUATE] return value = '%s'\n", output);
 
     free(values);
     free(values_ptrs);
