@@ -288,25 +288,27 @@ int executeSourceTableScan (
         int left_val = atoi(step->nodes[0].children[1].field.text);
         enum Function function = step->nodes[0].function;
 
+        int op_limit = -1;
+
         if (function == OPERATOR_EQ) {
             start_rowid = left_val;
-            limit = 1;
+            op_limit = 1;
         }
         else if (function == OPERATOR_LT) {
             start_rowid = 0;
-            limit = limit > -1 ? MIN(limit, left_val) : left_val;
+            op_limit = left_val;
         }
         else if (function == OPERATOR_LE) {
             start_rowid = 0;
-            limit = limit > -1 ? MIN(limit, left_val + 1) : (left_val + 1);
+            op_limit = left_val + 1;
         }
         else if (function == OPERATOR_GT) {
             start_rowid = left_val + 1;
-            limit = -1;
+            op_limit = -1;
         }
         else if (function == OPERATOR_GE) {
             start_rowid = left_val;
-            limit = -1;
+            op_limit = -1;
         }
         else {
             fprintf(
@@ -315,6 +317,15 @@ int executeSourceTableScan (
                 function
             );
             return -1;
+        }
+
+        if (op_limit >= 0) {
+            if (limit < 0) {
+                limit = op_limit;
+            }
+            else {
+                limit = MIN(limit, op_limit);
+            }
         }
     }
 
