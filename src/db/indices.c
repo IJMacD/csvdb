@@ -69,7 +69,7 @@ enum IndexSearchResult indexUniqueSeek (
     struct RowList * row_list,
     int limit
 ) {
-     // We can't handle LIKE with this index (yet)
+    // We can't handle LIKE with this index (yet)
     if (predicate_op == OPERATOR_LIKE) {
         return RESULT_NO_INDEX;
     }

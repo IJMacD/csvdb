@@ -789,10 +789,14 @@ int calendar_indexSearch(
         if (db->data[0] == COL_DATE) {
             struct DateTime dt;
 
-            parseDateTime(value, &dt);
+            if (parseDateTime(value, &dt)) {
+                *output_flag = RESULT_FOUND;
+                return datetimeGetJulian(&dt);
+            }
 
-            *output_flag = RESULT_FOUND;
-            return datetimeGetJulian(&dt);
+            // fprintf(stderr, "Couldn't parse date: '%s'\n", value);
+
+            return RESULT_NO_ROWS;
         }
 
         return RESULT_NO_ROWS;

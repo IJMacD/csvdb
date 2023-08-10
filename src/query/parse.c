@@ -1135,6 +1135,14 @@ static int parseFunctionParams (
     return 0;
 }
 
+/**
+ * Detects whether the value in field->text is recognised as a constant or not.
+ * If it detects a constant then it sets the field->index to FIELD_CONSTANT.
+ * If it detects a 'string literal' it will remove the single quotes as well.
+ * Returns:
+ *   0 if ok (constant or not);
+ *  -1 if an error occurred (e.g. unterminated string literal)
+ */
 static int checkConstantField (struct Field *field) {
 
     if (is_numeric(field->text)) {

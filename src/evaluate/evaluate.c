@@ -248,6 +248,12 @@ int evaluateConstantField (char * value, struct Field *field) {
         return sprintf(value, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
     }
 
+    // Alpine doesn't like sprintf'ing a buffer into itself
+    if (value == field->text) {
+        // fprintf(stderr, "[DEBUG] src = dest\n");
+        return strlen(value);
+    }
+
     return sprintf(value, "%s", field->text);
 }
 
