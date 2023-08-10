@@ -799,6 +799,9 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
     return 0;
 }
 
+/**
+ * Returns -1 for error; flags otherwise
+ */
 static int parseNode (
     const char * query,
     size_t * index,
@@ -831,7 +834,9 @@ static int parseNode (
         // Field is explicit, it can't be a function or special column name
         strcpy(node->field.text, value);
 
-        checkSimpleOperators(query, index, node);
+        if (checkSimpleOperators(query, index, node) < 0) {
+            return -1;
+        }
 
         // Whether we found a simple operator or not, we're done here
 
@@ -1063,7 +1068,9 @@ static int parseNode (
         return -1;
     }
 
-    checkSimpleOperators(query, index, node);
+    if (checkSimpleOperators(query, index, node) < 0) {
+        return -1;
+    }
 
     return flags;
 }
@@ -1192,6 +1199,9 @@ static int checkConstantField (struct Field *field) {
     return 0;
 }
 
+/**
+ * Returns -1 for error; 0 otherwise
+ */
 static int checkSimpleOperators(
     const char *query,
     size_t *index,
