@@ -711,7 +711,7 @@ static int evaluateTableNode (
     if (values == NULL) {
         fprintf(
             stderr,
-            "Unable to allocate %d bytes for %d child node values\n",
+            __FILE__ " Unable to allocate %d bytes for %d child node values\n",
             node->child_count * MAX_VALUE_LENGTH,
             node->child_count
         );

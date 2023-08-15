@@ -29,6 +29,13 @@ int evaluateFunction(
         return sprintf(output, "%d", rand());
     }
 
+    // TODAY takes 0 parameters
+    if (function == FUNC_DATE_TODAY) {
+        struct DateTime dt;
+        parseDateTime("CURRENT_DATE", &dt);
+        return sprintf(output, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
+    }
+
     // All other functions take at least 1 parameter. If the field is NULL then
     // the whole function evaluates to NULL.
     if (values[0][0] == 0) {

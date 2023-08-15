@@ -167,6 +167,7 @@ int select_query (
         return -1;
     }
 
+    // Verbose mode prints out current query
     if (output_flags & OUTPUT_OPTION_VERBOSE) {
         size_t query_len = *end_ptr - query;
         fwrite(query, 1, query_len, stderr);

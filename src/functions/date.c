@@ -44,7 +44,7 @@ const int month_index[] = {
  * Returns 1 on success; 0 on failure
  */
 int parseDateTime(const char *input, struct DateTime *output) {
-    if (strcmp(input, "TODAY()") == 0 || strcmp(input, "CURRENT_DATE") == 0) {
+    if (strcmp(input, "CURRENT_DATE") == 0) {
         time_t t = time(NULL);
         struct tm *local = localtime(&t);
 

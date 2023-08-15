@@ -81,7 +81,7 @@ int evaluateNode (
     if (values == NULL) {
         fprintf(
             stderr,
-            "Unable to allocate %d bytes for %d child node values\n",
+            __FILE__ ":%d Unable to allocate %d bytes for %d child node values\n", __LINE__,
             n * MAX_VALUE_LENGTH,
             n
         );
@@ -120,7 +120,7 @@ int evaluateConstantNode (
     char *output
 ) {
     int n = node->child_count;
-    if (n == 0) {
+    if (n <= 0) {
         n = 1;
     }
 
@@ -133,7 +133,7 @@ int evaluateConstantNode (
     if (values == NULL) {
         fprintf(
             stderr,
-            "Unable to allocate %d bytes for %d child node values\n",
+            __FILE__ ":%d Unable to allocate %d bytes for %d child node values\n", __LINE__,
             n * MAX_VALUE_LENGTH,
             n
         );
@@ -236,6 +236,10 @@ static int evaluateField (
     char * output,
     int max_length
 ) {
+    if (field->index == FIELD_UNKNOWN) {
+        fprintf(stderr, "Trying to evaluate unknown field\n");
+        exit(-1);
+    }
 
     if (field->index == FIELD_CONSTANT) {
         return evaluateConstantField(output, field);
@@ -290,9 +294,7 @@ int evaluateConstantField (char * output, struct Field *field) {
         return sprintf(output, "%ld", val);
     }
 
-    if (strcmp(field->text, "CURRENT_DATE") == 0
-        || strcmp(field->text, "TODAY()") == 0)
-    {
+    if (strcmp(field->text, "CURRENT_DATE") == 0) {
         struct DateTime dt;
         parseDateTime("CURRENT_DATE", &dt);
         return sprintf(output, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
@@ -308,7 +310,10 @@ int evaluateConstantField (char * output, struct Field *field) {
 }
 
 int isConstantNode (struct Node *node) {
-    if (node->function == FUNC_UNITY || node->child_count == -1) {
+    if (node->function == FUNC_UNITY
+        // Optimistation where node is its own child
+        || node->child_count == -1
+    ) {
         return node->field.index == FIELD_CONSTANT;
     }
 

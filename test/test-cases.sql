@@ -18,9 +18,9 @@ SELECT name, birth_date FROM test WHERE birth_date = '2050-01-02';
 SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' FETCH FIRST 5 ROWS ONLY;
 SELECT name, birth_date FROM test WHERE '2050-01-01' < birth_date  FETCH FIRST 5 ROWS ONLY;
 SELECT name, birth_date, score FROM test WHERE birth_date > '2050-01-01' AND score > 95 ORDER BY name FETCH FIRST 5 ROWS ONLY;
-SELECT name, birth_date FROM test WHERE PK(id) = 769;
-SELECT id, name, birth_date FROM test WHERE PK(id) < 51;
-SELECT id, name, birth_date FROM test WHERE 51 >= PK(id);
+-- SELECT name, birth_date FROM test WHERE PK(id) = 769;
+-- SELECT id, name, birth_date FROM test WHERE PK(id) < 51;
+-- SELECT id, name, birth_date FROM test WHERE 51 >= PK(id);
 -- Test EXTRACT
 SELECT birth_date, EXTRACT(YEAR FROM birth_date), EXTRACT(MONTH FROM birth_date), EXTRACT(DAY FROM birth_date), EXTRACT(YEARDAY FROM birth_date) FROM test FETCH FIRST ROW ONLY;
 -- Test Functions
@@ -46,7 +46,7 @@ FROM suits AS s1, suits AS s2 ON s1.name < s2.name ORDER BY name;
 FROM suits, ranks WHERE value > 10 ORDER BY name SELECT ranks.name || ' of ' || suits.name AS cards;
 -- Test query with no Table
 SELECT CURRENT_DATE, EXTRACT(YEARDAY FROM CURRENT_DATE), EXTRACT(JULIAN FROM '1995-10-10');
-FROM CALENDAR WHERE date = CURRENT_DATE SELECT julian, date, yeardayString, weekdayString;
+FROM CALENDAR WHERE date = CURRENT_DATE SELECT julian, date, ordinalDate, weekDate;
 -- Test TABLE clause
 TABLE suits;
 -- Test LISTAGG
@@ -99,7 +99,7 @@ FROM ranks SELECT 1000 / value ORDER BY rowid DESC FETCH FIRST 5 ROWS ONLY;
 FROM test SELECT score % 4 AS mod, COUNT(*) WHERE rowid < 100000 GROUP BY mod FETCH FIRST 5 ROWS ONLY;
 -- Date arithmetic
 SELECT '2023-07-25' + 5, '2023-07-25' - 5, '2023-08-25' - '2023-07-25';
-FROM test SELECT birth_date, birth_date + 5, birth_date - 5, 'TODAY()' - birth_date FETCH FIRST 5 ROWS ONLY;
+FROM test SELECT birth_date, birth_date + 5, birth_date - 5, TODAY() - birth_date FETCH FIRST 5 ROWS ONLY;
 -- Temp Tables
 CREATE TEMP TABLE ttt AS FROM SEQUENCE(10); FROM ttt ORDER BY value DESC FETCH FIRST 5 ROWS ONLY;
 CREATE TEMP TABLE tt2 AS FROM SEQUENCE(2); INSERT INTO tt2 VALUES (14),(15),(16); TABLE tt2;

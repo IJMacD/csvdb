@@ -116,12 +116,25 @@ int getToken (
 ) {
     skipWhitespace(string, index);
 
-    // End of string
+    // Check for end of string
     if (string[*index] == '\0') {
         // clear output value
         token[0] = '\0';
         return 0;
     }
+
+    // Check for simple operators
+    if (
+        string[*index] == '+'
+        || string[*index] == '-'
+        || string[*index] == '*'
+        || string[*index] == '/'
+        || string[*index] == '%'
+    ) {
+        // operators are not allowed as tokens
+        return -1;
+    }
+
     int start_index = *index;
 
     skipToken(string, index);

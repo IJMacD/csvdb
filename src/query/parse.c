@@ -38,6 +38,11 @@ static struct Table *findTable (
 
 static struct Node *addChildNode (struct Node *node);
 
+static struct Node *replaceParentNode (
+    struct Node *node,
+    enum Function newFunction
+);
+
 int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
     /*********************
      * Begin Query parsing
@@ -1025,6 +1030,11 @@ static int parseNode (
         else if (strcmp(value, "DATE_DIFF") == 0) {
             node->function = FUNC_DATE_DIFF;
         }
+        else if (strcmp(value, "TODAY") == 0) {
+            node->function = FUNC_DATE_TODAY;
+            node->field.index = FIELD_CONSTANT;
+            node->field.table_id = -1;
+        }
         else if (strcmp(value, "COUNT") == 0) {
             node->function = FUNC_AGG_COUNT;
             flags |= FLAG_GROUP;
@@ -1054,6 +1064,14 @@ static int parseNode (
         else if (strcmp(value, "LISTAGG") == 0) {
             node->function = FUNC_AGG_LISTAGG;
             flags |= FLAG_GROUP;
+        }
+        else {
+            fprintf(stderr, "Unknown function: %s\n", value);
+            return -1;
+        }
+
+        if (checkSimpleOperators(query, index, node) < 0) {
+            return -1;
         }
 
         return flags;
@@ -1109,7 +1127,16 @@ static int parseFunctionParams (
 
         while (query[*index] == ',') {
             // We need to have multiple child nodes
-            struct Node *child_node = addChildNode(node);
+            struct Node *child_node;
+
+            if (node->child_count == -1) {
+                // If we're currently using the optimisation, we need to undo
+                // that.
+                child_node = replaceParentNode(node, node->function);
+            }
+            else {
+                child_node = addChildNode(node);
+            }
 
             // Parse second child node
 
@@ -1183,9 +1210,8 @@ static int checkConstantField (struct Field *field) {
         value[len - 2] = '\0';
 
         strcpy(field->text, value);
-    } else if (strcmp(field->text, "CURRENT_DATE") == 0
-        || strcmp(field->text, "TODAY") == 0)
-    {
+    }
+    else if (strcmp(field->text, "CURRENT_DATE") == 0) {
         field->index = FIELD_CONSTANT;
         field->table_id = -1;
 
@@ -1248,24 +1274,27 @@ static int checkSimpleOperators(
             break;
         }
 
-        // If this is the first operator, we set the node
-        if (node->function == FUNC_UNITY) {
-            node->function = function;
-        }
-        else if (node->function != function) {
-            fprintf(stderr, "Complex expressions are not supported.\n");
-            return -1;
-        }
-
         (*index)++;
 
         skipWhitespace(query, index);
 
-        struct Node *next_child = addChildNode(node);
+        struct Node *next_child;
+
+        if (node->function == function) {
+            // We can just add a new sibling
+
+            next_child = addChildNode(node);
+        }
+        else {
+            // We need to convert the current node into a parent node
+
+            next_child = replaceParentNode(node, function);
+        }
 
         getQuotedToken(query, index, next_child->field.text, MAX_FIELD_LENGTH);
 
         checkConstantField(&next_child->field);
+
     }
 
     return 0;
@@ -1294,60 +1323,100 @@ static struct Table *findTable (
 /**
  * mallocs a new node and adds it as a child of the provided node.
  * Also returns the new child for convenience.
- * If there aren't any children yet then the node is turned into a new parent.
+ *
+ *       P
+ *    +--+--+
+ *    C  C  C'
+ *
+ * P is the original node passed to this function
+ * C' is the new child. C' is returned from this function.
  */
-static struct Node *addChildNode (struct Node *node) {
+static struct Node *addChildNode (struct Node *parent_node) {
     struct Node *child_node;
 
-    if (node->children == NULL) {
-        node->child_count = 2;
-
-        node->children = calloc(node->child_count, sizeof(*node));
-
-        // copy existing field to new child
-        struct Node *first_child = &node->children[0];
-        memcpy(&first_child->field, &node->field, sizeof(node->field));
-
-        // Clear current field
-        node->field.text[0] = '\0';
-
-        // Clear field index
-        node->field.index = FIELD_UNKNOWN;
-
-        // Return second child
-        child_node = &node->children[1];
-    }
-    else if (node->child_count == -1) {
+    // Optimistation where node is its own child
+    if (parent_node->child_count == -1 || parent_node->children == NULL) {
         fprintf(
             stderr,
-            "You found a bug. node->child_count out of sync with "
-            "node->children.\n"
+            "Cannot add a child to a node with no existing children.\n"
         );
         exit(-1);
     }
-    else {
-        node->child_count++;
 
-        node->children = realloc(
-            node->children,
-            sizeof(*node) * node->child_count
-        );
+    parent_node->child_count++;
 
-        if (node->children == NULL) {
-            fprintf(stderr, "Unable to allocate memory.\n");
-            exit(-1);
-        }
+    parent_node->children = realloc(
+        parent_node->children,
+        sizeof(*parent_node) * parent_node->child_count
+    );
 
-        child_node = &node->children[node->child_count - 1];
-
-        // NULL out children to avoid uninitialized read and set defaults
-        child_node->children = NULL;
-        child_node->child_count = 0;
-        child_node->field.index = FIELD_UNKNOWN;
-        child_node->field.table_id = -1;
-        child_node->field.text[0] = '\0';
-        child_node->function = FUNC_UNITY;
+    if (parent_node->children == NULL) {
+        fprintf(stderr, "Unable to allocate memory.\n");
+        exit(-1);
     }
+
+    child_node = &parent_node->children[parent_node->child_count - 1];
+
+    // NULL out children to avoid uninitialized read and set defaults
+    child_node->children = NULL;
+    child_node->child_count = 0;
+    child_node->field.index = FIELD_UNKNOWN;
+    child_node->field.table_id = -1;
+    child_node->field.text[0] = '\0';
+    child_node->function = FUNC_UNITY;
+
+    return child_node;
+}
+
+/**
+ * mallocs two new nodes and adds them as a child of the provided node.
+ * It then copies the provided node to the first of the two new nodes and
+ * set the original node to a new parent.
+ * Also returns the second child for convenience.
+ *
+ *       P'
+ *       +--+
+ *       P  C
+ *
+ * P' is the original node modified to be a new parent
+ * P is newly allocated and is a copy of the original node
+ * C is newly allocated and is returned (blank) from this function.
+ */
+static struct Node *replaceParentNode (
+    struct Node *node,
+    enum Function newFunction
+) {
+
+    if (node->children != NULL) {
+        fprintf(
+            stderr,
+            "Unimplemented: unable to construct complex expression trees\n"
+        );
+        exit(-1);
+    }
+
+    node->child_count = 2;
+
+    node->children = calloc(node->child_count, sizeof(*node));
+
+    // copy existing field to new child
+    struct Node *first_child = &node->children[0];
+    memcpy(&first_child->field, &node->field, sizeof(node->field));
+
+    // copy function to new child
+    first_child->function = node->function;
+
+    // set node function to new function
+    node->function = newFunction;
+
+    // Clear current field
+    node->field.text[0] = '\0';
+
+    // Clear field index
+    node->field.index = FIELD_UNKNOWN;
+
+    // Return second child
+    struct Node *child_node = &node->children[1];
 
     return child_node;
 }
