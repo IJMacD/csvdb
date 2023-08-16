@@ -705,8 +705,12 @@ static int evaluateTableNode (
         return evaluateFunction(output, node->function, values, 1);
     }
 
-    char (*values)[MAX_VALUE_LENGTH]
-        = malloc(node->child_count * MAX_VALUE_LENGTH);
+    int n = node->child_count;
+    char *values = malloc(n * MAX_VALUE_LENGTH);
+    char **values_ptrs = malloc(n * sizeof(values));
+    for (int i = 0; i < n; i++) {
+        values_ptrs[i] = values + MAX_FIELD_LENGTH * i;
+    }
 
     if (values == NULL) {
         fprintf(
@@ -723,16 +727,21 @@ static int evaluateTableNode (
             db,
             row_id,
             &node->children[i],
-            values[i]
+            values_ptrs[i]
         );
     }
 
-    return evaluateFunction(
+    int result = evaluateFunction(
         output,
         node->function,
-        (char **)values,
+        values_ptrs,
         node->child_count
     );
+
+    free(values);
+    free(values_ptrs);
+
+    return result;
 }
 /**
  * @brief Like evaluateField() but only operates on a single table

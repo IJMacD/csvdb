@@ -7,6 +7,8 @@
 #include "../db/csv-mem.h"
 #include "../functions/util.h"
 #include "../evaluate/predicates.h"
+#include "node.h"
+#include "../debug.h"
 
 #define MAX_CTES    10
 
@@ -526,13 +528,18 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                         return result;
                     }
 
-                    // node from left to right side of predicate
-                    memcpy(right, left, sizeof (*left));
+                    // Duplicate node from left to right side of predicate
+                    copyNodeTree(right, left);
 
                     // One side (right) needs to be on this joined table
                     // The other side needs to be from any of the previous
                     // tables we don't which yet, but it will be filled in later
-                    right->field.table_id = q->table_count - 1;
+                    if (right->child_count == -1) {
+                        right->field.table_id = q->table_count - 1;
+                    }
+                    else if (right->child_count > 0) {
+                        right->children[0].field.table_id = q->table_count - 1;
+                    }
 
                     // Set operator
                     p->function = OPERATOR_EQ;
@@ -604,8 +611,6 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                 if (result < 0) {
                     return result;
                 }
-
-                // printf("Predicate field: %s\n", predicate_field);
 
                 char op[5];
                 getOperatorToken(query, &index, op, 5);
@@ -817,6 +822,7 @@ static int parseNode (
 
     // Fill in defaults
     node->child_count = 0;
+    node->children = NULL;
     node->function = FUNC_UNITY;
     node->field.index = FIELD_UNKNOWN;
     node->field.table_id = -1;
@@ -970,8 +976,6 @@ static int parseNode (
             return flags;
         }
 
-        parseFunctionParams(query, index, node);
-
         if (strcmp(value, "PK") == 0) {
             node->function = FUNC_PK;
         }
@@ -1038,12 +1042,6 @@ static int parseNode (
         else if (strcmp(value, "COUNT") == 0) {
             node->function = FUNC_AGG_COUNT;
             flags |= FLAG_GROUP;
-
-            if (strcmp(node->field.text, "*") == 0) {
-                node->function = FUNC_UNITY;
-                node->field.index = FIELD_COUNT_STAR;
-                node->field.table_id = -1;
-            }
         }
         else if (strcmp(value, "MAX") == 0) {
             node->function = FUNC_AGG_MAX;
@@ -1068,6 +1066,25 @@ static int parseNode (
         else {
             fprintf(stderr, "Unknown function: %s\n", value);
             return -1;
+        }
+
+        parseFunctionParams(query, index, node);
+
+        // Special treatment for COUNT(*)
+        if (node->function == FUNC_AGG_COUNT
+            &&
+            (
+                (   node->child_count == 1
+                    && node->children[0].field.index == FIELD_STAR
+                )
+                || (   node->child_count == -1
+                    && node->field.index == FIELD_STAR
+                )
+            )
+        ) {
+            node->function = FUNC_UNITY;
+            node->field.index = FIELD_COUNT_STAR;
+            node->field.table_id = -1;
         }
 
         if (checkSimpleOperators(query, index, node) < 0) {
@@ -1108,54 +1125,25 @@ static int parseFunctionParams (
 ) {
     // getQuotedToken won't get '*' so we'll check manually
     if (query[*index] == '*') {
+        node->child_count = -1;
         node->field.text[0] = '*';
         node->field.index = FIELD_STAR;
 
         (*index)++;
     }
     else {
-        // Default to self-child node
-        node->child_count = -1;
+        while (query[*index] != '\0' && query[*index] != ')') {
+            struct Node *child_node = addChildNode(node);
 
-        getQuotedToken(query, index, node->field.text, MAX_FIELD_LENGTH);
+            parseNode(query, index, child_node);
 
-        if (checkConstantField((struct Field *)node) < 0) {
-            return -1;
-        }
+            skipWhitespace(query, index);
 
-        skipWhitespace(query, index);
-
-        while (query[*index] == ',') {
-            // We need to have multiple child nodes
-            struct Node *child_node;
-
-            if (node->child_count == -1) {
-                // If we're currently using the optimisation, we need to undo
-                // that.
-                child_node = replaceParentNode(node, node->function);
+            if (query[*index] != ',') {
+                break;
             }
-            else {
-                child_node = addChildNode(node);
-            }
-
-            // Parse second child node
 
             (*index)++;
-
-            skipWhitespace(query, index);
-
-            getQuotedToken(
-                query,
-                index,
-                child_node->field.text,
-                sizeof(child_node->field.text)
-            );
-
-            if (checkConstantField(&child_node->field) < 0) {
-                return -1;
-            }
-
-            skipWhitespace(query, index);
         }
     }
 
@@ -1335,20 +1323,27 @@ static struct Node *addChildNode (struct Node *parent_node) {
     struct Node *child_node;
 
     // Optimistation where node is its own child
-    if (parent_node->child_count == -1 || parent_node->children == NULL) {
+    if (parent_node->child_count == -1) {
         fprintf(
             stderr,
-            "Cannot add a child to a node with no existing children.\n"
+            "Cannot add a child to an optimised node.\n"
         );
         exit(-1);
     }
 
     parent_node->child_count++;
 
-    parent_node->children = realloc(
-        parent_node->children,
-        sizeof(*parent_node) * parent_node->child_count
-    );
+    if (parent_node->children == NULL) {
+        parent_node->children = malloc(
+            sizeof(*parent_node) * parent_node->child_count
+        );
+    }
+    else {
+        parent_node->children = realloc(
+            parent_node->children,
+            sizeof(*parent_node) * parent_node->child_count
+        );
+    }
 
     if (parent_node->children == NULL) {
         fprintf(stderr, "Unable to allocate memory.\n");

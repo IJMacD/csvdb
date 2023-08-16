@@ -2,6 +2,7 @@
 
 #include "../structs.h"
 #include "../query/query.h"
+#include "../query/node.h"
 #include "../query/result.h"
 #include "../db/db.h"
 #include "../evaluate/evaluate.h"
@@ -85,23 +86,30 @@ int executeConstantJoin (
 
     RowListIndex row_list = popRowList(result_set);
 
+    struct Node *p = &step->nodes[0];
+
     // Defined to be this table join ID on left
-    int table_id = step->nodes[0].children[0].field.table_id;
-
-    // Sanity check
-    struct Node *p = step->nodes + 0;
-    if (p->children[0].field.table_id != table_id &&
-        p->children[1].field.table_id != table_id)
-    {
-        fprintf(
-            stderr,
-            "Cannot perform constant join (Join Index: %d)\n",
-            table_id
-        );
-        return -1;
+    struct Node *left_node = &p->children[0];
+    struct Field *left_field;
+    if (left_node->child_count == -1) {
+        left_field = &left_node->field;
     }
+    else if (left_node->child_count == 0) {
+        fprintf(stderr, "Constant JOIN needs a table\n");
+        exit(-1);
+    }
+    else {
+        left_field = &left_node->children[0].field;
+    }
+    int left_table_id = left_field->table_id;
 
-    struct DB *next_db = tables[table_id].db;
+
+    struct DB *next_db = tables[left_table_id].db;
+
+    if (next_db == NULL) {
+        fprintf(stderr, "Unknown DB in JOIN\n");
+        exit(-1);
+    }
 
     int record_count = getRecordCount(next_db);
     RowListIndex tmp_list = createRowList(1, record_count);
@@ -122,7 +130,7 @@ int executeConstantJoin (
     int new_length = old_count * tmp_count;
 
     // Check for LEFT JOIN
-    if (tmp_count == 0 && tables[table_id].join_type == JOIN_LEFT) {
+    if (tmp_count == 0 && tables[left_table_id].join_type == JOIN_LEFT) {
         new_length = old_count;
     }
 
@@ -141,7 +149,7 @@ int executeConstantJoin (
         // If it's a LEFT JOIN and the right table was empty we
         // need to add each row to the new row list with NULLs for
         // the right table
-        if (tmp_count == 0 && tables[table_id].join_type == JOIN_LEFT) {
+        if (tmp_count == 0 && tables[left_table_id].join_type == JOIN_LEFT) {
             appendJoinedRowID(
                 getRowList(new_list),
                 getRowList(row_list),
@@ -205,7 +213,28 @@ int executeLoopJoin (
     RowListIndex row_list = popRowList(result_set);
 
     // Defined to be this table join ID on left
-    int table_id = step->nodes[0].children[0].field.table_id;
+    struct Node *left_node = &step->nodes[0].children[0];
+
+    int table_id;
+
+    if (left_node->function == FUNC_UNITY || left_node->child_count == -1) {
+        // Take the field directly from the node
+        table_id = left_node->field.table_id;
+    }
+    else if (left_node->child_count == 0) {
+        // There shouldn't be a function with zero params here
+        fprintf(stderr, "Cannot join with field\n");
+        exit(-1);
+    }
+    else {
+        // Let's hope the first param is the relevant field
+        table_id = left_node->children[0].field.table_id;
+    }
+
+    if (table_id < 0) {
+        fprintf(stderr, "Error joining table\n");
+        exit(-1);
+    }
 
     struct Table *table = &tables[table_id];
     struct DB *next_db = table->db;
@@ -229,22 +258,33 @@ int executeLoopJoin (
         struct Node p;
         copyNodeTree(&p, &step->nodes[0]);
 
+        struct Node *right_node = &p.children[1];
+        struct Field *right_field =
+            (right_node->function == FUNC_UNITY || right_node->child_count == -1)
+            ? &right_node->field : &right_node->children[0].field;
+
         // Fill in right value as constant from outer tables
-        if (p.children[1].field.table_id < table_id) {
+        if (right_field->table_id < table_id) {
+            // replace right node with constant value from outer table
             evaluateNode(
                 tables,
                 getRowList(row_list),
                 i,
-                &p.children[1],
-                p.children[1].field.text,
+                right_node,
+                right_node->field.text,
                 MAX_FIELD_LENGTH
             );
-            p.children[1].field.index = FIELD_CONSTANT;
-            p.children[1].function = FUNC_UNITY;
+            right_node->field.index = FIELD_CONSTANT;
+            right_node->function = FUNC_UNITY;
 
             // We're only passing one table to fullTableScan so predicate will
             // be on first table
-            p.children[0].field.table_id = 0;
+            struct Node *left_node = &p.children[0];
+            struct Field *left_field =
+                (left_node->function == FUNC_UNITY || left_node->child_count == -1)
+                ? &left_node->field : &left_node->children[0].field;
+
+            left_field->table_id = 0;
         }
         else {
             fprintf(stderr, "Limitation of RowList: tables must be joined in "

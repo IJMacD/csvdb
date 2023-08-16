@@ -18,6 +18,8 @@
 #include "../db/db.h"
 #include "../db/csv-mem.h"
 #include "../functions/util.h"
+#include "node.h"
+#include "../debug.h"
 
 #ifdef DEBUG
 int query_count = -1;
@@ -357,6 +359,11 @@ int process_query (
         }
     }
 
+    #ifdef DEBUG
+    // fprintf(stderr, "SELECT\n");
+    // debugNodes(q->columns, q->column_count);
+    #endif
+
     // Populate WHERE columns
     for (int i = 0; i < q->predicate_count; i++) {
         result = resolveNode(q, &q->predicate_nodes[i].children[0], 1);
@@ -375,6 +382,11 @@ int process_query (
 
         optimiseCollapseConstantNode(&q->predicate_nodes[i].children[1]);
     }
+
+    #ifdef DEBUG
+    // fprintf(stderr, "WHERE\n");
+    // debugNodes(q->predicate_nodes, q->predicate_count);
+    #endif
 
     // Populate ORDER BY columns
     for (int i = 0; i < q->order_count; i++) {
@@ -920,44 +932,4 @@ static int wrap_query (
     destroy_query(&q2);
 
     return result;
-}
-
-/**
- * @brief Copies a node tree recursively to avoid double FREE
- * Will malloc for children
- *
- * @param dest
- * @param src
- * @return void
- */
-void copyNodeTree (struct Node *dest, struct Node *src) {
-    memcpy(&dest->field, &src->field, sizeof(dest->field));
-
-    dest->function = src->function;
-
-    dest->child_count = src->child_count;
-
-    dest->children = NULL;
-
-    if (src->children != NULL && src->child_count > 0) {
-
-        dest->children = malloc(sizeof(*dest) * src->child_count);
-
-        for (int i = 0; i < src->child_count; i++) {
-            copyNodeTree(&dest->children[i], &src->children[i]);
-        }
-    }
-}
-
-void freeNode (struct Node *node) {
-    if (node->child_count > 0) {
-        for (int i = 0; i < node->child_count; i++) {
-            freeNode(&node->children[i]);
-        }
-    }
-
-    if (node->children != NULL) {
-        free(node->children);
-        node->children = NULL;
-    }
 }

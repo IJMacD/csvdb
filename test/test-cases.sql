@@ -100,6 +100,7 @@ FROM test SELECT score % 4 AS mod, COUNT(*) WHERE rowid < 100000 GROUP BY mod FE
 -- Date arithmetic
 SELECT '2023-07-25' + 5, '2023-07-25' - 5, '2023-08-25' - '2023-07-25';
 FROM test SELECT birth_date, birth_date + 5, birth_date - 5, TODAY() - birth_date FETCH FIRST 5 ROWS ONLY;
+SELECT TODAY() + 10, DATE_DIFF(TODAY() + 10, '2000-01-01') AS a;
 -- Temp Tables
 CREATE TEMP TABLE ttt AS FROM SEQUENCE(10); FROM ttt ORDER BY value DESC FETCH FIRST 5 ROWS ONLY;
 CREATE TEMP TABLE tt2 AS FROM SEQUENCE(2); INSERT INTO tt2 VALUES (14),(15),(16); TABLE tt2;

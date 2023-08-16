@@ -2,7 +2,7 @@
 #include "../evaluate/evaluate.h"
 
 void optimiseCollapseConstantNode (struct Node *node)  {
-    if (node->function == FUNC_UNITY) {
+    if (node->function == FUNC_UNITY || node->child_count == -1) {
         return;
     }
 

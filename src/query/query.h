@@ -37,7 +37,3 @@ int process_query (
     enum OutputOption output_flags,
     FILE * output
 );
-
-void copyNodeTree (struct Node *dest, struct Node *src);
-
-void freeNode (struct Node *node);

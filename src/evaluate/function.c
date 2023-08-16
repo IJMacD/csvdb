@@ -379,21 +379,30 @@ int evaluateAggregateFunction (
         return -1;
     }
 
-    // Aggregate functions can only work on a single field at the moment
-    if (node->child_count != -1) {
+    struct Field *field;
+
+    if (node->child_count == -1) {
+        // Self-child optimisation
+        field = (struct Field *)node;
+    }
+    else if (node->child_count == 1) {
+        field = (struct Field *)&node->children[0];
+    }
+    else {
+        // Aggregate functions can only work on a single field at the moment
         fprintf(
             stderr,
-            "Aggregate function %d must have a field\n",
+            "Aggregate function 0x%X must have a field\n",
             node->function
         );
         return -1;
     }
 
     // Check there's a valid field to use
-    if (node->field.table_id < 0) {
+    if (field->table_id < 0) {
         fprintf(
             stderr,
-            "Aggregate function %d must have a field\n",
+            "Aggregate function 0x%X must have a table\n",
             node->function
         );
         return -1;
@@ -403,14 +412,14 @@ int evaluateAggregateFunction (
         int count = 0;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, node->field.table_id, i);
+            int rowid = getRowID(row_list, field->table_id, i);
 
             // Count up the non-NULL values
             if (
                 getRecordValue(
-                    tables[node->field.table_id].db,
+                    tables[field->table_id].db,
                     rowid,
-                    node->field.index,
+                    field->index,
                     value,
                     MAX_VALUE_LENGTH
                 ) > 0
@@ -426,14 +435,14 @@ int evaluateAggregateFunction (
         int min = INT_MAX;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, node->field.table_id, i);
+            int rowid = getRowID(row_list, field->table_id, i);
 
             // Only consider the non-NULL values
             if (
                 getRecordValue(
-                    tables[node->field.table_id].db,
+                    tables[field->table_id].db,
                     rowid,
-                    node->field.index,
+                    field->index,
                     value,
                     MAX_VALUE_LENGTH
                 ) > 0
@@ -455,14 +464,14 @@ int evaluateAggregateFunction (
         int max = INT_MIN;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, node->field.table_id, i);
+            int rowid = getRowID(row_list, field->table_id, i);
 
             // Only consider the non-NULL values
             if (
                 getRecordValue(
-                    tables[node->field.table_id].db,
+                    tables[field->table_id].db,
                     rowid,
-                    node->field.index,
+                    field->index,
                     value,
                     MAX_VALUE_LENGTH
                 ) > 0
@@ -485,14 +494,14 @@ int evaluateAggregateFunction (
         int non_null = 0;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, node->field.table_id, i);
+            int rowid = getRowID(row_list, field->table_id, i);
 
             // Sum the non-NULL values
             if (
                 getRecordValue(
-                    tables[node->field.table_id].db,
+                    tables[field->table_id].db,
                     rowid,
-                    node->field.index,
+                    field->index,
                     value,
                     MAX_VALUE_LENGTH
                 ) > 0
@@ -517,14 +526,14 @@ int evaluateAggregateFunction (
         int sum = 0;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, node->field.table_id, i);
+            int rowid = getRowID(row_list, field->table_id, i);
 
             // Count up the non-NULL values
             if (
                 getRecordValue(
-                    tables[node->field.table_id].db,
+                    tables[field->table_id].db,
                     rowid,
-                    node->field.index,
+                    field->index,
                     value,
                     MAX_VALUE_LENGTH
                 ) > 0
@@ -549,14 +558,14 @@ int evaluateAggregateFunction (
         int have_prev = 0;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, node->field.table_id, i);
+            int rowid = getRowID(row_list, field->table_id, i);
 
             // Count up the non-NULL values
             if (
                 getRecordValue(
-                    tables[node->field.table_id].db,
+                    tables[field->table_id].db,
                     rowid,
-                    node->field.index,
+                    field->index,
                     value,
                     MAX_VALUE_LENGTH
                 ) > 0

@@ -705,8 +705,20 @@ static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
         }
         else {
 
-            struct Field *left_field = (struct Field *)&join->children[0];
-            struct Field *right_field = (struct Field *)&join->children[1];
+            struct Node *left_node = &join->children[0];
+            struct Node *right_node = &join->children[1];
+
+            struct Field *left_field =
+                (
+                    left_node->function == FUNC_UNITY
+                    || left_node->child_count == -1
+                ) ? &left_node->field : &left_node->children[0].field;
+
+            struct Field *right_field =
+                (
+                    right_node->function == FUNC_UNITY
+                    || right_node->child_count == -1
+                ) ? &right_node->field : &right_node->children[0].field;
 
             // We'll define that table-to-be-joined MUST be on left
             if (left_field->table_id != i) {
@@ -719,6 +731,19 @@ static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
                 // Swap left and right so that preciate looks like this:
                 //  A JOIN B ON B.field = A.field
                 flipPredicate(join);
+
+                // Reestablish our cached references if needed
+                left_field =
+                    (
+                        left_node->function == FUNC_UNITY
+                        || left_node->child_count == -1
+                    ) ? &left_node->field : &left_node->children[0].field;
+
+                right_field =
+                    (
+                        right_node->function == FUNC_UNITY
+                        || right_node->child_count == -1
+                    ) ? &right_node->field : &right_node->children[0].field;
             }
 
             // Constant must be on right if there is one
@@ -728,7 +753,7 @@ static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
             }
             else if (right_field->table_id == i) {
                 // Both sides of predicate are on same table
-                // We can do contsant join
+                // We can do constant join
                 addStepWithNode(plan, PLAN_CONSTANT_JOIN, join);
             }
             else {

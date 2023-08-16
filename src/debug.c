@@ -71,34 +71,62 @@ static void debugNodeInner (struct Node * node, int depth) {
         stderr,
         "%*s[NODE] ", depth, "");
 
-    if (node->field.index == FIELD_CONSTANT) {
-        fprintf(
-            stderr,
-            "Field: { CONSTANT text = %s } ",
-            node->field.text
-        );
-    }
-    else if (node->field.index != FIELD_UNKNOWN) {
-        fprintf(
-            stderr,
-            "Field: { index = %d, table_id = %d, text = %s } ",
-            node->field.index,
-            node->field.table_id,
-            node->field.text
-        );
+    if (node->function != FUNC_UNITY) {
+        if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR) {
+            char *operators[] = {
+                "NEVER","EQ","LT","LE","GT","GE","NE","ALWAYS"
+            };
+            char *s = operators[node->function & ~MASK_FUNC_FAMILY];
+            fprintf(
+                stderr,
+                "OPERATOR_%s ",
+                s
+            );
+        }
+        else {
+            fprintf(
+                stderr,
+                "Function: 0x%X ",
+                node->function
+            );
+        }
     }
 
-    if (node->function != FUNC_UNITY) {
-        fprintf(
-            stderr,
-            "Function: 0x%x ",
-            node->function
-        );
+    if (node->function == FUNC_UNITY || node->child_count == -1) {
+        if (node->field.index == FIELD_CONSTANT) {
+            fprintf(
+                stderr,
+                "Field: { CONSTANT text = %s } ",
+                node->field.text
+            );
+        }
+        else if (node->field.index != FIELD_UNKNOWN) {
+            fprintf(
+                stderr,
+                "Field: { table_id = %d, index = %d, text = %s } ",
+                node->field.table_id,
+                node->field.index,
+                node->field.text
+            );
+        }
+        else {
+            fprintf(
+                stderr,
+                "Field: { UNKNOWN text = %s } ",
+                node->field.text
+            );
+        }
     }
 
     fprintf(stderr, "\n");
 
     for (int i = 0; i < node->child_count; i++) {
         debugNodeInner(node->children + i, depth + 1);
+    }
+}
+
+void debugNodes (struct Node nodes[], int node_count) {
+    for (int i = 0; i < node_count; i++) {
+        debugNode(&nodes[i]);
     }
 }

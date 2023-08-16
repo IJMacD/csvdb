@@ -47,33 +47,43 @@ int explain_select_query (
                     *(ptr++) = ' ';
                 }
 
+                char *name = "";
+
                 struct Node *node = &s.nodes[i];
 
-                if (node->child_count > 1) {
+                if (node->child_count > 0) {
                     node = &node->children[0];
                 }
 
-                char *name = node->field.text;
+                if (node != NULL) {
+                    struct Field *field = (node->child_count <= 0)
+                        ? &node->field
+                        : &node->children[0].field;
 
-                if (node->field.index == FIELD_ROW_INDEX) {
-                    name = "rowid";
-                }
+                    if (field != NULL) {
+                        name = field->text;
 
-                if (node->function == FUNC_UNITY) {
-                    ptr += snprintf(
-                        ptr,
-                        remaining,
-                        "%s",
-                        name
-                    );
-                }
-                else if (node->function != OPERATOR_ALWAYS) {
-                    ptr += snprintf(
-                        ptr,
-                        remaining,
-                        "F(%s)",
-                        name
-                    );
+                        if (field->index == FIELD_ROW_INDEX) {
+                            name = "rowid";
+                        }
+
+                        if (node->function == FUNC_UNITY) {
+                            ptr += snprintf(
+                                ptr,
+                                remaining,
+                                "%s",
+                                name
+                            );
+                        }
+                        else if (node->function != OPERATOR_ALWAYS) {
+                            ptr += snprintf(
+                                ptr,
+                                remaining,
+                                "F(%s)",
+                                name
+                            );
+                        }
+                    }
                 }
 
                 *ptr = '\0';
