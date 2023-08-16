@@ -51,7 +51,8 @@ int explain_select_query (
 
                 struct Node *node = &s.nodes[i];
 
-                if (node->child_count > 0) {
+                // SORT nodes have 1 child; PREDICATE nodes have 2
+                if (node->child_count > 1) {
                     node = &node->children[0];
                 }
 
