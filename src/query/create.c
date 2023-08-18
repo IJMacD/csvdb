@@ -435,7 +435,7 @@ static int create_view_query (const char * query, const char **end_ptr) {
     // Warning! can't cope with semicolons legally embedded in SQL
     char *c = strchr(query + index, ';');
 
-    if (*c != '\0') {
+    if (c != NULL) {
         int view_len = c - (query + index);
         char *s = malloc(view_len + 1);
         strncpy(s, query + index, view_len);
@@ -447,10 +447,10 @@ static int create_view_query (const char * query, const char **end_ptr) {
             *end_ptr = c;
         }
     } else {
-        int len = fputs(query + index, f);
+        fputs(query + index, f);
 
         if (end_ptr != NULL) {
-            *end_ptr = query + index + len;
+            *end_ptr = strchr(query + index, '\0');
         }
     }
 

@@ -973,6 +973,10 @@ static int parseNode (
                 return -1;
             }
 
+            if (checkSimpleOperators(query, index, node) < 0) {
+                return -1;
+            }
+
             return flags;
         }
 
@@ -1382,27 +1386,22 @@ static struct Node *replaceParentNode (
     enum Function newFunction
 ) {
 
-    if (node->children != NULL) {
-        fprintf(
-            stderr,
-            "Unimplemented: unable to construct complex expression trees\n"
-        );
-        exit(-1);
-    }
+    int new_child_count = 2;
 
-    node->child_count = 2;
+    struct Node * new_children = calloc(new_child_count, sizeof(*node));
 
-    node->children = calloc(node->child_count, sizeof(*node));
-
-    // copy existing field to new child
-    struct Node *first_child = &node->children[0];
-    memcpy(&first_child->field, &node->field, sizeof(node->field));
-
-    // copy function to new child
-    first_child->function = node->function;
+    // copy existing node to new child
+    struct Node *first_child = &new_children[0];
+    memcpy(first_child, node, sizeof(*node));
 
     // set node function to new function
     node->function = newFunction;
+
+    // set new children
+    node->children = new_children;
+
+    // set new child count
+    node->child_count = new_child_count;
 
     // Clear current field
     node->field.text[0] = '\0';

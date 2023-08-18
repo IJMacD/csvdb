@@ -140,11 +140,20 @@ int evaluateConstantNode (
         exit(-1);
     }
 
-    for (int i = 0; i < node->child_count; i++) {
-        evaluateConstantField(
-            values_ptrs[i],
-            &node->children[i].field
-        );
+    if (node->child_count == -1) {
+        // If this node is a self-child node, just copy from the field (since we
+        // know the field must be constant)
+        strcpy(values_ptrs[0], node->field.text);
+    }
+    else for (int i = 0; i < node->child_count; i++) {
+        struct Node *child_node = &node->children[i];
+
+        if (child_node->function == FUNC_UNITY) {
+            evaluateConstantField(values_ptrs[i], &child_node->field);
+        }
+        else {
+            evaluateConstantNode(child_node, values_ptrs[i]);
+        }
         // fprintf(stderr, "[EVALUATE] operand = '%s'\n", values_ptrs[i]);
     }
 
