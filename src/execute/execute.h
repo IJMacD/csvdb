@@ -3,8 +3,7 @@
 #include "../structs.h"
 
 int executeQueryPlan (
-    struct Table *tables,
-    int table_count,
+    struct Query *query,
     struct Plan *plan,
     enum OutputOption output_flags,
     FILE * output

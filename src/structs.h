@@ -330,6 +330,9 @@ struct Table {
 };
 
 struct Query {
+    #ifdef DEBUG
+    int id;
+    #endif
     struct Table *tables;
     int table_count;
     struct Node columns[MAX_FIELD_COUNT];

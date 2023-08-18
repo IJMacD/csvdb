@@ -1,5 +1,7 @@
 #include <stdio.h>
 
+#include <unistd.h>
+
 #include "structs.h"
 #include "query/result.h"
 
@@ -7,13 +9,13 @@ static void debugNodeInner (struct Node * node, int depth);
 
 void debugRowList (struct RowList * list, int verbosity) {
     if (list == NULL) {
-        fprintf(stderr, "RowList (NULL)\n");
+        fprintf(stderr, "\tRowList (NULL)\n");
         return;
     }
 
     fprintf(
         stderr,
-        "RowList (%d joins x %d rows)\n",
+        "\tRowList (%d joins x %d rows)\n",
         list->join_count,
         list->row_count
     );
@@ -55,7 +57,7 @@ void debugTree (struct TreeNode * node) {
 }
 
 void debugResultSet (struct ResultSet *results) {
-    fprintf(stderr, "ResultSet (count = %d): ", results->count);
+    fprintf(stderr, "\tResultSet (count = %d): ", results->count);
     for (int i = 0; i < results->count; i++) {
         fprintf(stderr, "%d, ", results->row_list_indices[i]);
     }
@@ -69,7 +71,7 @@ void debugNode (struct Node * node) {
 static void debugNodeInner (struct Node * node, int depth) {
     fprintf(
         stderr,
-        "%*s[NODE] ", depth, "");
+        "\t%*s[NODE] ", depth, "");
 
     if (node->function != FUNC_UNITY) {
         if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR) {
@@ -98,6 +100,13 @@ static void debugNodeInner (struct Node * node, int depth) {
                 stderr,
                 "Field: { CONSTANT text = %s } ",
                 node->field.text
+            );
+        }
+        else if (node->field.index == FIELD_STAR) {
+            fprintf(
+                stderr,
+                "Field: { *, table_id = %d } ",
+                node->field.table_id
             );
         }
         else if (node->field.index != FIELD_UNKNOWN) {
@@ -129,4 +138,10 @@ void debugNodes (struct Node nodes[], int node_count) {
     for (int i = 0; i < node_count; i++) {
         debugNode(&nodes[i]);
     }
+}
+
+void debugLog (struct Query *query, const char *msg) {
+    #ifdef DEBUG
+    fprintf(stderr, "[Q%d.%d] %s\n", getpid(), query->id, msg);
+    #endif
 }

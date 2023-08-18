@@ -23,20 +23,16 @@
 
 #ifdef DEBUG
 int query_count = -1;
+extern int debug_verbosity;
 #endif
 
-int basic_select_query (
-    struct Query *q,
-    struct Plan *plan,
-    enum OutputOption output_flags,
-    FILE * output
-);
-
-int information_query (const char *table, FILE * output);
+static int information_query (const char *table, FILE * output);
 
 static int populate_tables (struct Query *q);
 
-int resolveNode (struct Query *query, struct Node *node, int allow_aliases);
+static int resolveNode (struct Query *query, struct Node *node, int allow_aliases);
+
+static struct Query *makeQuery ();
 
 static int find_field (
     struct Query *q,
@@ -99,10 +95,6 @@ int query (
     FILE * output,
     const char **end_ptr
 ) {
-    #ifdef DEBUG
-    fprintf(stderr, "Start Query (%d.%d)\n", getpid(), ++query_count);
-    #endif
-
     skipWhitespacePtr(&query);
 
     if (strncmp(query, "CREATE ", 7) == 0) {
@@ -158,14 +150,14 @@ int select_query (
     FILE * output,
     const char **end_ptr
 ) {
-    struct Query q = {0};
+    struct Query *q = makeQuery();
     struct timeval stop, start;
 
     if (output_flags & OUTPUT_OPTION_STATS) {
         gettimeofday(&start, NULL);
     }
 
-    if (parseQuery(&q, query, end_ptr) < 0) {
+    if (parseQuery(q, query, end_ptr) < 0) {
         return -1;
     }
 
@@ -190,7 +182,7 @@ int select_query (
         }
     }
 
-    int explain = (q.flags & FLAG_EXPLAIN) || (output_flags & FLAG_EXPLAIN);
+    int explain = (q->flags & FLAG_EXPLAIN) || (output_flags & FLAG_EXPLAIN);
 
     enum OutputOption format = output_flags & OUTPUT_MASK_FORMAT;
 
@@ -198,24 +190,27 @@ int select_query (
     // whole query in a subquery.
     if (format != OUTPUT_FORMAT_COMMA && explain) {
         int result = wrap_query(
-            &q,
+            q,
             (enum OutputOption)FLAG_EXPLAIN,
             format | (output_flags & OUTPUT_OPTION_HEADERS),
             output
         );
 
-        destroy_query(&q);
+        destroy_query(q);
+
+        free(q);
 
         return result;
     }
 
     // Cannot group and sort in the same query.
-    if ((q.flags & FLAG_GROUP) && q.order_count > 0)
+    if ((q->flags & FLAG_GROUP) && q->order_count > 0)
     {
         // We will materialise the GROUP'd query to disk then sort that
 
         // Make a copy of the struct
-        struct Query q2a = q;
+        struct Query q2a;
+        memcpy(&q2a, q, sizeof(q2a));
         q2a.order_count = 0;
 
         struct Table table = {0};
@@ -241,11 +236,11 @@ int select_query (
 
         memcpy(
             q2b.order_nodes,
-            q.order_nodes,
-            sizeof(q.order_nodes)
+            q->order_nodes,
+            sizeof(q->order_nodes)
         );
 
-        q2b.order_count = q.order_count;
+        q2b.order_count = q->order_count;
 
         result = process_query(&q2b, output_flags, output);
 
@@ -255,14 +250,17 @@ int select_query (
 
         destroy_query(&q2b);
 
+        //      Why aren't we destroying here?
         // destroy_query(&q);
 
         return result;
     }
 
-    int result = process_query(&q, output_flags, output);
+    int result = process_query(q, output_flags, output);
 
-    destroy_query(&q);
+    destroy_query(q);
+
+    free(q);
 
     return result;
 }
@@ -360,8 +358,11 @@ int process_query (
     }
 
     #ifdef DEBUG
-    // fprintf(stderr, "SELECT\n");
-    // debugNodes(q->columns, q->column_count);
+    if (debug_verbosity >= 2) {
+        debugLog(q, "AST");
+        fprintf(stderr, "    SELECT\n");
+        debugNodes(q->columns, q->column_count);
+    }
     #endif
 
     // Populate WHERE columns
@@ -384,8 +385,10 @@ int process_query (
     }
 
     #ifdef DEBUG
-    // fprintf(stderr, "WHERE\n");
-    // debugNodes(q->predicate_nodes, q->predicate_count);
+    if (debug_verbosity >= 2) {
+        fprintf(stderr, "    WHERE\n");
+        debugNodes(q->predicate_nodes, q->predicate_count);
+    }
     #endif
 
     // Populate ORDER BY columns
@@ -441,8 +444,7 @@ int process_query (
     }
 
     result = executeQueryPlan(
-        q->tables,
-        q->table_count,
+        q,
         &plan,
         output_flags,
         output
@@ -470,16 +472,30 @@ int select_subquery_file (
     char *filename,
     const char **end_ptr
 ) {
-    struct Query q = {0};
+    struct Query *q = makeQuery();
 
-    int result = parseQuery(&q, query, end_ptr);
+    int result = parseQuery(q, query, end_ptr);
     if (result < 0) {
         return -1;
     }
 
-    result = process_subquery(&q, 0, filename);
+    // DEBUG builds print out current query
+    #ifdef DEBUG
+    if (end_ptr != NULL) {
+        size_t query_len = *end_ptr - query;
+        fwrite(query, 1, query_len, stderr);
+        fprintf(stderr, "\n");
+    }
+    else {
+        fprintf(stderr, "%s\n", query);
+    }
+    #endif
 
-    destroy_query(&q);
+    result = process_subquery(q, 0, filename);
+
+    destroy_query(q);
+
+    free(q);
 
     return result;
 }
@@ -498,16 +514,30 @@ int select_subquery_mem (
     struct DB *db,
     const char **end_ptr
 ) {
-    struct Query q = {0};
+    struct Query *q = makeQuery();
 
-    int result = parseQuery(&q, query, end_ptr);
+    int result = parseQuery(q, query, end_ptr);
     if (result < 0) {
         return -1;
     }
 
-    result = csvMem_fromQuery(db, &q);
+    // DEBUG builds print out current query
+    #ifdef DEBUG
+    if (end_ptr != NULL) {
+        size_t query_len = *end_ptr - query;
+        fwrite(query, 1, query_len, stderr);
+        fprintf(stderr, "\n");
+    }
+    else {
+        fprintf(stderr, "%s\n", query);
+    }
+    #endif
 
-    destroy_query(&q);
+    result = csvMem_fromQuery(db, q);
+
+    destroy_query(q);
+
+    free(q);
 
     return result;
 }
@@ -545,7 +575,7 @@ static int process_subquery(
     return 0;
 }
 
-int information_query (const char *table, FILE * output) {
+static int information_query (const char *table, FILE * output) {
     struct DB db;
 
     if (openDB(&db, table) != 0) {
@@ -810,7 +840,7 @@ static int find_field (
  *
  * @returns 0 on success
  */
-int resolveNode (struct Query *query, struct Node *node, int allow_aliases) {
+static int resolveNode (struct Query *query, struct Node *node, int allow_aliases) {
     if (node->child_count > 0) {
         for (int i = 0; i < node->child_count; i++) {
             int result = resolveNode(query, &node->children[i], allow_aliases);
@@ -932,4 +962,16 @@ static int wrap_query (
     destroy_query(&q2);
 
     return result;
+}
+
+static struct Query *makeQuery () {
+    struct Query *q = calloc(1, sizeof(*q));
+
+    #ifdef DEBUG
+    q->id = ++query_count;
+
+    debugLog(q, "Start Query");
+    #endif
+
+    return q;
 }

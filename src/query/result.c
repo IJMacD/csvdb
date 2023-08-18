@@ -5,6 +5,8 @@
 #include "../structs.h"
 #include "../functions/util.h"
 
+extern int debug_verbosity;
+
 int getRowID (struct RowList * row_list, int join_id, int index) {
     if (join_id < 0) return -1;
     return row_list->row_ids[index * row_list->join_count + join_id];
@@ -307,15 +309,17 @@ RowListIndex createRowList (int join_count, int max_rows) {
     }
 
     #ifdef DEBUG
-    fprintf(
-        stderr,
-        "Created RowList %d (max: %dj x %dr). Pool use: %d/%d\n",
-        pool_count - 1,
-        join_count,
-        max_rows,
-        pool_count,
-        max_size
-    );
+    if (debug_verbosity >= 2) {
+        fprintf(
+            stderr,
+            "\tCreated RowList %d (max: %dj x %dr). Pool use: %d/%d\n",
+            pool_count - 1,
+            join_count,
+            max_rows,
+            pool_count,
+            max_size
+        );
+    }
     #endif
 
     return pool_count - 1;
@@ -344,12 +348,14 @@ void destroyRowList (RowListIndex row_list) {
 
 
     #ifdef DEBUG
-    fprintf(
-        stderr,
-        "Destroyed RowList %d. Pool use: %d\n",
-        row_list,
-        pool_count
-    );
+    if (debug_verbosity >= 2) {
+        fprintf(
+            stderr,
+            "\tDestroyed RowList %d. Pool use: %d\n",
+            row_list,
+            pool_count
+        );
+    }
     #endif
 }
 

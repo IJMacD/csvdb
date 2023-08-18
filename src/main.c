@@ -17,6 +17,7 @@ extern char* gitversion;
 
 #ifdef DEBUG
 const char debug[] = "DEBUG";
+int debug_verbosity = 1;
 #else
 const char debug[] = "";
 #endif
@@ -160,6 +161,12 @@ int main (int argc, char * argv[]) {
             // Secret internal argument to force read-only mode
             flags |= FLAG_READ_ONLY;
         }
+        #ifdef DEBUG
+        else if (strcmp(arg, "-D") == 0) {
+            // Extra verbose debugging
+            debug_verbosity = 2;
+        }
+        #endif
         else {
             fprintf(stderr, "Unknown option %s\n", arg);
             printUsage(argv[0]);
