@@ -425,40 +425,19 @@ int datetimeGetWeekYear (struct DateTime *dt) {
 }
 
 /**
- * ISO Week Number
- * Algorithm from https://www.tondering.dk/claus/cal/week.php
+ * ISO Week Day
+ * 1 = Mon, 7 = Sun
  */
 int datetimeGetWeekDay (struct DateTime *dt) {
-    int d;
-
-    // Special case for 0000-01-01
-    if (dt->year == 0 && dt->month == 1 && dt->day == 1) {
-        return 7;
-    }
-
-    if (dt->month < 3) {
-        int a = dt->year - 1;
-        int b = a / 4 - a / 100 + a / 400;
-        int e = 0;
-        int f = dt->day - 1 + 31 * (dt->month - 1);
-        int g = (a + b) % 7;
-        d = (f + g - e) % 7;
-    }
-    else {
-        int a = dt->year;
-        int b = a / 4 - a / 100 + a / 400;
-        int c = (a - 1) / 4 - (a - 1) / 100 + (a - 1) / 400;
-        int s = b - c;
-        int e = s + 1;
-        int f = dt->day + (153 * (dt->month - 3) + 2) / 5 + 58 + s;
-        int g = (a + b) % 7;
-        d = (f + g - e) % 7;
-    }
-
-    return d + 1;
+    struct DateTime dt2 = *dt;
+    dt2.hour = 12;
+    int julian = datetimeGetJulian(&dt2);
+    return (julian % 7) + 1;
 }
 
 /**
+ * Respects hour field in DateTime struct
+ * i.e. if dt->hour == 0 then gives JD at midnight
  * Algorithm from https://quasar.as.utexas.edu/BillInfo/JulianDatesG.html
  */
 int datetimeGetJulian (struct DateTime *dt) {
