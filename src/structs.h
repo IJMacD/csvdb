@@ -66,7 +66,9 @@ enum Function {
     FUNC_CHR =                      0x01,
     FUNC_TO_HEX =                   0x02,
 
-    FUNC_RANDOM =                   0x10,
+    FUNC_RANDOM =                   0x0A,
+
+    // Maths functions
 
     FUNC_ADD =                      0x11,
     FUNC_SUB =                      0x12,
@@ -135,8 +137,7 @@ enum Function {
     FUNC_AGG_LISTAGG =              0xA6,
 
     // Family 110x (0xC0) (Comparison Operators)
-    // FUNC_FAM_OPERATOR =          0xC0,
-    // (Aliased below)
+    // FUNC_FAM_OPERATOR =          0xC0, // (Aliased below)
 
     // Operator bitmap
     //

@@ -31,6 +31,7 @@ void printUsage (const char* name) {
         "\t%1$s \"CREATE [UNIQUE] INDEX [<index_file>] ON <file> (<field>)\"\n"
         "\t%1$s \"CREATE TABLE <file> AS <query>\"\n"
         "\t%1$s \"INSERT INTO <file> <query>\"\n"
+        "\t%1$s \"CREATE VIEW <file> AS <query>\"\n"
         "\t%1$s -h|--help\n"
         "\n"
         "Where <query> is one of:\n"
@@ -56,6 +57,7 @@ void printUsage (const char* name) {
         "\t[(-F |--format=)(tsv|csv|html|json|json_array|sql|sql_values|xml|"
         "record)]\n"
         "\t[(-o |--output=)<filename>]\n"
+        "\t[--stats] (Writes timing data to 'stats.csv')\n"
         "\n"
         "Version: %2$s %3$s\n"
     , name, gitversion, debug);
