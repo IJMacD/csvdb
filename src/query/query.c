@@ -381,8 +381,7 @@ int process_query (
 
         optimiseRowidAlgebra(&q->predicate_nodes[i]);
 
-        optimiseCollapseConstantNode(&q->predicate_nodes[i].children[0]);
-        optimiseCollapseConstantNode(&q->predicate_nodes[i].children[1]);
+        optimiseCollapseConstantNode(&q->predicate_nodes[i]);
     }
 
     #ifdef DEBUG

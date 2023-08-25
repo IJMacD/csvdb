@@ -25,36 +25,13 @@ int executeTableAccessRowid (
     getRowList(row_list)->row_count = 0;
 
     for (int i = 0; i < source_count; i++) {
-        int match = 1;
-
-        for (int j = 0; j < step->node_count; j++) {
-            struct Node * p = step->nodes + j;
-
-            char value_left[MAX_VALUE_LENGTH] = {0};
-            char value_right[MAX_VALUE_LENGTH] = {0};
-
-            evaluateNode(
-                tables,
-                getRowList(row_list),
-                i,
-                &p->children[0],
-                value_left,
-                MAX_VALUE_LENGTH
-            );
-            evaluateNode(
-                tables,
-                getRowList(row_list),
-                i,
-                &p->children[1],
-                value_right,
-                MAX_VALUE_LENGTH
-            );
-
-            if (!evaluateExpression(p->function, value_left, value_right)) {
-                match = 0;
-                break;
-            }
-        }
+        int match = evaluateExpressionNode(
+            tables,
+            row_list,
+            i,
+            step->nodes,
+            step->node_count
+        );
 
         if (match) {
             // Add to result set

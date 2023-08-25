@@ -1,8 +1,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "./predicates.h"
+#include "./evaluate.h"
 #include "../structs.h"
-#include "predicates.h"
+#include "../query/result.h"
 #include "../functions/date.h"
 #include "../functions/util.h"
 
@@ -26,8 +28,68 @@ int parseOperator (const char *input) {
     return FUNC_UNKNOWN;
 }
 
+/**
+ * Evaluate an OPERATOR node
+ */
+int evaluateExpressionNode (struct Table *tables, int row_list, int row_index, struct Node *nodes, int node_count) {
+    for (int j = 0; j < node_count; j++) {
+        struct Node * p = nodes + j;
+
+        if ((p->function & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR) {
+            fprintf(
+                stderr,
+                "Expression node must be an operator. Found function 0x%X\n",
+                p->function
+            );
+            exit(-1);
+        }
+
+        if (p->function == OPERATOR_NEVER) {
+            return 0;
+        }
+
+        if (p->function == OPERATOR_ALWAYS) {
+            return 1;
+        }
+
+        char value_left[MAX_VALUE_LENGTH] = {0};
+        char value_right[MAX_VALUE_LENGTH] = {0};
+
+        evaluateNode(
+            tables,
+            getRowList(row_list),
+            row_index,
+            &p->children[0],
+            value_left,
+            MAX_VALUE_LENGTH
+        );
+        evaluateNode(
+            tables,
+            getRowList(row_list),
+            row_index,
+            &p->children[1],
+            value_right,
+            MAX_VALUE_LENGTH
+        );
+
+        if (!evaluateExpression(p->function, value_left, value_right)) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 int evaluateExpression (enum Function op, const char *left, const char *right) {
     // printf("Evaluating %s OP %s\n", left, right);
+
+    if (op == OPERATOR_NEVER) {
+        return 0;
+    }
+
+    if (op == OPERATOR_ALWAYS) {
+        return 1;
+    }
 
     struct DateTime dt_left, dt_right;
     if (parseDateTime(left, &dt_left) && parseDateTime(right, &dt_right)) {

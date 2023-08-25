@@ -2,9 +2,10 @@
 
 #include "../structs.h"
 #include "../evaluate/evaluate.h"
+#include "../evaluate/predicates.h"
 
 void optimiseCollapseConstantNode (struct Node *node)  {
-    if (node->function == FUNC_UNITY || node->child_count == -1) {
+    if (node->function == FUNC_UNITY) {
         return;
     }
 
@@ -20,12 +21,33 @@ void optimiseCollapseConstantNode (struct Node *node)  {
         }
     }
 
-    // Evaluate the function and write result to field
-    evaluateConstantNode(node, node->field.text);
+    if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR) {
+        // If we're evaluating an operator then we can definitively set the node
+        // to OPERATOR_ALWAYS or OPERATOR_NEVER
 
-    // Mark the node as constant and remove function marker
-    node->field.index = FIELD_CONSTANT;
-    node->function = FUNC_UNITY;
+        char value_left[MAX_VALUE_LENGTH] = {0};
+        char value_right[MAX_VALUE_LENGTH] = {0};
+
+        evaluateConstantNode(&node->children[0], value_left);
+        evaluateConstantNode(&node->children[1], value_right);
+
+        int result = evaluateExpression(node->function, value_left, value_right);
+
+        if (result) {
+            node->function = OPERATOR_ALWAYS;
+        }
+        else {
+            node->function = OPERATOR_NEVER;
+        }
+    }
+    else {
+        // Evaluate the function and write result to field
+        evaluateConstantNode(node, node->field.text);
+
+        // Mark the node as constant and remove function marker
+        node->field.index = FIELD_CONSTANT;
+        node->function = FUNC_UNITY;
+    }
 }
 
 /**

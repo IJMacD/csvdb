@@ -2,6 +2,8 @@
 
 #include "../structs.h"
 #include "../query/result.h"
+#include "../evaluate/evaluate.h"
+#include "../functions/util.h"
 #include "../db/db.h"
 #include "../db/indices.h"
 
@@ -250,6 +252,7 @@ int executeSourceTableFull (
 
 /**
  * @brief Iterate a range of rowids adding each one to the RowList.
+ * The range of rowids is determined by rowid predicates.
  * Any nodes on this step must ONLY be rowid nodes.
  *
  * @param query
@@ -277,7 +280,7 @@ int executeSourceTableScan (
             return -1;
         }
 
-        if (step->nodes[0].children[1].field.index != FIELD_CONSTANT) {
+        if (!isConstantNode(&step->nodes[0].children[1])) {
             fprintf(
                 stderr,\
                 "Cannot compare rowid against non-constant value\n"
@@ -285,35 +288,43 @@ int executeSourceTableScan (
             return -1;
         }
 
-        int left_val = atoi(step->nodes[0].children[1].field.text);
+        char right_value[MAX_VALUE_LENGTH] = {0};
+        evaluateConstantNode(&step->nodes[0].children[1], right_value);
+
+        if (!is_numeric(right_value)) {
+            return 0;
+        }
+
+        int right_val = atoi(right_value);
+
         enum Function function = step->nodes[0].function;
 
         int op_limit = -1;
 
         if (function == OPERATOR_EQ) {
-            start_rowid = left_val;
+            start_rowid = right_val;
             op_limit = 1;
         }
         else if (function == OPERATOR_LT) {
             start_rowid = 0;
-            op_limit = left_val;
+            op_limit = right_val;
         }
         else if (function == OPERATOR_LE) {
             start_rowid = 0;
-            op_limit = left_val + 1;
+            op_limit = right_val + 1;
         }
         else if (function == OPERATOR_GT) {
-            start_rowid = left_val + 1;
+            start_rowid = right_val + 1;
             op_limit = -1;
         }
         else if (function == OPERATOR_GE) {
-            start_rowid = left_val;
+            start_rowid = right_val;
             op_limit = -1;
         }
         else {
             fprintf(
                 stderr,
-                "Unable to do FULL TABLE SCAN with functionerator %d\n",
+                "Unable to do FULL TABLE SCAN with operator %d\n",
                 function
             );
             return -1;

@@ -67,14 +67,14 @@ int evaluateNode (
         return evaluateFunction(output, node->function, (char **)values, 1);
     }
 
-    int n = node->child_count;
-    if (n == 0) {
-        n = 1;
+    int value_count = node->child_count;
+    if (value_count == 0) {
+        value_count = 1;
     }
 
-    char *values = malloc(n * MAX_VALUE_LENGTH);
-    char **values_ptrs = malloc(n * sizeof(values));
-    for (int i = 0; i < n; i++) {
+    char *values = malloc(value_count * MAX_VALUE_LENGTH);
+    char **values_ptrs = malloc(value_count * sizeof(values));
+    for (int i = 0; i < value_count; i++) {
         values_ptrs[i] = values + MAX_FIELD_LENGTH * i;
     }
 
@@ -82,8 +82,8 @@ int evaluateNode (
         fprintf(
             stderr,
             __FILE__ ":%d Unable to allocate %d bytes for %d child node values\n", __LINE__,
-            n * MAX_VALUE_LENGTH,
-            n
+            value_count * MAX_VALUE_LENGTH,
+            value_count
         );
         exit(-1);
     }
@@ -119,14 +119,20 @@ int evaluateConstantNode (
     struct Node *node,
     char *output
 ) {
-    int n = node->child_count;
-    if (n <= 0) {
-        n = 1;
+    if (node->function == FUNC_UNITY) {
+        // If this node is just unity, then just copy from the field
+        strcpy(output, node->field.text);
+        return 1;
     }
 
-    char *values = malloc(n * MAX_VALUE_LENGTH);
-    char **values_ptrs = malloc(n * sizeof(values));
-    for (int i = 0; i < n; i++) {
+    int value_count = node->child_count;
+    if (value_count <= 0) {
+        value_count = 1;
+    }
+
+    char *values = malloc(value_count * MAX_VALUE_LENGTH);
+    char **values_ptrs = malloc(value_count * sizeof(values));
+    for (int i = 0; i < value_count; i++) {
         values_ptrs[i] = values + MAX_FIELD_LENGTH * i;
     }
 
@@ -134,8 +140,8 @@ int evaluateConstantNode (
         fprintf(
             stderr,
             __FILE__ ":%d Unable to allocate %d bytes for %d child node values\n", __LINE__,
-            n * MAX_VALUE_LENGTH,
-            n
+            value_count * MAX_VALUE_LENGTH,
+            value_count
         );
         exit(-1);
     }
