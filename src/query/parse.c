@@ -989,7 +989,10 @@ static int parseNode (
         else if (strcmp(value, "INDEX") == 0) {
             node->function = FUNC_INDEX;
         }
-        else if (strcmp(value, "CHR") == 0) {
+        else if (
+            strcmp(value, "CHR") == 0 ||
+            strcmp(value, "CHAR") == 0
+        ) {
             node->function = FUNC_CHR;
         }
         else if (strcmp(value, "RANDOM") == 0) {
