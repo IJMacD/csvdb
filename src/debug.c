@@ -201,3 +201,26 @@ void debugLog (struct Query *query, const char *msg) {
     fprintf(stderr, "[Q%d.%d] %s\n", getpid(), query->id, msg);
     #endif
 }
+
+void debugFrom (struct Query *query) {
+    if (query->table_count == 0) {
+        fprintf(stderr, "      DUMMY\n");
+    }
+    else for(int i = 0; i < query->table_count; i++) {
+        struct Table *table = &query->tables[i];
+        fprintf(stderr, "      %s, ALIAS = '%s'", table->name, table->alias);
+        if (i == 0) {
+            fprintf(stderr, "\n");
+        }
+        else {
+            if (table->join.function == OPERATOR_ALWAYS) {
+                fprintf(stderr, ", CROSS\n");
+            }
+            else {
+                const char *JOIN_TYPES[] = {"INNER","LEFT"};
+                fprintf(stderr, ", %s\n", JOIN_TYPES[table->join_type]);
+            }
+            debugNode(&table->join);
+        }
+    }
+}

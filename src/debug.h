@@ -11,3 +11,5 @@ void debugNode (struct Node * node);
 void debugNodes (struct Node nodes[], int node_count);
 
 void debugLog (struct Query *query, const char *msg);
+
+void debugFrom (struct Query *query);

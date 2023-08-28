@@ -348,7 +348,16 @@ int process_query (
         return result;
     }
 
-    // Populate SELECT Columns
+    #ifdef DEBUG
+    if (debug_verbosity >= 2) {
+        debugLog(q, "AST");
+        fprintf(stderr, "    FROM\n");
+        debugFrom(q);
+    }
+    #endif
+
+    // Populate SELECT Columns firtst so that aliases can be used in WHERE or
+    // ORDER BY clauses
     for (int i = 0; i < q->column_count; i++) {
         result = resolveNode(q, &q->columns[i], 0);
         if (result < 0) {
@@ -358,14 +367,6 @@ int process_query (
 
         optimiseCollapseConstantNode(&q->columns[i]);
     }
-
-    #ifdef DEBUG
-    if (debug_verbosity >= 2) {
-        debugLog(q, "AST");
-        fprintf(stderr, "    SELECT\n");
-        debugNodes(q->columns, q->column_count);
-    }
-    #endif
 
     // Populate WHERE columns
     for (int i = 0; i < q->predicate_count; i++) {
@@ -387,7 +388,7 @@ int process_query (
     }
 
     #ifdef DEBUG
-    if (debug_verbosity >= 2) {
+    if (debug_verbosity >= 2 && q->predicate_count > 0) {
         fprintf(stderr, "    WHERE\n");
         debugNodes(q->predicate_nodes, q->predicate_count);
     }
@@ -410,6 +411,13 @@ int process_query (
             return result;
         }
     }
+
+    #ifdef DEBUG
+    if (debug_verbosity >= 2) {
+        fprintf(stderr, "    SELECT\n");
+        debugNodes(q->columns, q->column_count);
+    }
+    #endif
 
     if (output_flags & OUTPUT_OPTION_STATS) {
         gettimeofday(&stop, NULL);
