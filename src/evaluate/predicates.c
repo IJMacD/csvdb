@@ -25,6 +25,11 @@ int parseOperator (const char *input) {
         return OPERATOR_GE;
     if (strcmp(input, "LIKE") == 0)
         return OPERATOR_LIKE;
+    if (strcmp(input, "BETWEEN") == 0)
+        return OPERATOR_GE;
+    // [Inclusive, Exclusive)
+    if (strcmp(input, "XBETWEEN") == 0)
+        return OPERATOR_GE;
     return FUNC_UNKNOWN;
 }
 

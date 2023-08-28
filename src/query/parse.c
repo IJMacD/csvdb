@@ -572,8 +572,9 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                     return result;
                 }
 
-                char op[5];
-                getOperatorToken(query, &index, op, 5);
+                // Max length is XBETWEEN
+                char op[9];
+                getOperatorToken(query, &index, op, 8);
 
                 p->function = parseOperator(op);
                 if (p->function == FUNC_UNKNOWN) {
@@ -596,6 +597,34 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                 }
 
                 skipWhitespace(query, &index);
+
+                if (strcmp(op, "BETWEEN") == 0 || strcmp(op, "XBETWEEN") == 0)
+                {
+                    if (strncmp(query + index, "AND ", 4) != 0) {
+                        fprintf(stderr, "Expected AND after BETWEEN\n");
+                        return -1;
+                    }
+                    index += 4;
+
+                    struct Node *p2 = allocatePredicateNode(q);
+
+                    struct Node *left2 = &p2->children[0];
+                    struct Node *right2 = &p2->children[1];
+
+                    copyNodeTree(left2, left);
+
+                    result = parseNode(query, &index, right2);
+                    if (result < 0) {
+                        return result;
+                    }
+
+                    if (op[0] == 'X') {
+                        p2->function = OPERATOR_LT;
+                    }
+                    else {
+                        p2->function = OPERATOR_LE;
+                    }
+                }
 
                 if (strncmp(query + index, "AND ", 4) == 0) {
                     index += 4;
