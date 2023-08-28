@@ -37,3 +37,5 @@ int process_query (
     enum OutputOption output_flags,
     FILE * output
 );
+
+struct Table *allocateTable (struct Query *q);

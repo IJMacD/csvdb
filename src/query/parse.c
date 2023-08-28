@@ -4,6 +4,7 @@
 
 #include "../structs.h"
 #include "token.h"
+#include "query.h"
 #include "../db/csv-mem.h"
 #include "../functions/util.h"
 #include "../evaluate/predicates.h"
@@ -297,32 +298,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
             int next_join_flag = 0;
 
             while (query[index] != '\0' && query[index] != ';') {
-                q->table_count++;
-
-                if (q->table_count == 1) {
-                    q->tables = calloc(q->table_count, sizeof (struct Table));
-                } else {
-                    void * ptr = realloc(
-                        q->tables,
-                        sizeof (struct Table) * q->table_count
-                    );
-
-                    if (ptr == NULL) {
-                        fprintf(stderr, "Can't allocate memory\n");
-                        return -1;
-                    }
-
-                    q->tables = ptr;
-
-                    // Zero out realloc'd space
-                    memset(
-                        q->tables + (q->table_count - 1),
-                        0,
-                        sizeof (struct Table)
-                    );
-                }
-
-                struct Table *table = &q->tables[q->table_count - 1];
+                struct Table *table = allocateTable(q);
 
                 table->join.function = OPERATOR_ALWAYS;
                 table->join_type = next_join_flag;
@@ -342,7 +318,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                         const char *end_ptr = query + index + len;
 
-                        index += 1 + 6; // '(' + 'VALUES'
+                        index += strlen("(VALUES");
 
                         skipWhitespace(query, &index);
 
@@ -417,6 +393,11 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                         );
 
                         if (cte != NULL) {
+                            // `ctes` array is just a holding area on the stack.
+                            // Nothing happens to any of them until they're
+                            // actually referenced in the FROM clause.
+                            // In which case we copy into the tables area of the
+                            // query.
                             memcpy(table, cte, sizeof(*cte));
 
                             // TODO: CTEs can't reference CTEs

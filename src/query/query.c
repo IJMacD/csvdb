@@ -985,3 +985,32 @@ static struct Query *makeQuery () {
 
     return q;
 }
+
+struct Table *allocateTable (struct Query *q) {
+    q->table_count++;
+
+    if (q->table_count == 1) {
+        q->tables = calloc(q->table_count, sizeof (struct Table));
+    } else {
+        void * ptr = realloc(
+            q->tables,
+            sizeof (struct Table) * q->table_count
+        );
+
+        if (ptr == NULL) {
+            fprintf(stderr, "Can't allocate memory\n");
+            exit(-1);
+        }
+
+        q->tables = ptr;
+
+        // Zero out realloc'd space
+        memset(
+            q->tables + (q->table_count - 1),
+            0,
+            sizeof (struct Table)
+        );
+    }
+
+    return &q->tables[q->table_count - 1];
+}
