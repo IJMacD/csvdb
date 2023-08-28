@@ -355,6 +355,8 @@ int process_query (
             fprintf(stderr, "Unable to resolve SELECT column %d\n", i);
             return result;
         }
+
+        optimiseCollapseConstantNode(&q->columns[i]);
     }
 
     #ifdef DEBUG

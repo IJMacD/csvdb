@@ -7,6 +7,44 @@
 
 static void debugNodeInner (struct Node * node, int depth);
 
+const char *FUNC_NAMES[] = {
+    // 0x00
+    "","CHAR","TO_HEX","","","","","",
+    "","","RANDOM","","","","","",
+    // 0x10
+    "","ADD","SUB","MUL","DIV","MOD","POW","",
+    "","","","","","","","",
+    // 0x20
+    "","LENGTH","LEFT","RIGHT","CONCAT","","","",
+    "","","","","","","","",
+    // 0x30
+    "","","","","","","","",
+    "","","","","","","","",
+    // 0x40
+    "","EXTRACT<YEAR>","EXTRACT<MONTH>","EXTRACT<DAY>","EXTRACT<WEEK>","EXTRACT<WEEKDAY>","EXTRACT<WEEKYEAR>","EXTRACT<YEARDAY>",
+    "EXTRACT<HEYEAR>","EXTRACT<MILLENNIUM>","EXTRACT<CENTURY>","EXTRACT<DECADE>","EXTRACT<QUARTER>","EXTRACT<HOUR>","EXTRACT<MINUTE>","EXTRACT<SECOND>",
+    // 0x50
+    "EXTRACT<MONTH_STRING>","EXTRACT<WEEK_STRING>","EXTRACT<YEARDAY_STRING>","","","","","",
+    "","","","","EXTRACT<JULIAN>","EXTRACT<DATE>","EXTRACT<TIME>","EXTRACT<DATETIME>",
+    // 0x60
+    "","DATE_ADD","DATE_SUB","DATE_DIFF","","","","",
+    "","","","","","","","",
+    // 0x70
+    "TODAY","","","","","","","",
+    "","","","","","","","",
+    // 0x80
+    "","","","","","","","",
+    "","","","","","","","",
+    // 0x90
+    "","","","","","","","",
+    "","","","","","","","",
+    // 0xA0
+    "","COUNT","MIN","MAX","SUM","AVG","LISTAGG",""
+    "","","","","","","","",
+};
+
+size_t FUNC_NAMES_COUNT = sizeof (FUNC_NAMES) / sizeof (FUNC_NAMES[0]);
+
 void debugRowList (struct RowList * list, int verbosity) {
     if (list == NULL) {
         fprintf(stderr, "\tRowList (NULL)\n");
@@ -83,6 +121,24 @@ static void debugNodeInner (struct Node * node, int depth) {
                 stderr,
                 "OPERATOR_%s ",
                 s
+            );
+        }
+        else if ((node->function & (MASK_FUNC_FAMILY | 0x10)) == 0x10) {
+            char *operators[] = {
+                "","+","-","*","/","%%","^"
+            };
+            char *s = operators[node->function & ~(MASK_FUNC_FAMILY | 0x10)];
+            fprintf(
+                stderr,
+                "OPERATOR %s ",
+                s
+            );
+        }
+        else if (node->function < FUNC_NAMES_COUNT) {
+            fprintf(
+                stderr,
+                "Function %s() ",
+                FUNC_NAMES[node->function]
             );
         }
         else {
