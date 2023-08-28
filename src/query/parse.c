@@ -562,28 +562,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
             q->flags |= FLAG_HAVE_PREDICATE;
 
             while (query[index] != '\0' && query[index] != ';') {
-                void *mem;
-
-                if (q->predicate_count == 0) {
-                    mem = malloc(sizeof (*q->predicate_nodes));
-                } else {
-                    mem = realloc(
-                        q->predicate_nodes,
-                        sizeof(*q->predicate_nodes) * (q->predicate_count + 1)
-                    );
-                }
-
-                if (mem == NULL) {
-                    fprintf(stderr, "Out of memory\n");
-                    return -1;
-                }
-
-                q->predicate_nodes = mem;
-
-                struct Node *p = &(q->predicate_nodes[q->predicate_count++]);
-
-                p->children = malloc(sizeof(*p) * 2);
-                p->child_count = 2;
+                struct Node *p = allocatePredicateNode(q);
 
                 struct Node *left = &p->children[0];
                 struct Node *right = &p->children[1];

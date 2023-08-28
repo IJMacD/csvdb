@@ -1014,3 +1014,30 @@ struct Table *allocateTable (struct Query *q) {
 
     return &q->tables[q->table_count - 1];
 }
+
+struct Node *allocatePredicateNode (struct Query *q) {
+    void *mem;
+
+    if (q->predicate_count == 0) {
+        mem = malloc(sizeof (*q->predicate_nodes));
+    } else {
+        mem = realloc(
+            q->predicate_nodes,
+            sizeof(*q->predicate_nodes) * (q->predicate_count + 1)
+        );
+    }
+
+    if (mem == NULL) {
+        fprintf(stderr, "Out of memory\n");
+        exit(-1);
+    }
+
+    q->predicate_nodes = mem;
+
+    struct Node *p = &(q->predicate_nodes[q->predicate_count++]);
+
+    p->children = malloc(sizeof(*p) * 2);
+    p->child_count = 2;
+
+    return p;
+}
