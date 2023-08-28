@@ -9,6 +9,8 @@
 #include "../query/result.h"
 #include "../db/db.h"
 
+#define IS_NOT_NULL(x) (x[0])
+
 /**
  * @brief
  *
@@ -358,6 +360,8 @@ int evaluateFunction(
     return 0;
 }
 
+typedef char LongestValue[MAX_VALUE_LENGTH];
+
 /**
  * @brief
  *
@@ -373,215 +377,152 @@ int evaluateAggregateFunction (
     struct Node *node,
     struct RowList * row_list
 ) {
-    char value[MAX_VALUE_LENGTH];
-
     if ((node->function & MASK_FUNC_FAMILY) != FUNC_FAM_AGG) {
         return -1;
     }
 
-    struct Field *field;
+    LongestValue *values = malloc(row_list->row_count * MAX_VALUE_LENGTH);
 
     if (node->child_count == -1) {
         // Self-child optimisation
-        field = (struct Field *)node;
+        // Must be a single field
+        struct Field *field = (struct Field *)node;
+
+        for (int i = 0; i < row_list->row_count; i++) {
+            int rowid = getRowID(row_list, field->table_id, i);
+
+            getRecordValue(
+                tables[field->table_id].db,
+                rowid,
+                field->index,
+                values[i],
+                MAX_VALUE_LENGTH
+            );
+        }
     }
     else if (node->child_count == 1) {
-        field = (struct Field *)&node->children[0];
-    }
-    else {
-        // Aggregate functions can only work on a single field at the moment
-        fprintf(
-            stderr,
-            "Aggregate function 0x%X must have a field\n",
-            node->function
-        );
-        return -1;
+        // Evaluate child node for each item in the RowList
+        for (int i = 0; i < row_list->row_count; i++) {
+            evaluateNode(
+                tables,
+                row_list,
+                i,
+                &node->children[0],
+                values[i],
+                MAX_VALUE_LENGTH
+            );
+        }
     }
 
-    // Check there's a valid field to use
-    if (field->table_id < 0) {
-        fprintf(
-            stderr,
-            "Aggregate function 0x%X must have a table\n",
-            node->function
-        );
-        return -1;
-    }
+    int bytesWritten = 0;
 
     if (node->function == FUNC_AGG_COUNT) {
         int count = 0;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, field->table_id, i);
-
             // Count up the non-NULL values
-            if (
-                getRecordValue(
-                    tables[field->table_id].db,
-                    rowid,
-                    field->index,
-                    value,
-                    MAX_VALUE_LENGTH
-                ) > 0
-            ) {
+            if (IS_NOT_NULL(values[i])) {
                 count++;
             }
         }
 
-        return sprintf(output, "%d", count);
+        bytesWritten = sprintf(output, "%d", count);
     }
-
-    if (node->function == FUNC_AGG_MIN) {
+    else if (node->function == FUNC_AGG_MIN) {
         int min = INT_MAX;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, field->table_id, i);
-
             // Only consider the non-NULL values
-            if (
-                getRecordValue(
-                    tables[field->table_id].db,
-                    rowid,
-                    field->index,
-                    value,
-                    MAX_VALUE_LENGTH
-                ) > 0
-            ) {
-                int v = atoi(value);
+            if (IS_NOT_NULL(values[0])) {
+                int v = atoi(values[i]);
 
                 if (v < min) min = v;
             }
         }
 
         if (min < INT_MAX) {
-            return sprintf(output, "%d", min);
+            bytesWritten = sprintf(output, "%d", min);
         }
-
-        return 0;
     }
-
-    if (node->function == FUNC_AGG_MAX) {
+    else if (node->function == FUNC_AGG_MAX) {
         int max = INT_MIN;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, field->table_id, i);
-
             // Only consider the non-NULL values
-            if (
-                getRecordValue(
-                    tables[field->table_id].db,
-                    rowid,
-                    field->index,
-                    value,
-                    MAX_VALUE_LENGTH
-                ) > 0
-            ) {
-                int v = atoi(value);
+            if (IS_NOT_NULL(values[i])) {
+                int v = atoi(values[i]);
 
                 if (v > max) max = v;
             }
         }
 
         if (max > INT_MIN) {
-            return sprintf(output, "%d", max);
+            bytesWritten = sprintf(output, "%d", max);
         }
-
-        return 0;
     }
-
-    if (node->function == FUNC_AGG_SUM) {
+    else if (node->function == FUNC_AGG_SUM) {
         int sum = 0;
         int non_null = 0;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, field->table_id, i);
-
             // Sum the non-NULL values
-            if (
-                getRecordValue(
-                    tables[field->table_id].db,
-                    rowid,
-                    field->index,
-                    value,
-                    MAX_VALUE_LENGTH
-                ) > 0
-            ) {
+            if (IS_NOT_NULL(values[i])) {
                 non_null = 1;
-                sum += atoi(value);
+                sum += atoi(values[i]);
             }
         }
 
         // If *all* rows are NULL then the result is NULL
         if (non_null) {
-            return sprintf(output, "%d", sum);
+            bytesWritten = sprintf(output, "%d", sum);
         }
-
-        output[0] = '\0';
-
-        return 0;
     }
-
-    if (node->function == FUNC_AGG_AVG) {
+    else if (node->function == FUNC_AGG_AVG) {
         int count = 0;
         int sum = 0;
 
         for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, field->table_id, i);
-
             // Count up the non-NULL values
-            if (
-                getRecordValue(
-                    tables[field->table_id].db,
-                    rowid,
-                    field->index,
-                    value,
-                    MAX_VALUE_LENGTH
-                ) > 0
-            ) {
+            if (IS_NOT_NULL(values[i])) {
                 count++;
 
-                sum += atoi(value);
+                sum += atoi(values[i]);
             }
         }
 
         if (count > 0) {
-            return sprintf(output, "%d", sum / count);
+            bytesWritten = sprintf(output, "%d", sum / count);
         }
-
-        output[0] = '\0';
-
-        return 0;
     }
-
-    if (node->function == FUNC_AGG_LISTAGG) {
-
+    else if (node->function == FUNC_AGG_LISTAGG) {
         int have_prev = 0;
 
-        for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, field->table_id, i);
+        char *output_start = output;
 
+        for (int i = 0; i < row_list->row_count; i++) {
             // Count up the non-NULL values
-            if (
-                getRecordValue(
-                    tables[field->table_id].db,
-                    rowid,
-                    field->index,
-                    value,
-                    MAX_VALUE_LENGTH
-                ) > 0
-            ) {
+            if (IS_NOT_NULL(values[i])) {
                 if (have_prev == 1) {
                     sprintf(output++, ",");
                 }
 
-                output += sprintf(output, "%s", value);
+                output += sprintf(output, "%s", values[i]);
 
                 have_prev = 1;
             }
         }
 
-        return 0;
+        bytesWritten = output - output_start;
+    }
+    else {
+        bytesWritten = -1;
     }
 
-    return -1;
+    free(values);
+
+    if (bytesWritten == 0) {
+        output[0] = '\0';
+    }
+
+    return bytesWritten;
 }
