@@ -356,7 +356,7 @@ int process_query (
     }
     #endif
 
-    // Populate SELECT Columns firtst so that aliases can be used in WHERE or
+    // Populate SELECT fields first so that aliases can be used in WHERE or
     // ORDER BY clauses
     for (int i = 0; i < q->column_count; i++) {
         result = resolveNode(q, &q->columns[i], 0);
@@ -368,23 +368,22 @@ int process_query (
         optimiseCollapseConstantNode(&q->columns[i]);
     }
 
-    // Populate WHERE columns
+    // Populate any fields in WHERE clause
     for (int i = 0; i < q->predicate_count; i++) {
-        result = resolveNode(q, &q->predicate_nodes[i].children[0], 1);
-        if (result < 0) {
-            fprintf(stderr, "Unable to resolve WHERE node (%d/left)\n", i);
-            return result;
+        struct Node *predicate = &q->predicate_nodes[i];
+
+        for (int j = 0; j < predicate->child_count; j++) {
+            result = resolveNode(q, &predicate->children[j], 1);
+
+            if (result < 0) {
+                fprintf(stderr, "Unable to resolve WHERE node (%d,%d)\n", i, j);
+                return result;
+            }
         }
 
-        result = resolveNode(q, &q->predicate_nodes[i].children[1], 1);
-        if (result < 0) {
-            fprintf(stderr, "Unable to resolve WHERE node (%d/right)\n", i);
-            return result;
-        }
+        optimiseRowidAlgebra(predicate);
 
-        optimiseRowidAlgebra(&q->predicate_nodes[i]);
-
-        optimiseCollapseConstantNode(&q->predicate_nodes[i]);
+        optimiseCollapseConstantNode(predicate);
     }
 
     #ifdef DEBUG
