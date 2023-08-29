@@ -8,31 +8,6 @@
 #include "../functions/date.h"
 #include "../functions/util.h"
 
-int parseOperator (const char *input) {
-    if (strcmp(input, "=") == 0)
-        return OPERATOR_EQ;
-    if (strcmp(input, "!=") == 0)
-        return OPERATOR_NE;
-    if (strcmp(input, "IS") == 0)
-        return OPERATOR_EQ;
-    if (strcmp(input, "<") == 0)
-        return OPERATOR_LT;
-    if (strcmp(input, "<=") == 0)
-        return OPERATOR_LE;
-    if (strcmp(input, ">") == 0)
-        return OPERATOR_GT;
-    if (strcmp(input, ">=") == 0)
-        return OPERATOR_GE;
-    if (strcmp(input, "LIKE") == 0)
-        return OPERATOR_LIKE;
-    if (strcmp(input, "BETWEEN") == 0)
-        return OPERATOR_GE;
-    // [Inclusive, Exclusive)
-    if (strcmp(input, "XBETWEEN") == 0)
-        return OPERATOR_GE;
-    return FUNC_UNKNOWN;
-}
-
 /**
  * Evaluate an OPERATOR node
  */

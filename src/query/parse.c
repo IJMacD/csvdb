@@ -7,7 +7,6 @@
 #include "query.h"
 #include "../db/csv-mem.h"
 #include "../functions/util.h"
-#include "../evaluate/predicates.h"
 #include "node.h"
 #include "../debug.h"
 
@@ -24,6 +23,8 @@ static int parseFunctionParams (
     size_t * index,
     struct Node *node
 );
+
+static int parseOperator (const char *input);
 
 static int checkConstantField (struct Field *field);
 
@@ -598,31 +599,35 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                 skipWhitespace(query, &index);
 
-                if (strcmp(op, "BETWEEN") == 0 || strcmp(op, "XBETWEEN") == 0)
+                if (strcmp(op, "BETWEEN") == 0)
                 {
-                    if (strncmp(query + index, "AND ", 4) != 0) {
-                        fprintf(stderr, "Expected AND after BETWEEN\n");
+                    enum Function op2 = FUNC_UNKNOWN;
+
+                    if (strncmp(query + index, "AND ", 4) == 0) {
+                        op2 = OPERATOR_LE;
+                        index += 4;
+                    }
+                    else if (strncmp(query + index, "ANDX ", 5) == 0) {
+                        op2 = OPERATOR_LT;
+                        index += 5;
+                    }
+                    else {
+                        fprintf(stderr, "Expected AND or ANDX after BETWEEN\n");
                         return -1;
                     }
-                    index += 4;
 
                     struct Node *p2 = allocatePredicateNode(q);
 
                     struct Node *left2 = &p2->children[0];
                     struct Node *right2 = &p2->children[1];
 
+                    p2->function = op2;
+
                     copyNodeTree(left2, left);
 
                     result = parseNode(query, &index, right2);
                     if (result < 0) {
                         return result;
-                    }
-
-                    if (op[0] == 'X') {
-                        p2->function = OPERATOR_LT;
-                    }
-                    else {
-                        p2->function = OPERATOR_LE;
                     }
                 }
 
@@ -1405,4 +1410,26 @@ static struct Node *replaceParentNode (
     struct Node *child_node = &node->children[1];
 
     return child_node;
+}
+
+static int parseOperator (const char *input) {
+    if (strcmp(input, "=") == 0)
+        return OPERATOR_EQ;
+    if (strcmp(input, "!=") == 0)
+        return OPERATOR_NE;
+    if (strcmp(input, "IS") == 0)
+        return OPERATOR_EQ;
+    if (strcmp(input, "<") == 0)
+        return OPERATOR_LT;
+    if (strcmp(input, "<=") == 0)
+        return OPERATOR_LE;
+    if (strcmp(input, ">") == 0)
+        return OPERATOR_GT;
+    if (strcmp(input, ">=") == 0)
+        return OPERATOR_GE;
+    if (strcmp(input, "LIKE") == 0)
+        return OPERATOR_LIKE;
+    if (strcmp(input, "BETWEEN") == 0)
+        return OPERATOR_GE;
+    return FUNC_UNKNOWN;
 }
