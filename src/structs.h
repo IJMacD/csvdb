@@ -160,6 +160,8 @@ enum Function {
     OPERATOR_NE =                   0xC6,
     OPERATOR_ALWAYS =               0xC7,
     OPERATOR_LIKE =                 0xC8,
+    OPERATOR_OR =                   0xC9,
+    OPERATOR_AND =                  0xCA,
 
     // Family 111x (0xE0) (Dummy)
     FUNC_FAM_DUMMY =                0xE0,

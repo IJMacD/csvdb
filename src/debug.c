@@ -114,7 +114,7 @@ static void debugNodeInner (struct Node * node, int depth) {
     if (node->function != FUNC_UNITY) {
         if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR) {
             char *operators[] = {
-                "NEVER","EQ","LT","LE","GT","GE","NE","ALWAYS"
+                "NEVER","EQ","LT","LE","GT","GE","NE","ALWAYS","LIKE","OR","AND"
             };
             char *s = operators[node->function & ~MASK_FUNC_FAMILY];
             fprintf(

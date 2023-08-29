@@ -573,9 +573,9 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                     return result;
                 }
 
-                // Max length is XBETWEEN
-                char op[9];
-                getOperatorToken(query, &index, op, 8);
+                // Max length is BETWEEN
+                char op[strlen("BETWEEN") + 1];
+                getOperatorToken(query, &index, op, strlen("BETWEEN"));
 
                 p->function = parseOperator(op);
                 if (p->function == FUNC_UNKNOWN) {
@@ -592,42 +592,115 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                     }
                 }
 
-                result = parseNode(query, &index, right);
-                if (result < 0) {
-                    return result;
-                }
+                if (strcmp(op, "IN") == 0) {
+                    skipWhitespace(query, &index);
 
-                skipWhitespace(query, &index);
-
-                if (strcmp(op, "BETWEEN") == 0)
-                {
-                    enum Function op2 = FUNC_UNKNOWN;
-
-                    if (strncmp(query + index, "AND ", 4) == 0) {
-                        op2 = OPERATOR_LE;
-                        index += 4;
-                    }
-                    else if (strncmp(query + index, "ANDX ", 5) == 0) {
-                        op2 = OPERATOR_LT;
-                        index += 5;
-                    }
-                    else {
-                        fprintf(stderr, "Expected AND or ANDX after BETWEEN\n");
+                    if (query[index] != '(') {
+                        fprintf(stderr, "Expected '(' after IN\n");
                         return -1;
                     }
 
-                    struct Node *p2 = allocatePredicateNode(q);
+                    index++;
 
-                    struct Node *left2 = &p2->children[0];
-                    struct Node *right2 = &p2->children[1];
-
-                    p2->function = op2;
-
-                    copyNodeTree(left2, left);
-
-                    result = parseNode(query, &index, right2);
+                    // Parse first child
+                    result = parseNode(query, &index, right);
                     if (result < 0) {
                         return result;
+                    }
+
+                    // Clone into child
+                    struct Node *clone = malloc(sizeof *clone);
+                    copyNodeTree(clone, p);
+
+                    // Set clone to be child of predicate
+                    free(p->children);
+                    p->children = clone;
+                    p->child_count = 1;
+                    p->function = OPERATOR_OR;
+
+                    skipWhitespace(query, &index);
+
+                    if (query[index] == ',') {
+                        index++;
+
+                        while (query[index] != '\0' &&
+                            query[index] != ';' &&
+                            query[index] != ')')
+                        {
+                            struct Node *next_child = addChildNode(p);
+
+                            addChildNode(next_child);
+                            addChildNode(next_child);
+
+                            struct Node *next_left = &next_child->children[0];
+                            struct Node *next_right = &next_child->children[1];
+
+                            next_child->function = OPERATOR_EQ;
+
+                            struct Node *clone = &p->children[0];
+
+                            copyNodeTree(next_left, &clone->children[0]);
+
+                            result = parseNode(query, &index, next_right);
+                            if (result < 0) {
+                                return result;
+                            }
+
+                            skipWhitespace(query, &index);
+
+                            if (query[index] != ',') {
+                                break;
+                            }
+
+                            index++;
+                        }
+
+                        if (query[index] != ')') {
+                            fprintf(stderr, "Expected ')' after 'IN ('. Found %c\n", query[index]);
+                            return -1;
+                        }
+
+                        index++;
+                    }
+                }
+                else {
+
+                    result = parseNode(query, &index, right);
+                    if (result < 0) {
+                        return result;
+                    }
+
+                    skipWhitespace(query, &index);
+
+                    if (strcmp(op, "BETWEEN") == 0) {
+                        enum Function op2 = FUNC_UNKNOWN;
+
+                        if (strncmp(query + index, "AND ", 4) == 0) {
+                            op2 = OPERATOR_LE;
+                            index += 4;
+                        }
+                        else if (strncmp(query + index, "ANDX ", 5) == 0) {
+                            op2 = OPERATOR_LT;
+                            index += 5;
+                        }
+                        else {
+                            fprintf(stderr, "Expected AND or ANDX after BETWEEN\n");
+                            return -1;
+                        }
+
+                        struct Node *p2 = allocatePredicateNode(q);
+
+                        struct Node *left2 = &p2->children[0];
+                        struct Node *right2 = &p2->children[1];
+
+                        p2->function = op2;
+
+                        copyNodeTree(left2, left);
+
+                        result = parseNode(query, &index, right2);
+                        if (result < 0) {
+                            return result;
+                        }
                     }
                 }
 
@@ -867,6 +940,11 @@ static int parseNode (
         node->field.table_id = 0;
 
         return flags;
+    }
+
+    if (value[0] == '\0') {
+        fprintf(stderr, "Error in parsing: Found unexpected parenthesis\n");
+        return -1;
     }
 
     if (query[*index] == '(') {
@@ -1431,5 +1509,7 @@ static int parseOperator (const char *input) {
         return OPERATOR_LIKE;
     if (strcmp(input, "BETWEEN") == 0)
         return OPERATOR_GE;
+    if (strcmp(input, "IN") == 0)
+        return OPERATOR_EQ;
     return FUNC_UNKNOWN;
 }

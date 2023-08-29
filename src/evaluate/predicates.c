@@ -29,6 +29,14 @@ int evaluateOperatorNode (struct Table *tables, int row_list, int row_index, str
         return 1;
     }
 
+    if (node->function == OPERATOR_OR) {
+        return evaluateOperatorNodeListOR(tables, row_list, row_index, node->children, node->child_count);
+    }
+
+    if (node->function == OPERATOR_AND) {
+        return evaluateOperatorNodeListAND(tables, row_list, row_index, node->children, node->child_count);
+    }
+
     char value_left[MAX_VALUE_LENGTH] = {0};
     char value_right[MAX_VALUE_LENGTH] = {0};
 
@@ -57,7 +65,8 @@ int evaluateOperatorNode (struct Table *tables, int row_list, int row_index, str
 }
 
 /**
- * Evaluate an OPERATOR node
+ * Evaluate a list of OPERATOR nodes
+ * returns 1 if ALL of the nodes match
  */
 int evaluateOperatorNodeListAND (struct Table *tables, int row_list, int row_index, struct Node *nodes, int node_count) {
     for (int j = 0; j < node_count; j++) {
@@ -72,7 +81,8 @@ int evaluateOperatorNodeListAND (struct Table *tables, int row_list, int row_ind
 }
 
 /**
- * Evaluate an OPERATOR node
+ * Evaluate a list of OPERATOR nodes
+ * returns 1 if ANY of the nodes match
  */
 int evaluateOperatorNodeListOR (struct Table *tables, int row_list, int row_index, struct Node *nodes, int node_count) {
     for (int j = 0; j < node_count; j++) {
@@ -165,7 +175,8 @@ int evaluateExpression (enum Function op, const char *left, const char *right) {
     if (op == OPERATOR_GT) return strcmp(left, right) > 0;
     if (op == OPERATOR_GE) return strcmp(left, right) >= 0;
 
-    return 0;
+    fprintf(stderr, "Unrecognised operator: %d\n", op);
+    exit(-1);
 }
 
 /**
