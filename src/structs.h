@@ -353,6 +353,8 @@ struct Query {
 
 typedef int RowListIndex;
 
+#define ROWLIST_ROWID -1
+
 struct RowList {
     int row_count;
     int join_count;

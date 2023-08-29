@@ -654,14 +654,14 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                             index++;
                         }
-
-                        if (query[index] != ')') {
-                            fprintf(stderr, "Expected ')' after 'IN ('. Found %c\n", query[index]);
-                            return -1;
-                        }
-
-                        index++;
                     }
+
+                    if (query[index] != ')') {
+                        fprintf(stderr, "Expected ')' after 'IN ('. Found %c\n", query[index]);
+                        return -1;
+                    }
+
+                    index++;
                 }
                 else {
 
@@ -703,6 +703,8 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
                         }
                     }
                 }
+
+                skipWhitespace(query, &index);
 
                 if (strncmp(query + index, "AND ", 4) == 0) {
                     index += 4;

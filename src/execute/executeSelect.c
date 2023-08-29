@@ -49,7 +49,7 @@ int executeSelect (
                 step->nodes,
                 step->node_count,
                 row_count,
-                row_list,
+                list_id,
                 options
             );
             row_count++;
@@ -62,7 +62,7 @@ int executeSelect (
                 step->nodes,
                 step->node_count,
                 i,
-                row_list,
+                list_id,
                 options
             );
             row_count++;

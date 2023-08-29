@@ -375,11 +375,13 @@ int evaluateAggregateFunction (
     char * output,
     struct Table *tables,
     struct Node *node,
-    struct RowList * row_list
+    RowListIndex list_id
 ) {
     if ((node->function & MASK_FUNC_FAMILY) != FUNC_FAM_AGG) {
         return -1;
     }
+
+    struct RowList *row_list = getRowList(list_id);
 
     LongestValue *values = malloc(row_list->row_count * MAX_VALUE_LENGTH);
 
@@ -405,7 +407,7 @@ int evaluateAggregateFunction (
         for (int i = 0; i < row_list->row_count; i++) {
             evaluateNode(
                 tables,
-                row_list,
+                list_id,
                 i,
                 &node->children[0],
                 values[i],

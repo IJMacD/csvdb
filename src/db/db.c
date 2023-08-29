@@ -19,20 +19,6 @@
 #include "../functions/util.h"
 #include "../evaluate/function.h"
 
-static int evaluateTableNode (
-    struct DB *db,
-    int row_id,
-    struct Node *node,
-    char * output
-);
-
-static int evaluateTableField (
-    struct DB *db,
-    int row_id,
-    struct Field *field,
-    char * output
-);
-
 struct VFS VFS_Table[VFS_COUNT] = {
     // 0 = VFS_NULL
     {
@@ -346,40 +332,22 @@ int fullTableAccess (
 
     // VFS-agnostic implementation
 
-    char value_left[MAX_VALUE_LENGTH] = {0};
-    char value_right[MAX_VALUE_LENGTH] = {0};
-
-    int result;
     int record_count = getRecordCount(db);
+
+    struct Table table;
+    table.db = db;
 
     for (int i = 0; i < record_count; i++) {
         int matching = 1;
 
-        // Perform filtering if necessary
-        for (int j = 0; j < predicate_count && matching; j++) {
-            struct Node *predicate = &predicates[j];
-            struct Node *left = &predicate->children[0];
-            struct Node *right = &predicate->children[1];
-
-            // All fields in predicates MUST be on this table or constant
-
-            result = evaluateTableNode(db, i, left, value_left);
-            if (result < 0) {
-                return -1;
-            }
-            result = evaluateTableNode(db, i, right, value_right);
-            if (result < 0) {
-                return -1;
-            }
-
-            if (!evaluateExpression(
-                predicate->function,
-                value_left,
-                value_right
-            )) {
-                matching = 0;
-                break;
-            }
+        if (predicate_count > 0) {
+            matching = evaluateOperatorNodeListAND(
+                &table,
+                ROWLIST_ROWID,
+                i,
+                predicates,
+                predicate_count
+            );
         }
 
         if (matching) {
@@ -677,108 +645,6 @@ int indexSearch (
  */
 int uniqueIndexSearch (struct DB *db, const char * value, int * output_flag) {
     return indexSearch(db, value, 0, output_flag);
-}
-
-/**
- * @brief Like evaluateNode() but with the restriction that all fields must be
- * constant or fields on this table
- *
- * @return int
- */
-static int evaluateTableNode (
-    struct DB *db,
-    int row_id,
-    struct Node *node,
-    char * output
-) {
-    if (node->function == FUNC_UNITY) {
-        // With FUNC_UNITY we'll just output directly to parent
-        return evaluateTableField(db, row_id, (struct Field *)node, output);
-    }
-
-    if (node->child_count == -1) {
-        // Optimistation where node is its own child
-
-        char value[MAX_VALUE_LENGTH];
-        char *values[] = { value };
-        evaluateTableField(db, row_id, (struct Field *)node, value);
-        return evaluateFunction(output, node->function, values, 1);
-    }
-
-    int n = node->child_count;
-    char *values = malloc(n * MAX_VALUE_LENGTH);
-    char **values_ptrs = malloc(n * sizeof(values));
-    for (int i = 0; i < n; i++) {
-        values_ptrs[i] = values + MAX_FIELD_LENGTH * i;
-    }
-
-    if (values == NULL) {
-        fprintf(
-            stderr,
-            __FILE__ " Unable to allocate %d bytes for %d child node values\n",
-            node->child_count * MAX_VALUE_LENGTH,
-            node->child_count
-        );
-        exit(-1);
-    }
-
-    for (int i = 0; i < node->child_count; i++) {
-        evaluateTableNode(
-            db,
-            row_id,
-            &node->children[i],
-            values_ptrs[i]
-        );
-    }
-
-    int result = evaluateFunction(
-        output,
-        node->function,
-        values_ptrs,
-        node->child_count
-    );
-
-    free(values);
-    free(values_ptrs);
-
-    return result;
-}
-/**
- * @brief Like evaluateField() but only operates on a single table
- *
- * @param output
- * @param tables
- * @param rowlist
- * @param field
- * @param result_index
- * @return int number of chars written
- */
-static int evaluateTableField (
-    struct DB *db,
-    int row_id,
-    struct Field *field,
-    char * output
-) {
-
-    if (field->index == FIELD_CONSTANT) {
-        return evaluateConstantField(output, field);
-    }
-
-    if (field->table_id < 0) {
-        return 0;
-    }
-
-    if (field->index == FIELD_ROW_INDEX) {
-        return sprintf(output, "%d", row_id);
-    }
-
-    return getRecordValue(
-        db,
-        row_id,
-        field->index,
-        output,
-        MAX_VALUE_LENGTH
-    ) > 0;
 }
 
 int insertRow (struct DB *db, const char *row) {

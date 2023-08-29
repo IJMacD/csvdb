@@ -449,16 +449,7 @@ int calendar_fullTableAccess (
     struct Table table;
     table.db = db;
 
-    int tmp_list = createRowList(1, max_julian - julian);
-    struct RowList *tmpList = getRowList(tmp_list);
-
-    // Add the entire Julian range to a temp list so that evaluateExpression can
-    // find the necesary rows
     for (; julian < max_julian; julian++) {
-        appendRowID(tmpList, julian);
-    }
-
-    for (int i = 0; i < tmpList->row_count; i++) {
         int matching = 1;
 
         // printf("Julian: %d\n", julian);
@@ -467,8 +458,8 @@ int calendar_fullTableAccess (
         if (predicate_count > 0) {
             matching = evaluateOperatorNodeListAND(
                 &table,
-                tmp_list,
-                i,
+                ROWLIST_ROWID,
+                julian,
                 predicates,
                 predicate_count
             );
@@ -476,7 +467,7 @@ int calendar_fullTableAccess (
 
         if (matching) {
             // Add to result set
-            appendRowID(getRowList(row_list), getRowID(tmpList, 0, i));
+            appendRowID(getRowList(row_list), julian);
             count++;
         }
 
@@ -485,8 +476,6 @@ int calendar_fullTableAccess (
             break;
         }
     }
-
-    destroyRowList(tmp_list);
 
     return count;
 }

@@ -16,7 +16,7 @@ void printResultLine (
     struct Node columns[],
     int column_count,
     int result_index,
-    struct RowList * row_list,
+    RowListIndex row_list,
     enum OutputOption flags
 );
 

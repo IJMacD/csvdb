@@ -94,7 +94,7 @@ int executeGroupSorted (
 
         evaluateNode(
             tables,
-            getRowList(row_list),
+            row_list,
             i,
             col,
             curr_value,
@@ -158,7 +158,7 @@ int executeGroupBucket (
         // Evaluate group key
         evaluateNodeList(
             tables,
-            getRowList(row_list),
+            row_list,
             i,
             step->nodes,
             step->node_count,

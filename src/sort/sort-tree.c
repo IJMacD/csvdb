@@ -35,9 +35,12 @@ void sortResultRows (
     struct Table *tables,
     struct Node *node,
     int direction,
-    struct RowList * source_list,
-    struct RowList * target_list
+    RowListIndex source_list_id,
+    RowListIndex target_list_id
 ) {
+    struct RowList *source_list = getRowList(source_list_id);
+    struct RowList *target_list = getRowList(target_list_id);
+
     if (source_list->row_count <= 0) {
         return;
     }
@@ -53,7 +56,7 @@ void sortResultRows (
 
         evaluateNode(
             tables,
-            source_list,
+            source_list_id,
             i,
             node,
             treenode->value,
@@ -132,7 +135,7 @@ void sortResultRowsMultiple (
 
         evaluateNodeList(
             tables,
-            source_list,
+            source_list_id,
             i,
             nodes,
             node_count,

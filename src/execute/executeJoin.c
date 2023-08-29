@@ -268,7 +268,7 @@ int executeLoopJoin (
             // replace right node with constant value from outer table
             evaluateNode(
                 tables,
-                getRowList(row_list),
+                row_list,
                 i,
                 right_node,
                 right_node->field.text,
@@ -420,7 +420,7 @@ int executeUniqueJoin (
         // Fill in value as constant from outer tables
         evaluateNode(
             tables,
-            getRowList(row_list),
+            row_list,
             i,
             outer,
             value,
@@ -550,7 +550,7 @@ int executeIndexJoin (
         // Fill in value as constant from outer tables
         evaluateNode(
             tables,
-            getRowList(row_list),
+            row_list,
             i,
             outer,
             value,

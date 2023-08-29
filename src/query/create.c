@@ -287,7 +287,7 @@ static int create_index (
             columns,
             field_count + 1,
             i,
-            getRowList(row_list),
+            row_list,
             OUTPUT_FORMAT_COMMA
         );
     }

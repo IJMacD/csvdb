@@ -2,7 +2,7 @@
 
 int evaluateNode (
     struct Table *tables,
-    struct RowList *rowlist,
+    RowListIndex row_list,
     int index,
     struct Node *node,
     char * value,
@@ -16,7 +16,7 @@ int evaluateConstantNode (
 
 int evaluateNodeList (
     struct Table *tables,
-    struct RowList *rowlist,
+    RowListIndex row_list,
     int index,
     struct Node *node,
     int node_count,

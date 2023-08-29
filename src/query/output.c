@@ -66,7 +66,7 @@ void printResultLine (
     struct Node columns[],
     int column_count,
     int result_index,
-    struct RowList * row_list,
+    RowListIndex list_id,
     enum OutputOption flags
 ) {
     enum OutputOption format = flags & OUTPUT_MASK_FORMAT;
@@ -75,6 +75,8 @@ void printResultLine (
         = column_count == 1 && strcmp(columns[0].alias, "_") == 0;
 
     printRecordStart(f, format, result_index == 0, is_single_column);
+
+    struct RowList *row_list = getRowList(list_id);
 
     // Arbitrarily choose index 0 for agg rows
     int rowlist_row_index = row_list->group ? 0 : result_index;
@@ -144,7 +146,7 @@ void printResultLine (
                 char output[MAX_VALUE_LENGTH];
                 int result = evaluateNode(
                     tables,
-                    row_list,
+                    list_id,
                     rowlist_row_index,
                     node,
                     output,
@@ -186,7 +188,7 @@ void printResultLine (
 
             int result = evaluateNode(
                 tables,
-                row_list,
+                list_id,
                 rowlist_row_index,
                 node,
                 output,

@@ -10,7 +10,7 @@ struct SortContext {
     struct Table *tables;
     struct Node *nodes;
     int node_count;
-    struct RowList *row_list;
+    RowListIndex list_id;
 };
 
 static void quickSort (struct SortContext *context, int lo, int hi);
@@ -22,15 +22,16 @@ void sortQuick (
     struct Table *tables,
     struct Node *nodes,
     int node_count,
-    struct RowList *row_list
+    RowListIndex list_id
 ) {
     struct SortContext context = {
         .tables = tables,
         .nodes = nodes,
         .node_count = node_count,
-        .row_list = row_list,
+        .list_id = list_id,
     };
 
+    struct RowList *row_list = getRowList(list_id);
     quickSort(&context, 0, row_list->row_count - 1);
 }
 
@@ -67,7 +68,7 @@ static int partition (struct SortContext *context, int lo, int hi) {
 }
 
 static void swap (struct SortContext *context, int index_a, int index_b) {
-    swapRows(context->row_list, index_a, index_b);
+    swapRows(getRowList(context->list_id), index_a, index_b);
 }
 
 static int compare (struct SortContext *context, int index_a, int index_b) {
@@ -78,7 +79,7 @@ static int compare (struct SortContext *context, int index_a, int index_b) {
     for (int i = 0; i < context->node_count; i++) {
         evaluateNode(
             context->tables,
-            context->row_list,
+            context->list_id,
             index_a,
             &context->nodes[i],
             value_a,
@@ -86,7 +87,7 @@ static int compare (struct SortContext *context, int index_a, int index_b) {
         );
         evaluateNode(
             context->tables,
-            context->row_list,
+            context->list_id,
             index_b,
             &context->nodes[i],
             value_b,

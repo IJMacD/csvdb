@@ -11,7 +11,7 @@
 /**
  * Evaluate an OPERATOR node
  */
-int evaluateOperatorNode (struct Table *tables, int row_list, int row_index, struct Node *node) {
+int evaluateOperatorNode (struct Table *tables, RowListIndex row_list, int row_index, struct Node *node) {
     if ((node->function & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR) {
         fprintf(
             stderr,
@@ -42,7 +42,7 @@ int evaluateOperatorNode (struct Table *tables, int row_list, int row_index, str
 
     evaluateNode(
         tables,
-        getRowList(row_list),
+        row_list,
         row_index,
         &node->children[0],
         value_left,
@@ -50,7 +50,7 @@ int evaluateOperatorNode (struct Table *tables, int row_list, int row_index, str
     );
     evaluateNode(
         tables,
-        getRowList(row_list),
+        row_list,
         row_index,
         &node->children[1],
         value_right,

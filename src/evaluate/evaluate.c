@@ -11,7 +11,7 @@
 
 static int evaluateField (
     struct Table *tables,
-    struct RowList *rowlist,
+    RowListIndex row_list,
     int index,
     struct Field *field,
     char * output,
@@ -31,7 +31,7 @@ static int evaluateField (
  */
 int evaluateNode (
     struct Table *tables,
-    struct RowList *rowlist,
+    RowListIndex row_list,
     int index,
     struct Node *node,
     char *output,
@@ -41,7 +41,7 @@ int evaluateNode (
         // With FUNC_UNITY we'll just output directly to parent
         return evaluateField(
             tables,
-            rowlist,
+            row_list,
             index,
             (struct Field *)node,
             output,
@@ -55,7 +55,7 @@ int evaluateNode (
         char value[MAX_VALUE_LENGTH];
         evaluateField(
             tables,
-            rowlist,
+            row_list,
             index,
             (struct Field *)node,
             value,
@@ -91,7 +91,7 @@ int evaluateNode (
     for (int i = 0; i < node->child_count; i++) {
         evaluateNode(
             tables,
-            rowlist,
+            row_list,
             index,
             &node->children[i],
             values_ptrs[i],
@@ -192,7 +192,7 @@ int evaluateConstantNode (
  */
 int evaluateNodeList (
     struct Table * tables,
-    struct RowList *rowlist,
+    RowListIndex row_list,
     int index,
     struct Node *nodes,
     int node_count,
@@ -205,7 +205,7 @@ int evaluateNodeList (
     for (int j = 0; j < node_count; j++) {
         int count = evaluateNode(
             tables,
-            rowlist,
+            row_list,
             index,
             &nodes[j],
             value,
@@ -245,7 +245,7 @@ int evaluateNodeList (
  */
 static int evaluateField (
     struct Table *tables,
-    struct RowList *rowlist,
+    RowListIndex row_list,
     int index,
     struct Field *field,
     char * output,
@@ -261,7 +261,15 @@ static int evaluateField (
     }
 
     if (field->table_id >= 0) {
-        int row_id = getRowID(rowlist, field->table_id, index);
+        int row_id;
+
+        if (row_list == ROWLIST_ROWID) {
+            // Special value of row_list means: row_index === row_id
+            row_id = index;
+        }
+        else {
+            row_id = getRowID(getRowList(row_list), field->table_id, index);
+        }
 
         if (field->index == FIELD_ROW_INDEX) {
             return sprintf(output, "%d", row_id);
