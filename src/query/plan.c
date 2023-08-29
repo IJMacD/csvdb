@@ -473,7 +473,30 @@ static void addPredicateSource (struct Plan *plan, struct Query *query) {
         }
 
         addOrderStepsIfRequired(plan, query);
-    } else { /* table_count == 1 */
+    }
+    /* table_count == 1 */
+    // Special case if the only predicate is an OR operator node
+    else if (
+        query->predicate_count == 1 &&
+        query->predicate_nodes[0].function == OPERATOR_OR
+    )
+    {
+        struct Node *or_children = query->predicate_nodes[0].children;
+
+        for (int i = 0; i < query->predicate_nodes[0].child_count; i++) {
+            // Add one *source* yes SOURCE step per OR child
+            addStepWithNode(
+                plan,
+                PLAN_TABLE_ACCESS_FULL,
+                &or_children[i]
+            );
+        }
+
+        addOrderStepsIfRequired(plan, query);
+
+    }
+    /* table_count == 1 */
+    else {
 
         // Only one table so add all predicates together
         addStepWithNodes(
