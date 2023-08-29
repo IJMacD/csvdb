@@ -316,7 +316,7 @@ enum IndexSearchType findIndex(
  */
 int fullTableAccess (
     struct DB *db,
-    struct RowList * row_list,
+    int row_list,
     struct Node *predicates,
     int predicate_count,
     int limit_value
@@ -328,7 +328,7 @@ int fullTableAccess (
 
     int (*vfs_fullTableAccess) (
         struct DB *,
-        struct RowList *,
+        int,
         struct Node *,
         int,
         int
@@ -384,16 +384,16 @@ int fullTableAccess (
 
         if (matching) {
             // Add to result set
-            appendRowID(row_list, i);
+            appendRowID(getRowList(row_list), i);
         }
 
         // Implement early exit FETCH FIRST/LIMIT for cases with no ORDER clause
-        if (limit_value >= 0 && row_list->row_count >= limit_value) {
+        if (limit_value >= 0 && getRowList(row_list)->row_count >= limit_value) {
             break;
         }
     }
 
-    return row_list->row_count;
+    return getRowList(row_list)->row_count;
 }
 
 /**
@@ -404,7 +404,7 @@ int fullTableAccess (
  */
 int fullTableScan (
     struct DB *db,
-    struct RowList * row_list,
+    int row_list,
     int start_rowid,
     int limit_value
 ) {
@@ -428,7 +428,7 @@ int fullTableScan (
 
     // Just push all rowids in range
     for (int i = start_rowid; i < end_rowid; i++) {
-        appendRowID(row_list, i);
+        appendRowID(getRowList(row_list), i);
     }
 
     return count;

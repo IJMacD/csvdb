@@ -25,7 +25,7 @@ int executeTableAccessRowid (
     getRowList(row_list)->row_count = 0;
 
     for (int i = 0; i < source_count; i++) {
-        int match = evaluateExpressionNode(
+        int match = evaluateOperatorNodeListAND(
             tables,
             row_list,
             i,

@@ -240,7 +240,7 @@ static int create_index (
     RowListIndex row_list = createRowList(1, record_count);
 
     // Fill row list with every sequential rowid
-    fullTableScan(&db, getRowList(row_list), 0, -1);
+    fullTableScan(&db, row_list, 0, -1);
 
     sortQuick(&table, columns, field_count, getRowList(row_list));
 

@@ -118,7 +118,7 @@ int executeConstantJoin (
     // Hopefully it won't be the whole table since we have a predicate
     fullTableAccess(
         next_db,
-        getRowList(tmp_list),
+        tmp_list,
         step->nodes,
         step->node_count,
         -1
@@ -296,7 +296,7 @@ int executeLoopJoin (
 
         // Populate the temp list with all rows which match our special
         // predicate
-        fullTableAccess(next_db, getRowList(tmp_list), &p, 1, -1);
+        fullTableAccess(next_db, tmp_list, &p, 1, -1);
 
         freeNode(&p);
 

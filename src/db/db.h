@@ -33,7 +33,7 @@ int uniqueIndexSearch(struct DB *db, const char *value, int * output_flag);
 
 int fullTableAccess (
     struct DB *db,
-    struct RowList * row_list,
+    int row_list,
     struct Node *nodes,
     int node_count,
     int limit_value
@@ -41,7 +41,7 @@ int fullTableAccess (
 
 int fullTableScan (
     struct DB *db,
-    struct RowList * row_list,
+    int row_list,
     int rowid_start,
     int limit
 );

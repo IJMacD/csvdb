@@ -11,53 +11,79 @@
 /**
  * Evaluate an OPERATOR node
  */
-int evaluateExpressionNode (struct Table *tables, int row_list, int row_index, struct Node *nodes, int node_count) {
+int evaluateOperatorNode (struct Table *tables, int row_list, int row_index, struct Node *node) {
+    if ((node->function & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR) {
+        fprintf(
+            stderr,
+            "Node must be an operator. Found function 0x%X\n",
+            node->function
+        );
+        exit(-1);
+    }
+
+    if (node->function == OPERATOR_NEVER) {
+        return 0;
+    }
+
+    if (node->function == OPERATOR_ALWAYS) {
+        return 1;
+    }
+
+    char value_left[MAX_VALUE_LENGTH] = {0};
+    char value_right[MAX_VALUE_LENGTH] = {0};
+
+    evaluateNode(
+        tables,
+        getRowList(row_list),
+        row_index,
+        &node->children[0],
+        value_left,
+        MAX_VALUE_LENGTH
+    );
+    evaluateNode(
+        tables,
+        getRowList(row_list),
+        row_index,
+        &node->children[1],
+        value_right,
+        MAX_VALUE_LENGTH
+    );
+
+    if (!evaluateExpression(node->function, value_left, value_right)) {
+        return 0;
+    }
+
+    return 1;
+}
+
+/**
+ * Evaluate an OPERATOR node
+ */
+int evaluateOperatorNodeListAND (struct Table *tables, int row_list, int row_index, struct Node *nodes, int node_count) {
     for (int j = 0; j < node_count; j++) {
         struct Node * p = nodes + j;
 
-        if ((p->function & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR) {
-            fprintf(
-                stderr,
-                "Expression node must be an operator. Found function 0x%X\n",
-                p->function
-            );
-            exit(-1);
-        }
-
-        if (p->function == OPERATOR_NEVER) {
-            return 0;
-        }
-
-        if (p->function == OPERATOR_ALWAYS) {
-            return 1;
-        }
-
-        char value_left[MAX_VALUE_LENGTH] = {0};
-        char value_right[MAX_VALUE_LENGTH] = {0};
-
-        evaluateNode(
-            tables,
-            getRowList(row_list),
-            row_index,
-            &p->children[0],
-            value_left,
-            MAX_VALUE_LENGTH
-        );
-        evaluateNode(
-            tables,
-            getRowList(row_list),
-            row_index,
-            &p->children[1],
-            value_right,
-            MAX_VALUE_LENGTH
-        );
-
-        if (!evaluateExpression(p->function, value_left, value_right)) {
+        if (!evaluateOperatorNode(tables, row_list, row_index, p)) {
             return 0;
         }
     }
 
     return 1;
+}
+
+/**
+ * Evaluate an OPERATOR node
+ */
+int evaluateOperatorNodeListOR (struct Table *tables, int row_list, int row_index, struct Node *nodes, int node_count) {
+    for (int j = 0; j < node_count; j++) {
+        struct Node * p = nodes + j;
+
+        if (evaluateOperatorNode(tables, row_list, row_index, p)) {
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 int evaluateExpression (enum Function op, const char *left, const char *right) {

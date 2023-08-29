@@ -241,7 +241,7 @@ int executeSourceTableFull (
 
     fullTableAccess(
         table->db,
-        getRowList(row_list),
+        row_list,
         step->nodes,
         step->node_count,
         step->limit
@@ -349,7 +349,7 @@ int executeSourceTableScan (
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);
 
-    fullTableScan(table->db, getRowList(row_list), start_rowid, limit);
+    fullTableScan(table->db, row_list, start_rowid, limit);
 
     return 0;
 }

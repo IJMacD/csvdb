@@ -400,14 +400,14 @@ struct VFS {
     );
     int (* fullTableAccess)(
         struct DB *db,
-        struct RowList * row_list,
+        int row_list,
         struct Node *nodes,
         int node_count,
         int limit_value
     );
     int (* fullTableScan)(
         struct DB *db,
-        struct RowList * row_list,
+        int row_list,
         int start_rowid,
         int limit_value
     );

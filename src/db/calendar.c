@@ -91,14 +91,6 @@ static int printDate (
     struct DateTime date
 );
 
-static int calendar_evaluateField (
-    struct DB *db,
-    struct Field *field,
-    int rowid,
-    char *value,
-    int max_length
-);
-
 int calendar_openDB (struct DB *db, const char *filename) {
     if (strcmp(filename, "CALENDAR") != 0) {
         return -1;
@@ -420,9 +412,12 @@ enum IndexSearchType calendar_findIndex(
     return INDEX_NONE;
 }
 
+/**
+ * Guaranteed that all predicates are on this table
+ */
 int calendar_fullTableAccess (
     struct DB *db,
-    struct RowList *row_list,
+    int row_list,
     struct Node *predicates,
     int predicate_count,
     int limit_value
@@ -450,48 +445,38 @@ int calendar_fullTableAccess (
     }
 
     int count = 0;
-    char value_left[MAX_VALUE_LENGTH];
-    char value_right[MAX_VALUE_LENGTH];
 
+    struct Table table;
+    table.db = db;
+
+    int tmp_list = createRowList(1, max_julian - julian);
+    struct RowList *tmpList = getRowList(tmp_list);
+
+    // Add the entire Julian range to a temp list so that evaluateExpression can
+    // find the necesary rows
     for (; julian < max_julian; julian++) {
+        appendRowID(tmpList, julian);
+    }
+
+    for (int i = 0; i < tmpList->row_count; i++) {
         int matching = 1;
 
         // printf("Julian: %d\n", julian);
 
         // Perform filtering if necessary
-        for (int j = 0; j < predicate_count && matching; j++) {
-            struct Node *predicate = &predicates[j];
-            struct Node *left = &predicate->children[0];
-            struct Node *right = &predicate->children[1];
-
-            calendar_evaluateField(
-                db,
-                (struct Field *)left,
-                julian,
-                value_left,
-                MAX_VALUE_LENGTH
+        if (predicate_count > 0) {
+            matching = evaluateOperatorNodeListAND(
+                &table,
+                tmp_list,
+                i,
+                predicates,
+                predicate_count
             );
-            calendar_evaluateField(
-                db,
-                (struct Field *)right,
-                julian,
-                value_right,
-                MAX_VALUE_LENGTH
-            );
-
-            if (!evaluateExpression(
-                predicate->function,
-                value_left,
-                value_right
-            )) {
-                matching = 0;
-                break;
-            }
         }
 
         if (matching) {
             // Add to result set
-            appendRowID(row_list, julian);
+            appendRowID(getRowList(row_list), getRowID(tmpList, 0, i));
             count++;
         }
 
@@ -500,6 +485,8 @@ int calendar_fullTableAccess (
             break;
         }
     }
+
+    destroyRowList(tmp_list);
 
     return count;
 }
@@ -740,37 +727,6 @@ static int printDate (char *value, int max_length, struct DateTime date) {
             date.day
         );
     }
-}
-
-
-static int calendar_evaluateField(
-    struct DB *db,
-    struct Field *field,
-    int rowid,
-    char *value,
-    int max_length
-) {
-    if (field->index == FIELD_CONSTANT) {
-        strcpy(value, field->text);
-        return 0;
-    }
-
-    if (field->index == FIELD_ROW_INDEX) {
-        return sprintf(value, "%d", rowid);
-    }
-
-    if (field->index >= 0) {
-        return calendar_getRecordValue(
-            db,
-            rowid,
-            field->index,
-            value,
-            max_length
-        );
-    }
-
-    fprintf(stderr, "CALENDAR Cannot evaluate column '%s'\n", field->text);
-    exit(-1);
 }
 
 /**
