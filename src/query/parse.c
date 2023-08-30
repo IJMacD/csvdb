@@ -835,10 +835,6 @@ static int parseNode (
             char part[32];
             getToken(query, index, part, 32);
 
-            // EXTRACT functions only take one parameter.
-            // We'll use the self-node optimisation
-            node->child_count = -1;
-
             if (strcmp(part, "YEAR") == 0) {
                 node->function = FUNC_EXTRACT_YEAR;
             }
@@ -910,7 +906,9 @@ static int parseNode (
 
             skipWhitespace(query, index);
 
-            getQuotedToken(query, index, node->field.text, MAX_FIELD_LENGTH);
+            struct Node *child = addChildNode(node);
+
+            parseNode(query, index, child);
 
             skipWhitespace(query, index);
 
