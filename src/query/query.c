@@ -23,7 +23,6 @@
 
 #ifdef DEBUG
 int query_count = -1;
-extern int debug_verbosity;
 #endif
 
 static int information_query (const char *table, FILE * output);

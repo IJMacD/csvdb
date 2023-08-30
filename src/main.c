@@ -16,10 +16,10 @@ static int read_file(FILE *file, char **output);
 extern char* gitversion;
 
 #ifdef DEBUG
-const char debug[] = "DEBUG";
-int debug_verbosity = 1;
+const char *version_debug = "DEBUG";
+int debug_verbosity = 0;
 #else
-const char debug[] = "";
+const char *version_debug = "";
 #endif
 
 void printUsage (const char* name) {
@@ -58,9 +58,12 @@ void printUsage (const char* name) {
         "record)]\n"
         "\t[(-o |--output=)<filename>]\n"
         "\t[--stats] (Writes timing data to 'stats.csv')\n"
+        #ifdef DEBUG
+        "\t[-v|-vv|-vvv|--verbose=n] Set DEBUG verbosity\n"
+        #endif
         "\n"
         "Version: %2$s %3$s\n"
-    , name, gitversion, debug);
+    , name, gitversion, version_debug);
 }
 
 int main (int argc, char * argv[]) {
@@ -118,11 +121,32 @@ int main (int argc, char * argv[]) {
 
             output_name = argv[++argi];
         }
-        else if (strcmp(arg, "-v") == 0) {
-            flags |= OUTPUT_OPTION_VERBOSE;
-        }
         else if (strncmp(arg, "--output=", 9) == 0) {
             output_name = arg + 9;
+        }
+        else if (strcmp(arg, "-v") == 0) {
+            flags |= OUTPUT_OPTION_VERBOSE;
+            #ifdef DEBUG
+            debug_verbosity = 1;
+            #endif
+        }
+        else if (strcmp(arg, "-vv") == 0) {
+            flags |= OUTPUT_OPTION_VERBOSE;
+            #ifdef DEBUG
+            debug_verbosity = 2;
+            #endif
+        }
+        else if (strcmp(arg, "-vvv") == 0) {
+            flags |= OUTPUT_OPTION_VERBOSE;
+            #ifdef DEBUG
+            debug_verbosity = 3;
+            #endif
+        }
+        else if (strncmp(arg, "--verbose=", 10) == 0) {
+            flags |= OUTPUT_OPTION_VERBOSE;
+            #ifdef DEBUG
+            debug_verbosity = atoi(arg + 10);
+            #endif
         }
         else if (strcmp(arg, "--stats") == 0) {
             flags |= OUTPUT_OPTION_STATS;
@@ -163,12 +187,6 @@ int main (int argc, char * argv[]) {
             // Secret internal argument to force read-only mode
             flags |= FLAG_READ_ONLY;
         }
-        #ifdef DEBUG
-        else if (strcmp(arg, "-D") == 0) {
-            // Extra verbose debugging
-            debug_verbosity = 2;
-        }
-        #endif
         else {
             fprintf(stderr, "Unknown option %s\n", arg);
             printUsage(argv[0]);
@@ -250,10 +268,6 @@ int main (int argc, char * argv[]) {
     #endif
 
     if (buffer != NULL) {
-        #ifdef DEBUG
-        flags |= OUTPUT_OPTION_VERBOSE;
-        #endif
-
         int result = runQueries(buffer, flags, output);
         free(buffer);
 
@@ -268,15 +282,13 @@ int main (int argc, char * argv[]) {
     // If stdin is something more than a tty (i.e pipe or redirected file)
     // then we will assume the following query:
     if (!isatty(fileno(stdin))) {
-        #ifdef DEBUG
-        flags |= OUTPUT_OPTION_VERBOSE;
-        #endif
-
         return query("SELECT * FROM stdin", flags, output, NULL);
     }
 
+    // If verbose option is set but we don't actually have a query, then we
+    // treat it like a version flag.
     if (flags & OUTPUT_OPTION_VERBOSE) {
-        printf("%s %s\n", gitversion, debug);
+        printf("%s %s\n", gitversion, version_debug);
         return 0;
     }
 

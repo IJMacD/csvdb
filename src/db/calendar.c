@@ -7,8 +7,7 @@
 #include "../functions/date.h"
 #include "../evaluate/predicates.h"
 #include "../query/result.h"
-
-extern int debug_verbosity;
+#include "../debug.h"
 
 #define COL_JULIAN              0
 #define COL_DATE                1
@@ -536,7 +535,7 @@ static void getJulianRange (
 
         #ifdef DEBUG
         if (debug_verbosity >= 2) {
-            fprintf(stderr, "\t[CALENDAR] Predicate %d julian start: %d end: %d\n", i, *julian_start, *julian_end);
+            fprintf(stderr, "[CALENDAR] Predicate %d julian start: %d end: %d\n", i, *julian_start, *julian_end);
         }
         #endif
     }

@@ -1,5 +1,7 @@
 #include "structs.h"
 
+extern int debug_verbosity;
+
 void debugRowList (struct RowList * list, int verbosity);
 
 void debugTree (struct TreeNode * node);

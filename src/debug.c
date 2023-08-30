@@ -5,6 +5,7 @@
 
 #include "structs.h"
 #include "query/result.h"
+#include "debug.h"
 
 static void debugNodeInner (struct Node * node, int depth);
 
@@ -48,18 +49,18 @@ size_t FUNC_NAMES_COUNT = sizeof (FUNC_NAMES) / sizeof (FUNC_NAMES[0]);
 
 void debugRowList (struct RowList * list, int verbosity) {
     if (list == NULL) {
-        fprintf(stderr, "\tRowList (NULL)\n");
+        fprintf(stderr, "RowList (NULL)\n");
         return;
     }
 
     fprintf(
         stderr,
-        "\tRowList (%d joins x %d rows)\n",
+        "RowList (%d joins x %d rows)\n",
         list->join_count,
         list->row_count
     );
 
-    if (verbosity > 1) {
+    if (verbosity > 3) {
         for (int i = 0; i < list->row_count; i++) {
             fprintf(stderr, "Index %3d, Rowids: (", i);
             for (int j = 0; j < list->join_count; j++) {
@@ -203,7 +204,9 @@ void debugNodes (struct Node nodes[], int node_count) {
 
 void debugLog (struct Query *query, const char *msg) {
     #ifdef DEBUG
-    fprintf(stderr, "[Q%d.%d] %s\n", getpid(), query->id, msg);
+    if (debug_verbosity > 0) {
+        fprintf(stderr, "[Q%d.%d] %s\n", getpid(), query->id, msg);
+    }
     #endif
 }
 

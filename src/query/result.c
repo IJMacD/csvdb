@@ -4,8 +4,7 @@
 
 #include "../structs.h"
 #include "../functions/util.h"
-
-extern int debug_verbosity;
+#include "../debug.h"
 
 int getRowID (struct RowList * row_list, int join_id, int index) {
     if (join_id < 0) return -1;
@@ -309,10 +308,10 @@ RowListIndex createRowList (int join_count, int max_rows) {
     }
 
     #ifdef DEBUG
-    if (debug_verbosity >= 2) {
+    if (debug_verbosity >= 3) {
         fprintf(
             stderr,
-            "\tCreated RowList %d (max: %dj x %dr). Pool use: %d/%d\n",
+            "Created RowList %d (max: %dj x %dr). Pool use: %d/%d\n",
             pool_count - 1,
             join_count,
             max_rows,
@@ -348,10 +347,10 @@ void destroyRowList (RowListIndex row_list) {
 
 
     #ifdef DEBUG
-    if (debug_verbosity >= 2) {
+    if (debug_verbosity >= 3) {
         fprintf(
             stderr,
-            "\tDestroyed RowList %d. Pool use: %d\n",
+            "Destroyed RowList %d. Pool use: %d\n",
             row_list,
             pool_count
         );

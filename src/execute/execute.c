@@ -19,8 +19,6 @@
 #include "../sort/sort-quick.h"
 #include "../debug.h"
 
-extern int debug_verbosity;
-
 int executeQueryPlan (
     struct Query *query,
     struct Plan *plan,
@@ -328,7 +326,7 @@ int executeQueryPlan (
             // debugResultSet(result_set);
             if (debug_verbosity >= 2) {
                 RowListIndex row_list = popRowList(result_set);
-                debugRowList(getRowList(row_list), 1);
+                debugRowList(getRowList(row_list), debug_verbosity);
                 pushRowList(result_set, row_list);
             }
         #endif
