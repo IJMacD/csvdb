@@ -18,6 +18,12 @@ static int parseNode (
     struct Node *node
 );
 
+static int parseOperatorNode (
+    const char *query,
+    size_t *index,
+    struct Node * node
+);
+
 static int parseFunctionParams (
     const char * query,
     size_t * index,
@@ -38,13 +44,6 @@ static struct Table *findTable (
     const char *table_name,
     struct Table *tables,
     int table_count
-);
-
-static struct Node *addChildNode (struct Node *node);
-
-static struct Node *replaceParentNode (
-    struct Node *node,
-    enum Function newFunction
 );
 
 int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
@@ -565,143 +564,9 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
             while (query[index] != '\0' && query[index] != ';') {
                 struct Node *p = allocatePredicateNode(q);
 
-                struct Node *left = &p->children[0];
-                struct Node *right = &p->children[1];
-
-                int result = parseNode(query, &index, left);
+                int result = parseOperatorNode(query, &index, p);
                 if (result < 0) {
                     return result;
-                }
-
-                // Max length is BETWEEN
-                char op[strlen("BETWEEN") + 1];
-                getOperatorToken(query, &index, op, strlen("BETWEEN"));
-
-                p->function = parseOperator(op);
-                if (p->function == FUNC_UNKNOWN) {
-                    fprintf(stderr, "expected =|!=|<|<=|>|>=\n");
-                    return -1;
-                }
-
-                // Check for IS NOT
-                if (strcmp(op, "IS") == 0) {
-                    skipWhitespace(query, &index);
-                    if (strncmp(query + index, "NOT ", 4) == 0) {
-                        p->function = OPERATOR_NE;
-                        index += 4;
-                    }
-                }
-
-                if (strcmp(op, "IN") == 0) {
-                    skipWhitespace(query, &index);
-
-                    if (query[index] != '(') {
-                        fprintf(stderr, "Expected '(' after IN\n");
-                        return -1;
-                    }
-
-                    index++;
-
-                    // Parse first child
-                    result = parseNode(query, &index, right);
-                    if (result < 0) {
-                        return result;
-                    }
-
-                    // Clone into child
-                    struct Node *clone = malloc(sizeof *clone);
-                    copyNodeTree(clone, p);
-
-                    // Set clone to be child of predicate
-                    free(p->children);
-                    p->children = clone;
-                    p->child_count = 1;
-                    p->function = OPERATOR_OR;
-
-                    skipWhitespace(query, &index);
-
-                    if (query[index] == ',') {
-                        index++;
-
-                        while (query[index] != '\0' &&
-                            query[index] != ';' &&
-                            query[index] != ')')
-                        {
-                            struct Node *next_child = addChildNode(p);
-
-                            addChildNode(next_child);
-                            addChildNode(next_child);
-
-                            struct Node *next_left = &next_child->children[0];
-                            struct Node *next_right = &next_child->children[1];
-
-                            next_child->function = OPERATOR_EQ;
-
-                            struct Node *clone = &p->children[0];
-
-                            copyNodeTree(next_left, &clone->children[0]);
-
-                            result = parseNode(query, &index, next_right);
-                            if (result < 0) {
-                                return result;
-                            }
-
-                            skipWhitespace(query, &index);
-
-                            if (query[index] != ',') {
-                                break;
-                            }
-
-                            index++;
-                        }
-                    }
-
-                    if (query[index] != ')') {
-                        fprintf(stderr, "Expected ')' after 'IN ('. Found %c\n", query[index]);
-                        return -1;
-                    }
-
-                    index++;
-                }
-                else {
-
-                    result = parseNode(query, &index, right);
-                    if (result < 0) {
-                        return result;
-                    }
-
-                    skipWhitespace(query, &index);
-
-                    if (strcmp(op, "BETWEEN") == 0) {
-                        enum Function op2 = FUNC_UNKNOWN;
-
-                        if (strncmp(query + index, "AND ", 4) == 0) {
-                            op2 = OPERATOR_LE;
-                            index += 4;
-                        }
-                        else if (strncmp(query + index, "ANDX ", 5) == 0) {
-                            op2 = OPERATOR_LT;
-                            index += 5;
-                        }
-                        else {
-                            fprintf(stderr, "Expected AND or ANDX after BETWEEN\n");
-                            return -1;
-                        }
-
-                        struct Node *p2 = allocatePredicateNode(q);
-
-                        struct Node *left2 = &p2->children[0];
-                        struct Node *right2 = &p2->children[1];
-
-                        p2->function = op2;
-
-                        copyNodeTree(left2, left);
-
-                        result = parseNode(query, &index, right2);
-                        if (result < 0) {
-                            return result;
-                        }
-                    }
                 }
 
                 skipWhitespace(query, &index);
@@ -1349,16 +1214,14 @@ static int checkSimpleOperators(
 
         struct Node *next_child;
 
-        if (node->function == function) {
-            // We can just add a new sibling
-
-            next_child = addChildNode(node);
-        }
-        else {
+        if (node->function != function) {
             // We need to convert the current node into a parent node
-
-            next_child = replaceParentNode(node, function);
+            cloneNodeIntoChild(node);
+            node->function = function;
         }
+
+        // Now we can just add a new sibling
+        next_child = addChildNode(node);
 
         getQuotedToken(query, index, next_child->field.text, MAX_FIELD_LENGTH);
 
@@ -1389,109 +1252,6 @@ static struct Table *findTable (
     return NULL;
 }
 
-/**
- * mallocs a new node and adds it as a child of the provided node.
- * Also returns the new child for convenience.
- *
- *       P
- *    +--+--+
- *    C  C  C'
- *
- * P is the original node passed to this function
- * C' is the new child. C' is returned from this function.
- */
-static struct Node *addChildNode (struct Node *parent_node) {
-    struct Node *child_node;
-
-    // Optimistation where node is its own child
-    if (parent_node->child_count == -1) {
-        fprintf(
-            stderr,
-            "Cannot add a child to an optimised node.\n"
-        );
-        exit(-1);
-    }
-
-    parent_node->child_count++;
-
-    if (parent_node->children == NULL) {
-        parent_node->children = malloc(
-            sizeof(*parent_node) * parent_node->child_count
-        );
-    }
-    else {
-        parent_node->children = realloc(
-            parent_node->children,
-            sizeof(*parent_node) * parent_node->child_count
-        );
-    }
-
-    if (parent_node->children == NULL) {
-        fprintf(stderr, "Unable to allocate memory.\n");
-        exit(-1);
-    }
-
-    child_node = &parent_node->children[parent_node->child_count - 1];
-
-    // NULL out children to avoid uninitialized read and set defaults
-    child_node->children = NULL;
-    child_node->child_count = 0;
-    child_node->field.index = FIELD_UNKNOWN;
-    child_node->field.table_id = -1;
-    child_node->field.text[0] = '\0';
-    child_node->function = FUNC_UNITY;
-
-    return child_node;
-}
-
-/**
- * mallocs two new nodes and adds them as a child of the provided node.
- * It then copies the provided node to the first of the two new nodes and
- * set the original node to a new parent.
- * Also returns the second child for convenience.
- *
- *       P'
- *       +--+
- *       P  C
- *
- * P' is the original node modified to be a new parent
- * P is newly allocated and is a copy of the original node
- * C is newly allocated and is returned (blank) from this function.
- */
-static struct Node *replaceParentNode (
-    struct Node *node,
-    enum Function newFunction
-) {
-
-    int new_child_count = 2;
-
-    struct Node * new_children = calloc(new_child_count, sizeof(*node));
-
-    // copy existing node to new child
-    struct Node *first_child = &new_children[0];
-    memcpy(first_child, node, sizeof(*node));
-
-    // set node function to new function
-    node->function = newFunction;
-
-    // set new children
-    node->children = new_children;
-
-    // set new child count
-    node->child_count = new_child_count;
-
-    // Clear current field
-    node->field.text[0] = '\0';
-
-    // Clear field index
-    node->field.index = FIELD_UNKNOWN;
-
-    // Return second child
-    struct Node *child_node = &node->children[1];
-
-    return child_node;
-}
-
 static int parseOperator (const char *input) {
     if (strcmp(input, "=") == 0)
         return OPERATOR_EQ;
@@ -1514,4 +1274,207 @@ static int parseOperator (const char *input) {
     if (strcmp(input, "IN") == 0)
         return OPERATOR_EQ;
     return FUNC_UNKNOWN;
+}
+
+/**
+ * Parses nodes with operators of the form:
+ *  <node> = <node>
+ *  <node> >= <node>
+ *  <node> BETWEEN <node> AND <node>
+ *  <node IN (<node>, <node>, ...)
+ *  etc.
+ * return -1 for error
+ */
+static int parseOperatorNode (
+    const char *query,
+    size_t *index,
+    struct Node *node
+) {
+    if (node->child_count != 0) {
+        fprintf(
+            stderr,
+            "We need an empty node to parse an operator expression into\n"
+        );
+        return -1;
+    }
+
+    struct Node *left = allocateNodeChildren(node, 2);
+    struct Node *right = left + 1;
+
+    /*******************
+     * Parse Left Side
+     *******************/
+
+    int result = parseNode(query, index, left);
+    if (result < 0) {
+        return result;
+    }
+
+    /*******************
+     * Parse Operator
+     *******************/
+
+    // Max length is BETWEEN
+    char op[strlen("BETWEEN") + 1];
+    getOperatorToken(query, index, op, strlen("BETWEEN"));
+
+    node->function = parseOperator(op);
+    if (node->function == FUNC_UNKNOWN) {
+        fprintf(stderr, "expected =|!=|<|<=|>|>=\n");
+        return -1;
+    }
+
+    // Check for IS NOT
+    if (strcmp(op, "IS") == 0) {
+        skipWhitespace(query, index);
+        if (strncmp(query + *index, "NOT ", 4) == 0) {
+            node->function = OPERATOR_NE;
+            *index += 4;
+        }
+    }
+
+    if (strcmp(op, "IN") == 0) {
+        skipWhitespace(query, index);
+
+        if (query[*index] != '(') {
+            fprintf(stderr, "Expected '(' after IN\n");
+            return -1;
+        }
+
+        (*index)++;
+
+        // Parse first child
+        result = parseNode(query, index, right);
+        if (result < 0) {
+            return result;
+        }
+
+        /*
+            Before:
+              =
+            /   \
+            L   R
+
+            After:
+                  OR
+               /      \
+              =     (   =       )
+            /   \   (  / \      )
+            L   R1  ( L   R2    )
+        */
+
+        cloneNodeIntoChild(node);
+
+        node->function = OPERATOR_OR;
+
+        skipWhitespace(query, index);
+
+        if (query[*index] == ',') {
+            (*index)++;
+
+            while (query[*index] != '\0' &&
+                query[*index] != ';' &&
+                query[*index] != ')')
+            {
+                struct Node *next_child = addChildNode(node);
+
+                struct Node *next_left = allocateNodeChildren(next_child, 2);
+                struct Node *next_right = next_left + 1;
+
+                next_child->function = OPERATOR_EQ;
+
+                struct Node *clone = &node->children[0];
+
+                copyNodeTree(next_left, &clone->children[0]);
+
+                result = parseNode(query, index, next_right);
+                if (result < 0) {
+                    return result;
+                }
+
+                skipWhitespace(query, index);
+
+                if (query[*index] != ',') {
+                    break;
+                }
+
+                (*index)++;
+            }
+        }
+
+        if (query[*index] != ')') {
+            fprintf(stderr, "Expected ')' after 'IN ('. Found %c\n", query[*index]);
+            return -1;
+        }
+
+        (*index)++;
+
+        return 0;
+    }
+
+    /*******************
+     * Parse Right Side
+     *******************/
+
+    result = parseNode(query, index, right);
+    if (result < 0) {
+        return result;
+    }
+
+    skipWhitespace(query, index);
+
+    /**************************
+     * Parse Second Right Side
+     **************************/
+
+    if (strcmp(op, "BETWEEN") == 0) {
+        enum Function op2 = FUNC_UNKNOWN;
+
+        if (strncmp(query + *index, "AND ", 4) == 0) {
+            op2 = OPERATOR_LE;
+            *index += 4;
+        }
+        else if (strncmp(query + *index, "ANDX ", 5) == 0) {
+            op2 = OPERATOR_LT;
+            *index += 5;
+        }
+        else {
+            fprintf(stderr, "Expected AND or ANDX after BETWEEN\n");
+            return -1;
+        }
+
+        /*
+            Before:
+              >=
+            /    \
+            L     R
+
+            After:
+                  AND
+               /      \
+              >=        <=
+            /   \      /  \
+            L    R1   L    R2
+        */
+
+        cloneNodeIntoChild(node);
+
+        node->function = OPERATOR_AND;
+
+        struct Node *p2 = addChildNode(node);
+
+        struct Node *left2 = allocateNodeChildren(p2, 2);
+        struct Node *right2 = left2 + 1;
+
+        p2->function = op2;
+
+        copyNodeTree(left2, left);
+
+        result = parseNode(query, index, right2);
+        if (result < 0) {
+            return result;
+        }
+    }
+
+    return 0;
 }

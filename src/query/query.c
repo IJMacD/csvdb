@@ -1014,6 +1014,11 @@ struct Table *allocateTable (struct Query *q) {
     return &q->tables[q->table_count - 1];
 }
 
+/**
+ * Allocate a new node as one of the predicates on a query object and
+ * increments the predicate counter.
+ * Does not allocate child nodes on the new predicate node.
+ */
 struct Node *allocatePredicateNode (struct Query *q) {
     void *mem;
 
@@ -1034,9 +1039,6 @@ struct Node *allocatePredicateNode (struct Query *q) {
     q->predicate_nodes = mem;
 
     struct Node *p = &(q->predicate_nodes[q->predicate_count++]);
-
-    p->children = malloc(sizeof(*p) * 2);
-    p->child_count = 2;
 
     return p;
 }

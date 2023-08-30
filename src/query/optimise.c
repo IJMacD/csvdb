@@ -14,6 +14,11 @@ void optimiseCollapseConstantNode (struct Node *node)  {
         optimiseCollapseConstantNode(&node->children[i]);
     }
 
+    // If this is a self-child node, check if the field is constant
+    if (node->child_count == -1 && node->field.index != FIELD_CONSTANT) {
+        return;
+    }
+
     // Make sure all children are constant
     for (int i = 0; i < node->child_count; i++) {
         if (node->children[i].field.index != FIELD_CONSTANT) {
@@ -24,6 +29,8 @@ void optimiseCollapseConstantNode (struct Node *node)  {
     if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR) {
         // If we're evaluating an operator then we can definitively set the node
         // to OPERATOR_ALWAYS or OPERATOR_NEVER
+
+        // TODO: What about cases with any child count other than 2?
 
         char value_left[MAX_VALUE_LENGTH] = {0};
         char value_right[MAX_VALUE_LENGTH] = {0};

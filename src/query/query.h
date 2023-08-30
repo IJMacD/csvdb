@@ -41,3 +41,4 @@ int process_query (
 struct Table *allocateTable (struct Query *q);
 
 struct Node *allocatePredicateNode (struct Query *q);
+

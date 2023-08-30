@@ -3,6 +3,73 @@
 #include "../structs.h"
 
 /**
+ * Allocates additional child nodes on a node
+ * returns the first new child added
+ */
+struct Node * allocateNodeChildren (struct Node *node, int new_children) {
+    struct Node *mem;
+
+    if (node->child_count == 0) {
+        mem = malloc(sizeof (*mem) * new_children);
+    } else {
+        mem = realloc(
+            node->children,
+            sizeof(*mem) * (node->child_count + new_children)
+        );
+    }
+
+    if (mem == NULL) {
+        fprintf(stderr, "Out of memory\n");
+        exit(-1);
+    }
+
+    node->children = mem;
+
+    struct Node *first_new_child = &node->children[node->child_count];
+
+    // NULL out children to avoid uninitialized read and set defaults
+    struct Node *child_node = first_new_child;
+    for (int i = 0; i < new_children; i++) {
+        child_node->children = NULL;
+        child_node->child_count = 0;
+        child_node->field.index = FIELD_UNKNOWN;
+        child_node->field.table_id = -1;
+        child_node->field.text[0] = '\0';
+        child_node->function = FUNC_UNITY;
+
+        child_node++;
+    }
+
+    node->child_count += new_children;
+
+    return first_new_child;
+}
+
+/**
+ * mallocs a new node and adds it as a child of the provided node.
+ * Also returns the new child for convenience.
+ *
+ *       P
+ *    +--+--+
+ *    C  C  C'
+ *
+ * P is the original node passed to this function
+ * C' is the new child. C' is returned from this function.
+ */
+struct Node *addChildNode (struct Node *parent_node) {
+    // Optimistation where node is its own child
+    if (parent_node->child_count == -1) {
+        fprintf(
+            stderr,
+            "Cannot add a child to an optimised node.\n"
+        );
+        exit(-1);
+    }
+
+    return allocateNodeChildren(parent_node, 1);
+}
+
+/**
  * @brief Copies a node tree recursively to avoid double FREE
  * Will malloc for children
  *
@@ -41,3 +108,67 @@ void freeNode (struct Node *node) {
         node->children = NULL;
     }
 }
+
+/**
+ * Given node A, this function will create a child B, and copy the contents of
+ * A into B.
+ */
+void cloneNodeIntoChild (struct Node *node) {
+    // Clone node into new child
+    struct Node *clone = malloc(sizeof *clone);
+
+    // Make shallow copy
+    memcpy(clone, node, sizeof *clone);
+
+    // Set clone to be child of root node
+    node->children = clone;
+    node->child_count = 1;
+}
+
+/**
+ * mallocs two new nodes and adds them as a child of the provided node.
+ * It then copies the provided node to the first of the two new nodes and
+ * set the original node to a new parent.
+ * Also returns the second child for convenience.
+ *
+ *       P'
+ *       +--+
+ *       P  C
+ *
+ * P' is the original node modified to be a new parent
+ * P is newly allocated and is a copy of the original node
+ * C is newly allocated and is returned (blank) from this function.
+ */
+// static struct Node *replaceParentNode (
+//     struct Node *node,
+//     enum Function newFunction
+// ) {
+
+//     int new_child_count = 2;
+
+//     struct Node * new_children = calloc(new_child_count, sizeof(*node));
+
+//     // copy existing node to new child
+//     struct Node *first_child = &new_children[0];
+//     memcpy(first_child, node, sizeof(*node));
+
+//     // set node function to new function
+//     node->function = newFunction;
+
+//     // set new children
+//     node->children = new_children;
+
+//     // set new child count
+//     node->child_count = new_child_count;
+
+//     // Clear current field
+//     node->field.text[0] = '\0';
+
+//     // Clear field index
+//     node->field.index = FIELD_UNKNOWN;
+
+//     // Return second child
+//     struct Node *child_node = &node->children[1];
+
+//     return child_node;
+// }
