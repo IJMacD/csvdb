@@ -124,13 +124,7 @@ int getToken (
     }
 
     // Check for simple operators
-    if (
-        string[*index] == '+'
-        || string[*index] == '-'
-        || string[*index] == '*'
-        || string[*index] == '/'
-        || string[*index] == '%'
-    ) {
+    if (!isTokenChar(string[*index])) {
         // operators are not allowed as tokens
         return -1;
     }
@@ -237,6 +231,15 @@ int getOperatorToken (
 
     int token_length = *index - start_index;
 
+    if (token_length == 0) {
+        // We didn't get a pure operator but perhaps we'll have a wordy one
+        // e.g. BETWEEN, AND, OR, IN
+
+        skipToken(string, index);
+
+        token_length = *index - start_index;
+    }
+
     if (token_length > token_max_length) {
         return -1;
     }
@@ -274,9 +277,14 @@ static int isTokenChar (char c) {
  * @return int
  */
 static int isOperatorChar (char c) {
-    return !iscntrl(c) &&
-        !isdigit(c) &&
-        c != ' ' &&
-        c != ',' &&
-        c != '|';
+    return c == '|'
+        || c == '='
+        || c == '!'
+        || c == '>'
+        || c == '<'
+        || c == '+'
+        || c == '-'
+        || c == '*'
+        || c == '/'
+        || c == '%';
 }
