@@ -533,13 +533,16 @@ int select_subquery_mem (
 
     // DEBUG builds print out current query
     #ifdef DEBUG
-    if (end_ptr != NULL) {
-        size_t query_len = *end_ptr - query;
-        fwrite(query, 1, query_len, stderr);
-        fprintf(stderr, "\n");
-    }
-    else {
-        fprintf(stderr, "%s\n", query);
+    if (debug_verbosity >= 1) {
+        fprintf(stderr, "Subquery: ");
+        if (end_ptr != NULL) {
+            size_t query_len = *end_ptr - query;
+            fwrite(query, 1, query_len, stderr);
+            fprintf(stderr, "\n");
+        }
+        else {
+            fprintf(stderr, "%s\n", query);
+        }
     }
     #endif
 

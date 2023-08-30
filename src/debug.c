@@ -127,7 +127,7 @@ static void debugNodeInner (struct Node * node, int depth) {
         }
         else if ((node->function & (MASK_FUNC_FAMILY | 0x10)) == 0x10) {
             char *operators[] = {
-                "","+","-","*","/","%%","^"
+                "","+","-","*","/","%","^"
             };
             char *s = operators[node->function & ~(MASK_FUNC_FAMILY | 0x10)];
             fprintf(

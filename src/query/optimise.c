@@ -11,6 +11,11 @@ void optimiseCollapseConstantNode (struct Node *node)  {
         return;
     }
 
+    if (node->function == FUNC_RANDOM) {
+        // RANDOM is non-deterministic so cannot be collapsed
+        return;
+    }
+
     // Optimise all children first
     for (int i = 0; i < node->child_count; i++) {
         optimiseCollapseConstantNode(&node->children[i]);
@@ -23,7 +28,8 @@ void optimiseCollapseConstantNode (struct Node *node)  {
 
     // Make sure all children are constant
     for (int i = 0; i < node->child_count; i++) {
-        if (node->children[i].field.index != FIELD_CONSTANT) {
+        if (node->children[i].function != FUNC_UNITY ||
+            node->children[i].field.index != FIELD_CONSTANT) {
             return;
         }
     }
