@@ -355,6 +355,14 @@ int process_query (
     }
     #endif
 
+    #ifdef DEBUG
+    // Pre-optimsed SELECT nodes
+    if (debug_verbosity >= 4) {
+        fprintf(stderr, "    SELECT\n");
+        debugNodes(q->columns, q->column_count);
+    }
+    #endif
+
     // Populate SELECT fields first so that aliases can be used in WHERE or
     // ORDER BY clauses
     for (int i = 0; i < q->column_count; i++) {

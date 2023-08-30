@@ -6,4 +6,4 @@ void copyNodeTree (struct Node *dest, struct Node *src);
 
 void freeNode (struct Node *node);
 
-void cloneNodeIntoChild (struct Node *node);
+struct Node * cloneNodeIntoChild (struct Node *node);

@@ -113,8 +113,9 @@ void freeNode (struct Node *node) {
 /**
  * Given node A, this function will create a child B, and copy the contents of
  * A into B.
+ * Returns new left child node as convenience
  */
-void cloneNodeIntoChild (struct Node *node) {
+struct Node * cloneNodeIntoChild (struct Node *node) {
     // Clone node into new child
     struct Node *clone = malloc(sizeof *clone);
 
@@ -124,6 +125,8 @@ void cloneNodeIntoChild (struct Node *node) {
     // Set clone to be child of root node
     node->children = clone;
     node->child_count = 1;
+
+    return &node->children[0];
 }
 
 /**
