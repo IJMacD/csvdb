@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <ctype.h>
 
 int is_numeric (const char *string) {
@@ -149,8 +150,22 @@ int whitespaceCollapse (char *output, const char *source, int length) {
             whitespace_flag = 0;
         }
     }
+
+    // Trim trailing whitespace
+    if (output[written-1] == ' ') {
+        written--;
+    }
+
     output[written] = '\0';
     return written;
+}
+
+void trimTrailingWhitespace (char *string) {
+    size_t length = strlen(string);
+    char *ptr = string + length;
+    while (ptr > string && isspace(*ptr)) {
+        *(ptr--) = '\0';
+    }
 }
 
 /**
