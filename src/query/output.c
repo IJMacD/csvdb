@@ -171,7 +171,7 @@ void printResultLine (
                 output,
                 tables,
                 node,
-                row_list
+                list_id
             );
 
             printColumnValue(

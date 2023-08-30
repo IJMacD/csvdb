@@ -11,20 +11,20 @@ int executeSort (
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
-    // debugRowList(row_list, 2);
+    RowListIndex list_id = popRowList(result_set);
 
-    RowListIndex row_list = popRowList(result_set);
+    // debugRowList(getRowList(list_id), 2);
 
     sortQuick(
         tables,
         step->nodes,
         step->node_count,
-        getRowList(row_list)
+        list_id
     );
 
-    pushRowList(result_set, row_list);
+    pushRowList(result_set, list_id);
 
-    // debugRowList(getRowList(row_list), 2);
+    // debugRowList(getRowList(list_id), 2);
 
     return 0;
 }
@@ -35,9 +35,9 @@ int executeReverse (
     struct ResultSet *result_set
 ) {
 
-    RowListIndex row_list = popRowList(result_set);
-    reverseRowList(getRowList(row_list), step->limit);
-    pushRowList(result_set, row_list);
+    RowListIndex list_id = popRowList(result_set);
+    reverseRowList(getRowList(list_id), step->limit);
+    pushRowList(result_set, list_id);
 
     return 0;
 }
@@ -70,9 +70,9 @@ int executeGroupSorted (
 
     char values[2][MAX_VALUE_LENGTH] = {0};
 
-    RowListIndex row_list = popRowList(result_set);
+    RowListIndex list_id = popRowList(result_set);
 
-    int limit = getRowList(row_list)->row_count;
+    int limit = getRowList(list_id)->row_count;
     if (step->limit > -1 && step->limit < limit) {
         limit = step->limit;
     }
@@ -81,20 +81,20 @@ int executeGroupSorted (
 
     RowListIndex curr_list = -1;
 
-    struct Node *col = &step->nodes[0].children[0];
+    struct Node *col = &step->nodes[0];
 
-    int join_count = getRowList(row_list)->join_count;
-    int row_count = getRowList(row_list)->row_count;
+    int join_count = getRowList(list_id)->join_count;
+    int row_count = getRowList(list_id)->row_count;
 
     // debugRowList(getRowList(row_list), 2);
 
-    for (int i = 0; i < getRowList(row_list)->row_count; i++) {
+    for (int i = 0; i < getRowList(list_id)->row_count; i++) {
         char *curr_value = values[i%2];
         char *prev_value = values[(i+1)%2];
 
         evaluateNode(
             tables,
-            row_list,
+            list_id,
             i,
             col,
             curr_value,
@@ -107,14 +107,15 @@ int executeGroupSorted (
             }
 
             curr_list = createRowList(join_count, row_count - i);
+            getRowList(curr_list)->group = 1;
             pushRowList(result_set, curr_list);
             count++;
         }
 
-        copyResultRow(getRowList(curr_list), getRowList(row_list), i);
+        copyResultRow(getRowList(curr_list), getRowList(list_id), i);
     }
 
-    destroyRowList(row_list);
+    destroyRowList(list_id);
 
     return 0;
 }
@@ -141,24 +142,27 @@ int executeGroupBucket (
     }
 
     // Get RowList
-    RowListIndex row_list = popRowList(result_set);
+    RowListIndex list_id = popRowList(result_set);
 
     int bucket_count = 0;
     char (*bucket_keys)[MAX_VALUE_LENGTH] = NULL;
     RowListIndex *buckets = NULL;
 
-    int join_count = getRowList(row_list)->join_count;
-    int row_count = getRowList(row_list)->row_count;
+    // We cannot have a long kept reference to the RowList because
+    // more RowLists get allocated in the loop
+
+    int join_count = getRowList(list_id)->join_count;
+    int row_count = getRowList(list_id)->row_count;
 
     // Iterate rows
 
-    for (int i = 0; i < getRowList(row_list)->row_count; i++) {
+    for (int i = 0; i < getRowList(list_id)->row_count; i++) {
         char value[MAX_VALUE_LENGTH] = {0};
 
         // Evaluate group key
         evaluateNodeList(
             tables,
-            row_list,
+            list_id,
             i,
             step->nodes,
             step->node_count,
@@ -214,7 +218,7 @@ int executeGroupBucket (
 
         copyResultRow(
             getRowList(buckets[bucket_index]),
-            getRowList(row_list),
+            getRowList(list_id),
             i
         );
     }
@@ -236,7 +240,7 @@ int executeGroupBucket (
         }
     }
 
-    destroyRowList(row_list);
+    destroyRowList(list_id);
 
     return 0;
 }

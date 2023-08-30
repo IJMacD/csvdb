@@ -9,5 +9,5 @@ int evaluateAggregateFunction (
     char * output,
     struct Table *tables,
     struct Node *node,
-    struct RowList * row_list
+    RowListIndex row_list
 );

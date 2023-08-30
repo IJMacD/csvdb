@@ -4,5 +4,5 @@ void sortQuick (
     struct Table *tables,
     struct Node *nodes,
     int node_count,
-    struct RowList *row_list
+    RowListIndex list_id
 );

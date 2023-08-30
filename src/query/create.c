@@ -242,7 +242,7 @@ static int create_index (
     // Fill row list with every sequential rowid
     fullTableScan(&db, row_list, 0, -1);
 
-    sortQuick(&table, columns, field_count, getRowList(row_list));
+    sortQuick(&table, columns, field_count, row_list);
 
     // Output functions assume array of DBs
     printHeaderLine(
