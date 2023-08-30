@@ -77,6 +77,8 @@ enum Function {
     FUNC_MOD =                      0x15,
     FUNC_POW =                      0x16,
 
+    FUNC_PARENS =                   0x1F,
+
     // Family 001x (0x20) String
     FUNC_FAM_STRING =               0x20,
 

@@ -125,6 +125,9 @@ static void debugNodeInner (struct Node * node, int depth) {
                 s
             );
         }
+        else if (node->function == FUNC_PARENS) {
+            fprintf(stderr, "PARENS");
+        }
         else if ((node->function & (MASK_FUNC_FAMILY | 0x10)) == 0x10) {
             char *operators[] = {
                 "","+","-","*","/","%","^"

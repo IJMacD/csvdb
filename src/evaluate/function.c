@@ -184,6 +184,9 @@ int evaluateFunction(
 
         return sprintf(output, "%ld", prod);
     }
+    else if (function == FUNC_PARENS) {
+        return sprintf(output, "%s", values[0]);
+    }
     else if ((function & MASK_FUNC_FAMILY) == FUNC_FAM_STRING) {
         if (function == FUNC_LENGTH) {
             int len = strlen(values[0]);

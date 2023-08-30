@@ -317,6 +317,8 @@ int parseSimpleNode (
     return flags;
 }
 
+#define MAX_PARENS 10
+
 /**
  * Parses simple nodes and maths nodes:
  *  Simple nodes: (<node>)
@@ -327,6 +329,7 @@ int parseSimpleNode (
  *      <field> + <constant>
  *      <function>() + <constant>
  *      <contant> + <function>()
+ *      (<node> + <node>)
  *      etc.
  * Returns -1 for error; flags otherwise
  */
@@ -335,7 +338,28 @@ int parseNode (
     size_t * index,
     struct Node *node
 ) {
-    int flags = parseSimpleNode(query, index, node);
+    skipWhitespace(query, index);
+
+    int parens_count = 0;
+    struct Node *root_stack[MAX_PARENS] = {node};
+
+    while (query[*index] == '(') {
+        (*index)++;
+
+        struct Node *root = root_stack[parens_count];
+        root->function = FUNC_PARENS;
+        root = addChildNode(root);
+        root_stack[++parens_count] = root;
+
+        if (parens_count > MAX_PARENS) {
+            fprintf(stderr, "Unable to go more than %d parens deep\n", MAX_PARENS);
+            return -1;
+        }
+    }
+
+    // Parse first simple node
+    struct Node *root = root_stack[parens_count];
+    int flags = parseSimpleNode(query, index, root);
 
     while (query[*index] != '\0' && query[*index] != ';') {
         enum Function fn = parseSimpleOperators(query, index);
@@ -344,9 +368,40 @@ int parseNode (
             break;
         }
 
-        struct Node *next_child = constructExpressionTree(node, fn);
+        struct Node *root = root_stack[parens_count];
+        struct Node *next_child = constructExpressionTree(root, fn);
+
+        skipWhitespace(query, index);
+        if (query[*index] == '(') {
+            (*index)++;
+            next_child->function = FUNC_PARENS;
+            next_child = addChildNode(next_child);
+            root_stack[++parens_count] = next_child;
+
+            if (parens_count > MAX_PARENS) {
+                fprintf(stderr, "Unable to go more than %d parens deep\n", MAX_PARENS);
+                return -1;
+            }
+        }
 
         flags |= parseSimpleNode(query, index, next_child);
+
+        skipWhitespace(query, index);
+        if (parens_count && query[*index] == ')') {
+            parens_count--;
+            (*index)++;
+        }
+    }
+
+    skipWhitespace(query, index);
+
+    if (parens_count) {
+        if (query[*index] != ')') {
+            fprintf(stderr, "Expecting ')' after expression\n");
+            return -1;
+        }
+
+        (*index)++;
     }
 
     return flags;
@@ -827,6 +882,8 @@ static int getPrecedence (enum Function fn) {
     if (fn == FUNC_MUL) return 20;
     if (fn == FUNC_DIV) return 20;
     if (fn == FUNC_MOD) return 20;
+
+    if (fn == FUNC_PARENS) return 90;
 
     // All other functions bind their params impossibly tightly
     return 100;

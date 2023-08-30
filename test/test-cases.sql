@@ -98,6 +98,7 @@ FROM ranks SELECT value*4 FETCH FIRST 5 ROWS ONLY;
 FROM ranks SELECT 1000 / value ORDER BY rowid DESC FETCH FIRST 5 ROWS ONLY;
 FROM test SELECT score % 4 AS mod, COUNT(*) WHERE rowid < 100000 GROUP BY mod FETCH FIRST 5 ROWS ONLY;
 FROM SEQUENCE(2) SELECT 5 + 3 * 3, 5 * 3 + 3, LENGTH('cat') * 2, 2 + LENGTH('CAT' || 'DOG') + value = 9;
+SELECT (5 + 3) * 3, 5 * (3 + 3), (5 + 3 * 3), (5 * 3 + 3), ((5 + 3) * 3), (5 + (3 * 3));
 -- Operator Expressions
 FROM CALENDAR WHERE date BETWEEN CURRENT_DATE AND CURRENT_DATE + 3 SELECT ordinalDate;
 FROM CALENDAR WHERE date >= CURRENT_DATE - 2 SELECT julian, date, date = CURRENT_DATE LIMIT 5;
