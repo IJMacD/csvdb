@@ -570,7 +570,7 @@ static void printRecordStart (
     }
     else if (format == OUTPUT_FORMAT_INFO_SEP) {
         if (is_first) {
-            printf("\x02"); // Start of Text
+            fprintf(f, "\x02"); // Start of Text
         }
     }
     else if (format == OUTPUT_FORMAT_XML) {

@@ -51,13 +51,15 @@ void printUsage (const char* name) {
         "respectively.\n"
         "\n"
         "Options:\n"
+        "\t[-h|--help]\n"
         "\t[-E|--explain]\n"
         "\t[-H|--headers] (default)\n"
         "\t[--no-headers]\n"
+        "\t[-f <filename.sql>|-] (read SQL from file, '-' for stdin)\n"
         "\t[(-F |--format=)(tsv|csv|html|json|json_array|sql|sql_values|xml|"
         "record)]\n"
         "\t[(-o |--output=)<filename>]\n"
-        "\t[--stats] (Writes timing data to 'stats.csv')\n"
+        "\t[--stats] (write timing data to 'stats.csv')\n"
         #ifdef DEBUG
         "\t[-v|-vv|-vvv|--verbose=n] Set DEBUG verbosity\n"
         #endif
