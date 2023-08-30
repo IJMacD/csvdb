@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 
 #include <unistd.h>
 
@@ -109,7 +110,7 @@ void debugNode (struct Node * node) {
 static void debugNodeInner (struct Node * node, int depth) {
     fprintf(
         stderr,
-        "\t%*s[NODE] ", depth, "");
+        "\t%*s[NODE] ", depth * 2, "");
 
     if (node->function != FUNC_UNITY) {
         if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR) {
@@ -183,6 +184,10 @@ static void debugNodeInner (struct Node * node, int depth) {
         }
     }
 
+    if (strlen(node->alias)) {
+        fprintf(stderr, "[Alias: '%s']", node->alias);
+    }
+
     fprintf(stderr, "\n");
 
     for (int i = 0; i < node->child_count; i++) {
@@ -208,7 +213,7 @@ void debugFrom (struct Query *query) {
     }
     else for(int i = 0; i < query->table_count; i++) {
         struct Table *table = &query->tables[i];
-        fprintf(stderr, "      %s, ALIAS = '%s'", table->name, table->alias);
+        fprintf(stderr, "      %s [Alias: '%s']", table->name, table->alias);
         if (i == 0) {
             fprintf(stderr, "\n");
         }

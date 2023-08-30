@@ -4,6 +4,7 @@
 #include "../structs.h"
 #include "evaluate.h"
 #include "function.h"
+#include "predicates.h"
 #include "../query/result.h"
 #include "../db/db.h"
 #include "../functions/date.h"
@@ -47,6 +48,14 @@ int evaluateNode (
             output,
             max_length
         );
+    }
+
+    if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR) {
+        int result = evaluateOperatorNode(tables, row_list, index, node);
+
+        sprintf(output, "%s", result ? "1" : "0");
+
+        return 1;
     }
 
     if (node->child_count == -1) {

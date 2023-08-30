@@ -36,6 +36,7 @@ struct Node * allocateNodeChildren (struct Node *node, int new_children) {
         child_node->field.table_id = -1;
         child_node->field.text[0] = '\0';
         child_node->function = FUNC_UNITY;
+        child_node->alias[0] = '\0';
 
         child_node++;
     }
@@ -88,7 +89,7 @@ void copyNodeTree (struct Node *dest, struct Node *src) {
 
     if (src->children != NULL && src->child_count > 0) {
 
-        dest->children = malloc(sizeof(*dest) * src->child_count);
+        dest->children = calloc( src->child_count, sizeof(*dest));
 
         for (int i = 0; i < src->child_count; i++) {
             copyNodeTree(&dest->children[i], &src->children[i]);

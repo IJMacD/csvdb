@@ -18,7 +18,7 @@ static int parseNode (
     struct Node *node
 );
 
-static int parseOperatorNode (
+static int parseComplexNode (
     const char *query,
     size_t *index,
     struct Node * node
@@ -252,7 +252,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                 int col_start_index = index;
 
-                int result = parseNode(query, &index, node);
+                int result = parseComplexNode(query, &index, node);
 
                 if (result < 0) {
                     return result;
@@ -564,9 +564,14 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
             while (query[index] != '\0' && query[index] != ';') {
                 struct Node *p = allocatePredicateNode(q);
 
-                int result = parseOperatorNode(query, &index, p);
+                int result = parseComplexNode(query, &index, p);
                 if (result < 0) {
                     return result;
+                }
+
+                if ((p->function & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR) {
+                    fprintf(stderr, "WHERE node: expected =|<|<=|>|>=\n");
+                    return -1;
                 }
 
                 skipWhitespace(query, &index);
@@ -744,6 +749,13 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 }
 
 /**
+ * Parses simple nodes and maths nodes:
+ *  Simple nodes: (<node>)
+ *      <field>
+ *      <constant>
+ *  Maths expression nodes: (<node>)
+ *      <field> + <constant>
+ *      etc.
  * Returns -1 for error; flags otherwise
  */
 static int parseNode (
@@ -761,6 +773,7 @@ static int parseNode (
     node->field.index = FIELD_UNKNOWN;
     node->field.table_id = -1;
     node->field.text[0] = '\0';
+    node->alias[0] = '\0';
 
     if (query[*index] == '*') {
         node->field.index = FIELD_STAR;
@@ -1277,15 +1290,22 @@ static int parseOperator (const char *input) {
 }
 
 /**
- * Parses nodes with operators of the form:
- *  <node> = <node>
- *  <node> >= <node>
- *  <node> BETWEEN <node> AND <node>
- *  <node IN (<node>, <node>, ...)
- *  etc.
+ * Parses all kind of nodes, including:
+ *  Simple nodes: (<node>)
+ *      <field>
+ *      <constant>
+ *  Maths expression nodes: (<node>)
+ *      <field> + <constant>
+ *      etc.
+ *  Nodes with operators of the form:
+ *      <node> = <node>
+ *      <node> >= <node>
+ *      <node> BETWEEN <node> AND <node>
+ *      <node IN (<node>, <node>, ...)
+ *      etc.
  * return -1 for error
  */
-static int parseOperatorNode (
+static int parseComplexNode (
     const char *query,
     size_t *index,
     struct Node *node
@@ -1298,31 +1318,47 @@ static int parseOperatorNode (
         return -1;
     }
 
-    struct Node *left = allocateNodeChildren(node, 2);
-    struct Node *right = left + 1;
-
     /*******************
      * Parse Left Side
      *******************/
 
-    int result = parseNode(query, index, left);
-    if (result < 0) {
-        return result;
+    int flags = parseNode(query, index, node);
+    if (flags < 0) {
+        return flags;
     }
 
     /*******************
      * Parse Operator
      *******************/
 
-    // Max length is BETWEEN
-    char op[strlen("BETWEEN") + 1];
-    getOperatorToken(query, index, op, strlen("BETWEEN"));
+    char op[32] = {0};
+    int count = getOperatorToken(query, index, op, 31);
 
-    node->function = parseOperator(op);
-    if (node->function == FUNC_UNKNOWN) {
-        fprintf(stderr, "expected =|!=|<|<=|>|>=\n");
-        return -1;
+    if (count == 0) {
+        // No operator, just end now
+        return flags;
     }
+
+    enum Function function = parseOperator(op);
+    if (function == FUNC_UNKNOWN) {
+        // No operator
+        // Rewind index and bail out
+        *index -= count;
+        return flags;
+    }
+
+    // We do have an operator
+
+    // First clone the node into child
+    cloneNodeIntoChild(node);
+
+    // Save this for later if needed
+    struct Node *left = &node->children[0];
+
+    // Then reserve space for right hand side
+    struct Node *right = addChildNode(node);
+
+    node->function = function;
 
     // Check for IS NOT
     if (strcmp(op, "IS") == 0) {
@@ -1344,8 +1380,8 @@ static int parseOperatorNode (
         (*index)++;
 
         // Parse first child
-        result = parseNode(query, index, right);
-        if (result < 0) {
+        int result = parseNode(query, index, right);
+        if (result != 0) {
             return result;
         }
 
@@ -1387,8 +1423,8 @@ static int parseOperatorNode (
 
                 copyNodeTree(next_left, &clone->children[0]);
 
-                result = parseNode(query, index, next_right);
-                if (result < 0) {
+                int result = parseNode(query, index, next_right);
+                if (result != 0) {
                     return result;
                 }
 
@@ -1416,8 +1452,8 @@ static int parseOperatorNode (
      * Parse Right Side
      *******************/
 
-    result = parseNode(query, index, right);
-    if (result < 0) {
+    int result = parseNode(query, index, right);
+    if (result != 0) {
         return result;
     }
 
@@ -1470,8 +1506,8 @@ static int parseOperatorNode (
 
         copyNodeTree(left2, left);
 
-        result = parseNode(query, index, right2);
-        if (result < 0) {
+        int result = parseNode(query, index, right2);
+        if (result != 0) {
             return result;
         }
     }
