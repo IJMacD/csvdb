@@ -1,6 +1,8 @@
+#include <stdlib.h>
 #include <string.h>
 
 #include "../structs.h"
+#include "../debug.h"
 #include "../evaluate/evaluate.h"
 #include "../evaluate/predicates.h"
 
@@ -30,6 +32,12 @@ void optimiseCollapseConstantNode (struct Node *node)  {
         // If we're evaluating an operator then we can definitively set the node
         // to OPERATOR_ALWAYS or OPERATOR_NEVER
 
+        #if DEBUG
+        if (debug_verbosity >= 2) {
+            fprintf(stderr, "[OPTIMISE] Constant Collapse (Operator)\n");
+        }
+        #endif
+
         // TODO: What about cases with any child count other than 2?
 
         char value_left[MAX_VALUE_LENGTH] = {0};
@@ -48,6 +56,12 @@ void optimiseCollapseConstantNode (struct Node *node)  {
         }
     }
     else {
+        #if DEBUG
+        if (debug_verbosity >= 2) {
+            fprintf(stderr, "[OPTIMISE] Constant Collapse\n");
+        }
+        #endif
+
         // Evaluate the function and write result to field
         evaluateConstantNode(node, node->field.text);
 
@@ -94,6 +108,12 @@ void optimiseRowidAlgebra (struct Node *node) {
             if (left_grandchild->field.index == FIELD_ROW_INDEX) {
                 // We should optimise!
 
+                #if DEBUG
+                if (debug_verbosity >= 2) {
+                    fprintf(stderr, "[OPTIMISE] RowID algebra\n");
+                }
+                #endif
+
                 // e.g. tree before
                 //          =       |
                 //       /    \     |
@@ -137,4 +157,54 @@ void optimiseRowidAlgebra (struct Node *node) {
             }
         }
     }
+}
+
+void optimiseFlattenANDPredicates (struct Query * query) {
+    int have_AND_predicates = 0;
+
+    // Count up how many extra predicate spaces we'll need
+    for (int i = 0; i < query->predicate_count; i++) {
+        struct Node *predicate = &query->predicate_nodes[i];
+        if (predicate->function == OPERATOR_AND) {
+            have_AND_predicates += predicate->child_count - 1;
+        }
+    }
+
+    if (have_AND_predicates == 0) {
+        return;
+    }
+
+    #if DEBUG
+    if (debug_verbosity >= 2) {
+        fprintf(stderr, "[OPTIMISE] Flatten AND predicates (%d)\n", have_AND_predicates);
+    }
+    #endif
+
+    int new_predicate_count = query->predicate_count + have_AND_predicates;
+
+    struct Node *new_predicates = malloc(
+        new_predicate_count * sizeof *new_predicates
+    );
+
+    struct Node *curr_predicate = new_predicates;
+    for (int i = 0; i < query->predicate_count; i++) {
+        struct Node *predicate = &query->predicate_nodes[i];
+
+        if (predicate->function == OPERATOR_AND) {
+            for (int j = 0; j < predicate->child_count; j++) {
+                memcpy(
+                    curr_predicate++,
+                    &predicate->children[j],
+                    sizeof *predicate
+                );
+            }
+        }
+        else {
+            memcpy(curr_predicate++, predicate, sizeof *predicate);
+        }
+    }
+
+    free(query->predicate_nodes);
+    query->predicate_nodes = new_predicates;
+    query->predicate_count = new_predicate_count;
 }

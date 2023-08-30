@@ -367,6 +367,8 @@ int process_query (
         optimiseCollapseConstantNode(&q->columns[i]);
     }
 
+    optimiseFlattenANDPredicates(q);
+
     // Populate any fields in WHERE clause
     for (int i = 0; i < q->predicate_count; i++) {
         struct Node *predicate = &q->predicate_nodes[i];
