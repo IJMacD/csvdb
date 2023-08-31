@@ -11,3 +11,5 @@ int parseComplexNode (
     size_t *index,
     struct Node * node
 );
+
+void parseNodeList (const char *query, size_t *index, struct Node *node);

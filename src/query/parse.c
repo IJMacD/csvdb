@@ -428,7 +428,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                     struct Node *p = &table->join;
 
-                    parseComplexNode(query, &index, p);
+                    parseNodeList(query, &index, p);
 
                     skipWhitespace(query, &index);
                 } else if (strncmp(query + index, "USING ", 6) == 0) {

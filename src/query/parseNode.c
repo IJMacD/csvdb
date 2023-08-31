@@ -812,6 +812,36 @@ int parseComplexNode (
 }
 
 /**
+ * Parses list of complex nodes with AND between
+ * Does *not* return a list. Returns single AND node with children as list
+ * Parses:
+ *      <complex node> AND <complex node> AND ...
+ */
+void parseNodeList (const char *query, size_t *index, struct Node *node) {
+    parseComplexNode(query, index, node);
+
+    while(query[*index] != '\0' && query[*index] != ';') {
+
+        skipWhitespace(query, index);
+
+        if (strncmp(&query[*index], "AND ", 4) != 0) {
+            break;
+        }
+
+        *index += 4;
+
+        if (node->function != OPERATOR_AND) {
+            cloneNodeIntoChild(node);
+            node->function = OPERATOR_AND;
+        }
+
+        struct Node *next_child = addChildNode(node);
+
+        parseComplexNode(query, index, next_child);
+    }
+}
+
+/**
  * Should take a partially built node tree and add a new mathematical operator
  * in the correct place as detrimined by order of operations rules
  *
