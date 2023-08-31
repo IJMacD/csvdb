@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../structs.h"
+#include "../db/db.h"
 
 /**
  * Allocates additional child nodes on a node
@@ -176,3 +177,43 @@ struct Node * cloneNodeIntoChild (struct Node *node) {
 
 //     return child_node;
 // }
+
+/**
+ * Generates a bit map to indicate which tables are referenced by a node
+ * Least significant bit is Table 0 etc.
+ */
+int getTableBitMap (struct Node *node) {
+    int map = 0;
+
+    if (node->child_count == -1 || node->function == FUNC_UNITY) {
+        if (node->field.index != FIELD_CONSTANT) {
+            int tableBit = 1 << node->field.table_id;
+            map |= tableBit;
+        }
+    }
+    else for (int i = 0; i < node->child_count; i++) {
+        map |= getTableBitMap(&node->children[i]);
+    }
+
+    return map;
+}
+
+/**
+ * Helper function as wrapper on findIndex
+ * Tries to locate an index on a node
+ */
+enum IndexSearchType findNodeIndex (
+    struct DB *db,
+    const char *table_name,
+    struct Node *node,
+    enum IndexSearchType index_type_flags
+) {
+    if (node->function == FUNC_UNITY) {
+        const char *field_name = node->field.text;
+        return findIndex(db, table_name, field_name, index_type_flags);
+    }
+
+    // indexes on functions are not supported yet
+
+    return INDEX_NONE;
+}

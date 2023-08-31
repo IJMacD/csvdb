@@ -24,30 +24,26 @@ int executeCrossJoin (
     struct ResultSet *result_set
 ) {
 
-    RowListIndex row_list = popRowList(result_set);
+    RowListIndex list_id = popRowList(result_set);
 
-    int table_id = step->nodes[0].child_count == 0
-        // Defined to be this table join ID in node field
-        ? step->nodes[0].field.table_id
-        // Defined to be this table join ID or left field
-        : step->nodes[0].children[0].field.table_id;
+    int table_id = getRowList(list_id)->join_count;
 
     struct DB *next_db = tables[table_id].db;
 
     int record_count = getRecordCount(next_db);
 
-    int new_length = getRowList(row_list)->row_count * record_count;
+    int new_length = getRowList(list_id)->row_count * record_count;
 
     RowListIndex new_list = createRowList(
-        getRowList(row_list)->join_count + 1,
+        getRowList(list_id)->join_count + 1,
         new_length
     );
 
-    for (int i = 0; i < getRowList(row_list)->row_count; i++) {
+    for (int i = 0; i < getRowList(list_id)->row_count; i++) {
         int done = 0;
 
         for (int j = 0; j < record_count; j++) {
-            appendJoinedRowID(getRowList(new_list), getRowList(row_list), i, j);
+            appendJoinedRowID(getRowList(new_list), getRowList(list_id), i, j);
 
             if (
                 step->limit > -1
@@ -61,7 +57,7 @@ int executeCrossJoin (
         if (done) break;
     }
 
-    destroyRowList(row_list);
+    destroyRowList(list_id);
 
     pushRowList(result_set, new_list);
 
@@ -84,27 +80,12 @@ int executeConstantJoin (
     struct ResultSet *result_set
 ) {
 
-    RowListIndex row_list = popRowList(result_set);
+    RowListIndex list_id = popRowList(result_set);
 
-    struct Node *p = &step->nodes[0];
+    // Tables must be joined in same order
+    int next_table_id = getRowList(list_id)->join_count;
 
-    // Defined to be this table join ID on left
-    struct Node *left_node = &p->children[0];
-    struct Field *left_field;
-    if (left_node->child_count == -1) {
-        left_field = &left_node->field;
-    }
-    else if (left_node->child_count == 0) {
-        fprintf(stderr, "Constant JOIN needs a table\n");
-        exit(-1);
-    }
-    else {
-        left_field = &left_node->children[0].field;
-    }
-    int left_table_id = left_field->table_id;
-
-
-    struct DB *next_db = tables[left_table_id].db;
+    struct DB *next_db = tables[next_table_id].db;
 
     if (next_db == NULL) {
         fprintf(stderr, "Unknown DB in JOIN\n");
@@ -124,20 +105,20 @@ int executeConstantJoin (
         -1
     );
 
-    int old_count = getRowList(row_list)->row_count;
+    int old_count = getRowList(list_id)->row_count;
     int tmp_count = getRowList(tmp_list)->row_count;
 
     int new_length = old_count * tmp_count;
 
     // Check for LEFT JOIN
-    if (tmp_count == 0 && tables[left_table_id].join_type == JOIN_LEFT) {
+    if (tmp_count == 0 && tables[next_table_id].join_type == JOIN_LEFT) {
         new_length = old_count;
     }
 
     // Now we know how many rows are to be joined we can make the
     // new row list.
     RowListIndex new_list = createRowList(
-        getRowList(row_list)->join_count + 1,
+        getRowList(list_id)->join_count + 1,
         new_length
     );
 
@@ -149,10 +130,10 @@ int executeConstantJoin (
         // If it's a LEFT JOIN and the right table was empty we
         // need to add each row to the new row list with NULLs for
         // the right table
-        if (tmp_count == 0 && tables[left_table_id].join_type == JOIN_LEFT) {
+        if (tmp_count == 0 && tables[next_table_id].join_type == JOIN_LEFT) {
             appendJoinedRowID(
                 getRowList(new_list),
-                getRowList(row_list),
+                getRowList(list_id),
                 i,
                 ROWID_NULL
             );
@@ -169,7 +150,7 @@ int executeConstantJoin (
             int rowid = getRowID(getRowList(tmp_list), 0, j);
             appendJoinedRowID(
                 getRowList(new_list),
-                getRowList(row_list),
+                getRowList(list_id),
                 i,
                 rowid
             );
@@ -185,7 +166,7 @@ int executeConstantJoin (
         if (done) break;
     }
 
-    destroyRowList(row_list);
+    destroyRowList(list_id);
     destroyRowList(tmp_list);
 
     pushRowList(result_set, new_list);
@@ -210,48 +191,26 @@ int executeLoopJoin (
     struct ResultSet *result_set
 ) {
 
-    RowListIndex row_list = popRowList(result_set);
+    RowListIndex list_id = popRowList(result_set);
 
-    // Defined to be this table join ID on left
-    struct Node *left_node = &step->nodes[0].children[0];
-
-    int table_id;
-
-    if (left_node->function == FUNC_UNITY || left_node->child_count == -1) {
-        // Take the field directly from the node
-        table_id = left_node->field.table_id;
-    }
-    else if (left_node->child_count == 0) {
-        // There shouldn't be a function with zero params here
-        fprintf(stderr, "Cannot join with field\n");
-        exit(-1);
-    }
-    else {
-        // Let's hope the first param is the relevant field
-        table_id = left_node->children[0].field.table_id;
-    }
-
-    if (table_id < 0) {
-        fprintf(stderr, "Error joining table\n");
-        exit(-1);
-    }
+    int table_id = getRowList(list_id)->join_count;
 
     struct Table *table = &tables[table_id];
     struct DB *next_db = table->db;
 
     int record_count = getRecordCount(next_db);
 
-    int new_length = getRowList(row_list)->row_count * record_count;
+    int new_length = getRowList(list_id)->row_count * record_count;
 
     RowListIndex new_list = createRowList(
-        getRowList(row_list)->join_count + 1,
+        getRowList(list_id)->join_count + 1,
         new_length
     );
 
     // Prepare a temporary list that can hold every record in the table
     RowListIndex tmp_list = createRowList(1, record_count);
 
-    for (int i = 0; i < getRowList(row_list)->row_count; i++) {
+    for (int i = 0; i < getRowList(list_id)->row_count; i++) {
         int done = 0;
 
         // Make a local copy of predicate
@@ -268,7 +227,7 @@ int executeLoopJoin (
             // replace right node with constant value from outer table
             evaluateNode(
                 tables,
-                row_list,
+                list_id,
                 i,
                 right_node,
                 right_node->field.text,
@@ -306,7 +265,7 @@ int executeLoopJoin (
 
             appendJoinedRowID(
                 getRowList(new_list),
-                getRowList(row_list),
+                getRowList(list_id),
                 i,
                 rowid
             );
@@ -329,14 +288,14 @@ int executeLoopJoin (
             // Add NULL to list
             appendJoinedRowID(
                 getRowList(new_list),
-                getRowList(row_list),
+                getRowList(list_id),
                 i,
                 ROWID_NULL
             );
         }
     }
 
-    destroyRowList(row_list);
+    destroyRowList(list_id);
     destroyRowList(tmp_list);
 
     pushRowList(result_set, new_list);
@@ -359,16 +318,15 @@ int executeUniqueJoin (
     struct ResultSet *result_set
 ) {
 
-    RowListIndex row_list = popRowList(result_set);
+    RowListIndex list_id = popRowList(result_set);
 
-    // Defined to be this table join ID on left
-    int table_id = step->nodes[0].children[0].field.table_id;
+    int table_id = getRowList(list_id)->join_count;
 
     struct Table *table = &tables[table_id];
 
     RowListIndex new_list = createRowList(
-        getRowList(row_list)->join_count + 1,
-        getRowList(row_list)->row_count
+        getRowList(list_id)->join_count + 1,
+        getRowList(list_id)->row_count
     );
 
     RowListIndex tmp_list = createRowList(1, 1);
@@ -411,7 +369,7 @@ int executeUniqueJoin (
 
     int rowid_field = getFieldIndex(&index_db, "rowid");
 
-    for (int i = 0; i < getRowList(row_list)->row_count; i++) {
+    for (int i = 0; i < getRowList(list_id)->row_count; i++) {
         char value[MAX_VALUE_LENGTH];
         int output_status;
 
@@ -420,7 +378,7 @@ int executeUniqueJoin (
         // Fill in value as constant from outer tables
         evaluateNode(
             tables,
-            row_list,
+            list_id,
             i,
             outer,
             value,
@@ -441,7 +399,7 @@ int executeUniqueJoin (
             getRowList(tmp_list)->row_count = 0;
             appendJoinedRowID(
                 getRowList(new_list),
-                getRowList(row_list),
+                getRowList(list_id),
                 i,
                 rowid
             );
@@ -450,7 +408,7 @@ int executeUniqueJoin (
             // Add NULL rowid
             appendJoinedRowID(
                 getRowList(new_list),
-                getRowList(row_list),
+                getRowList(list_id),
                 i,
                 ROWID_NULL
             );
@@ -467,7 +425,7 @@ int executeUniqueJoin (
     closeDB(&index_db);
 
     destroyRowList(tmp_list);
-    destroyRowList(row_list);
+    destroyRowList(list_id);
 
     pushRowList(result_set, new_list);
 
@@ -489,16 +447,15 @@ int executeIndexJoin (
     struct ResultSet *result_set
 ) {
 
-    RowListIndex row_list = popRowList(result_set);
+    RowListIndex list_id = popRowList(result_set);
 
-    // Defined to be this table join ID on left
-    int table_id = step->nodes[0].children[0].field.table_id;
+    int table_id = getRowList(list_id)->join_count;
 
     struct Table *table = &tables[table_id];
 
     RowListIndex new_list = createRowList(
-        getRowList(row_list)->join_count + 1,
-        getRowList(row_list)->row_count
+        getRowList(list_id)->join_count + 1,
+        getRowList(list_id)->row_count
     );
 
     RowListIndex tmp_list = createRowList(1, getRecordCount(table->db));
@@ -543,14 +500,14 @@ int executeIndexJoin (
     // table
     int rowid_col = getFieldIndex(&index_db, "rowid");
 
-    for (int i = 0; i < getRowList(row_list)->row_count; i++) {
+    for (int i = 0; i < getRowList(list_id)->row_count; i++) {
         char value[MAX_VALUE_LENGTH];
         int done = 0;
 
         // Fill in value as constant from outer tables
         evaluateNode(
             tables,
-            row_list,
+            list_id,
             i,
             outer,
             value,
@@ -572,7 +529,7 @@ int executeIndexJoin (
 
                 appendJoinedRowID(
                     getRowList(new_list),
-                    getRowList(row_list),
+                    getRowList(list_id),
                     i,
                     rowid
                 );
@@ -590,7 +547,7 @@ int executeIndexJoin (
             // Add NULL rowid
             appendJoinedRowID(
                 getRowList(new_list),
-                getRowList(row_list),
+                getRowList(list_id),
                 i,
                 ROWID_NULL
             );
@@ -613,7 +570,7 @@ int executeIndexJoin (
     closeDB(&index_db);
 
     destroyRowList(tmp_list);
-    destroyRowList(row_list);
+    destroyRowList(list_id);
 
     pushRowList(result_set, new_list);
 

@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../structs.h"
+#include "./node.h"
 #include "../functions/util.h"
 #include "../db/db.h"
 #include "../evaluate/predicates.h"
@@ -747,95 +748,88 @@ static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
         enum Function op = join->function;
 
         if (op == OPERATOR_ALWAYS) {
-            // Still need to include predicate to indicate to the executor
-            // which table to join.
-            join->field.table_id = i;
-            addStepWithNode(plan, PLAN_CROSS_JOIN, join);
+            addStep(plan, PLAN_CROSS_JOIN);
         }
         else {
+            int tableMap = getTableBitMap(join);
+            int tableBit = 1 << i;
 
-            struct Node *left_node = &join->children[0];
-            struct Node *right_node = &join->children[1];
-
-            struct Field *left_field =
-                (
-                    left_node->function == FUNC_UNITY
-                    || left_node->child_count == -1
-                ) ? &left_node->field : &left_node->children[0].field;
-
-            struct Field *right_field =
-                (
-                    right_node->function == FUNC_UNITY
-                    || right_node->child_count == -1
-                ) ? &right_node->field : &right_node->children[0].field;
-
-            // We'll define that table-to-be-joined MUST be on left
-            if (left_field->table_id != i) {
-                if (right_field->table_id != i) {
-                    fprintf(stderr, "At least one of the predicates must be on "
-                        "the joined table.\n");
-                    exit(-1);
-                }
-
-                // Swap left and right so that preciate looks like this:
-                //  A JOIN B ON B.field = A.field
-                flipPredicate(join);
-
-                // Reestablish our cached references if needed
-                left_field =
-                    (
-                        left_node->function == FUNC_UNITY
-                        || left_node->child_count == -1
-                    ) ? &left_node->field : &left_node->children[0].field;
-
-                    right_node = &join->children[1];
-                right_field =
-                    (
-                        right_node->function == FUNC_UNITY
-                        || right_node->child_count == -1
-                    ) ? &right_node->field : &right_node->children[0].field;
-            }
-
-            // Constant must be on right if there is one
-            if (isConstantNode(right_node))
-            {
+            if (tableMap == tableBit) {
+                // the join predicate depends ONLY on this table
                 addStepWithNode(plan, PLAN_CONSTANT_JOIN, join);
             }
-            // else if (right_field->table_id == i) {
-            //     // Both sides of predicate are on same table
-            //     // We can do constant join
-            //     addStepWithNode(plan, PLAN_CONSTANT_JOIN, join);
-            // }
-            else {
-                enum IndexSearchType index_result = findIndex(
+            else if (tableMap & tableBit) {
+                // the join predicate depends on this table and others
+
+                // Try to find index on left
+                enum IndexSearchType index_result = findNodeIndex(
                     NULL,
                     table->name,
-                    left_field->text,
+                    &join->children[0],
                     INDEX_ANY
                 );
 
-                if (op == OPERATOR_EQ) {
-                    if (
-                        index_result == INDEX_UNIQUE
-                        || index_result == INDEX_PRIMARY
-                    ) {
+                // Try to find Index on right
+                if (index_result == INDEX_NONE) {
+                    index_result = findNodeIndex(
+                        NULL,
+                        table->name,
+                        &join->children[1],
+                        INDEX_ANY
+                    );
+
+                    if (index_result != INDEX_NONE) {
+                        flipPredicate(join);
+                    }
+                }
+
+                if (index_result != INDEX_NONE) {
+                    // We found an index (should be on left now)
+
+                    if (op == OPERATOR_EQ && (
+                            index_result == INDEX_UNIQUE ||
+                            index_result == INDEX_PRIMARY
+                        ))
+                    {
                         addStepWithNode(plan, PLAN_UNIQUE_JOIN, join);
                     }
-                    else if (index_result == INDEX_REGULAR) {
-                        addStepWithNode(plan, PLAN_INDEX_JOIN, join);
-                    }
                     else {
-                        addStepWithNode(plan, PLAN_LOOP_JOIN, join);
+                        addStepWithNode(plan, PLAN_INDEX_JOIN, join);
                     }
                 }
                 else {
-                    if (index_result != INDEX_NONE) {
-                        addStepWithNode(plan, PLAN_INDEX_JOIN, join);
+                    // No index, just O(NxM) loop both entire tables
+
+                    // Loop step requires this table to be on left
+                    if ((getTableBitMap(&join->children[0]) & tableBit) == 0) {
+                        flipPredicate(join);
                     }
-                    else {
-                        addStepWithNode(plan, PLAN_LOOP_JOIN, join);
-                    }
+
+                    addStepWithNode(plan, PLAN_LOOP_JOIN, join);
                 }
+            }
+            else if (tableMap < tableBit) {
+                // the join predicate is constant with respect to this table
+                // it may even be completely constant
+
+                // Don't know why the predicate was specified as a join
+                // predicate but we can just filter by it anyway first
+                addStepWithNode(plan, PLAN_TABLE_ACCESS_ROWID, join);
+
+                // Then just do the join
+                addStep(plan, PLAN_CROSS_JOIN);
+            }
+            else {
+                // the predicate depends on tables which we haven't joined yet
+                // bad!!
+                fprintf(
+                    stderr,
+                    "Cannot join on a table we haven't got to yet. Table: %d "
+                    "TableBitMap: %X\n",
+                    i,
+                    tableMap
+                );
+                exit(-1);
             }
         }
     }
