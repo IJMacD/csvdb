@@ -375,6 +375,14 @@ int process_query (
         optimiseCollapseConstantNode(&q->columns[i]);
     }
 
+    #ifdef DEBUG
+    // Pre-optimsed WHERE nodes
+    if (debug_verbosity >= 4) {
+        fprintf(stderr, "    WHERE\n");
+        debugNodes(q->predicate_nodes, q->predicate_count);
+    }
+    #endif
+
     optimiseFlattenANDPredicates(q);
 
     // Populate any fields in WHERE clause

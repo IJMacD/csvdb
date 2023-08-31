@@ -428,40 +428,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                     struct Node *p = &table->join;
 
-                    p->children = malloc(sizeof(*p) * 2);
-                    p->child_count = 2;
-
-                    struct Node *left = &p->children[0];
-                    struct Node *right = &p->children[1];
-
-                    int result = parseNode(query, &index, left);
-
-                    if (result < 0) {
-                        return result;
-                    }
-
-                    char op[5];
-                    getOperatorToken(query, &index, op, 5);
-
-                    p->function = parseOperator(op);
-                    if (p->function == FUNC_UNKNOWN) {
-                        fprintf(stderr, "expected =|!=|<|<=|>|>=\n");
-                        return -1;
-                    }
-
-                    // Check for IS NOT
-                    if (strcmp(op, "IS") == 0) {
-                        skipWhitespace(query, &index);
-                        if (strncmp(query + index, "NOT ", 4) == 0) {
-                            p->function = OPERATOR_NE;
-                            index += 4;
-                        }
-                    }
-
-                    result = parseNode(query, &index, right);
-                    if (result < 0) {
-                        return result;
-                    }
+                    parseComplexNode(query, &index, p);
 
                     skipWhitespace(query, &index);
                 } else if (strncmp(query + index, "USING ", 6) == 0) {

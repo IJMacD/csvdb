@@ -23,6 +23,7 @@
         "indices.h": "c",
         "function.h": "c",
         "result.h": "c",
-        "predicates.h": "c"
+        "predicates.h": "c",
+        "structs.h": "c"
     }
 }

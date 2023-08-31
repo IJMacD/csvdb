@@ -12,7 +12,19 @@ static struct Node * constructExpressionTree (
     enum Function next_function
 );
 
+static int parseFunctionParams (
+    const char * query,
+    size_t * index,
+    struct Node *node
+);
+
+static int parseOperator (const char *input);
+
 static int getPrecedence (enum Function fn);
+
+static int checkConstantField (struct Field *field);
+
+static enum Function parseSimpleOperators (const char *query, size_t *index);
 
 /**
  * Parses simple nodes:
@@ -321,16 +333,19 @@ int parseSimpleNode (
 
 /**
  * Parses simple nodes and maths nodes:
- *  Simple nodes: (<node>)
+ *  Simple nodes: => <node>
  *      <field>
  *      <constant>
- *      <function>(<node>)
- *  Maths expression nodes: (<node>)
+ *      <function>(<node>, ...)
+ *  Maths expression nodes: => <node>
  *      <field> + <constant>
  *      <function>() + <constant>
  *      <contant> + <function>()
  *      (<node> + <node>)
  *      etc.
+ * @param query {string}
+ * @param index {int pointer} pointer to index offset
+ * @param node {node pointer} destination node to parse into
  * Returns -1 for error; flags otherwise
  */
 int parseNode (
@@ -340,26 +355,27 @@ int parseNode (
 ) {
     skipWhitespace(query, index);
 
-    int parens_count = 0;
-    struct Node *root_stack[MAX_PARENS] = {node};
+    int flags = 0;
 
-    while (query[*index] == '(') {
+    if (query[*index] == '(') {
         (*index)++;
 
-        struct Node *root = root_stack[parens_count];
-        root->function = FUNC_PARENS;
-        root = addChildNode(root);
-        root_stack[++parens_count] = root;
+        node->function = FUNC_PARENS;
+        struct Node *root = addChildNode(node);
 
-        if (parens_count > MAX_PARENS) {
-            fprintf(stderr, "Unable to go more than %d parens deep\n", MAX_PARENS);
+        flags |= parseNode(query, index, root);
+
+        if (query[*index] != ')') {
+            fprintf(stderr, "Expecting ')' after expression\n");
             return -1;
         }
-    }
 
-    // Parse first simple node
-    struct Node *root = root_stack[parens_count];
-    int flags = parseSimpleNode(query, index, root);
+        (*index)++;
+    }
+    else {
+        // Parse first simple node
+        flags |= parseSimpleNode(query, index, node);
+    }
 
     while (query[*index] != '\0' && query[*index] != ';') {
         enum Function fn = parseSimpleOperators(query, index);
@@ -368,40 +384,27 @@ int parseNode (
             break;
         }
 
-        struct Node *root = root_stack[parens_count];
-        struct Node *next_child = constructExpressionTree(root, fn);
+        struct Node *next_child = constructExpressionTree(node, fn);
 
         skipWhitespace(query, index);
+
         if (query[*index] == '(') {
             (*index)++;
             next_child->function = FUNC_PARENS;
             next_child = addChildNode(next_child);
-            root_stack[++parens_count] = next_child;
 
-            if (parens_count > MAX_PARENS) {
-                fprintf(stderr, "Unable to go more than %d parens deep\n", MAX_PARENS);
+            flags |= parseNode(query, index, next_child);
+
+            if (query[*index] != ')') {
+                fprintf(stderr, "Expecting ')' after expression\n");
                 return -1;
             }
-        }
 
-        flags |= parseSimpleNode(query, index, next_child);
-
-        skipWhitespace(query, index);
-        if (parens_count && query[*index] == ')') {
-            parens_count--;
             (*index)++;
         }
-    }
-
-    skipWhitespace(query, index);
-
-    if (parens_count) {
-        if (query[*index] != ')') {
-            fprintf(stderr, "Expecting ')' after expression\n");
-            return -1;
+        else {
+            flags |= parseSimpleNode(query, index, next_child);
         }
-
-        (*index)++;
     }
 
     return flags;
@@ -415,7 +418,7 @@ int parseNode (
  * @param node Pointer to column struct
  * @return int
  */
-int parseFunctionParams (
+static int parseFunctionParams (
     const char * query,
     size_t * index,
     struct Node *node
@@ -462,7 +465,7 @@ int parseFunctionParams (
  *   0 if ok (constant or not);
  *  -1 if an error occurred (e.g. unterminated string literal)
  */
-int checkConstantField (struct Field *field) {
+static int checkConstantField (struct Field *field) {
 
     if (is_numeric(field->text)) {
         // Detected numeric constant
@@ -513,7 +516,7 @@ int checkConstantField (struct Field *field) {
 /**
  * Returns function found; or FUNC_UNITY if nothing found
  */
-enum Function parseSimpleOperators(
+static enum Function parseSimpleOperators(
     const char *query,
     size_t *index
 ) {
@@ -558,7 +561,7 @@ enum Function parseSimpleOperators(
     return function;
 }
 
-int parseOperator (const char *input) {
+static int parseOperator (const char *input) {
     if (strcmp(input, "=") == 0)
         return OPERATOR_EQ;
     if (strcmp(input, "!=") == 0)
@@ -627,7 +630,7 @@ int parseComplexNode (
     char op[32] = {0};
     int count = getOperatorToken(query, index, op, 31);
 
-    if (count == 0) {
+    if (count <= 0) {
         // No operator, just end now
         return flags;
     }
