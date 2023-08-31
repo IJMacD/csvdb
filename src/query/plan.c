@@ -750,6 +750,15 @@ static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
         if (op == OPERATOR_ALWAYS) {
             addStep(plan, PLAN_CROSS_JOIN);
         }
+        else if (op == OPERATOR_NEVER) {
+            // Just like predicates any NEVER
+
+            // Wipe out plan
+            plan->step_count = 0;
+
+            // We're done
+            return;
+        }
         else {
             int tableMap = getTableBitMap(join);
             int tableBit = 1 << i;

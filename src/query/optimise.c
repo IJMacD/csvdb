@@ -26,16 +26,36 @@ void optimiseCollapseConstantNode (struct Node *node)  {
         return;
     }
 
+    if (node->function == OPERATOR_ALWAYS || node->function == OPERATOR_NEVER) {
+        return;
+    }
+
+    if (node->function == OPERATOR_AND) {
+        // If we have any NEVER children then the whole node is NEVER
+        for (int i = 0; i < node->child_count; i++) {
+            if (node->children[i].function == OPERATOR_NEVER) {
+                node->function = OPERATOR_NEVER;
+                return;
+            }
+        }
+    }
+
+    if (node->function == OPERATOR_OR) {
+        // If we have any ALWAYS children then the whole node is ALWAYS
+        for (int i = 0; i < node->child_count; i++) {
+            if (node->children[i].function == OPERATOR_ALWAYS) {
+                node->function = OPERATOR_ALWAYS;
+                return;
+            }
+        }
+    }
+
     // Make sure all children are constant
     for (int i = 0; i < node->child_count; i++) {
         if (node->children[i].function != FUNC_UNITY ||
             node->children[i].field.index != FIELD_CONSTANT) {
             return;
         }
-    }
-
-    if (node->function == OPERATOR_ALWAYS || node->function == OPERATOR_NEVER) {
-        return;
     }
 
     if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR) {
