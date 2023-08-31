@@ -341,6 +341,9 @@ int evaluateConstantField (char * output, struct Field *field) {
     return sprintf(output, "%s", field->text);
 }
 
+/**
+ * returns 1 if node is entirely constant; 0 if any part of it includes fields.
+*/
 int isConstantNode (struct Node *node) {
     if (node->function == FUNC_UNITY
         // Optimistation where node is its own child

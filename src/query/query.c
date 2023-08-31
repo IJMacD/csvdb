@@ -339,6 +339,12 @@ int process_query (
         q->column_count = 1;
     }
 
+    #ifdef DEBUG
+    if (debug_verbosity >= 2) {
+        debugLog(q, "AST");
+    }
+    #endif
+
     // Populate Tables
     // (including JOIN predicate columns)
     result = populate_tables(q);
@@ -347,9 +353,25 @@ int process_query (
         return result;
     }
 
+
+    #ifdef DEBUG
+    // Pre-optimsed FROM nodes
+    if (debug_verbosity >= 4) {
+        fprintf(stderr, "    FROM\n");
+        debugFrom(q);
+    }
+    #endif
+
+    for (int i = 1; i < q->table_count; i++) {
+        if (q->tables[i].join.function != OPERATOR_ALWAYS) {
+            optimiseCollapseConstantNode(&q->tables[i].join);
+
+            optimiseRowidAlgebra(&q->tables[i].join);
+        }
+    }
+
     #ifdef DEBUG
     if (debug_verbosity >= 2) {
-        debugLog(q, "AST");
         fprintf(stderr, "    FROM\n");
         debugFrom(q);
     }
@@ -377,7 +399,7 @@ int process_query (
 
     #ifdef DEBUG
     // Pre-optimsed WHERE nodes
-    if (debug_verbosity >= 4) {
+    if (debug_verbosity >= 4 && q->predicate_count > 0) {
         fprintf(stderr, "    WHERE\n");
         debugNodes(q->predicate_nodes, q->predicate_count);
     }

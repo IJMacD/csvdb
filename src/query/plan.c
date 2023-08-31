@@ -788,6 +788,7 @@ static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
                         || left_node->child_count == -1
                     ) ? &left_node->field : &left_node->children[0].field;
 
+                    right_node = &join->children[1];
                 right_field =
                     (
                         right_node->function == FUNC_UNITY
@@ -796,17 +797,17 @@ static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
             }
 
             // Constant must be on right if there is one
-            if (right_field->index == FIELD_CONSTANT)
+            if (isConstantNode(right_node))
             {
                 addStepWithNode(plan, PLAN_CONSTANT_JOIN, join);
             }
-            else if (right_field->table_id == i) {
-                // Both sides of predicate are on same table
-                // We can do constant join
-                addStepWithNode(plan, PLAN_CONSTANT_JOIN, join);
-            }
+            // else if (right_field->table_id == i) {
+            //     // Both sides of predicate are on same table
+            //     // We can do constant join
+            //     addStepWithNode(plan, PLAN_CONSTANT_JOIN, join);
+            // }
             else {
-                int index_result = findIndex(
+                enum IndexSearchType index_result = findIndex(
                     NULL,
                     table->name,
                     left_field->text,

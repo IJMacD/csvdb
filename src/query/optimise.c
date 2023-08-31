@@ -34,6 +34,10 @@ void optimiseCollapseConstantNode (struct Node *node)  {
         }
     }
 
+    if (node->function == OPERATOR_ALWAYS || node->function == OPERATOR_NEVER) {
+        return;
+    }
+
     if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR) {
         // If we're evaluating an operator then we can definitively set the node
         // to OPERATOR_ALWAYS or OPERATOR_NEVER
