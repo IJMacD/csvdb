@@ -225,7 +225,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                 int col_start_index = index;
 
-                int result = parseComplexNode(query, &index, node);
+                int result = parseNodeList(query, &index, node);
 
                 if (result < 0) {
                     return result;

@@ -52,12 +52,12 @@ void printUsage (const char* name) {
         "\n"
         "Options:\n"
         "\t[-h|--help]\n"
+        "\t[-f (<filename.sql>|-)] (read SQL from file, '-' for stdin)\n"
         "\t[-E|--explain]\n"
         "\t[-H|--headers] (default)\n"
-        "\t[--no-headers]\n"
-        "\t[-f <filename.sql>|-] (read SQL from file, '-' for stdin)\n"
-        "\t[(-F |--format=)(tsv|csv|html|json|json_array|sql|sql_values|xml|"
-        "record)]\n"
+        "\t[-N|--no-headers]\n"
+        "\t[(-F |--format=)(table|tsv|csv|html|json|json_array|sql|sql_values|"
+        "xml|record)]\n"
         "\t[(-o |--output=)<filename>]\n"
         "\t[--stats] (write timing data to 'stats.csv')\n"
         #ifdef DEBUG
@@ -95,10 +95,10 @@ int main (int argc, char * argv[]) {
         if (strcmp(arg, "-E") == 0 || strcmp(arg, "--explain") == 0) {
             flags |= FLAG_EXPLAIN;
         }
-        else if ((strcmp(arg, "-H") == 0 || strcmp(arg, "--headers") == 0)) {
+        else if (strcmp(arg, "-H") == 0 || strcmp(arg, "--headers") == 0) {
             flags |= OUTPUT_OPTION_HEADERS;
         }
-        else if (strcmp(arg, "--no-headers") == 0) {
+        else if (strcmp(arg, "-N") == 0 || strcmp(arg, "--no-headers") == 0) {
             flags &= !OUTPUT_OPTION_HEADERS;
         }
         else if (strcmp(arg, "-F") == 0) {

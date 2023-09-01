@@ -846,8 +846,11 @@ int parseComplexNode (
  * Parses:
  *      <complex node> AND <complex node> AND ...
  */
-void parseNodeList (const char *query, size_t *index, struct Node *node) {
-    parseComplexNode(query, index, node);
+int parseNodeList (const char *query, size_t *index, struct Node *node) {
+    int result = parseComplexNode(query, index, node);
+    if (result < 0) {
+        return result;
+    }
 
     while(query[*index] != '\0' && query[*index] != ';') {
 
@@ -866,8 +869,13 @@ void parseNodeList (const char *query, size_t *index, struct Node *node) {
 
         struct Node *next_child = addChildNode(node);
 
-        parseComplexNode(query, index, next_child);
+        int result = parseComplexNode(query, index, next_child);
+        if (result < 0) {
+            return result;
+        }
     }
+
+    return 0;
 }
 
 /**
