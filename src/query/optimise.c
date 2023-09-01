@@ -50,6 +50,11 @@ void optimiseCollapseConstantNode (struct Node *node)  {
         }
     }
 
+    if (node->function == FUNC_TO_HEX) {
+        // We don't want to re-parse a hex number back into an int later on
+        return;
+    }
+
     // Make sure all children are constant
     for (int i = 0; i < node->child_count; i++) {
         if (node->children[i].function != FUNC_UNITY ||

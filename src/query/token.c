@@ -55,7 +55,17 @@ static void skipToken (const char *string, size_t *index) {
         // Skip open quote
         (*index)++;
 
-        while (string[*index] != '\0' && string[*index] != '\'') {
+        while (string[*index] != '\0') {
+            if (string[*index] == '\\') {
+                (*index) += 2;
+            }
+            if (string[*index] == '\'') {
+                // Allow double single quote escaping
+                if (string[*index + 1] != '\'') {
+                    break;
+                }
+                (*index)++;
+            }
             (*index)++;
         }
 

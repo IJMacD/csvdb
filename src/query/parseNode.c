@@ -486,9 +486,45 @@ static int checkConstantField (struct Field *field) {
             return -1;
         }
 
+        // We need to strip the leading and trailing single quote and replace
+        // escaped characters.
         char value[MAX_FIELD_LENGTH];
-        strncpy(value, field->text + 1, len - 2);
-        value[len - 2] = '\0';
+
+        char *ptr = value;
+
+        for (int i = 1; i < len - 1; i++) {
+            char c = field->text[i];
+            char c2 = field->text[i+1];
+
+            // Backslash escapes
+            if (c == '\\') {
+                if (c2 == 't') {
+                    *ptr++ = '\t';
+                    i++;
+                }
+                // Will probably cause output issues
+                else if (c2 == 'n') {
+                    *ptr++ = '\n';
+                    i++;
+                }
+                else if (c2 == '\'') {
+                    *ptr++ = c2;
+                    i++;
+                }
+                else {
+                    *ptr++ = c;
+                }
+            }
+            // Double single quote escape
+            else if (c == '\'' && c2 == c) {
+                *ptr++ = c;
+                i++;
+            }
+            // Just a normal character
+            else {
+                *ptr++ = c;
+            }
+        }
 
         strcpy(field->text, value);
     }

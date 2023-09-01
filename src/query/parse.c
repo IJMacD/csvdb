@@ -233,6 +233,16 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                 // Default alias is whole column spec (if it fits in)
                 int len = index - col_start_index;
+
+                // Uncomment if we don't want the alias to be surrounded by the
+                // single quotes.
+                // if (query[col_start_index] == '\'' &&
+                //     query[col_start_index + len - 1] == '\'')
+                // {
+                //     col_start_index++;
+                //     len -= 2;
+                // }
+
                 if (len < MAX_FIELD_LENGTH) {
                     whitespaceCollapse(
                         node->alias,
