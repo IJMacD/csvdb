@@ -58,6 +58,9 @@ static int wrap_query (
     FILE *output
 );
 
+/**
+ * returns process exit code; negative for error
+ */
 int runQueries (
     const char *query_string,
     enum OutputOption output_flags,
@@ -88,6 +91,9 @@ int runQueries (
     return 0;
 }
 
+/**
+ * returns process exit code; negative for error
+ */
 int query (
     const char *query,
     enum OutputOption output_flags,
@@ -143,6 +149,9 @@ int query (
     return select_query(query, output_flags, output, end_ptr);
 }
 
+/**
+ * returns process exit code; negative for error
+ */
 int select_query (
     const char *query,
     enum OutputOption output_flags,
@@ -205,6 +214,11 @@ int select_query (
     // Cannot group and sort in the same query.
     if ((q->flags & FLAG_GROUP) && q->order_count > 0)
     {
+        if (output_flags & OUTPUT_OPTION_AST) {
+            debugAST(stdout, q);
+            return 0;
+        }
+
         // We will materialise the GROUP'd query to disk then sort that
 
         // Make a copy of the struct
@@ -264,6 +278,9 @@ int select_query (
     return result;
 }
 
+/**
+ * returns process exit code; negative for error
+ */
 int process_query (
     struct Query *q,
     enum OutputOption output_flags,
@@ -465,6 +482,11 @@ int process_query (
         }
 
         start = stop;
+    }
+
+    if (output_flags & OUTPUT_OPTION_AST) {
+        debugAST(stdout, q);
+        return 0;
     }
 
     /**********************

@@ -41,8 +41,23 @@ const char *FUNC_NAMES[] = {
     "","","","","","","","",
     "","","","","","","","",
     // 0xA0
-    "","COUNT","MIN","MAX","SUM","AVG","LISTAGG",""
+    "","COUNT","MIN","MAX","SUM","AVG","LISTAGG","",
     "","","","","","","","",
+    // 0xB0
+    "","","","","","","","",
+    "","","","","","","","",
+    // 0xC0
+    "NEVER","EQ","LT","LE","GT","GE","NE","ALWAYS",
+    "LIKE","OR","AND","","","","","",
+    // 0xD0
+    "","","","","","","","",
+    "","","","","","","","",
+    // 0xE0
+    "","PK","UNIQUE","INDEX","","","","",
+    "","","","","","","","",
+    // 0xF0
+    "","","","","","","","",
+    "","","","","","","","UNKNOWN",
 };
 
 size_t FUNC_NAMES_COUNT = sizeof (FUNC_NAMES) / sizeof (FUNC_NAMES[0]);
@@ -234,4 +249,237 @@ void debugFrom (struct Query *query) {
             debugNode(&table->join);
         }
     }
+}
+
+void debugAST (FILE *output, struct Query *query) {
+    fprintf(output, "{");
+
+    int have_prev_section = 0;
+
+    if (query->table_count) {
+        fprintf(output, "\"from\":[");
+        for (int i = 0; i < query->table_count; i++) {
+            struct Table *table = &query->tables[i];
+            fprintf(output, "{\"name\": \"%s\", \"alias\": \"%s\"", table->name, table->alias);
+
+            if (table->join.function != OPERATOR_ALWAYS) {
+                fprintf(output, ", \"on\": ");
+                debugASTNode(output, &table->join);
+            }
+
+            fprintf(output, "}");
+
+            if (i < query->table_count-1) {
+                fprintf(output, ",");
+            }
+        }
+        fprintf(output, "]");
+
+        have_prev_section = 1;
+    }
+
+    if (query->column_count > 0) {
+        if (have_prev_section) {
+            fprintf(output, ",");
+        }
+
+        fprintf(output, "\"select\":[");
+        for (int i = 0; i < query->column_count; i++) {
+            struct Node *node = &query->columns[i];
+
+            if (node->field.index == FIELD_STAR) {
+                fprintf(
+                    output,
+                    "{\"column\": \"*\"}"
+                );
+            }
+            else {
+                fprintf(output, "{\"column\": ");
+
+                debugASTNode(output, node);
+
+                if (strlen(node->alias)) {
+                    fprintf(output, ", \"alias\": \"%s\"", node->alias);
+                }
+
+                fprintf(output, "}");
+            }
+
+            if (i < query->column_count-1) {
+                fprintf(output, ",");
+            }
+        }
+        fprintf(output, "]");
+
+        have_prev_section = 1;
+    }
+
+    if (query->predicate_count > 0) {
+        if (have_prev_section) {
+            fprintf(output, ",");
+        }
+
+        fprintf(output, "\"where\":[");
+        for (int i = 0; i < query->predicate_count; i++) {
+            struct Node *node = &query->predicate_nodes[i];
+
+            debugASTNode(output, node);
+
+            if (i < query->predicate_count-1) {
+                fprintf(output, ",");
+            }
+        }
+        fprintf(output, "]");
+
+        have_prev_section = 1;
+    }
+
+    if (query->group_count > 0) {
+        if (have_prev_section) {
+            fprintf(output, ",");
+        }
+
+        fprintf(output, "\"groupBy\":[");
+        for (int i = 0; i < query->group_count; i++) {
+            struct Node *node = &query->group_nodes[i];
+
+            debugASTNode(output, node);
+
+            if (i < query->group_count-1) {
+                fprintf(output, ",");
+            }
+        }
+        fprintf(output, "]");
+
+        have_prev_section = 1;
+    }
+
+    if (query->order_count > 0) {
+        if (have_prev_section) {
+            fprintf(output, ",");
+        }
+
+        fprintf(output, "\"orderBy\":[");
+        for (int i = 0; i < query->order_count; i++) {
+            struct Node *node = &query->order_nodes[i];
+
+            debugASTNode(output, node);
+
+            if (i < query->order_count-1) {
+                fprintf(output, ",");
+            }
+        }
+        fprintf(output, "]");
+
+        have_prev_section = 1;
+    }
+
+    if (query->offset_value) {
+        if (have_prev_section) {
+            fprintf(output, ",");
+        }
+
+        fprintf(output, "\"offset\": %d", query->offset_value);
+
+        have_prev_section = 1;
+    }
+
+    if (query->limit_value >= 0) {
+        if (have_prev_section) {
+            fprintf(output, ",");
+        }
+
+        fprintf(output, "\"limit\": %d", query->limit_value);
+
+        have_prev_section = 1;
+    }
+
+    fprintf(output, "}\n");
+}
+
+void debugASTNode (FILE *output, struct Node *node) {
+    if (node->function == FUNC_UNITY) {
+        debugASTField(output, &node->field);
+        return;
+    }
+
+    if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR) {
+        fprintf(
+            output,
+            "{\"type\": \"comparison\", \"operator\":\"%s\"",
+            FUNC_NAMES[node->function]
+        );
+    }
+    else {
+        fprintf(
+            output,
+            "{\"type\": \"function\", \"function\":\"%s\"",
+            FUNC_NAMES[node->function]
+        );
+    }
+
+    if (node->child_count != 0 &&
+        node->function != OPERATOR_ALWAYS &&
+        node->function != OPERATOR_NEVER)
+    {
+        fprintf(output, ",\"params\":[");
+        if (node->child_count == -1) {
+            debugASTField(output, &node->field);
+        }
+        else for (int i = 0; i < node->child_count; i++) {
+            debugASTNode(output, &node->children[i]);
+            if (i < node->child_count - 1) fprintf(output, ",");
+        }
+        fprintf(output, "]");
+    }
+
+    fprintf(output, "}");
+}
+
+void debugASTField (FILE *output, struct Field *field) {
+    if (field->index == FIELD_CONSTANT) {
+        fprintf(
+            output,
+            "{\"type\": \"constant\", \"value\": \"%s\"}",
+            field->text
+        );
+        return;
+    }
+
+    if (field->index == FIELD_STAR) {
+        if (field->table_id >= 0) {
+            fprintf(
+                output,
+                "{\"type\": \"*\", \"tableIndex\": %d}",
+                field->table_id
+            );
+            return;
+        }
+
+        fprintf(
+            output,
+            "{\"type\": \"*\"}"
+        );
+        return;
+    }
+
+    fprintf(
+        output,
+        "{\"type\": \"field\""
+    );
+
+    if (field->index != FIELD_UNKNOWN) {
+        fprintf(
+            output,
+            ", \"tableIndex\": %d, \"fieldIndex\": %d",
+            field->table_id,
+            field->index
+        );
+    }
+
+    fprintf(
+        output,
+        ", \"name\": \"%s\"}",
+        field->text
+    );
 }

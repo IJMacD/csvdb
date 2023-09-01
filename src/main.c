@@ -62,6 +62,7 @@ void printUsage (const char* name) {
         "\t[--stats] (write timing data to 'stats.csv')\n"
         #ifdef DEBUG
         "\t[-v|-vv|-vvv|--verbose=n] Set DEBUG verbosity\n"
+        "\t[-A] Output AST"
         #endif
         "\n"
         "Version: %2$s %3$s\n"
@@ -132,24 +133,23 @@ int main (int argc, char * argv[]) {
             debug_verbosity = 1;
             #endif
         }
+        #ifdef DEBUG
         else if (strcmp(arg, "-vv") == 0) {
             flags |= OUTPUT_OPTION_VERBOSE;
-            #ifdef DEBUG
             debug_verbosity = 2;
-            #endif
         }
         else if (strcmp(arg, "-vvv") == 0) {
             flags |= OUTPUT_OPTION_VERBOSE;
-            #ifdef DEBUG
             debug_verbosity = 3;
-            #endif
         }
         else if (strncmp(arg, "--verbose=", 10) == 0) {
             flags |= OUTPUT_OPTION_VERBOSE;
-            #ifdef DEBUG
             debug_verbosity = atoi(arg + 10);
-            #endif
         }
+        else if (strcmp(arg, "-A") == 0) {
+            flags |= OUTPUT_OPTION_AST;
+        }
+        #endif
         else if (strcmp(arg, "--stats") == 0) {
             flags |= OUTPUT_OPTION_STATS;
         }
