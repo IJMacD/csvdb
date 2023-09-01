@@ -477,9 +477,13 @@ void debugASTField (FILE *output, struct Field *field) {
         );
     }
 
-    fprintf(
-        output,
-        ", \"name\": \"%s\"}",
-        field->text
-    );
+    if (strlen(field->text)) {
+        fprintf(
+            output,
+            ", \"name\": \"%s\"",
+            field->text
+        );
+    }
+
+    fprintf(output, "}");
 }

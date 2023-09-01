@@ -31,6 +31,8 @@ static int populate_tables (struct Query *q);
 
 static int resolveNode (struct Query *query, struct Node *node, int allow_aliases);
 
+static void expandFieldStar (struct Query *query);
+
 static struct Query *makeQuery ();
 
 static int find_field (
@@ -415,6 +417,8 @@ int process_query (
 
         optimiseCollapseConstantNode(&q->column_nodes[i]);
     }
+
+    expandFieldStar(q);
 
     #ifdef DEBUG
     // Pre-optimsed WHERE nodes
@@ -1137,4 +1141,60 @@ struct Node *allocatePredicateNode (struct Query *q) {
     clearNode(p);
 
     return p;
+}
+
+static void expandFieldStar (struct Query *query) {
+    int table_field_count = 0;
+
+    for (int i = 0; i < query->column_count; i++) {
+        struct Node *col = &query->column_nodes[i];
+
+        if (col->field.index == FIELD_STAR) {
+            // Count the total number of fields in all tables and cache the
+            // result.
+            if (table_field_count == 0) {
+                for (int j = 0; j < query->table_count; j++) {
+                    struct Table *table = &query->tables[j];
+
+                    table_field_count += table->db->field_count;
+                }
+            }
+
+            int new_column_count = query->column_count + table_field_count - 1;
+
+            struct Node * new_cols = malloc(new_column_count * sizeof *col);
+
+            // Copy first half of nodes from old list to new list;
+            memcpy(new_cols, query->column_nodes, i * sizeof *col);
+
+            // Create nodes for all fields in all tables
+            int index = i;
+            for (int j = 0; j < query->table_count; j++) {
+                struct Table *table = &query->tables[j];
+
+                for (int k = 0; k < table->db->field_count; k++) {
+                    struct Node *new_col = new_cols + index++;
+
+                    clearNode(new_col);
+
+                    new_col->function = FUNC_UNITY;
+                    new_col->field.table_id = j;
+                    new_col->field.index = k;
+
+                    strcpy(new_col->alias, getFieldName(table->db, k));
+                }
+            }
+
+            // Copy rest of nodes
+            memcpy(new_cols + index, query->column_nodes + i + 1, (new_column_count - index) * sizeof *col);
+
+            free(query->column_nodes);
+
+            query->column_nodes = new_cols;
+
+            query->column_count += table_field_count - 1;
+
+            i += table_field_count - 1;
+        }
+    }
 }
