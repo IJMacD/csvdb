@@ -340,19 +340,19 @@ struct Query {
     #ifdef DEBUG
     int id;
     #endif
+    enum QueryFlag flags;
     struct Table *tables;
     int table_count;
-    struct Node columns[MAX_FIELD_COUNT];
+    struct Node *column_nodes;
     int column_count;
-    enum QueryFlag flags;
-    int offset_value;
-    int limit_value;
     struct Node *predicate_nodes;
     int predicate_count;
     struct Node order_nodes[MAX_FIELD_COUNT];
     int order_count;
     struct Node group_nodes[MAX_FIELD_COUNT];
     int group_count;
+    int offset_value;
+    int limit_value;
 };
 
 typedef int RowListIndex;

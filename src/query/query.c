@@ -214,10 +214,12 @@ int select_query (
     // Cannot group and sort in the same query.
     if ((q->flags & FLAG_GROUP) && q->order_count > 0)
     {
+        #ifdef DEBUG
         if (output_flags & OUTPUT_OPTION_AST) {
             debugAST(stdout, q);
             return 0;
         }
+        #endif
 
         // We will materialise the GROUP'd query to disk then sort that
 
@@ -309,7 +311,7 @@ int process_query (
             // Check if any of the fields are non-constant and abort
 
             for (int i = 0; i < q->column_count; i++) {
-                if (isConstantNode((struct Node *)&q->columns[i]) == 0) {
+                if (isConstantNode((struct Node *)&q->column_nodes[i]) == 0) {
                     fprintf(stderr, "No Tables specified\n");
                     return -1;
                 }
@@ -350,10 +352,10 @@ int process_query (
 
     if (q->column_count == 0) {
         // Allow SELECT to be optional and default to SELECT *
-        q->columns[0].function = FUNC_UNITY;
-        q->columns[0].field.index = FIELD_STAR;
-        q->columns[0].field.table_id = -1;
-        q->column_count = 1;
+        struct Node *col = allocateColumnNode(q);
+        col->function = FUNC_UNITY;
+        col->field.index = FIELD_STAR;
+        col->field.table_id = -1;
     }
 
     #ifdef DEBUG
@@ -398,20 +400,20 @@ int process_query (
     // Pre-optimsed SELECT nodes
     if (debug_verbosity >= 4) {
         fprintf(stderr, "    SELECT\n");
-        debugNodes(q->columns, q->column_count);
+        debugNodes(q->column_nodes, q->column_count);
     }
     #endif
 
     // Populate SELECT fields first so that aliases can be used in WHERE or
     // ORDER BY clauses
     for (int i = 0; i < q->column_count; i++) {
-        result = resolveNode(q, &q->columns[i], 0);
+        result = resolveNode(q, &q->column_nodes[i], 0);
         if (result < 0) {
             fprintf(stderr, "Unable to resolve SELECT column %d\n", i);
             return result;
         }
 
-        optimiseCollapseConstantNode(&q->columns[i]);
+        optimiseCollapseConstantNode(&q->column_nodes[i]);
     }
 
     #ifdef DEBUG
@@ -470,7 +472,7 @@ int process_query (
     #ifdef DEBUG
     if (debug_verbosity >= 2) {
         fprintf(stderr, "    SELECT\n");
-        debugNodes(q->columns, q->column_count);
+        debugNodes(q->column_nodes, q->column_count);
     }
     #endif
 
@@ -484,10 +486,12 @@ int process_query (
         start = stop;
     }
 
+    #ifdef DEBUG
     if (output_flags & OUTPUT_OPTION_AST) {
         debugAST(stdout, q);
         return 0;
     }
+    #endif
 
     /**********************
      * Make Plan
@@ -714,7 +718,7 @@ static void destroy_query (struct Query *query) {
     }
 
     for (int i = 0; i < query->column_count; i++) {
-        freeNode((struct Node *)&query->columns[i]);
+        freeNode((struct Node *)&query->column_nodes[i]);
     }
 
     for (int i = 0; i < query->order_count; i++) {
@@ -931,10 +935,10 @@ static int resolveNode (struct Query *query, struct Node *node, int allow_aliase
     ) {
         for (int i = 0; i < query->column_count; i++) {
             if (
-                node != (struct Node *)&query->columns[i]
-                && strcmp(node->field.text, query->columns[i].alias) == 0
+                node != (struct Node *)&query->column_nodes[i]
+                && strcmp(node->field.text, query->column_nodes[i].alias) == 0
             ) {
-                copyNodeTree(node, (struct Node *)&query->columns[i]);
+                copyNodeTree(node, (struct Node *)&query->column_nodes[i]);
                 return 0;
             }
         }
@@ -1078,6 +1082,32 @@ struct Table *allocateTable (struct Query *q) {
     return &q->tables[q->table_count - 1];
 }
 
+struct Node *allocateColumnNode (struct Query *q) {
+    void *mem;
+
+    if (q->column_count == 0) {
+        mem = malloc(sizeof (*q->column_nodes));
+    } else {
+        mem = realloc(
+            q->column_nodes,
+            sizeof(*q->column_nodes) * (q->column_count + 1)
+        );
+    }
+
+    if (mem == NULL) {
+        fprintf(stderr, "Out of memory\n");
+        exit(-1);
+    }
+
+    q->column_nodes = mem;
+
+    struct Node *p = &(q->column_nodes[q->column_count++]);
+
+    clearNode(p);
+
+    return p;
+}
+
 /**
  * Allocate a new node as one of the predicates on a query object and
  * increments the predicate counter.
@@ -1103,6 +1133,8 @@ struct Node *allocatePredicateNode (struct Query *q) {
     q->predicate_nodes = mem;
 
     struct Node *p = &(q->predicate_nodes[q->predicate_count++]);
+
+    clearNode(p);
 
     return p;
 }

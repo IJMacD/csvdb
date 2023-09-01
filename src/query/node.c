@@ -2,6 +2,7 @@
 #include <string.h>
 #include "../structs.h"
 #include "../db/db.h"
+#include "node.h"
 
 /**
  * Allocates additional child nodes on a node
@@ -31,13 +32,7 @@ struct Node * allocateNodeChildren (struct Node *node, int new_children) {
     // NULL out children to avoid uninitialized read and set defaults
     struct Node *child_node = first_new_child;
     for (int i = 0; i < new_children; i++) {
-        child_node->children = NULL;
-        child_node->child_count = 0;
-        child_node->field.index = FIELD_UNKNOWN;
-        child_node->field.table_id = -1;
-        child_node->field.text[0] = '\0';
-        child_node->function = FUNC_UNITY;
-        child_node->alias[0] = '\0';
+        clearNode(child_node);
 
         child_node++;
     }
@@ -98,6 +93,16 @@ void copyNodeTree (struct Node *dest, struct Node *src) {
     }
 }
 
+void clearNode (struct Node *node) {
+    node->children = NULL;
+    node->child_count = 0;
+    node->field.index = FIELD_UNKNOWN;
+    node->field.table_id = -1;
+    node->field.text[0] = '\0';
+    node->function = FUNC_UNITY;
+    node->alias[0] = '\0';
+}
+
 void freeNode (struct Node *node) {
     if (node->child_count > 0) {
         for (int i = 0; i < node->child_count; i++) {
@@ -129,54 +134,6 @@ struct Node * cloneNodeIntoChild (struct Node *node) {
 
     return &node->children[0];
 }
-
-/**
- * mallocs two new nodes and adds them as a child of the provided node.
- * It then copies the provided node to the first of the two new nodes and
- * set the original node to a new parent.
- * Also returns the second child for convenience.
- *
- *       P'
- *       +--+
- *       P  C
- *
- * P' is the original node modified to be a new parent
- * P is newly allocated and is a copy of the original node
- * C is newly allocated and is returned (blank) from this function.
- */
-// static struct Node *replaceParentNode (
-//     struct Node *node,
-//     enum Function newFunction
-// ) {
-
-//     int new_child_count = 2;
-
-//     struct Node * new_children = calloc(new_child_count, sizeof(*node));
-
-//     // copy existing node to new child
-//     struct Node *first_child = &new_children[0];
-//     memcpy(first_child, node, sizeof(*node));
-
-//     // set node function to new function
-//     node->function = newFunction;
-
-//     // set new children
-//     node->children = new_children;
-
-//     // set new child count
-//     node->child_count = new_child_count;
-
-//     // Clear current field
-//     node->field.text[0] = '\0';
-
-//     // Clear field index
-//     node->field.index = FIELD_UNKNOWN;
-
-//     // Return second child
-//     struct Node *child_node = &node->children[1];
-
-//     return child_node;
-// }
 
 /**
  * Generates a bit map to indicate which tables are referenced by a node

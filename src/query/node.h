@@ -4,6 +4,8 @@ struct Node * addChildNode (struct Node *node);
 
 void copyNodeTree (struct Node *dest, struct Node *src);
 
+void clearNode (struct Node *node);
+
 void freeNode (struct Node *node);
 
 struct Node * cloneNodeIntoChild (struct Node *node);

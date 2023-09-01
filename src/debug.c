@@ -285,7 +285,7 @@ void debugAST (FILE *output, struct Query *query) {
 
         fprintf(output, "\"select\":[");
         for (int i = 0; i < query->column_count; i++) {
-            struct Node *node = &query->columns[i];
+            struct Node *node = &query->column_nodes[i];
 
             if (node->field.index == FIELD_STAR) {
                 fprintf(

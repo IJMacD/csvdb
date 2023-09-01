@@ -214,7 +214,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
             int curr_index = 0;
             while (query[index] != '\0' && query[index] != ';') {
-                struct Node *node = &(q->columns[curr_index++]);
+                struct Node *node = allocateColumnNode(q);
 
                 if (curr_index >= MAX_FIELD_COUNT + 1) {
                     fprintf(stderr, "Too many columns\n");
@@ -264,8 +264,6 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                 index++;
             }
-
-            q->column_count = curr_index;
         }
         else if (strcmp(keyword, "FROM") == 0) {
             int next_join_flag = 0;

@@ -44,14 +44,7 @@ int parseSimpleNode (
     char value[MAX_FIELD_LENGTH];
     int flags = 0;
 
-    // Fill in defaults
-    node->child_count = 0;
-    node->children = NULL;
-    node->function = FUNC_UNITY;
-    node->field.index = FIELD_UNKNOWN;
-    node->field.table_id = -1;
-    node->field.text[0] = '\0';
-    node->alias[0] = '\0';
+    clearNode(node);
 
     if (query[*index] == '*') {
         node->field.index = FIELD_STAR;

@@ -78,7 +78,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
     // If there's a single NEVER predicate then we have 0 rows
     if (predicates_any_never) {
-        addStepWithNodes(plan, PLAN_SELECT, q->columns, q->column_count);
+        addStepWithNodes(plan, PLAN_SELECT, q->column_nodes, q->column_count);
 
         return plan->step_count;
     }
@@ -88,7 +88,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
     if (q->table_count == 0) {
         addStep(plan, PLAN_DUMMY_ROW);
 
-        addStepWithNodes(plan, PLAN_SELECT, q->columns, q->column_count);
+        addStepWithNodes(plan, PLAN_SELECT, q->column_nodes, q->column_count);
 
         return plan->step_count;
     }
@@ -203,7 +203,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
 
     checkCoveringIndex(q, plan);
 
-    addStepWithNodes(plan, PLAN_SELECT, q->columns, q->column_count);
+    addStepWithNodes(plan, PLAN_SELECT, q->column_nodes, q->column_count);
 
     return plan->step_count;
 }
@@ -1275,7 +1275,7 @@ static void checkCoveringIndex (
 
     // Every column in the SELECT clause must be present in the index
     for (int i = 0; i < q->column_count; i++) {
-        const char *col_name = getNodeFieldName(&q->columns[i]);
+        const char *col_name = getNodeFieldName(&q->column_nodes[i]);
 
         mapped_cols[i] = getFieldIndex(db, col_name);
 
@@ -1335,7 +1335,7 @@ static void checkCoveringIndex (
 
     // Replace the SELECT nodes with references to the index
     for (int i = 0; i < q->column_count; i++) {
-        q->columns[i].field.index = mapped_cols[i];
+        q->column_nodes[i].field.index = mapped_cols[i];
     }
 
     // Replace the ORDER BY nodes with references to the index
