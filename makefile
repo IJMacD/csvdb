@@ -58,7 +58,6 @@ GENDIR = release
 GENEXE = $(GENDIR)/gen
 GENSRCS = $(filter-out main.c, $(SRCS)) gen.c
 GENOBJS = $(addprefix $(GENDIR)/, $(GENSRCS:.c=.o))
-GENCFLAGS = -O3 -DNDEBUG
 
 .PHONY: all clean debug prep release remake cgi test install
 
@@ -96,8 +95,9 @@ cgi: prep $(CGIEXE)
 $(CGIEXE): $(CGIOBJS)
 	$(CC) $(CFLAGS) -o $(CGIEXE) $^
 
+# Warning: overlaps with $(RELDIR)/%.o: $(SRCDIR)/%.c
 $(CGIDIR)/%.o: $(SRCDIR)/%.c
-	$(CC) -c $(CFLAGS) -o $@ $<
+	$(CC) -c $(CFLAGS) $(RELCFLAGS) -o $@ $<
 
 #
 # CGI DEBUG rules
@@ -121,7 +121,7 @@ test.csv: $(GENEXE)
 	${GENEXE} 1000000 test.csv
 
 $(GENEXE): $(GENOBJS)
-	$(CC) $(CFLAGS) $(GENCFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) $(RELCFLAGS) -o $@ $^
 
 #
 # Other rules
