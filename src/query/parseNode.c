@@ -847,9 +847,9 @@ int parseComplexNode (
  *      <complex node> AND <complex node> AND ...
  */
 int parseNodeList (const char *query, size_t *index, struct Node *node) {
-    int result = parseComplexNode(query, index, node);
-    if (result < 0) {
-        return result;
+    int flags = parseComplexNode(query, index, node);
+    if (flags < 0) {
+        return flags;
     }
 
     while(query[*index] != '\0' && query[*index] != ';') {
@@ -873,9 +873,10 @@ int parseNodeList (const char *query, size_t *index, struct Node *node) {
         if (result < 0) {
             return result;
         }
+        flags |= result;
     }
 
-    return 0;
+    return flags;
 }
 
 /**
