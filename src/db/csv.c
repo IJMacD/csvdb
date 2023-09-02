@@ -427,6 +427,14 @@ enum IndexSearchType csv_findIndex(
     const char *index_name,
     int index_type_flags
 ) {
+    char table_filename[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12];
+    size_t t_len = strlen(table_name);
+    if (strcmp(table_name + t_len - 4, ".csv") == 0) {
+        t_len -= 4;
+    }
+    strncpy(table_filename, table_name, t_len);
+    table_filename[t_len] = '\0';
+
     char index_filename[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12];
     size_t len = strlen(index_name);
 
@@ -438,7 +446,7 @@ enum IndexSearchType csv_findIndex(
         strcpy(index_filename + index_name_len, ".unique.csv");
     }
     else {
-        sprintf(index_filename, "%s__%s.unique.csv", table_name, index_name);
+        sprintf(index_filename, "%s__%s.unique.csv", table_filename, index_name);
     }
 
     // If db is NULL our caller doesn't care about using the file, they just
@@ -472,7 +480,7 @@ enum IndexSearchType csv_findIndex(
         strcpy(index_filename + index_name_len, ".index.csv");
     }
      else {
-        sprintf(index_filename, "%s__%s.index.csv", table_name, index_name);
+        sprintf(index_filename, "%s__%s.index.csv", table_filename, index_name);
     }
 
     // If db is NULL our caller doesn't care about using the file, they just
