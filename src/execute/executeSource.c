@@ -217,7 +217,7 @@ int executeSourceIndexScan (
 }
 
 /**
- * @brief Sequentially access every row of the table applying the
+ * @brief Sequentially access every row of the table applying the predicate
  * nodes to each row accessed.
  *
  * @param query

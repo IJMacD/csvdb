@@ -526,7 +526,9 @@ static int checkConstantField (struct Field *field) {
             }
         }
 
-        strcpy(field->text, value);
+        strncpy(field->text, value, len - 2);
+
+        field->text[len-2] = '\0';
     }
     else if (strcmp(field->text, "CURRENT_DATE") == 0) {
         field->index = FIELD_CONSTANT;
