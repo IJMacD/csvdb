@@ -5,7 +5,11 @@
 
 #include "../structs.h"
 
-int sequence_openDB (struct DB *db, const char *filename) {
+int sequence_openDB (
+    struct DB *db,
+    const char *filename,
+    __attribute__((unused)) char **resolved
+) {
     if (strncmp(filename, "SEQUENCE(", 9) != 0) {
         return -1;
     }

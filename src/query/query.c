@@ -659,12 +659,18 @@ static int process_subquery(
 static int information_query (const char *table, FILE * output) {
     struct DB db;
 
-    if (openDB(&db, table) != 0) {
+    char *resolved = NULL;
+
+    if (openDB(&db, table, &resolved) != 0) {
         fprintf(stderr, "File not found: '%s'\n", table);
         return -1;
     }
 
     fprintf(output, "Table:\t%s\n", table);
+    if (resolved != NULL) {
+        fprintf(output, "Path:\t%s\n", resolved);
+        free(resolved);
+    }
     fprintf(output, "Fields:\t%d\n", db.field_count);
     fprintf(output, "Records:\t%d\n", getRecordCount(&db));
 
@@ -781,9 +787,16 @@ static int populate_tables (struct Query *q) {
         if (found == 0) {
             table->db = calloc(1, sizeof(*table->db));
 
-            if (openDB(table->db, table->name) != 0) {
+            char *resolved = NULL;
+
+            if (openDB(table->db, table->name, &resolved) != 0) {
                 fprintf(stderr, "Unable to use file: '%s'\n", table->name);
                 return -1;
+            }
+
+            if (resolved != NULL) {
+                strcpy(table->name, resolved);
+                free(resolved);
             }
         }
 

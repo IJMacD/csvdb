@@ -39,9 +39,11 @@ int csvMem_makeDB (struct DB *db, FILE *f) {
  *
  * @param db
  * @param filename can also be "stdin"
- * @returns int 0 on success; -1 on failure
+ * @param resolved if not NULL, then will write resolved path to buffer pointed
+ * to by this pointer. If this pointer points to NULL then a buffer will be
+ * malloc'd for it.
  */
-int csvMem_openDB (struct DB *db, const char *filename) {
+int csvMem_openDB (struct DB *db, const char *filename, char **resolved) {
     FILE *f;
 
     if (strcmp(filename, "stdin") == 0) {
@@ -49,6 +51,10 @@ int csvMem_openDB (struct DB *db, const char *filename) {
     }
     else {
         f = fopen(filename, "r");
+
+        if (resolved != NULL) {
+            *resolved = realpath(filename, *resolved);
+        }
     }
 
     if (!f) {
@@ -58,6 +64,10 @@ int csvMem_openDB (struct DB *db, const char *filename) {
 
         if (!f) {
             return -1;
+        }
+
+        if (resolved != NULL) {
+            *resolved = realpath(buffer, *resolved);
         }
     }
 

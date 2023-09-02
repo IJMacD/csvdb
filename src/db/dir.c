@@ -28,7 +28,7 @@ static struct dirent * getDirectoryEntry (struct DB *db, int record_index);
 
 static int unixToJulian (long time);
 
-int dir_openDB (struct DB *db, const char *filename) {
+int dir_openDB (struct DB *db, const char *filename, char **resolved) {
     if (strncmp(filename, "DIR(", 4) != 0) {
         return -1;
     }
@@ -42,7 +42,15 @@ int dir_openDB (struct DB *db, const char *filename) {
     strncpy(path, filename + 4, MAX_TABLE_LENGTH - 1);
     path[len - 1] = '\0';
 
-    makeDB(db, path);
+    int result = makeDB(db, path);
+
+    if (result < 0) {
+        return result;
+    }
+
+    if (resolved != NULL) {
+        *resolved = realpath(path, *resolved);
+    }
 
     return 0;
 }

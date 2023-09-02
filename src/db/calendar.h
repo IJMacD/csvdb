@@ -1,6 +1,6 @@
 #include "../structs.h"
 
-int calendar_openDB (struct DB *db, const char *filename);
+int calendar_openDB (struct DB *db, const char *filename, char **resolved);
 
 void calendar_closeDB (struct DB *db);
 

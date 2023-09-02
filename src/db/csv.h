@@ -1,6 +1,6 @@
 #include "../structs.h"
 
-int csv_openDB (struct DB *db, const char *filename);
+int csv_openDB (struct DB *db, const char *filename, char **resolved);
 
 void csv_closeDB (struct DB *db);
 

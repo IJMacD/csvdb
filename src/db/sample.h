@@ -1,6 +1,6 @@
 #include "../structs.h"
 
-int sample_openDB (struct DB *db, const char *filename);
+int sample_openDB (struct DB *db, const char *filename, char **resolved);
 
 void sample_closeDB (struct DB *db);
 

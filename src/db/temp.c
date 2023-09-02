@@ -20,11 +20,15 @@ int find_table_rowid (const char *table_name);
  * @param table_name
  * @return int 0 on success; -1 on failure
  */
-int temp_openDB (struct DB *db, const char *table_name) {
+int temp_openDB (
+    struct DB *db,
+    const char *table_name,
+    char **resolved
+) {
     char filename[MAX_TABLE_LENGTH];
 
     if (temp_findTable(table_name, filename) == 0) {
-        return csvMmap_openDB(db, filename);
+        return csvMmap_openDB(db, filename, resolved);
     }
 
     return -1;
@@ -161,7 +165,7 @@ struct DB *temp_openMappingDB (const char *filename) {
     // Next, check if the mapping file already exists.
     // Must specifically choose VFS_CSV to make sure changes are persisted to
     // disk.
-    if (csv_openDB(db, filename) == 0) {
+    if (csv_openDB(db, filename, NULL) == 0) {
         return db;
     }
 

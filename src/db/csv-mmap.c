@@ -40,11 +40,18 @@ int csvMmap_makeDB (struct DB *db, FILE *f) {
  * @brief Opens, consumes, and closes file specified by filename
  *
  * @param db
- * @param filename can also be "stdin"
+ * @param filename
+ * @param resolved if not NULL, then will write resolved path to buffer pointed
+ * to by this pointer. If this pointer points to NULL then a buffer will be
+ * malloc'd for it.
  * @returns int 0 on success; -1 on failure
  */
-int csvMmap_openDB (struct DB *db, const char *filename) {
+int csvMmap_openDB (struct DB *db, const char *filename, char **resolved) {
     FILE *f = fopen(filename, "r");
+
+    if (f != NULL && resolved != NULL) {
+        *resolved = realpath(filename, *resolved);
+    }
 
     if (!f) {
         char buffer[FILENAME_MAX];
@@ -53,6 +60,10 @@ int csvMmap_openDB (struct DB *db, const char *filename) {
 
         if (!f) {
             return -1;
+        }
+
+        if (resolved != NULL) {
+            *resolved = realpath(buffer, *resolved);
         }
     }
 

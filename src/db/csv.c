@@ -33,8 +33,12 @@ static int makeDB (struct DB *db, FILE *f) {
 /**
  * Returns 0 on success; -1 on failure
  */
-int csv_openDB (struct DB *db, const char *filename) {
+int csv_openDB (struct DB *db, const char *filename, char **resolved) {
     FILE *f = fopen(filename, "r+");
+
+    if (f && resolved != NULL) {
+        *resolved = realpath(filename, *resolved);
+    }
 
     if (!f) {
         char buffer[FILENAME_MAX];
@@ -43,6 +47,10 @@ int csv_openDB (struct DB *db, const char *filename) {
 
         if (!f) {
             return -1;
+        }
+
+        if (resolved != NULL) {
+            *resolved = realpath(buffer, *resolved);
         }
     }
 
@@ -445,7 +453,7 @@ enum IndexSearchType csv_findIndex(
         }
 
     }
-    else if (openDB(db, index_filename) == 0) {
+    else if (openDB(db, index_filename, NULL) == 0) {
         return INDEX_UNIQUE;
     }
 
@@ -481,7 +489,7 @@ enum IndexSearchType csv_findIndex(
         return INDEX_REGULAR;
     }
 
-    if (openDB(db, index_filename) == 0) {
+    if (openDB(db, index_filename, NULL) == 0) {
         return INDEX_REGULAR;
     }
 
@@ -521,7 +529,7 @@ int csv_fromHeaders (
     fputs(headers, f);
     fclose(f);
 
-    return csv_openDB(db, filename);
+    return csv_openDB(db, filename, NULL);
 }
 
 /**
@@ -567,7 +575,7 @@ int csv_fromQuery (
         return -1;
     }
 
-    return csv_openDB(db, filename);
+    return csv_openDB(db, filename, NULL);
 }
 
 int csv_insertRow (struct DB *db, const char *row) {

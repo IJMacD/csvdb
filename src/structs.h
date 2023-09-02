@@ -388,7 +388,7 @@ struct DateTime {
 };
 
 struct VFS {
-    int (* openDB)(struct DB *db, const char *filename);
+    int (* openDB)(struct DB *db, const char *filename, char **resolved);
     void (* closeDB)(struct DB *db);
     int (* getFieldIndex)(struct DB *db, const char *field);
     char *(* getFieldName)(struct DB *db, int field_index);

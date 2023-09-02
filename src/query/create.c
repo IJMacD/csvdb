@@ -183,7 +183,7 @@ static int create_index (
     table.db = &db;
     strcpy(table.name, table_name);
 
-    if (openDB(&db, table_name) != 0) {
+    if (openDB(&db, table_name, NULL) != 0) {
         fprintf(stderr, "File not found: '%s'\n", table_name);
         return -1;
     }
@@ -489,7 +489,7 @@ int insert_query (const char * query, const char **end_ptr) {
     temp_findTable(table_name, table_name);
 
     // Must force VFS_CSV to make sure changes are persisted
-    int result = csv_openDB(&db, table_name);
+    int result = csv_openDB(&db, table_name, NULL);
 
     if (result == 0) {
         result = insertFromQuery(&db, query + index, end_ptr);

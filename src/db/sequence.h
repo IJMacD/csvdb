@@ -1,6 +1,6 @@
 #include "../structs.h"
 
-int sequence_openDB (struct DB *db, const char *filename);
+int sequence_openDB (struct DB *db, const char *filename, char **resolved);
 
 void sequence_closeDB (struct DB *db);
 

@@ -90,7 +90,11 @@ static int printDate (
     struct DateTime date
 );
 
-int calendar_openDB (struct DB *db, const char *filename) {
+int calendar_openDB (
+    struct DB *db,
+    const char *filename,
+    __attribute__((unused)) char **resolved
+) {
     if (strcmp(filename, "CALENDAR") != 0) {
         return -1;
     }
@@ -384,7 +388,7 @@ enum IndexSearchType calendar_findIndex(
 ) {
     if (strcmp(index_name, "julian") == 0) {
         if (db != NULL) {
-            calendar_openDB(db, "CALENDAR");
+            calendar_openDB(db, "CALENDAR", NULL);
             db->field_count = 2;
 
             // Store index type in unused data field
@@ -397,7 +401,7 @@ enum IndexSearchType calendar_findIndex(
 
     if (strcmp(index_name, "date") == 0) {
         if (db != NULL) {
-            calendar_openDB(db, "CALENDAR");
+            calendar_openDB(db, "CALENDAR", NULL);
             db->field_count = 2;
 
             // Store index type in unused data field

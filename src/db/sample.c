@@ -28,7 +28,11 @@ unsigned lcg ();
 unsigned lcg_value;
 int prev_id;
 
-int sample_openDB (struct DB *db, const char *filename) {
+int sample_openDB (
+    struct DB *db,
+    const char *filename,
+    __attribute__((unused)) char **resolved
+) {
     if (strcmp(filename, "SAMPLE") != 0) {
         return -1;
     }

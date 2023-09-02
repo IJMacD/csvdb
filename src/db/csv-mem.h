@@ -2,7 +2,7 @@
 
 #include "../structs.h"
 
-int csvMem_openDB (struct DB *db, const char *filename);
+int csvMem_openDB (struct DB *db, const char *filename, char **resolved);
 
 void csvMem_closeDB (struct DB *db);
 

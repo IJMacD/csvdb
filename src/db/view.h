@@ -1,3 +1,3 @@
 #include "../structs.h"
 
-int view_openDB (struct DB *db, const char *filename);
+int view_openDB (struct DB *db, const char *filename, char **resolved);

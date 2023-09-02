@@ -105,23 +105,28 @@ struct VFS VFS_Table[VFS_COUNT] = {
 /**
  * @brief Try to open a database by filename
  *
+ * @param db
+ * @param filename can also be "stdin"
+ * @param resolved if not NULL, then will write resolved path to buffer pointed
+ * to by this pointer. If this pointer points to NULL then a buffer will be
+ * malloc'd for it.
  * @return 0 on success, -1 on failure
  */
-int openDB (struct DB *db, const char *filename) {
+int openDB (struct DB *db, const char *filename, char **resolved) {
     // Process explicit CSV_MEM first
     if (strncmp(filename, "memory:", 7) == 0) {
-        return csvMem_openDB(db, filename + 7);
+        return csvMem_openDB(db, filename + 7, resolved);
     }
 
     // Need to skip CSV and CSV_MEM for now because they are not very picky and
     // will attempt to find files with the same name, which might not be what
     // we want.
     for (int i = VFS_VIEW; i < VFS_COUNT; i++) {
-        int (*vfs_openDB) (struct DB *, const char *filename)
+        int (*vfs_openDB) (struct DB *, const char *filename, char **resolved)
             = VFS_Table[i].openDB;
 
         if (vfs_openDB != NULL) {
-            int result = vfs_openDB(db, filename);
+            int result = vfs_openDB(db, filename, resolved);
 
             if (result == 0) {
                 return 0;
@@ -141,6 +146,7 @@ int openDB (struct DB *db, const char *filename) {
         f = fopen(filename, "r");
     }
 
+    // We haven't found the file yet. Try adding '.csv' and checking again.
     if (!f) {
         char buffer[FILENAME_MAX];
         sprintf(buffer, "%s.csv", filename);
@@ -149,6 +155,9 @@ int openDB (struct DB *db, const char *filename) {
         if (!f) {
             return -1;
         }
+
+        char * path = realpath(buffer, NULL);
+        fprintf(stderr, "Resolved path: %s\n", path);
     }
 
     // Try to seek to see if we have a stream
@@ -174,7 +183,7 @@ int openDB (struct DB *db, const char *filename) {
     }
 
     // Fallback to CSV
-    return csv_openDB(db, filename);
+    return csv_openDB(db, filename, resolved);
 }
 
 void closeDB (struct DB *db) {
