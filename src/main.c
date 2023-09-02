@@ -14,10 +14,10 @@
 static int read_file(FILE *file, char **output);
 
 extern char* gitversion;
+int debug_verbosity = 0;
 
 #ifdef DEBUG
 const char *version_debug = "DEBUG";
-int debug_verbosity = 0;
 #else
 const char *version_debug = "";
 #endif

@@ -31,22 +31,56 @@ void optimiseCollapseConstantNode (struct Node *node)  {
     }
 
     if (node->function == OPERATOR_AND) {
-        // If we have any NEVER children then the whole node is NEVER
+        int all_always = 1;
+
         for (int i = 0; i < node->child_count; i++) {
+            // If we have any NEVER children then the whole node is NEVER
             if (node->children[i].function == OPERATOR_NEVER) {
+                if (debug_verbosity >= 2) {
+                    fprintf(stderr, "[OPTIMISE] Constant Collapse (AND)\n");
+                }
                 node->function = OPERATOR_NEVER;
                 return;
             }
+            // If we have all ALWAYS children then the whole node is ALWAYS
+            else if (node->children[i].function != OPERATOR_ALWAYS) {
+                all_always = 0;
+            }
+        }
+
+        if (all_always) {
+            if (debug_verbosity >= 2) {
+                fprintf(stderr, "[OPTIMISE] Constant Collapse (AND)\n");
+            }
+            node->function = OPERATOR_ALWAYS;
         }
     }
 
     if (node->function == OPERATOR_OR) {
-        // If we have any ALWAYS children then the whole node is ALWAYS
+        int all_never = 1;
+
         for (int i = 0; i < node->child_count; i++) {
+            // If we have any ALWAYS children then the whole node is ALWAYS
             if (node->children[i].function == OPERATOR_ALWAYS) {
+                #if DEBUG
+                if (debug_verbosity >= 2) {
+                    fprintf(stderr, "[OPTIMISE] Constant Collapse (OR)\n");
+                }
+                #endif
                 node->function = OPERATOR_ALWAYS;
                 return;
             }
+            // If we have all NEVER children the whole node is NEVER
+            else if (node->children[i].function != OPERATOR_NEVER) {
+                all_never = 0;
+            }
+        }
+
+        if (all_never) {
+            if (debug_verbosity >= 2) {
+                fprintf(stderr, "[OPTIMISE] Constant Collapse (AND)\n");
+            }
+            node->function = OPERATOR_NEVER;
         }
     }
 
