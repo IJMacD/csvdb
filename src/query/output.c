@@ -182,6 +182,36 @@ void printResultLine (
                 result < 0 ? "BADFUNC" : output
             );
         }
+        #ifdef JSON_BOOL
+        else if (node->function == OPERATOR_ALWAYS &&
+            (
+                format == OUTPUT_FORMAT_JSON ||
+                format == OUTPUT_FORMAT_JSON_ARRAY)
+            )
+        {
+            printColumnValue(
+                f,
+                format,
+                NULL,
+                node->alias,
+                "true"
+            );
+        }
+        else if (node->function == OPERATOR_NEVER &&
+            (
+                format == OUTPUT_FORMAT_JSON ||
+                format == OUTPUT_FORMAT_JSON_ARRAY)
+            )
+        {
+            printColumnValue(
+                f,
+                format,
+                NULL,
+                node->alias,
+                "false"
+            );
+        }
+        #endif
         else {
             // Evaluate functions
             char output[MAX_VALUE_LENGTH];
@@ -276,21 +306,6 @@ void printHeaderLine (
 
     for (int j = 0; j < column_count; j++) {
         struct Node *node = &columns[j];
-
-        if (
-            (
-                format == OUTPUT_FORMAT_JSON
-                || format == OUTPUT_FORMAT_JSON_ARRAY
-                || format == OUTPUT_FORMAT_SQL_INSERT
-            )
-            // && column->concat == 1
-        ) {
-            fprintf(
-                stderr,
-                "Cannot output json, json_array, sql with concat columns\n"
-            );
-            exit(-1);
-        }
 
         int is_last = j == column_count - 1;
 
@@ -655,6 +670,22 @@ static void printColumnValue (
         && strlen(value) == 0
     ) {
         fprintf(f, "null");
+    }
+    else
+    #endif
+
+    #ifdef JSON_BOOL
+    if (
+        (format == OUTPUT_FORMAT_JSON || format == OUTPUT_FORMAT_JSON_ARRAY)
+        && strcmp(value, "true") == 0
+    ) {
+        fprintf(f, "true");
+    }
+    else if (
+        (format == OUTPUT_FORMAT_JSON || format == OUTPUT_FORMAT_JSON_ARRAY)
+        && strcmp(value, "false") == 0
+    ) {
+        fprintf(f, "false");
     }
     else
     #endif
