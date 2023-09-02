@@ -207,7 +207,7 @@ int parseDateTime(const char *input, struct DateTime *output) {
 
         const char *c = input + 3;
 
-        int m;
+        int m = 0;
              if (strncmp(c, "Jan", 3) == 0 || strncmp(c, "JAN", 3) == 0) m = 1;
         else if (strncmp(c, "Feb", 3) == 0 || strncmp(c, "FEB", 3) == 0) m = 2;
         else if (strncmp(c, "Mar", 3) == 0 || strncmp(c, "MAR", 3) == 0) m = 3;
@@ -220,6 +220,11 @@ int parseDateTime(const char *input, struct DateTime *output) {
         else if (strncmp(c, "Oct", 3) == 0 || strncmp(c, "OCT", 3) == 0) m = 10;
         else if (strncmp(c, "Nov", 3) == 0 || strncmp(c, "NOV", 3) == 0) m = 11;
         else if (strncmp(c, "Dec", 3) == 0 || strncmp(c, "DEC", 3) == 0) m = 12;
+
+        if (m == 0) {
+            return 0;
+        }
+
         output->month = m;
 
         output->year = atoi(input + 7);
