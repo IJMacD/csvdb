@@ -226,46 +226,55 @@ int select_query (
         // We will materialise the GROUP'd query to disk then sort that
 
         // Make a copy of the struct
-        struct Query q2a;
-        memcpy(&q2a, q, sizeof(q2a));
-        q2a.order_count = 0;
+        struct Query *q2a = makeQuery();
+        #ifdef DEBUG
+        int id = q2a->id;
+        #endif
+        memcpy(q2a, q, sizeof(*q2a));
+        #ifdef DEBUG
+        q2a->id = id;
+        #endif
+        q2a->order_count = 0;
 
         struct Table table = {0};
 
         int result = process_subquery(
-            &q2a,
+            q2a,
             (output_flags & OUTPUT_OPTION_STATS),
             table.name
         );
 
-        destroy_query(&q2a);
+        destroy_query(q2a);
 
         if (result < 0) {
             remove(table.name);
             return -1;
         }
 
-        struct Query q2b = {0};
-        q2b.tables = &table;
-        q2b.table_count = 1;
+        struct Query *q2b = makeQuery();
+        q2b->tables = &table;
+        q2b->table_count = 1;
 
-        q2b.limit_value = -1;
+        q2b->limit_value = -1;
 
         memcpy(
-            q2b.order_nodes,
+            q2b->order_nodes,
             q->order_nodes,
             sizeof(q->order_nodes)
         );
 
-        q2b.order_count = q->order_count;
+        q2b->order_count = q->order_count;
 
-        result = process_query(&q2b, output_flags, output);
+        result = process_query(q2b, output_flags, output);
 
         remove(table.name);
 
-        q2b.tables = NULL;
+        q2b->tables = NULL;
 
-        destroy_query(&q2b);
+        destroy_query(q2b);
+
+        free(q2a);
+        free(q2b);
 
         //      Why aren't we destroying here?
         // destroy_query(&q);
@@ -1032,7 +1041,7 @@ static int wrap_query (
     enum OutputOption outer_options,
     FILE *output
 ) {
-    struct Query q2 = {0};
+    struct Query *q2 = makeQuery();
     struct Table table = {0};
 
     int result = process_subquery(query, inner_options, table.name);
@@ -1040,20 +1049,22 @@ static int wrap_query (
         return result;
     }
 
-    q2.table_count = 1;
-    q2.tables = &table;
-    q2.limit_value = -1;
+    q2->table_count = 1;
+    q2->tables = &table;
+    q2->limit_value = -1;
 
     result = process_query(
-        &q2,
+        q2,
         outer_options,
         output
     );
 
     remove(table.name);
 
-    q2.tables = NULL;
-    destroy_query(&q2);
+    q2->tables = NULL;
+    destroy_query(q2);
+
+    free(q2);
 
     return result;
 }
