@@ -58,8 +58,9 @@ int executeSourceUnique (
         findIndex(
             &index_db,
             table->name,
-            p->children[0].field.text,
-            INDEX_UNIQUE
+            &p->children[0],
+            INDEX_UNIQUE,
+            NULL
         ) == 0
     ) {
         fprintf(
@@ -110,8 +111,9 @@ int executeSourceIndexSeek (
         findIndex(
             &index_db,
             table->name,
-            p->children[0].field.text,
-            INDEX_ANY
+            &p->children[0],
+            INDEX_ANY,
+            NULL
         ) == 0
     ) {
         fprintf(
@@ -187,8 +189,9 @@ int executeSourceIndexScan (
         findIndex(
             &index_db,
             table->name,
-            p->field.text,
-            INDEX_ANY
+            p,
+            INDEX_ANY,
+            NULL
         ) == 0
     ) {
         fprintf(

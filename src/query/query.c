@@ -682,9 +682,9 @@ static int information_query (const char *table, FILE * output) {
     for (int i = 0; i < db.field_count; i++) {
         int have_index = 0;
 
-        if (findIndex(NULL, table, getFieldName(&db, i), INDEX_ANY)) {
-            have_index = 1;
-        }
+        // if (findIndex(NULL, table, getFieldName(&db, i), INDEX_ANY, NULL)) {
+        //     have_index = 1;
+        // }
 
         fprintf(
             output,

@@ -424,10 +424,24 @@ static void prepareHeaders (struct DB *db) {
 enum IndexSearchType csv_findIndex(
     struct DB *db,
     const char *table_name,
-    const char *index_name,
-    int index_type_flags
+    struct Node *node,
+    int index_type_flags,
+    char **resolved
 ) {
+    int found_unique = 0;
+    const char *field_name = field_name = node->field.text;
+    size_t field_len = strlen(field_name);
+    int fn = node->function;
+
+    if (fn != FUNC_UNITY && fn != FUNC_UNIQUE && fn != FUNC_INDEX) {
+        // indexes on functions are not supported yet
+        return INDEX_NONE;
+    }
+
     char table_filename[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12];
+
+    // If the table name ends in '.csv' remove that before searching for a
+    // matching index
     size_t t_len = strlen(table_name);
     if (strcmp(table_name + t_len - 4, ".csv") == 0) {
         t_len -= 4;
@@ -435,70 +449,76 @@ enum IndexSearchType csv_findIndex(
     strncpy(table_filename, table_name, t_len);
     table_filename[t_len] = '\0';
 
+    // Allocate working buffer
     char index_filename[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12];
-    size_t len = strlen(index_name);
 
-    // Try UNIQUE indexes first
+    FILE *f = NULL;
 
-    if (strncmp(index_name, "UNIQUE(", 7) == 0) {
-        size_t index_name_len = len - 8;
-        strncpy(index_filename, index_name + 7, index_name_len);
-        strcpy(index_filename + index_name_len, ".unique.csv");
+    if (fn == FUNC_UNIQUE || fn == FUNC_INDEX) {
+        // Explicit index name, with or without '.csv'
+
+        strcpy(index_filename, field_name);
+        f = fopen(index_filename, "r");
+
+        if (!f) {
+            // Add '.csv' and try again
+            strcpy(index_filename + field_len, ".csv");
+            f = fopen(index_filename, "r");
+        }
+
+        if (f && fn == FUNC_UNIQUE) {
+            found_unique = 1;
+        }
     }
     else {
-        sprintf(index_filename, "%s__%s.unique.csv", table_filename, index_name);
+        // Start trying auto names
+
+        sprintf(
+            index_filename,
+            "%s__%s.unique.csv",
+            table_filename,
+            field_name
+        );
+        f = fopen(index_filename, "r");
+
+        if (f) {
+            found_unique = 1;
+        }
+
+        if (!f && index_type_flags == INDEX_ANY) {
+            sprintf(
+                index_filename,
+                "%s__%s.index.csv",
+                table_filename,
+                field_name
+            );
+            f = fopen(index_filename, "r");
+        }
+    }
+
+    if (!f) {
+        return INDEX_NONE;
+    }
+
+    // So we do have an index
+
+    // Write the resolved name if caller wants it
+    if (resolved != NULL) {
+        *resolved = malloc(strlen(index_filename) + 1);
+        strcpy(*resolved, index_filename);
     }
 
     // If db is NULL our caller doesn't care about using the file, they just
     // want to know if the index exists.
     if (db == NULL) {
-        FILE * f = fopen(index_filename, "r");
-
-        if (f != NULL) {
-            fclose(f);
-
-            return INDEX_UNIQUE;
-        }
-
-    }
-    else if (openDB(db, index_filename, NULL) == 0) {
-        return INDEX_UNIQUE;
-    }
-
-    if (index_type_flags == INDEX_UNIQUE) {
-        // We have failed - we were only looking for UNIQUE indexes
-        return 0;
-    }
-
-    // Now try a regular  index
-
-    if (strncmp(index_name, "INDEX(", 6) == 0) {
-        if (index_type_flags != INDEX_ANY) return -1;
-
-        size_t index_name_len = len - 7;
-        strncpy(index_filename, index_name + 6, index_name_len);
-        strcpy(index_filename + index_name_len, ".index.csv");
-    }
-     else {
-        sprintf(index_filename, "%s__%s.index.csv", table_filename, index_name);
-    }
-
-    // If db is NULL our caller doesn't care about using the file, they just
-    // want to know if the index exists.
-    if (db == NULL) {
-        FILE * f = fopen(index_filename, "r");
-
-        if (f == NULL) {
-            return 0;
-        }
-
         fclose(f);
 
-        return INDEX_REGULAR;
+        return found_unique ? INDEX_UNIQUE : INDEX_REGULAR;
     }
 
+    // We will open the DB for the caller
     if (openDB(db, index_filename, NULL) == 0) {
-        return INDEX_REGULAR;
+        return found_unique ? INDEX_UNIQUE : INDEX_REGULAR;
     }
 
     return INDEX_NONE;

@@ -62,8 +62,9 @@ int sequence_getRecordValue (
 enum IndexSearchType sequence_findIndex(
     __attribute__((unused)) struct DB *db,
     __attribute__((unused)) const char *table_name,
-    __attribute__((unused)) const char *index_name,
-    __attribute__((unused)) int index_type_flags
+    __attribute__((unused)) struct Node *node,
+    __attribute__((unused)) int index_type_flags,
+    __attribute__((unused)) char **resolved
 ) {
     return 0;
 }

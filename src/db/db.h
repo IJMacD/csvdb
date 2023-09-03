@@ -21,8 +21,9 @@ int getRecordValue (
 enum IndexSearchType findIndex(
     struct DB *db,
     const char *table_name,
-    const char *index_name,
-    enum IndexSearchType index_type_flags
+    struct Node *node,
+    int index_type_flags,
+    char **resolved
 );
 
 int pkSearch(struct DB *db, const char *value);

@@ -282,26 +282,28 @@ int getRecordValue (
  *
  * @param db struct DB * OUT - Database to populate with index (Can be NULL)
  * @param table_name
- * @param index_name
+ * @param node
  * @param index_type_flags INDEX_ANY|INDEX_REGULAR|INDEX_UNIQUE|INDEX_PRIMARY
+ * @param resolved if not NULL then a buffer will be malloc'd
  * @returns enum IndexSearchType INDEX_REGULAR|INDEX_UNIQUE|INDEX_PRIMARY
  * |INDEX_NONE
  */
 enum IndexSearchType findIndex(
     struct DB *db,
     const char *table_name,
-    const char *index_name,
-    enum IndexSearchType index_type_flags
+    struct Node *node,
+    int index_type_flags,
+    char **resolved
 ) {
     if (strcmp(table_name, "CALENDAR") == 0) {
-        return calendar_findIndex(db, table_name, index_name, index_type_flags);
+        return calendar_findIndex(db, table_name, node, index_type_flags, resolved);
     }
 
     if (strncmp(table_name, "SEQUENCE(", 9) == 0) {
-        return sequence_findIndex(db, table_name, index_name, index_type_flags);
+        return sequence_findIndex(db, table_name, node, index_type_flags, resolved);
     }
 
-    return csv_findIndex(db, table_name, index_name, index_type_flags);
+    return csv_findIndex(db, table_name, node, index_type_flags, resolved);
 }
 
 /**

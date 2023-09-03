@@ -383,10 +383,17 @@ int calendar_getRecordValue (
 enum IndexSearchType calendar_findIndex(
     struct DB *db,
     __attribute__((unused)) const char *table_name,
-    const char *index_name,
-    __attribute__((unused)) int index_type_flags
+    struct Node *node,
+    __attribute__((unused)) int index_type_flags,
+    char **resolved
 ) {
-    if (strcmp(index_name, "julian") == 0) {
+    if (node->function != FUNC_UNITY) {
+        return INDEX_NONE;
+    }
+
+    char *field_name = node->field.text;
+
+    if (strcmp(field_name, "julian") == 0) {
         if (db != NULL) {
             calendar_openDB(db, "CALENDAR", NULL);
             db->field_count = 2;
@@ -396,10 +403,16 @@ enum IndexSearchType calendar_findIndex(
             db->data[0] = COL_JULIAN;
         }
 
+        // Write the resolved name if caller wants it
+        if (resolved != NULL) {
+            *resolved = malloc(strlen("julian")+1);
+            strcpy(*resolved, "julian");
+        }
+
         return INDEX_PRIMARY;
     }
 
-    if (strcmp(index_name, "date") == 0) {
+    if (strcmp(field_name, "date") == 0) {
         if (db != NULL) {
             calendar_openDB(db, "CALENDAR", NULL);
             db->field_count = 2;
@@ -407,6 +420,12 @@ enum IndexSearchType calendar_findIndex(
             // Store index type in unused data field
             db->data = malloc(1);
             db->data[0] = COL_DATE;
+        }
+
+        // Write the resolved name if caller wants it
+        if (resolved != NULL) {
+            *resolved = malloc(strlen("date")+1);
+            strcpy(*resolved, "date");
         }
 
         return INDEX_UNIQUE;

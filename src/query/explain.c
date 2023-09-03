@@ -1,4 +1,6 @@
 #include <string.h>
+#include <libgen.h>
+#include <stdlib.h>
 
 #include "../structs.h"
 #include "../db/db.h"
@@ -31,7 +33,7 @@ int explain_select_query (
         struct PlanStep s = plan->steps[i];
 
         char *operation = "";
-        char table[MAX_FIELD_LENGTH] = {0};
+        char table[MAX_TABLE_LENGTH] = {0};
         char predicate[MAX_FIELD_LENGTH] = {0};
 
         if (s.node_count == 0) {
@@ -108,8 +110,8 @@ int explain_select_query (
                 rows = (s.limit < rows) ? s.limit : rows;
             }
 
-            strncpy(table, tables[join_count].alias, MAX_FIELD_LENGTH);
-            table[MAX_FIELD_LENGTH - 1] = '\0';
+            char *name = basename(tables[join_count].name);
+            strcpy(table, name);
         }
         else if (s.type == PLAN_TABLE_SCAN){
             operation = "TABLE SCAN";
@@ -128,8 +130,8 @@ int explain_select_query (
                 rows = (s.limit < rows) ? s.limit : rows;
             }
 
-            strncpy(table, tables[join_count].alias, MAX_FIELD_LENGTH);
-            table[MAX_FIELD_LENGTH - 1] = '\0';
+            char *name = basename(tables[join_count].name);
+            strcpy(table, name);
         }
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
             operation = "ACCESS BY ROWID";
@@ -159,10 +161,13 @@ int explain_select_query (
         }
         else if (s.type == PLAN_PK) {
             operation = "PRIMARY KEY UNIQUE";
+
+            char *t = tables[join_count].alias;
+
             sprintf(
                 table,
                 "%s__%s",
-                tables[join_count].name,
+                t,
                 s.nodes[0].children[0].field.text
             );
             rows = 1;
@@ -170,10 +175,14 @@ int explain_select_query (
         }
         else if (s.type == PLAN_PK_RANGE) {
             operation = "PRIMARY KEY RANGE";
+
+            // char *t = basename(tables[join_count].name);
+            char *t = tables[join_count].alias;
+
             sprintf(
                 table,
                 "%s__%s",
-                tables[join_count].name,
+                t,
                 s.nodes[0].children[0].field.text
             );
             rows = getRecordCount(tables[join_count].db) / 2;
@@ -181,23 +190,37 @@ int explain_select_query (
         }
         else if (s.type == PLAN_UNIQUE) {
             operation = "INDEX UNIQUE";
-            sprintf(
-                table,
-                "%s__%s",
+
+            char *index_filename;
+            findIndex(
+                NULL,
                 tables[join_count].name,
-                s.nodes[0].children[0].field.text
+                &s.nodes[0].children[0],
+                INDEX_ANY,
+                &index_filename
             );
+
+            strcpy(table, basename(index_filename));
+            free(index_filename);
+
             rows = 1;
             cost = log_rows;
         }
         else if (s.type == PLAN_UNIQUE_RANGE) {
             operation = "INDEX UNIQUE RANGE";
-            sprintf(
-                table,
-                "%s__%s",
+
+            char *index_filename;
+            findIndex(
+                NULL,
                 tables[join_count].name,
-                s.nodes[0].children[0].field.text
+                &s.nodes[0].children[0],
+                INDEX_ANY,
+                &index_filename
             );
+
+            strcpy(table, basename(index_filename));
+            free(index_filename);
+
             int row_estimate = getRecordCount(tables[join_count].db);
             if (s.node_count > 0) {
                 if (s.limit >= 0) {
@@ -223,12 +246,19 @@ int explain_select_query (
         }
         else if (s.type == PLAN_INDEX_RANGE) {
             operation = "INDEX SEEK";
-            sprintf(
-                table,
-                "%s__%s",
+
+            char *index_filename;
+            findIndex(
+                NULL,
                 tables[join_count].name,
-                s.nodes[0].children[0].field.text
+                &s.nodes[0].children[0],
+                INDEX_ANY,
+                &index_filename
             );
+
+            strcpy(table, basename(index_filename));
+            free(index_filename);
+
             int row_estimate = getRecordCount(tables[join_count].db);
             if (s.node_count > 0) {
                 if (s.limit >= 0) {
@@ -254,21 +284,33 @@ int explain_select_query (
         }
         else if (s.type == PLAN_INDEX_SCAN) {
             operation = "INDEX SCAN";
-            sprintf(
-                table,
-                "%s__%s",
+
+            char *index_filename;
+            findIndex(
+                NULL,
                 tables[join_count].name,
-                s.nodes[0].field.text
+                &s.nodes[0],
+                INDEX_ANY,
+                &index_filename
             );
+
+            strcpy(table, basename(index_filename));
+            free(index_filename);
         }
         else if (s.type == PLAN_COVERING_INDEX_SEEK) {
             operation = "COVERING INDEX SEEK";
-            sprintf(
-                table,
-                "%s__%s",
+
+            char *index_filename;
+            findIndex(
+                NULL,
                 tables[join_count].name,
-                s.nodes[0].children[0].field.text
+                &s.nodes[0],
+                INDEX_ANY,
+                &index_filename
             );
+
+            strcpy(table, basename(index_filename));
+            free(index_filename);
         }
         else if (s.type == PLAN_SORT) {
             operation = "SORT";

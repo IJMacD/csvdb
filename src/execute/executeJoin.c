@@ -354,8 +354,9 @@ int executeUniqueJoin (
         findIndex(
             &index_db,
             tables[table_id].name,
-            inner->field.text,
-            INDEX_UNIQUE
+            inner,
+            INDEX_UNIQUE,
+            NULL
         ) == 0
     ) {
         fprintf(
@@ -483,8 +484,9 @@ int executeIndexJoin (
         findIndex(
             &index_db,
             tables[table_id].name,
-            inner->field.text,
-            INDEX_ANY
+            inner,
+            INDEX_ANY,
+            NULL
         ) == 0
     ) {
         fprintf(

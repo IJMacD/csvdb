@@ -403,8 +403,9 @@ struct VFS {
     enum IndexSearchType (* findIndex)(
         struct DB *db,
         const char *table_name,
-        const char *index_name,
-        int index_type_flags
+        struct Node *node,
+        int index_type_flags,
+        char **resolved
     );
     int (* fullTableAccess)(
         struct DB *db,

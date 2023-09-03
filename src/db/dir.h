@@ -24,7 +24,8 @@ int dir_getRecordValue (
 int dir_findIndex(
     struct DB *db,
     const char *table_name,
-    const char *index_name,
-    int index_type_flags
+    struct Node *node,
+    int index_type_flags,
+    char **resolved
 );
 

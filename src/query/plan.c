@@ -127,8 +127,9 @@ int makePlan (struct Query *q, struct Plan *plan) {
         enum IndexSearchType index_type = findIndex(
             NULL,
             table->name,
-            q->order_nodes[0].field.text,
-            INDEX_ANY
+            &q->order_nodes[0],
+            INDEX_ANY,
+            NULL
         );
 
         // If the first ORDER BY node is a unique index then we can make use of
@@ -162,8 +163,9 @@ int makePlan (struct Query *q, struct Plan *plan) {
         if (findIndex(
             NULL,
             table->name,
-            q->group_nodes[0].field.text,
-            INDEX_ANY
+            &q->group_nodes[0],
+            INDEX_ANY,
+            NULL
         )) {
 
             addStepWithNode(plan, PLAN_INDEX_SCAN, &q->group_nodes[0]);
@@ -339,8 +341,9 @@ static void addPredicateSource (struct Plan *plan, struct Query *query) {
         && findIndex(
             NULL,
             table->name,
-            query->order_nodes[0].field.text,
-            INDEX_ANY
+            &query->order_nodes[0],
+            INDEX_ANY,
+            NULL
         )
     ) {
         // Add step for Sorted index access
@@ -389,8 +392,9 @@ static void addPredicateSource (struct Plan *plan, struct Query *query) {
         if (findIndex(
             NULL,
             table->name,
-            query->group_nodes[0].field.text,
-            INDEX_ANY
+            &query->group_nodes[0],
+            INDEX_ANY,
+            NULL
         )) {
 
             addStepWithNode(plan, PLAN_INDEX_SCAN, &query->group_nodes[0]);
@@ -571,8 +575,9 @@ static enum PlanStepType findIndexSource (struct Query *query) {
     enum IndexSearchType find_result = findIndex(
         NULL,
         table->name,
-        field_left->text,
-        INDEX_ANY
+        left,
+        INDEX_ANY,
+        NULL
     );
 
     if (find_result == INDEX_NONE) {
@@ -771,20 +776,22 @@ static void addJoinStepsIfRequired (struct Plan *plan, struct Query *q) {
                 // the join predicate depends on this table and others
 
                 // Try to find index on left
-                enum IndexSearchType index_result = findNodeIndex(
+                enum IndexSearchType index_result = findIndex(
                     NULL,
                     table->name,
                     &join->children[0],
-                    INDEX_ANY
+                    INDEX_ANY,
+                    NULL
                 );
 
                 // Try to find Index on right
                 if (index_result == INDEX_NONE) {
-                    index_result = findNodeIndex(
+                    index_result = findIndex(
                         NULL,
                         table->name,
                         &join->children[1],
-                        INDEX_ANY
+                        INDEX_ANY,
+                        NULL
                     );
 
                     if (index_result != INDEX_NONE) {
@@ -1260,7 +1267,7 @@ static void checkCoveringIndex (
     struct DB *db = malloc(sizeof(*db));
 
     if (
-        findIndex(db, firstTable->name, col_name, INDEX_ANY)
+        findIndex(db, firstTable->name, &firstStep->nodes[0], INDEX_ANY, NULL)
             == INDEX_NONE
     ) {
         fprintf(

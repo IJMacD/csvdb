@@ -154,23 +154,3 @@ int getTableBitMap (struct Node *node) {
 
     return map;
 }
-
-/**
- * Helper function as wrapper on findIndex
- * Tries to locate an index on a node
- */
-enum IndexSearchType findNodeIndex (
-    struct DB *db,
-    const char *table_name,
-    struct Node *node,
-    enum IndexSearchType index_type_flags
-) {
-    if (node->function == FUNC_UNITY) {
-        const char *field_name = node->field.text;
-        return findIndex(db, table_name, field_name, index_type_flags);
-    }
-
-    // indexes on functions are not supported yet
-
-    return INDEX_NONE;
-}
