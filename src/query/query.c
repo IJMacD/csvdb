@@ -1194,7 +1194,8 @@ static void expandFieldStar (struct Query *query) {
                     new_col->field.table_id = j;
                     new_col->field.index = k;
 
-                    strcpy(new_col->alias, getFieldName(table->db, k));
+                    strcpy(new_col->field.text, getFieldName(table->db, k));
+                    strcpy(new_col->alias, new_col->field.text);
                 }
             }
 
