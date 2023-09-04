@@ -185,3 +185,25 @@ void strcpy_overlap (char *dest, const char *src) {
 
     *dest = '\0';
 }
+
+/**
+ * returns which *single* bit is 1
+ * returns -1 if no *single* bit is 1
+ */
+int whichBit (int bit_map) {
+    int count = 0;
+
+    while (bit_map) {
+        int bit = bit_map & 1;
+
+        bit_map >>= 1;
+
+        if (bit) {
+            return bit_map ? -1 : count;
+        }
+
+        count++;
+    }
+
+    return -1;
+}

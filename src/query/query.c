@@ -401,13 +401,6 @@ int process_query (
     }
 
     #ifdef DEBUG
-    if (debug_verbosity >= 2) {
-        fprintf(stderr, "    FROM\n");
-        debugFrom(q);
-    }
-    #endif
-
-    #ifdef DEBUG
     // Pre-optimsed SELECT nodes
     if (debug_verbosity >= 4) {
         fprintf(stderr, "    SELECT\n");
@@ -457,7 +450,18 @@ int process_query (
         optimiseCollapseConstantNode(predicate);
     }
 
+    optimiseWhereToOn(q);
+
     #ifdef DEBUG
+    // Post-optimised
+    if (debug_verbosity >= 2) {
+        fprintf(stderr, "    FROM\n");
+        debugFrom(q);
+    }
+    #endif
+
+    #ifdef DEBUG
+    // Post-optimised
     if (debug_verbosity >= 2 && q->predicate_count > 0) {
         fprintf(stderr, "    WHERE\n");
         debugNodes(q->predicate_nodes, q->predicate_count);
@@ -483,6 +487,7 @@ int process_query (
     }
 
     #ifdef DEBUG
+    // Post-optimised
     if (debug_verbosity >= 2) {
         fprintf(stderr, "    SELECT\n");
         debugNodes(q->column_nodes, q->column_count);

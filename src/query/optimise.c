@@ -2,9 +2,11 @@
 #include <string.h>
 
 #include "../structs.h"
-#include "../debug.h"
+#include "./node.h"
 #include "../evaluate/evaluate.h"
 #include "../evaluate/predicates.h"
+#include "../functions/util.h"
+#include "../debug.h"
 
 void optimiseCollapseConstantNode (struct Node *node)  {
     if (node->function == FUNC_UNITY) {
@@ -276,4 +278,61 @@ void optimiseFlattenANDPredicates (struct Query * query) {
     free(query->predicate_nodes);
     query->predicate_nodes = new_predicates;
     query->predicate_count = new_predicate_count;
+}
+
+void optimiseWhereToOn (struct Query *query) {
+    // Nothing to do for single table queries
+    if (query->table_count <= 1) {
+        return;
+    }
+
+    for (int i = 0; i < query->predicate_count; i++) {
+        struct Node *predicate = &query->predicate_nodes[i];
+
+        if (predicate->function == OPERATOR_ALWAYS ||
+            predicate->function == OPERATOR_NEVER)
+        {
+            continue;
+        }
+
+        struct Node *left_node  = &predicate->children[0];
+        struct Node *right_node = &predicate->children[1];
+
+        int bit_map = getTableBitMap(left_node);
+        int left_table_id = whichBit(bit_map);
+
+        int is_right_constant = getTableBitMap(right_node) == 0;
+
+        if (left_table_id >= 0 && is_right_constant) {
+            // Success: Expression on a single table!
+
+            #if DEBUG
+            if (debug_verbosity >= 2) {
+                fprintf(stderr, "[OPTIMISE] WHERE to ON (Predicate #%d)\n", i);
+            }
+            #endif
+
+            struct Node *join_node = &query->tables[left_table_id].join;
+            if (join_node->function == OPERATOR_ALWAYS) {
+                // We can just overwrite
+                copyNodeTree(join_node, predicate);
+            }
+            else if (join_node->function == OPERATOR_AND) {
+                // Add a child and clone
+                struct Node *child = addChildNode(join_node);
+                copyNodeTree(child, predicate);
+            }
+            else {
+                // Need to convert node
+                cloneNodeIntoChild(join_node);
+                join_node->function = OPERATOR_AND;
+                // Add another child and clone
+                struct Node *next_child = addChildNode(join_node);
+                copyNodeTree(next_child, predicate);
+            }
+
+            // Predicate can now be wiped out
+            predicate->function = OPERATOR_ALWAYS;
+        }
+    }
 }

@@ -14,3 +14,5 @@ int whitespaceCollapse (char * output, const char *source, int length);
 void strcpy_overlap (char *dest, const char *src);
 
 void trimTrailingWhitespace (char *string);
+
+int whichBit (int bit_map);
