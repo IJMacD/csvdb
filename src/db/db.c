@@ -69,6 +69,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getFieldName = &sequence_getFieldName,
         .getRecordCount = &sequence_getRecordCount,
         .getRecordValue = &sequence_getRecordValue,
+        .fullTableAccess = &sequence_fullTableAccess,
     },
     // 6 = VFS_SAMPLE
     {

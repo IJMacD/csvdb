@@ -29,3 +29,10 @@ enum IndexSearchType sequence_findIndex(
     char **resolved
 );
 
+int sequence_fullTableAccess (
+    struct DB *db,
+    RowListIndex list_id,
+    struct Node *predicates,
+    int predicate_count,
+    int limit_value
+);

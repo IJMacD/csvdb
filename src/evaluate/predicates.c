@@ -188,10 +188,14 @@ void normalisePredicate (struct Node *predicate) {
     struct Node *left = &predicate->children[0];
     struct Node *right = &predicate->children[1];
 
-    if (left->field.index == FIELD_CONSTANT && right->field.index >= 0) {
+    if (isConstantNode(left) && !isConstantNode(right)) {
         flipPredicate(predicate);
-    } else if (left->function != FUNC_PK && right->function == FUNC_PK) {
+        return;
+    }
+
+    if (left->function != FUNC_PK && right->function == FUNC_PK) {
         flipPredicate(predicate);
+        return;
     }
 }
 

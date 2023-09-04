@@ -31,7 +31,7 @@ enum IndexSearchType calendar_findIndex(
 
 int calendar_fullTableAccess (
     struct DB *db,
-    int row_list,
+    RowListIndex list_id,
     struct Node *nodes,
     int node_count,
     int limit_value

@@ -10,7 +10,8 @@
 
 #define dt(stop,start)  (stop.tv_sec - start.tv_sec) * 1000000 + stop.tv_usec - start.tv_usec
 
-#define MIN(a,b)    ((a<b)?(a):(b))
+#define MIN(a,b)    ((a<=b)?(a):(b))
+#define MAX(a,b)    ((a>=b)?(a):(b))
 
 #define VFS_COUNT   10
 

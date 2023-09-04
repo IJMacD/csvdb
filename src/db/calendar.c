@@ -100,7 +100,7 @@ int calendar_openDB (
     }
 
     db->vfs = VFS_CALENDAR;
-    db->_record_count = 10000000;
+    db->_record_count = 1e7;
     db->line_indices = NULL;
     db->field_count = sizeof(field_names) / sizeof(field_names[0]);
     db->data = NULL;
@@ -436,10 +436,12 @@ enum IndexSearchType calendar_findIndex(
 
 /**
  * Guaranteed that all predicates are on this table
+ *
+ * @return int number of matched rows
  */
 int calendar_fullTableAccess (
     struct DB *db,
-    int row_list,
+    RowListIndex list_id,
     struct Node *predicates,
     int predicate_count,
     int limit_value
@@ -489,7 +491,7 @@ int calendar_fullTableAccess (
 
         if (matching) {
             // Add to result set
-            appendRowID(getRowList(row_list), julian);
+            appendRowID(getRowList(list_id), julian);
             count++;
         }
 
