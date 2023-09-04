@@ -83,6 +83,13 @@ int sequence_fullTableAccess (
     int predicate_count,
     int limit_value
 ) {
+    // We might get a single AND node rather than a list
+    if (predicate_count == 1 && predicates[0].function == OPERATOR_AND) {
+        // Replace node list with our child list
+        predicates = predicates[0].children;
+        predicate_count = predicates[0].child_count;
+    }
+
     // Inclusive
     int start = 0;
     // Exclusive
@@ -90,6 +97,8 @@ int sequence_fullTableAccess (
 
     int step = 1;
     int step_offset = 0;
+
+    int have_unprocessed_predicates = 0;
 
     // Establish limits from predicates
     for (int i = 0; i < predicate_count; i++) {
@@ -161,9 +170,15 @@ int sequence_fullTableAccess (
                 end = 0;
             }
         }
+        else {
+            have_unprocessed_predicates = 1;
+        }
     }
 
     int start_offset = (step - (start % step) + step_offset) % step;
+
+    struct Table table;
+    table.db = db;
 
     struct RowList *row_list = getRowList(list_id);
     int start_row_count = row_list->row_count;
@@ -172,7 +187,24 @@ int sequence_fullTableAccess (
             break;
         }
 
-        appendRowID(row_list, i);
+        if (have_unprocessed_predicates) {
+            // If we have unprocessed predicates then this is necessary
+            int matching = evaluateOperatorNodeListAND(
+                &table,
+                ROWLIST_ROWID,
+                i,
+                predicates,
+                predicate_count
+            );
+
+            if (matching) {
+                // Add to result set
+                appendRowID(row_list, i);
+            }
+        }
+        else {
+            appendRowID(row_list, i);
+        }
     }
 
     return row_list->row_count - start_row_count;

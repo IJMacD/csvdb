@@ -71,7 +71,7 @@ static char *field_names[] = {
 
 const int month_lengths[] = {31,28,31,30,31,30,31,31,30,31,30,31};
 
-static void getJulianRange (
+static int getJulianRange (
     struct Node *predicates,
     int predicate_count,
     int *julian_start,
@@ -449,7 +449,8 @@ int calendar_fullTableAccess (
     int julian = -1, max_julian = -1;
 
     // Try to get range from predicates
-    getJulianRange(predicates, predicate_count, &julian, &max_julian);
+    int have_unprocessed_predicates =
+        getJulianRange(predicates, predicate_count, &julian, &max_julian);
 
     // Default to min and max
     // There could still be a predicate which limits the output further - we
@@ -479,7 +480,7 @@ int calendar_fullTableAccess (
         // printf("Julian: %d\n", julian);
 
         // Perform filtering if necessary
-        if (predicate_count > 0) {
+        if (have_unprocessed_predicates) {
             matching = evaluateOperatorNodeListAND(
                 &table,
                 ROWLIST_ROWID,
@@ -504,12 +505,17 @@ int calendar_fullTableAccess (
     return count;
 }
 
-static void getJulianRange (
+/**
+ * @returns 1 if there are unprocessed predicates, 0 if all predicates are fully
+ * satisfied
+ */
+static int getJulianRange (
     struct Node *predicates,
     int predicate_count,
     int *julian_start,
     int *julian_end
 ) {
+    int have_unprocessed_predicates = 0;
 
     for (int i = 0; i < predicate_count; i++) {
         struct Node *predicate = &predicates[i];
@@ -556,6 +562,13 @@ static void getJulianRange (
                     *julian_end = j_end;
                 }
             }
+
+            else {
+                have_unprocessed_predicates = 1;
+            }
+        }
+        else {
+            have_unprocessed_predicates = 1;
         }
 
         #ifdef DEBUG
@@ -564,6 +577,8 @@ static void getJulianRange (
         }
         #endif
     }
+
+    return have_unprocessed_predicates;
 }
 
 static void getSingleJulianRange (
