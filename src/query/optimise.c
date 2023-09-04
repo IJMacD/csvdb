@@ -303,7 +303,7 @@ void optimiseWhereToOn (struct Query *query) {
 
         int is_right_constant = getTableBitMap(right_node) == 0;
 
-        if (left_table_id >= 0 && is_right_constant) {
+        if (left_table_id > 0 && is_right_constant) {
             // Success: Expression on a single table!
 
             #if DEBUG
