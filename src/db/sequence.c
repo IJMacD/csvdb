@@ -87,8 +87,9 @@ int sequence_fullTableAccess (
     int start = 0;
     // Exclusive
     int end = db->_record_count;
-    // TODO: parse mod predicate
+
     int step = 1;
+    int step_offset = 0;
 
     // Establish limits from predicates
     for (int i = 0; i < predicate_count; i++) {
@@ -141,11 +142,32 @@ int sequence_fullTableAccess (
                 start = MAX(start, value);
             }
         }
+        else if (node_left->function == FUNC_MOD) {
+            struct Node *node_left_left = &node_left->children[0];
+            struct Node *node_left_right = &node_left->children[1];
+
+            // This shouldn't be anything else but check just in case
+            if (node_left_left->field.index != 0) {
+                continue;
+            }
+
+            step = atoi(node_left_right->field.text);
+
+            step_offset = atoi(field_right->text);
+
+            if (step_offset >= step) {
+                // Impossible
+                start = 0;
+                end = 0;
+            }
+        }
     }
+
+    int start_offset = (step - (start % step) + step_offset) % step;
 
     struct RowList *row_list = getRowList(list_id);
     int start_row_count = row_list->row_count;
-    for (int i = start; i < end; i += step) {
+    for (int i = start + start_offset; i < end; i += step) {
         if (limit_value >= 0 && row_list->row_count >= limit_value) {
             break;
         }
