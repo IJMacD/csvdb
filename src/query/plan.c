@@ -1013,31 +1013,30 @@ static int optimiseNodes (
             struct Node *left = &predicates[i].children[0];
 
             // Any predicate on the first table is fine
-            // Comment: Only checking left?
-            if (left->field.table_id == 0) {
+            int bit_map = getTableBitMap(left);
+
+            if (bit_map == 1) {
+                // Must be exactly only on first table
                 chosen_predicate_index = i;
                 break;
             }
+
+            // Only checking left because predicates should have been
+            // normalised, right?
+            /// TODO: check they have actually been normalised
         }
     }
 
     // Swap predicates so first predicate is on first table
     if (chosen_predicate_index > 0) {
-        struct Node tmp;
-        memcpy(&tmp, &predicates[0], sizeof(tmp));
-        memcpy(
-            &predicates[0],
-            &predicates[chosen_predicate_index],
-            sizeof(tmp)
-        );
-        memcpy(&predicates[chosen_predicate_index], &tmp, sizeof(tmp));
+        swapNodes(&predicates[0], &predicates[chosen_predicate_index]);
     }
 
     // We found at least one predicate on the first table now just count how
     // many are already in place
     if (chosen_predicate_index >= 0) {
         int i = 1;
-        while (i < count && predicates[i].children[0].field.table_id == 0) {
+        while (i < count && getTableBitMap(&predicates[i]) == 1) {
             i++;
         }
         return i;

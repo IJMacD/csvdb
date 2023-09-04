@@ -154,3 +154,13 @@ int getTableBitMap (struct Node *node) {
 
     return map;
 }
+
+/**
+ * Swap node from one pointer to another and vice versa
+ */
+void swapNodes (struct Node *nodeA, struct Node *nodeB) {
+    // Copy to stack
+    struct Node tmp = *nodeA;
+    memcpy(nodeA, nodeB, sizeof(tmp));
+    memcpy(nodeB, &tmp, sizeof(tmp));
+}

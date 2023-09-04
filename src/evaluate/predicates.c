@@ -199,6 +199,10 @@ void normalisePredicate (struct Node *predicate) {
     }
 }
 
+/**
+ * Flips left and right operands of a predicate, adjusting operator as necessary
+ * @returns 0 for success, -1 for error
+ */
 int flipPredicate (struct Node *predicate) {
     struct Node *left = &predicate->children[0];
     struct Node *right = &predicate->children[1];

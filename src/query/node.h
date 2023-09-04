@@ -11,3 +11,5 @@ void freeNode (struct Node *node);
 struct Node * cloneNodeIntoChild (struct Node *node);
 
 int getTableBitMap (struct Node *node);
+
+void swapNodes (struct Node *nodeA, struct Node *nodeB);
