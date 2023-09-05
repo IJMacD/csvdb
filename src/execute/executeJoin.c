@@ -7,6 +7,7 @@
 #include "../db/db.h"
 #include "../evaluate/evaluate.h"
 #include "../db/indices.h"
+#include "../functions/util.h"
 #include "../debug.h"
 
 static void replaceTableID (struct Node *node, int table_id);
@@ -228,39 +229,21 @@ int executeLoopJoin (
         struct Node p;
         copyNodeTree(&p, &step->nodes[0]);
 
-        struct Node *right_node = &p.children[1];
-        struct Field *right_field =
-            (right_node->function == FUNC_UNITY || right_node->child_count == -1)
-            ? &right_node->field : &right_node->children[0].field;
+        // Fill in values as constant from outer tables (tables with lower
+        // table_id)
+        evaluateNodeTreePartial(tables, list_id, i, &p, table_id - 1);
 
-        // Fill in right value as constant from outer tables
-        if (right_field->table_id < table_id) {
-            // replace right node with constant value from outer table
-            evaluateNode(
-                tables,
-                list_id,
-                i,
-                right_node,
-                right_node->field.text,
-                MAX_FIELD_LENGTH
-            );
-            right_node->field.index = FIELD_CONSTANT;
-            right_node->function = FUNC_UNITY;
+        int bit_id = whichBit(getTableBitMap(&p));
 
-            // We're only passing one table to fullTableScan so predicate will
-            // be on first table
-            struct Node *left_node = &p.children[0];
-            struct Field *left_field =
-                (left_node->function == FUNC_UNITY || left_node->child_count == -1)
-                ? &left_node->field : &left_node->children[0].field;
-
-            left_field->table_id = 0;
-        }
-        else {
+        if (bit_id != table_id) {
             fprintf(stderr, "Limitation of RowList: tables must be joined in "
                 "order specified.\n");
             exit(-1);
         }
+
+        // We're only passing one table to fullTableScan so predicate will
+        // be on first table (we've just check this is the case)
+        replaceTableID(&p, 0);
 
         getRowList(tmp_list)->row_count = 0;
 

@@ -5,6 +5,7 @@
 #include "evaluate.h"
 #include "function.h"
 #include "predicates.h"
+#include "../query/node.h"
 #include "../query/result.h"
 #include "../db/db.h"
 #include "../functions/date.h"
@@ -359,4 +360,50 @@ int isConstantNode (struct Node *node) {
     }
 
     return 1;
+}
+
+/**
+ * Evaluates a node partially.
+ *
+ * Partially evaluates a node up to a certain table_id and leaves other
+ * sub-nodes unevaluated.
+ *
+ * Writes the computed result back into the node as appropriate
+ */
+void evaluateNodeTreePartial(
+    struct Table *tables,
+    int list_id,
+    int result_index,
+    struct Node *node,
+    int max_table_id
+) {
+    int bit_map_limit = 1 << (max_table_id + 1);
+
+    if (getTableBitMap(node) < bit_map_limit) {
+        evaluateNode(
+            tables,
+            list_id,
+            result_index,
+            node,
+            node->field.text,
+            MAX_FIELD_LENGTH
+        );
+
+        node->function = FUNC_UNITY;
+        node->field.index = FIELD_CONSTANT;
+
+        return;
+    }
+
+    for (int i = 0; i < node->child_count; i++) {
+        struct Node *child = &node->children[i];
+
+        evaluateNodeTreePartial(
+            tables,
+            list_id,
+            result_index,
+            child,
+            max_table_id
+        );
+    }
 }

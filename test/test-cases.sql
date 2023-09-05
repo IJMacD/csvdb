@@ -55,6 +55,8 @@ FROM suits SELECT LISTAGG(name);
 FROM suits INNER JOIN ranks ON LENGTH(ranks.name) = LENGTH(suits.name);
 FROM suits LEFT JOIN ranks ON LENGTH(ranks.name) = LENGTH(suits.name);
 FROM suits JOIN ranks USING LENGTH(name);
+-- Test join predicates
+FROM SEQUENCE AS s1 LEFT JOIN SEQUENCE AS s2 ON s1.value - 2 = s2.value AND s2.value < 2 LIMIT 5
 -- Test FROM column aliasing;
 FROM suits AS s (n, s);
 -- Test multi-column ordering

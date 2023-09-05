@@ -27,3 +27,11 @@ int evaluateNodeList (
 int evaluateConstantField (char * output, struct Field *field);
 
 int isConstantNode (struct Node *node);
+
+void evaluateNodeTreePartial(
+    struct Table *tables,
+    int list_id,
+    int result_index,
+    struct Node *node,
+    int max_table_id
+);
