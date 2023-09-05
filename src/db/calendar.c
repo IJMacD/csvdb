@@ -405,8 +405,8 @@ enum IndexSearchType calendar_findIndex(
 
         // Write the resolved name if caller wants it
         if (resolved != NULL) {
-            *resolved = malloc(strlen("julian")+1);
-            strcpy(*resolved, "julian");
+            *resolved = malloc(strlen("CALENDAR__julian")+1);
+            strcpy(*resolved, "CALENDAR__julian");
         }
 
         return INDEX_PRIMARY;
@@ -424,8 +424,8 @@ enum IndexSearchType calendar_findIndex(
 
         // Write the resolved name if caller wants it
         if (resolved != NULL) {
-            *resolved = malloc(strlen("date")+1);
-            strcpy(*resolved, "date");
+            *resolved = malloc(strlen("CALENDAR__date")+1);
+            strcpy(*resolved, "CALENDAR__date");
         }
 
         return INDEX_UNIQUE;

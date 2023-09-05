@@ -3,11 +3,15 @@
 #include <stdlib.h>
 
 #include "../structs.h"
+#include "./node.h"
 #include "../db/db.h"
+#include "../functions/util.h"
 
 #define COVERING_INDEX_SUPPORT 0
 
-long log_10 (long value);
+static long log_10 (long value);
+
+static void setTableName (char * dest, struct Table *table);
 
 int explain_select_query (
     struct Table *tables,
@@ -110,8 +114,7 @@ int explain_select_query (
                 rows = (s.limit < rows) ? s.limit : rows;
             }
 
-            char *name = basename(tables[join_count].name);
-            strcpy(table, name);
+            setTableName(table, &tables[join_count]);
         }
         else if (s.type == PLAN_TABLE_SCAN){
             operation = "TABLE SCAN";
@@ -130,8 +133,7 @@ int explain_select_query (
                 rows = (s.limit < rows) ? s.limit : rows;
             }
 
-            char *name = basename(tables[join_count].name);
-            strcpy(table, name);
+            setTableName(table, &tables[join_count]);
         }
         else if (s.type == PLAN_TABLE_ACCESS_ROWID) {
             operation = "ACCESS BY ROWID";
@@ -153,10 +155,14 @@ int explain_select_query (
             }
 
             if (s.node_count > 0) {
-                int table_id = s.nodes[0].field.table_id;
+                int table_id = whichBit(getTableBitMap(&s.nodes[0]));
 
-                strncpy(table, tables[table_id].alias, MAX_FIELD_LENGTH);
-                table[MAX_FIELD_LENGTH - 1] = '\0';
+                if (table_id < 0) {
+                    strcpy(table, "{multiple}");
+                }
+                else {
+                    setTableName(table, &tables[table_id]);
+                }
             }
         }
         else if (s.type == PLAN_PK) {
@@ -364,8 +370,7 @@ int explain_select_query (
 
             struct Table *t = &tables[join_count];
 
-            strncpy(table, t->alias, MAX_FIELD_LENGTH);
-            table[MAX_FIELD_LENGTH - 1] = '\0';
+            setTableName(table, t);
 
             int record_count = getRecordCount(t->db);
             rows *= record_count;
@@ -380,8 +385,7 @@ int explain_select_query (
 
             struct Table *t = &tables[join_count];
 
-            strncpy(table, t->alias, MAX_FIELD_LENGTH);
-            table[MAX_FIELD_LENGTH - 1] = '\0';
+            setTableName(table, t);
 
             int record_count = getRecordCount(t->db);
 
@@ -411,8 +415,7 @@ int explain_select_query (
 
             struct Table *t = &tables[join_count];
 
-            strncpy(table, t->alias, MAX_FIELD_LENGTH);
-            table[MAX_FIELD_LENGTH - 1] = '\0';
+            setTableName(table, t);
 
             int record_count = getRecordCount(t->db);
 
@@ -442,8 +445,7 @@ int explain_select_query (
 
             struct Table *t = &tables[join_count];
 
-            strncpy(table, t->alias, MAX_FIELD_LENGTH);
-            table[MAX_FIELD_LENGTH - 1] = '\0';
+            setTableName(table, t);
 
             if (cost < rows) {
                 cost = rows;
@@ -456,8 +458,7 @@ int explain_select_query (
 
             struct Table *t = &tables[join_count];
 
-            strncpy(table, t->alias, MAX_FIELD_LENGTH);
-            table[MAX_FIELD_LENGTH - 1] = '\0';
+            setTableName(table, t);
 
             if (cost < rows) {
                 cost = rows;
@@ -491,11 +492,22 @@ int explain_select_query (
     return 0;
 }
 
-long log_10 (long value) {
+static long log_10 (long value) {
     long i = 0;
     while (value > 0) {
         value /= 10;
         i++;
     }
     return i;
+}
+
+static void setTableName(char *dest, struct Table *table) {
+    char *name = basename(table->name);
+
+    if (strcmp(name, table->alias) == 0) {
+        strcpy(dest, name);
+    }
+    else {
+        sprintf(dest, "%s (%s)", name, table->alias);
+    }
 }

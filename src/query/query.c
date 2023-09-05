@@ -793,6 +793,14 @@ static int populate_tables (struct Query *q) {
                 return -1;
             }
 
+            /// TODO: do we want to change table->name to "SUBQUERY" or keep a
+            /// record of what the query was?
+            // Counter point: subquery can have commas which messes with EXPLAIN
+            // output.
+            strcpy(table->name, "SUBQUERY");
+            // Counter counter point: what if we want to re-evaluate later? e.g.
+            // implement correlated subqueries
+
             found = 1;
         }
 

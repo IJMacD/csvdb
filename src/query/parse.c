@@ -80,6 +80,8 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
         table->db = db;
 
+        strcpy(table->name, "VALUES");
+
         strcpy(table->alias, "values");
 
         return 0;
@@ -316,6 +318,8 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                         // This DB needs to be free'd in populateTables()
                         table->db = db;
+
+                        strcpy(table->name, "VALUES");
 
                         index = end_ptr - query;
                     }
