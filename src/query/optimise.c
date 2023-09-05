@@ -318,7 +318,7 @@ void optimiseWhereToOn (struct Query *query) {
                 copyNodeTree(join_node, predicate);
             }
             else if (join_node->function == OPERATOR_AND) {
-                // Add a child and clone
+                // Add a child and copy
                 struct Node *child = addChildNode(join_node);
                 copyNodeTree(child, predicate);
             }
@@ -326,7 +326,7 @@ void optimiseWhereToOn (struct Query *query) {
                 // Need to convert node
                 cloneNodeIntoChild(join_node);
                 join_node->function = OPERATOR_AND;
-                // Add another child and clone
+                // Add another child and copy
                 struct Node *next_child = addChildNode(join_node);
                 copyNodeTree(next_child, predicate);
             }

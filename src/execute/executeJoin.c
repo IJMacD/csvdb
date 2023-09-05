@@ -9,6 +9,8 @@
 #include "../db/indices.h"
 #include "../debug.h"
 
+static void replaceTableID (struct Node *node, int table_id);
+
 /**
  * @brief Every row of left table is unconditionally joined to every
  * row of right table.
@@ -82,7 +84,7 @@ int executeConstantJoin (
 
     RowListIndex list_id = popRowList(result_set);
 
-    // Tables must be joined in same order
+    // Tables must be joined in same order as specified
     int next_table_id = getRowList(list_id)->join_count;
 
     struct DB *next_db = tables[next_table_id].db;
@@ -94,6 +96,15 @@ int executeConstantJoin (
 
     int record_count = getRecordCount(next_db);
     RowListIndex tmp_list = createRowList(1, record_count);
+
+    // We need to replace all references to table_id with table_id = 0 since
+    // we're passing to fullTableAccess which might execute the node an we're
+    // only passing a single table. This should be safe since constant join
+    // should only have exactly one table.
+    for (int i = 0; i < step->node_count; i++) {
+        struct Node *node = &step->nodes[i];
+        replaceTableID(node, 0);
+    }
 
     // This is a constant join so we'll just populate the table once
     // Hopefully it won't be the whole table since we have a predicate
@@ -577,4 +588,13 @@ int executeIndexJoin (
     pushRowList(result_set, new_list);
 
     return 0;
+}
+
+static void replaceTableID (struct Node *node, int table_id) {
+    for (int i = 0; i < node->child_count; i++) {
+        struct Node *child = &node->children[0];
+        replaceTableID(child, table_id);
+    }
+
+    node->field.table_id = table_id;
 }
