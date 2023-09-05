@@ -52,9 +52,27 @@ int parseDateTime(const char *input, struct DateTime *output) {
         output->month = local->tm_mon + 1;
         output->day = local->tm_mday;
 
-        output->hour = 0;
-        output->minute = 0;
-        output->second = 0;
+        return 1;
+    }
+    if (strcmp(input, "CURRENT_TIME") == 0) {
+        time_t t = time(NULL);
+        struct tm *local = localtime(&t);
+
+        output->hour = local->tm_hour;
+        output->minute = local->tm_min;
+        output->second = local->tm_sec;
+
+        return 1;
+    }
+
+    if (checkFormat(input, "nnnn-nn-nnTnn:nn:nn")) {
+        output->year = atoi(input);
+        output->month = atoi(input + 5);
+        output->day = atoi(input + 8);
+
+        output->hour = atoi(input + 11);
+        output->minute = atoi(input + 14);
+        output->second = atoi(input + 17);
 
         return 1;
     }

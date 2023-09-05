@@ -259,6 +259,21 @@ int parseSimpleNode (
             node->field.index = FIELD_CONSTANT;
             node->field.table_id = -1;
         }
+        else if (strcmp(value, "NOW") == 0) {
+            node->function = FUNC_DATE_NOW;
+            node->field.index = FIELD_CONSTANT;
+            node->field.table_id = -1;
+        }
+        else if (strcmp(value, "DATE") == 0) {
+            node->function = FUNC_DATE_DATE;
+            node->field.index = FIELD_CONSTANT;
+            node->field.table_id = -1;
+        }
+        else if (strcmp(value, "TIME") == 0) {
+            node->function = FUNC_DATE_TIME;
+            node->field.index = FIELD_CONSTANT;
+            node->field.table_id = -1;
+        }
         else if (strcmp(value, "COUNT") == 0) {
             node->function = FUNC_AGG_COUNT;
             flags |= FLAG_GROUP;

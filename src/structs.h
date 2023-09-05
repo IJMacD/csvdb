@@ -125,6 +125,9 @@ enum Function {
     FUNC_DATE_DIFF =                0x63,
 
     FUNC_DATE_TODAY =               0x70,
+    FUNC_DATE_NOW =                 0x71,
+    FUNC_DATE_DATE =                0x72,
+    FUNC_DATE_TIME =                0x73,
 
     // Family 100x (0x80) (Undefined)
     FUNC_FAM_UNDEF_80 =             0x80,

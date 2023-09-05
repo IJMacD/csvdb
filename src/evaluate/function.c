@@ -38,6 +38,19 @@ int evaluateFunction(
         return sprintf(output, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
     }
 
+    // NOW takes 0 parameters
+    if (function == FUNC_DATE_NOW) {
+        struct DateTime dt = {0};
+        parseDateTime("CURRENT_DATE", &dt);
+        parseDateTime("CURRENT_TIME", &dt);
+        return sprintf(
+            output,
+            "%04d-%02d-%02dT%02d:%02d:%02d",
+            dt.year, dt.month, dt.day,
+            dt.hour, dt.minute, dt.second
+        );
+    }
+
     // All other functions take at least 1 parameter. If the field is NULL then
     // the whole function evaluates to NULL.
     if (values[0][0] == 0) {
@@ -355,6 +368,26 @@ int evaluateFunction(
         int julian2 = datetimeGetJulian(&dt2);
 
         return sprintf(output, "%d", julian1 - julian2);
+    }
+    else if (function == FUNC_DATE_DATE) {
+        struct DateTime dt;
+        if (!parseDateTime(values[0], &dt)) {
+            return 0;
+        }
+
+        return sprintDate(output, &dt);
+    }
+    else if (function == FUNC_DATE_TIME) {
+        struct DateTime dt;
+        if (!parseDateTime(values[0], &dt)) {
+            return 0;
+        }
+
+        return sprintf(
+            output,
+            "%02d:%02d:%02d",
+            dt.hour, dt.minute, dt.second
+        );
     }
     else {
         return -1;
