@@ -51,6 +51,17 @@ int evaluateFunction(
         );
     }
 
+    // CLOCK takes 0 parameters
+    if (function == FUNC_DATE_CLOCK) {
+        struct DateTime dt = {0};
+        parseDateTime("CURRENT_TIME", &dt);
+        return sprintf(
+            output,
+            "%02d:%02d:%02d",
+            dt.hour, dt.minute, dt.second
+        );
+    }
+
     // All other functions take at least 1 parameter. If the field is NULL then
     // the whole function evaluates to NULL.
     if (values[0][0] == 0) {

@@ -572,7 +572,7 @@ static int getJulianRange (
         }
 
         #ifdef DEBUG
-        if (debug_verbosity >= 2) {
+        if (debug_verbosity >= 3) {
             fprintf(stderr, "[CALENDAR] Predicate %d julian start: %d end: %d\n", i, *julian_start, *julian_end);
         }
         #endif

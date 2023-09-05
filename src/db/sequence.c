@@ -182,7 +182,7 @@ int sequence_fullTableAccess (
     int start_offset = (step - (start % step) + step_offset) % step;
 
     #ifdef DEBUG
-    if (debug_verbosity >= 2) {
+    if (debug_verbosity >= 3) {
         fprintf(stderr, "[SEQUENCE] start: %d, end: %d, step: %d\n", start, end, step);
     }
     #endif

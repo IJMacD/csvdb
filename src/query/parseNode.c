@@ -274,6 +274,11 @@ int parseSimpleNode (
             node->field.index = FIELD_CONSTANT;
             node->field.table_id = -1;
         }
+        else if (strcmp(value, "CLOCK") == 0) {
+            node->function = FUNC_DATE_CLOCK;
+            node->field.index = FIELD_CONSTANT;
+            node->field.table_id = -1;
+        }
         else if (strcmp(value, "COUNT") == 0) {
             node->function = FUNC_AGG_COUNT;
             flags |= FLAG_GROUP;

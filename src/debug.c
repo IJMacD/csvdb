@@ -33,7 +33,7 @@ const char *FUNC_NAMES[] = {
     "","DATE_ADD","DATE_SUB","DATE_DIFF","","","","",
     "","","","","","","","",
     // 0x70
-    "TODAY","NOW","DATE","TIME","","","","",
+    "TODAY","NOW","DATE","TIME","CLOCK","","","",
     "","","","","","","","",
     // 0x80
     "","","","","","","","",
@@ -76,7 +76,7 @@ void debugRowList (struct RowList * list, int verbosity) {
         list->row_count
     );
 
-    if (verbosity > 3) {
+    if (verbosity >= 5) {
         for (int i = 0; i < list->row_count; i++) {
             fprintf(stderr, "Index %3d, Rowids: (", i);
             for (int j = 0; j < list->join_count; j++) {

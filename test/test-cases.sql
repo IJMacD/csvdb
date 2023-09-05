@@ -104,6 +104,8 @@ SELECT (5 + 3) * 3, 5 * (3 + 3), (5 + 3 * 3), (5 * 3 + 3), ((5 + 3) * 3), (5 + (
 -- Operator Expressions
 FROM CALENDAR WHERE date BETWEEN CURRENT_DATE AND CURRENT_DATE + 3 SELECT ordinalDate;
 FROM CALENDAR WHERE date >= CURRENT_DATE - 2 SELECT julian, date, date = CURRENT_DATE LIMIT 5;
+-- Dates
+SELECT TODAY(), NOW(), DATE(NOW()), TIME(NOW()), CLOCK()
 -- Date arithmetic
 SELECT '2023-07-25' + 5, '2023-07-25' - 5, '2023-08-25' - '2023-07-25';
 FROM test SELECT birth_date, birth_date + 5, birth_date - 5, TODAY() - birth_date FETCH FIRST 5 ROWS ONLY;
