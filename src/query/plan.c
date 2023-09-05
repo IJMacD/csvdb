@@ -893,49 +893,47 @@ static void addGroupStepIfRequired (struct Plan *plan, struct Query *q) {
 }
 
 static void addLimitStepIfRequired (struct Plan *plan, struct Query *query) {
-    /********************
-     * OFFSET/FETCH FIRST
-     ********************/
 
     if (query->limit_value >= 0) {
         int limit = query->offset_value + query->limit_value;
 
         if (
+            /// TODO: better tracking of predicates
+            // maybe they don't matter here. They might have been taken care of
+            // in joins etc.
             query->predicate_count == 0
+
             && query->order_count == 0
             && !(query->flags & FLAG_GROUP)
         ) {
-            // Check if all LEFT UNIQUE joins
-            int all_left_unique = 1;
+
+            // First thing to check is if we have all LEFT joins.
+            // If we have all left joins then we will never need more than LIMIT
+            // rows from the first table.
+            int all_left = 1;
+
+            int table_id = 1;
 
             for (int i = 1; i < plan->step_count; i++) {
                 if (
-                    plan->steps[i].type == PLAN_CONSTANT_JOIN
-                    || plan->steps[i].type == PLAN_LOOP_JOIN
-                    || plan->steps[i].type == PLAN_CROSS_JOIN
-                    || plan->steps[i].type == PLAN_INDEX_JOIN
-                ) {
-                    all_left_unique = 0;
-                    break;
-                }
-
-                if (plan->steps[i].type == PLAN_UNIQUE_JOIN) {
-                    // Defined to be this table join ID on left
-                    struct Field *join_field
-                        = (struct Field *)&plan->steps[i].nodes[0];
-
-                    int table_id = join_field->table_id;
+                    plan->steps[i].type == PLAN_CONSTANT_JOIN ||
+                    plan->steps[i].type == PLAN_LOOP_JOIN ||
+                    plan->steps[i].type == PLAN_CROSS_JOIN ||
+                    plan->steps[i].type == PLAN_INDEX_JOIN ||
+                    plan->steps[i].type == PLAN_UNIQUE_JOIN) {
 
                     if (query->tables[table_id].join_type != JOIN_LEFT) {
-                        all_left_unique = 0;
+                        all_left = 0;
                         break;
                     }
+
+                    table_id++;
                 }
             }
 
-            // If we have no joins, or only unique left joins; then we can
+            // If we have no joins, or only left joins; then we can
             // apply the limit to the first "{table|index} {access|scan}""
-            if (all_left_unique) {
+            if (all_left) {
                 plan->steps[0].limit = limit;
                 return;
             }
