@@ -93,17 +93,7 @@ int makePlan (struct Query *q, struct Plan *plan) {
         return plan->step_count;
     }
 
-    // Do we have any relevant predicates?
-    int predicates_all_always = 1;
-    for (int i = 0; i < q->predicate_count; i++) {
-        if (q->predicate_nodes[i].function != OPERATOR_ALWAYS) {
-            predicates_all_always = 0;
-            break;
-        }
-    }
-
-    int have_predicates = predicates_all_always == 0;
-
+    int have_predicates = havePredicates(q);
     int have_group_by = q->group_count > 0;
     int have_grouping = have_group_by || (q->flags & FLAG_GROUP);
 

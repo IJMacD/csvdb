@@ -236,3 +236,20 @@ int flipPredicate (struct Node *predicate) {
 
     return 0;
 }
+
+/**
+ * Checks if there are any predicates on this query. Ignores ALWAYS operators
+ * @returns 1 if there are predicates, 0 if not
+ */
+int havePredicates (struct Query *query) {
+    // Do we have any relevant predicates?
+    int predicates_all_always = 1;
+    for (int i = 0; i < query->predicate_count; i++) {
+        if (query->predicate_nodes[i].function != OPERATOR_ALWAYS) {
+            predicates_all_always = 0;
+            break;
+        }
+    }
+
+    return predicates_all_always == 0;
+}

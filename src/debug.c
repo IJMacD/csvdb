@@ -5,6 +5,7 @@
 
 #include "structs.h"
 #include "query/result.h"
+#include "evaluate/predicates.h"
 #include "debug.h"
 
 static void debugNodeInner (struct Node * node, int depth);
@@ -314,7 +315,7 @@ void debugAST (FILE *output, struct Query *query) {
         have_prev_section = 1;
     }
 
-    if (query->predicate_count > 0) {
+    if (havePredicates(query)) {
         if (have_prev_section) {
             fprintf(output, ",");
         }
