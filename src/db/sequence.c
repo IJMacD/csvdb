@@ -5,7 +5,9 @@
 
 #include "../structs.h"
 #include "../query/result.h"
+#include "../evaluate/evaluate.h"
 #include "../evaluate/predicates.h"
+#include "../debug.h"
 
 int sequence_openDB (
     struct DB *db,
@@ -91,6 +93,7 @@ int sequence_fullTableAccess (
     }
 
     // Inclusive
+    // Rest of system can't cope with negative RowIDs
     int start = 0;
     // Exclusive
     int end = db->_record_count;
@@ -112,16 +115,17 @@ int sequence_fullTableAccess (
         enum Function op = predicate->function;
 
         struct Node *node_left = &predicate->children[0];
+        struct Node *node_right = &predicate->children[1];
 
         struct Field *field_left = (struct Field *)node_left;
-        struct Field *field_right = (struct Field *)&predicate->children[1];
+        struct Field *field_right = (struct Field *)node_right;
 
         // Prep: We need field on the left and constant on the right, swap if
         // necessary
         normalisePredicate(predicate);
 
-        // We're only looking for constants
-        if (field_right->index != FIELD_CONSTANT) {
+        // We're only looking for constants (which are direct node constants)
+        if (node_right->function != FUNC_UNITY) {
             continue;
         }
 
@@ -135,8 +139,8 @@ int sequence_fullTableAccess (
             int value = atoi(field_right->text);
 
             if (op == OPERATOR_EQ) {
-                start = value;
-                end = value + 1;
+                start = MAX(start, value);
+                end = MIN(end, value + 1);
             }
             else if (op == OPERATOR_LT) {
                 end = MIN(end, value);
@@ -176,6 +180,12 @@ int sequence_fullTableAccess (
     }
 
     int start_offset = (step - (start % step) + step_offset) % step;
+
+    #ifdef DEBUG
+    if (debug_verbosity >= 2) {
+        fprintf(stderr, "[SEQUENCE] start: %d, end: %d, step: %d\n", start, end, step);
+    }
+    #endif
 
     struct Table table;
     table.db = db;
