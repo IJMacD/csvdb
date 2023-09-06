@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../structs.h"
+#include "./query.h"
 #include "./node.h"
 #include "../evaluate/evaluate.h"
 #include "../evaluate/predicates.h"
@@ -334,5 +335,44 @@ void optimiseWhereToOn (struct Query *query) {
             // Predicate can now be wiped out
             predicate->function = OPERATOR_ALWAYS;
         }
+    }
+}
+
+/**
+ * Any predicates in the join node which only depend upon earlier tables can be
+ * moved to the WHERE clause.
+ * (Might get re-moved into an earlier join node by optimiseWhereToOn
+ * afterwards.)
+ */
+void optimiseOnToWhere (
+    int table_id,
+    struct Node *joinNode,
+    struct Query *query
+) {
+    if (joinNode->function == OPERATOR_AND) {
+        for (int i = 0; i < joinNode->child_count; i++) {
+            struct Node *child = &joinNode->children[i];
+            optimiseOnToWhere(table_id, child, query);
+        }
+
+        return;
+    }
+
+    int table_bit_map = getTableBitMap(joinNode);
+    if (table_bit_map < (1 << table_id)) {
+        // We can optimise
+
+        #if DEBUG
+        if (debug_verbosity >= 2) {
+            fprintf(stderr, "[OPTIMISE] WHERE to ON (Table %d)\n", table_id);
+        }
+        #endif
+
+        // Copy to predicate list
+        struct Node *target = allocatePredicateNode(query);
+        copyNodeTree(target, joinNode);
+
+        // Mark this node as satisfied
+        joinNode->function = OPERATOR_ALWAYS;
     }
 }

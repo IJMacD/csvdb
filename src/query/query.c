@@ -397,6 +397,8 @@ int process_query (
             optimiseCollapseConstantNode(&q->tables[i].join);
 
             optimiseRowidAlgebra(&q->tables[i].join);
+
+            optimiseOnToWhere(i, &q->tables[i].join, q);
         }
     }
 
