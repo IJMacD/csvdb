@@ -263,6 +263,14 @@ void debugAST (FILE *output, struct Query *query) {
             struct Table *table = &query->tables[i];
             fprintf(output, "{\"name\": \"%s\", \"alias\": \"%s\"", table->name, table->alias);
 
+            if (table->join_type != JOIN_INNER) {
+                fprintf(
+                    output,
+                    ", \"joinType\": %s",
+                    table->join_type == JOIN_LEFT ? "\"left\"" : "\"cross\""
+                );
+            }
+
             if (table->join.function != OPERATOR_ALWAYS) {
                 fprintf(output, ", \"on\": ");
                 debugASTNode(output, &table->join);
