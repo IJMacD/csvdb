@@ -12,6 +12,7 @@
 #include "dir.h"
 #include "view.h"
 #include "temp.h"
+#include "tsv.h"
 #include "../evaluate/predicates.h"
 #include "../evaluate/evaluate.h"
 #include "../query/result.h"
@@ -20,12 +21,10 @@
 #include "../evaluate/function.h"
 
 struct VFS VFS_Table[VFS_COUNT] = {
-    // 0 = VFS_NULL
-    {
+    [VFS_NULL] = {
         0
     },
-    // 1 = VFS_CSV
-    {
+    [VFS_CSV] = {
         .openDB = &csv_openDB,
         .closeDB = &csv_closeDB,
         .getFieldIndex = &csv_getFieldIndex,
@@ -36,8 +35,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .insertRow = &csv_insertRow,
         .insertFromQuery = &csv_insertFromQuery,
     },
-    // 2 = VFS_CSV_MEM
-    {
+    [VFS_CSV_MEM] = {
         .openDB = &csvMem_openDB,
         .closeDB = &csvMem_closeDB,
         .getFieldIndex = &csvMem_getFieldIndex,
@@ -46,12 +44,10 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordValue = &csvMem_getRecordValue,
         .insertRow = &csvMem_insertRow,
     },
-    // 3 = VFS_VIEW
-    {
+    [VFS_VIEW] = {
         .openDB = &view_openDB,
     },
-    // 4 = VFS_CALENDAR
-    {
+    [VFS_CALENDAR] = {
         .openDB = &calendar_openDB,
         .closeDB = &calendar_closeDB,
         .getFieldIndex = &calendar_getFieldIndex,
@@ -62,8 +58,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .fullTableAccess = &calendar_fullTableAccess,
         .indexSearch = &calendar_indexSearch,
     },
-    // 5 = VFS_SEQUENCE
-    {
+    [VFS_SEQUENCE] = {
         .openDB = &sequence_openDB,
         .getFieldIndex = &sequence_getFieldIndex,
         .getFieldName = &sequence_getFieldName,
@@ -71,16 +66,14 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordValue = &sequence_getRecordValue,
         .fullTableAccess = &sequence_fullTableAccess,
     },
-    // 6 = VFS_SAMPLE
-    {
+    [VFS_SAMPLE] = {
         .openDB = &sample_openDB,
         .getFieldIndex = &sample_getFieldIndex,
         .getFieldName = &sample_getFieldName,
         .getRecordCount = &sample_getRecordCount,
         .getRecordValue = &sample_getRecordValue,
     },
-    // 7 = VFS_DIR
-    {
+    [VFS_DIR] = {
         .openDB = &dir_openDB,
         .closeDB = &dir_closeDB,
         .getFieldIndex = &dir_getFieldIndex,
@@ -88,8 +81,18 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordCount = &dir_getRecordCount,
         .getRecordValue = &dir_getRecordValue,
     },
-    // 8 = VFS_CSV_MMAP
-    {
+    [VFS_TSV] = {
+        .openDB = &tsv_openDB,
+        .closeDB = &tsv_closeDB,
+        .getFieldIndex = &tsv_getFieldIndex,
+        .getFieldName = &tsv_getFieldName,
+        .getRecordCount = &tsv_getRecordCount,
+        .getRecordValue = &tsv_getRecordValue,
+        .findIndex = &tsv_findIndex,
+        .insertRow = &tsv_insertRow,
+        .insertFromQuery = &tsv_insertFromQuery,
+    },
+    [VFS_CSV_MMAP] = {
         .openDB = &csvMmap_openDB,
         .closeDB = &csvMmap_closeDB,
         .getFieldIndex = &csvMmap_getFieldIndex,
@@ -97,8 +100,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordCount = &csvMmap_getRecordCount,
         .getRecordValue = &csvMmap_getRecordValue,
     },
-    // 9 = VFS_TEMP
-    {
+    [VFS_TEMP] = {
         .openDB = &temp_openDB,
     },
 };

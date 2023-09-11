@@ -13,8 +13,6 @@
 #define MIN(a,b)    ((a<=b)?(a):(b))
 #define MAX(a,b)    ((a>=b)?(a):(b))
 
-#define VFS_COUNT   10
-
 enum VFSType {
     VFS_NULL        = 0,
     VFS_CSV         = 1,
@@ -24,8 +22,11 @@ enum VFSType {
     VFS_SEQUENCE    = 5,
     VFS_SAMPLE      = 6,
     VFS_DIR         = 7,
-    VFS_CSV_MMAP    = 8,
-    VFS_TEMP        = 9,
+    VFS_TSV         = 8,
+    VFS_CSV_MMAP    = 9,
+    VFS_TEMP        = 10,
+
+    VFS_COUNT
 };
 
 struct DB {
