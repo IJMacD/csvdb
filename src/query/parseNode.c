@@ -279,6 +279,15 @@ int parseSimpleNode (
             node->field.index = FIELD_CONSTANT;
             node->field.table_id = -1;
         }
+        else if (strcmp(value, "MAKE_DATE") == 0) {
+            node->function = FUNC_MAKE_DATE;
+        }
+        else if (strcmp(value, "MAKE_TIME") == 0) {
+            node->function = FUNC_MAKE_TIME;
+        }
+        else if (strcmp(value, "MAKE_DATETIME") == 0) {
+            node->function = FUNC_MAKE_DATETIME;
+        }
         else if (strcmp(value, "COUNT") == 0) {
             node->function = FUNC_AGG_COUNT;
             flags |= FLAG_GROUP;

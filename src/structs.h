@@ -129,6 +129,9 @@ enum Function {
     FUNC_DATE_DATE =                0x72,
     FUNC_DATE_TIME =                0x73,
     FUNC_DATE_CLOCK =               0x74,
+    FUNC_MAKE_DATE =                0x75,
+    FUNC_MAKE_TIME =                0x76,
+    FUNC_MAKE_DATETIME =            0x77,
 
     // Family 100x (0x80) (Undefined)
     FUNC_FAM_UNDEF_80 =             0x80,

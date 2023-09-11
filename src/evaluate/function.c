@@ -400,6 +400,33 @@ int evaluateFunction(
             dt.hour, dt.minute, dt.second
         );
     }
+    else if (function == FUNC_MAKE_DATE) {
+        struct DateTime dt = {0};
+        dt.year = atoi(values[0]);
+        dt.month = atoi(values[1]);
+        dt.day = atoi(values[2]);
+
+        return sprintDate(output, &dt);
+    }
+    else if (function == FUNC_MAKE_TIME) {
+        return sprintf(
+            output,
+            "%02d:%02d:%02d",
+            atoi(values[0]), atoi(values[1]), atoi(values[2])
+        );
+    }
+    else if (function == FUNC_MAKE_DATETIME) {
+        return sprintf(
+            output,
+            "%04d-%02d-%02dT%02d:%02d:%02d",
+            atoi(values[0]),
+            atoi(values[1]),
+            atoi(values[2]),
+            atoi(values[3]),
+            atoi(values[4]),
+            atoi(values[5])
+        );
+    }
     else {
         return -1;
     }
