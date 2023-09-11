@@ -575,7 +575,7 @@ int executeIndexJoin (
 
 static void replaceTableID (struct Node *node, int table_id) {
     for (int i = 0; i < node->child_count; i++) {
-        struct Node *child = &node->children[0];
+        struct Node *child = &node->children[i];
         replaceTableID(child, table_id);
     }
 
