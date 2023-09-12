@@ -401,30 +401,85 @@ int evaluateFunction(
         );
     }
     else if (function == FUNC_MAKE_DATE) {
-        struct DateTime dt = {0};
-        dt.year = atoi(values[0]);
-        dt.month = atoi(values[1]);
-        dt.day = atoi(values[2]);
+        struct DateTime dt;
+        // Default to 0
+        dt.year = 0;
+        // Default to 1
+        dt.month = 1;
+        // Default to 1
+        dt.day = 1;
+
+        if (value_count > 0) {
+            dt.year = atoi(values[0]);
+
+            if (value_count > 1) {
+                dt.month = atoi(values[1]);
+
+                if (value_count > 2) {
+                    dt.day = atoi(values[2]);
+                }
+            }
+        }
 
         return sprintDate(output, &dt);
     }
     else if (function == FUNC_MAKE_TIME) {
-        return sprintf(
-            output,
-            "%02d:%02d:%02d",
-            atoi(values[0]), atoi(values[1]), atoi(values[2])
-        );
+        int h = 0;
+        int m = 0;
+        int s = 0;
+
+        // Default to 0
+        if (value_count > 0) {
+            h = atoi(values[0]);
+
+            if (value_count > 1) {
+                m = atoi(values[1]);
+
+                if (value_count > 2) {
+                    s = atoi(values[2]);
+                }
+            }
+        }
+
+        return sprintf(output, "%02d:%02d:%02d", h, m, s);
     }
     else if (function == FUNC_MAKE_DATETIME) {
+        int y = 0;
+        int m = 0;
+        int d = 0;
+        int h = 0;
+        int i = 0;
+        int s = 0;
+
+        // Default to 0
+        if (value_count > 0) {
+            y = atoi(values[0]);
+
+            if (value_count > 1) {
+                m = atoi(values[1]);
+
+                if (value_count > 2) {
+                    d = atoi(values[2]);
+
+                    if (value_count > 3) {
+                        h = atoi(values[3]);
+
+                        if (value_count > 4) {
+                            i = atoi(values[4]);
+
+                            if (value_count > 5) {
+                                s = atoi(values[5]);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         return sprintf(
             output,
             "%04d-%02d-%02dT%02d:%02d:%02d",
-            atoi(values[0]),
-            atoi(values[1]),
-            atoi(values[2]),
-            atoi(values[3]),
-            atoi(values[4]),
-            atoi(values[5])
+            y, m, d, h, i, s
         );
     }
     else {
