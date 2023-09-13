@@ -39,7 +39,8 @@ int csv_fromQuery (
     struct DB *db,
     const char *name,
     const char *query,
-    const char **end_ptr
+    const char **end_ptr,
+    const char *headers
 );
 
 int csv_insertRow (struct DB *db, const char *row);

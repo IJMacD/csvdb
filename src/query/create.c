@@ -11,6 +11,7 @@
 #include "../sort/sort-quick.h"
 #include "output.h"
 #include "query.h"
+#include "../functions/util.h"
 
 static int create_table_query (const char * query, const char **end_ptr);
 
@@ -325,18 +326,49 @@ static int create_table_query (const char * query, const char **end_ptr) {
 
     getQuotedToken(query, &index, table_name, MAX_TABLE_LENGTH);
 
-    getToken(query, &index, keyword, MAX_FIELD_LENGTH);
+    skipWhitespace(query, &index);
 
-    if (strcmp(keyword, "AS") != 0) {
-        fprintf(stderr, "Expected AS got '%s'\n", keyword);
-        return -1;
+    char header_buffer[MAX_VALUE_LENGTH];
+
+    if (query[index] == '(') {
+        int length = find_matching_parenthesis(query + index);
+        strncpy(header_buffer, query + index + 1, length - 2);
+        header_buffer[length-1] = '\0';
+        index += length;
+    }
+    else {
+        header_buffer[0] = '\0';
     }
 
-    skipWhitespace(query, &index);
+    const char *sub_query = NULL;
+
+    if (getToken(query, &index, keyword, MAX_FIELD_LENGTH) > 0) {
+        if (strcmp(keyword, "AS") == 0) {
+            skipWhitespace(query, &index);
+
+            sub_query = query + index;
+        }
+
+        else {
+            fprintf(stderr, "Unexpected keyword: '%s'\n", keyword);
+            exit(-1);
+        }
+    }
+
+    if (sub_query == NULL && header_buffer[0] == '\0') {
+        fprintf(stderr, "Expected column spec or AS keyword.\n");
+        exit(-1);
+    }
 
     struct DB db = {0};
 
-    int result = csv_fromQuery(&db, table_name, query + index, end_ptr);
+    int result = csv_fromQuery(
+        &db,
+        table_name,
+        sub_query,
+        end_ptr,
+        header_buffer[0] == '\0' ? NULL : header_buffer
+    );
 
     closeDB(&db);
 

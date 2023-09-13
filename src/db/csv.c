@@ -574,7 +574,8 @@ int csv_fromQuery (
     struct DB *db,
     const char *name,
     const char *query,
-    const char **end_ptr
+    const char **end_ptr,
+    const char *headers
 ) {
     char filename[MAX_TABLE_LENGTH];
 
@@ -593,9 +594,21 @@ int csv_fromQuery (
         return -1;
     }
 
-    int flags = OUTPUT_FORMAT_COMMA | OUTPUT_OPTION_HEADERS;
+    int flags = OUTPUT_FORMAT_COMMA;
 
-    int result = select_query(query, flags, f, end_ptr);
+    if (headers) {
+        fputs(headers, f);
+        fputc('\n', f);
+    }
+    else {
+        flags |= OUTPUT_OPTION_HEADERS;
+    }
+
+    int result = 0;
+
+    if (query != NULL) {
+        result = select_query(query, flags, f, end_ptr);
+    }
 
     fclose(f);
 

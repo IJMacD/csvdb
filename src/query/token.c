@@ -136,6 +136,7 @@ int getToken (
     // Check for simple operators
     if (!isTokenChar(string[*index])) {
         // operators are not allowed as tokens
+        token[0] = '\0';
         return -1;
     }
 

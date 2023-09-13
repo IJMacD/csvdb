@@ -56,11 +56,8 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
     // Special treatment for VALUES only (top-level) query
     // Will behave as a query: SELECT * FROM values_mem
     // Where values_mem is a simulated DB in memory
-    if (
-        strncmp(query + index, "VALUES", 6) == 0
-        && isspace(query[index + 6])
-    ) {
-        index += 7;
+    if (strncmp(query + index, "VALUES", 6) == 0) {
+        index += 6;
 
         q->tables = calloc(1, sizeof(q->tables[0]));
         q->table_count = 1;
