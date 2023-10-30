@@ -606,6 +606,10 @@ static void printColumnValue (
 ) {
     int value_is_numeric = is_numeric(value);
 
+    char *escaped_value = (void *)value;
+
+    int mallocd = 0;
+
     if (format == OUTPUT_FORMAT_JSON) {
         if (prefix) {
             fprintf(f, "\"%s.%s\": ", prefix, name);
@@ -640,15 +644,46 @@ static void printColumnValue (
     const char * num_fmt = string_fmt;
 
     if (format == OUTPUT_FORMAT_COMMA) {
-        if (strchr(value, ',')) {
+
+        // Raw newlines can appear in CSV as long as they're in a quoted field
+        if (strchr(value, ',') || strchr(value, '\n')) {
+
             string_fmt = "\"%s\"";
+
+            // If there are any double quotes in the value, they need to be
+            // double-double quoted
+            if (strchr(value, '"')) {
+                size_t value_length = strlen(value);
+                escaped_value = malloc(value_length * 2);
+                mallocd = 1;
+                replace(escaped_value, value, '"', "\"\"");
+            }
         }
+
     }
     else if (format == OUTPUT_FORMAT_JSON_ARRAY) {
         string_fmt = "\"%s\"";
         num_fmt = "%ld";
     }
     else if (format == OUTPUT_FORMAT_JSON) {
+
+        size_t value_length = strlen(value);
+        escaped_value = malloc(value_length * 2);
+        char *clone = malloc(value_length * 2);
+        mallocd = 1;
+
+        replace(clone, value, '\r', "\\r");
+        replace(escaped_value, clone, '\n', "\\n");
+
+        if (strchr(value, '"')) {
+            replace(clone, escaped_value, '"', "\\\"");
+            free(escaped_value);
+            escaped_value = clone;
+        }
+        else {
+            free(clone);
+        }
+
         string_fmt = "\"%s\"";
         num_fmt = "%ld";
     }
@@ -693,7 +728,7 @@ static void printColumnValue (
     if (num_fmt != string_fmt && value_is_numeric) {
         fprintf(f, num_fmt, atol(value));
     } else {
-        fprintf(f, string_fmt, value);
+        fprintf(f, string_fmt, escaped_value);
     }
 
     if (format == OUTPUT_FORMAT_XML && strcmp(name, "_")) {
@@ -706,6 +741,10 @@ static void printColumnValue (
     }
     else if (format == OUTPUT_FORMAT_HTML) {
         fprintf(f, "</TD>");
+    }
+
+    if (mallocd) {
+        free(escaped_value);
     }
 }
 

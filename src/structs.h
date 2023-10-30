@@ -67,6 +67,8 @@ enum Function {
     FUNC_UNITY =                    0x00,
     FUNC_CHR =                      0x01,
     FUNC_TO_HEX =                   0x02,
+    FUNC_CODEPOINT =                0x03,
+    FUNC_W1252 =                    0x04,
 
     FUNC_RANDOM =                   0x0A,
 
@@ -146,6 +148,8 @@ enum Function {
     FUNC_AGG_SUM =                  0xA4,
     FUNC_AGG_AVG =                  0xA5,
     FUNC_AGG_LISTAGG =              0xA6,
+
+    FUNC_VECTOR_CODEPOINT =         0xB1,
 
     // Family 110x (0xC0) (Comparison Operators)
     // FUNC_FAM_OPERATOR =          0xC0, // (Aliased below)

@@ -208,6 +208,14 @@ int parseSimpleNode (
         ) {
             node->function = FUNC_CHR;
         }
+        // Get codepoint of first UTF-8 character in value
+        else if (strcmp(value, "CODEPOINT") == 0) {
+            node->function = FUNC_CODEPOINT;
+        }
+        // Convert mis-encoded string
+        else if (strcmp(value, "W1252") == 0) {
+            node->function = FUNC_W1252;
+        }
         else if (strcmp(value, "RANDOM") == 0) {
             node->function = FUNC_RANDOM;
             node->field.index = FIELD_CONSTANT;

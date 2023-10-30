@@ -81,6 +81,42 @@ int writeUTF8(char * output, int codepoint) {
     return 0;
 }
 
+int readUTF8 (__uint8_t *input, __uint8_t **end_ptr) {
+    if (input[0] < 0x80) {
+        if (end_ptr != NULL) {
+            *end_ptr = input + 1;
+        }
+        return input[0];
+    }
+
+    if ((input[0] & 0xE0) == 0xC0) {
+        if (end_ptr != NULL) {
+            *end_ptr = input + 2;
+        }
+        return ((input[0] & 0x1F) << 6) | (input[1] & 0x3F);
+    }
+
+    if ((input[0] & 0xF0) == 0xE0) {
+        if (end_ptr != NULL) {
+            *end_ptr = input + 3;
+        }
+        return ((input[0] & 0x0F) << 12) | ((input[1] & 0x3F) << 6) | (input[2] & 0x3F);
+    }
+
+    if ((input[0] & 0xF8) == 0xF0) {
+        if (end_ptr != NULL) {
+            *end_ptr = input + 4;
+        }
+        return ((input[0] & 0x0F) << 18) | ((input[1] & 0x3F) << 12) | ((input[2] & 0x3F) << 6) | (input[3] & 0x3F);
+    }
+
+    if (end_ptr != NULL) {
+        *end_ptr = input;
+    }
+
+    return -1;
+}
+
 /**
  * @brief Given a string *starting with an open parenthesis*, search for a
  * matching closing parenthesis and return the total length of string
@@ -206,4 +242,45 @@ int whichBit (int bit_map) {
     }
 
     return -1;
+}
+
+int w1252Map (int w1252Char) {
+    if (w1252Char < 0x80) {
+        return w1252Char;
+    }
+
+    int codepoints[] = {
+        8364,129,8218,402,8222,8230,8224,8225,710,8240,352,8249,338,141,381,143,
+        144,8216,8217,8220,8221,8226,8211,8212,732,8482,353,8250,339,157,382,
+        376,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,
+        177,178,179,180,181,182,183,184,185,186,187,188,189,190,191,192,193,194,
+        195,196,197,198,199,200,201,202,203,204,205,206,207,208,209,210,211,212,
+        213,214,215,216,217,218,219,220,221,222,223,224,225,226,227,228,229,230,
+        231,232,233,234,235,236,237,238,239,240,241,242,243,244,245,246,247,248,
+        249,250,251,252,253,254,255
+    };
+
+    for (int i = 0; i < 128; i++) {
+        if (codepoints[i] == w1252Char) {
+            return 0x80 + i;
+        }
+    }
+
+    return -1;
+}
+
+void replace (char *output, const char *input, char search, char *replace) {
+    size_t r_len = strlen(replace);
+    while (*input) {
+        if (*input == search) {
+            for (size_t i = 0; i < r_len; i++) {
+                *(output++) = replace[i];
+            }
+        }
+        else {
+            *(output++) = *input;
+        }
+        input++;
+    }
+    *output = '\0';
 }

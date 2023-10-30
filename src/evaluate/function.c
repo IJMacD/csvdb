@@ -78,6 +78,39 @@ int evaluateFunction(
 
         return sprintf(output, "%s", values[0]);
     }
+    // Reads a single codepoint from the first one, two, three, or four bytes.
+    else if (function == FUNC_CODEPOINT) {
+        int codepoint = readUTF8((void *)values[0], NULL);
+
+        return sprintf(output, "%d", codepoint);
+    }
+    // Somehow will produce an array of code points
+    // else if (function == FUNC_VECTOR_CODEPOINT) {
+    //     char *end_ptr = values[0];
+
+    //     while (*end_ptr != '\0') {
+    //         int codepoint = readUTF8(end_ptr, &end_ptr);
+    //         fprintf(stderr, "%d ", codepoint);
+    //     }
+
+    //     return sprintf(output, "%d", 0);
+    // }
+    else if (function == FUNC_W1252) {
+        __uint8_t *end_ptr = (void *)values[0];
+        int i = 0;
+
+        while (*end_ptr != '\0') {
+            int codepoint = readUTF8(end_ptr, &end_ptr);
+            int byte = w1252Map(codepoint);
+            // fprintf(stderr, "0x%02X ", byte);
+            output[i] = byte;
+            i++;
+        }
+
+        output[i] = '\0';
+
+        return i;
+    }
     else if (function == FUNC_TO_HEX) {
         int val = atoi(values[0]);
 
