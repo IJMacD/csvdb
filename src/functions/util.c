@@ -93,6 +93,11 @@ int readUTF8 (__uint8_t *input, __uint8_t **end_ptr) {
         if (end_ptr != NULL) {
             *end_ptr = input + 2;
         }
+
+        // Catch (some) malformed UTF-8
+        // Note: end_ptr has already moved on expected number of bytes
+        if ((input[1] & 0xC0) != 0x80) return 0;
+
         return ((input[0] & 0x1F) << 6) | (input[1] & 0x3F);
     }
 
@@ -100,6 +105,11 @@ int readUTF8 (__uint8_t *input, __uint8_t **end_ptr) {
         if (end_ptr != NULL) {
             *end_ptr = input + 3;
         }
+
+        // Catch (some) malformed UTF-8
+        // Note: end_ptr has already moved on expected number of bytes
+        if ((input[1] & 0xC0) != 0x80 || (input[2] & 0xC0) != 0x80) return 0;
+
         return ((input[0] & 0x0F) << 12) | ((input[1] & 0x3F) << 6) | (input[2] & 0x3F);
     }
 
@@ -107,6 +117,11 @@ int readUTF8 (__uint8_t *input, __uint8_t **end_ptr) {
         if (end_ptr != NULL) {
             *end_ptr = input + 4;
         }
+
+        // Catch (some) malformed UTF-8
+        // Note: end_ptr has already moved on expected number of bytes
+        if ((input[1] & 0xC0) != 0x80 || (input[2] & 0xC0) != 0x80 || (input[3] & 0xC0) != 0x80) return 0;
+
         return ((input[0] & 0x0F) << 18) | ((input[1] & 0x3F) << 12) | ((input[2] & 0x3F) << 6) | (input[3] & 0x3F);
     }
 

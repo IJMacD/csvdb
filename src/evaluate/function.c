@@ -99,12 +99,68 @@ int evaluateFunction(
         __uint8_t *end_ptr = (void *)values[0];
         int i = 0;
 
+        // Track valid UTF-8 sequences
+        int expected_byte_count = 0;
+        int byte_start = 0;
+
         while (*end_ptr != '\0') {
             int codepoint = readUTF8(end_ptr, &end_ptr);
             int byte = w1252Map(codepoint);
+
+            if (byte == -1) {
+                // This means this value wasn't actually w1252 encoded
+                // Write the original character back to the output
+                i += writeUTF8(output + i, codepoint);
+                continue;
+            }
+
             // fprintf(stderr, "0x%02X ", byte);
+
+            int is_continuation = (byte & 0xC0) == 0x80;
+
+            if (expected_byte_count && is_continuation) {
+                expected_byte_count--;
+            }
+            else if (expected_byte_count > 0 && !is_continuation) {
+                // error
+                // fprintf(stderr, "Bad UTF-8 sequence: Missing continuation byte\n");
+                // rewind
+                i = byte_start;
+                break;
+            }
+            else if (expected_byte_count == 0 && is_continuation) {
+                // error
+                // fprintf(stderr, "Bad UTF-8 sequence: Unexpected continuation byte\n");
+                // rewind
+                i = byte_start;
+                break;
+            }
+            else if (byte < 0x80) {
+                expected_byte_count = 0;
+                byte_start = i;
+            }
+            else if ((byte & 0xE0) == 0xC0) {
+                expected_byte_count = 1;
+                byte_start = i;
+            }
+            else if ((byte & 0xF0) == 0xE0) {
+                expected_byte_count = 2;
+                byte_start = i;
+            }
+            else if ((byte & 0xF8) == 0xF0) {
+                expected_byte_count = 3;
+                byte_start = i;
+            }
+
             output[i] = byte;
             i++;
+        }
+
+        if (expected_byte_count > 0) {
+            // error
+            // fprintf(stderr, "Bad UTF-8 sequence: Unexpected end\n");
+            // rewind
+            i = byte_start;
         }
 
         output[i] = '\0';
