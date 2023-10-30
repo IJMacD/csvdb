@@ -240,31 +240,31 @@ static void prepareHeaders (struct DB *db) {
 
     db->fields = malloc(MAX_TABLE_LENGTH);
 
-    int i = 0;
+    char *read_ptr, *write_ptr;
 
-    while (db->data[i] != '\n') {
-        if (db->data[i] == ',') {
-            db->fields[i] = '\0';
+    read_ptr = db->data;
+    write_ptr = db->fields;
+
+    // Overwrite fields buffer with itself skipping quotes and inserting nulls
+    while (*read_ptr && *read_ptr != '\n')
+    {
+        if(
+            *read_ptr == ','
+            || *read_ptr == '\r'
+        ) {
+            *(write_ptr++) = '\0';
             db->field_count++;
         }
-        else {
-            db->fields[i] = db->data[i];
+        else if (*read_ptr != '"') {
+            *(write_ptr++) = *read_ptr;
         }
 
-        i++;
-
-        if (i >= MAX_TABLE_LENGTH) {
-            fprintf(
-                stderr,
-                "Unable to process header longer than %d bytes\n",
-                i
-            );
-            exit(-1);
-        }
+        read_ptr++;
     }
-    db->fields[i] = '\0';
 
-    db->data += i + 1;
+    *(write_ptr++) = '\0';
+
+    db->data = read_ptr + 1;
 }
 
 /**

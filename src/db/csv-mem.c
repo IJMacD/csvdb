@@ -226,26 +226,36 @@ static int prepareHeaders (struct DB *db) {
 
     db->fields = db->data;
 
-    int i = 0;
-
     if (db->data[0] == '\0') {
         fprintf(stderr, "Empty file\n");
         return -1;
     }
 
-    while (db->data[i] != '\n' && db->data[i] != '\0') {
+    char *read_ptr, *write_ptr;
 
-        if (db->data[i] == ',') {
-            db->fields[i] = '\0';
+    read_ptr = db->fields;
+    write_ptr = db->fields;
+
+    // Overwrite fields buffer with itself skipping quotes and inserting nulls
+    while (*read_ptr && *read_ptr != '\n')
+    {
+        if(
+            *read_ptr == ','
+            || *read_ptr == '\r'
+        ) {
+            *(write_ptr++) = '\0';
             db->field_count++;
         }
+        else if (*read_ptr != '"') {
+            *(write_ptr++) = *read_ptr;
+        }
 
-        i++;
+        read_ptr++;
     }
 
-    db->fields[i] = '\0';
+    *(write_ptr++) = '\0';
 
-    db->data += i + 1;
+    db->data = read_ptr + 1;
 
     return 0;
 }
