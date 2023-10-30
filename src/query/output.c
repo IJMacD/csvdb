@@ -86,6 +86,7 @@ void printResultLine (
 
         if (node->function == FUNC_UNITY) {
 
+            // Note: optimiser has probably already expanded FIELD_STAR away
             if (node->field.index == FIELD_STAR) {
                 if (node->field.table_id >= 0) {
                     // e.g. table.*

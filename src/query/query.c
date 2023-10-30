@@ -1182,6 +1182,9 @@ struct Node *allocatePredicateNode (struct Query *q) {
     return p;
 }
 
+/**
+ * Only expands FIELD_STAR, in FUNC_UNITY or self-child optimisation
+ */
 static void expandFieldStar (struct Query *query) {
     int table_field_count = 0;
 
@@ -1216,7 +1219,12 @@ static void expandFieldStar (struct Query *query) {
 
                     clearNode(new_col);
 
-                    new_col->function = FUNC_UNITY;
+                    // FN(*) is supported
+                    // i.e. gets expanded to FN(a), FN(b), etc.
+                    // Note: single param only, i.e. FN(*, 1) is not supported
+                    new_col->function = col->function;
+                    // If there's a function, use the self-child optimisation
+                    new_col->child_count = col->function == FUNC_UNITY ? 0 : -1;
                     new_col->field.table_id = j;
                     new_col->field.index = k;
 

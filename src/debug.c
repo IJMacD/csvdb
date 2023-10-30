@@ -12,7 +12,7 @@ static void debugNodeInner (struct Node * node, int depth);
 
 const char *FUNC_NAMES[] = {
     // 0x00
-    "","CHAR","TO_HEX","","","","","",
+    "","CHAR","TO_HEX","CODEPOINT","W1252","","","",
     "","","RANDOM","","","","","",
     // 0x10
     "","ADD","SUB","MUL","DIV","MOD","POW","",
@@ -263,17 +263,19 @@ void debugAST (FILE *output, struct Query *query) {
             struct Table *table = &query->tables[i];
             fprintf(output, "{\"name\": \"%s\", \"alias\": \"%s\"", table->name, table->alias);
 
-            if (table->join_type != JOIN_INNER) {
-                fprintf(
-                    output,
-                    ", \"joinType\": %s",
-                    table->join_type == JOIN_LEFT ? "\"left\"" : "\"cross\""
-                );
-            }
+            if (i > 0) {
+                if (table->join_type != JOIN_INNER) {
+                    fprintf(
+                        output,
+                        ", \"joinType\": %s",
+                        table->join_type == JOIN_LEFT ? "\"left\"" : "\"cross\""
+                    );
+                }
 
-            if (table->join.function != OPERATOR_ALWAYS) {
-                fprintf(output, ", \"on\": ");
-                debugASTNode(output, &table->join);
+                if (table->join.function != OPERATOR_ALWAYS) {
+                    fprintf(output, ", \"on\": ");
+                    debugASTNode(output, &table->join);
+                }
             }
 
             fprintf(output, "}");

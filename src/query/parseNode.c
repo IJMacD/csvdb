@@ -446,7 +446,7 @@ int parseNode (
  * @param query Whole query string
  * @param index Pointer to index value
  * @param node Pointer to column struct
- * @return int
+ * @return int 0 for success; -1 for error
  */
 static int parseFunctionParams (
     const char * query,
@@ -460,21 +460,45 @@ static int parseFunctionParams (
         node->field.index = FIELD_STAR;
 
         (*index)++;
-    }
-    else {
-        while (query[*index] != '\0' && query[*index] != ')') {
-            struct Node *child_node = addChildNode(node);
 
-            parseNode(query, index, child_node);
+        skipWhitespace(query, index);
 
-            skipWhitespace(query, index);
-
-            if (query[*index] != ',') {
-                break;
-            }
-
-            (*index)++;
+        if (query[*index] != ')') {
+            fprintf(
+                stderr,
+                "Not implemented: multiple function params including '*'\n"
+            );
+            return -1;
         }
+
+        (*index)++;
+
+        return 0;
+    }
+
+    while (query[*index] != '\0' && query[*index] != ')') {
+        struct Node *child_node = addChildNode(node);
+
+        // TODO: in the future we can support multiple function params including
+        // field star.
+        // getQuotedToken won't get '*' so we'll check manually
+        // if (query[*index] == '*') {
+        //     child_node->child_count = 0;
+        //     child_node->field.text[0] = '*';
+        //     child_node->field.index = FIELD_STAR;
+        //     (*index)++;
+        // }
+        // else {
+            parseNode(query, index, child_node);
+        // }
+
+        skipWhitespace(query, index);
+
+        if (query[*index] != ',') {
+            break;
+        }
+
+        (*index)++;
     }
 
     if (query[*index] != ')') {
