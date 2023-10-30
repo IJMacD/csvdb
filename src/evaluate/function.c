@@ -728,11 +728,17 @@ int evaluateAggregateFunction (
 
                 output += sprintf(output, "%s", values[i]);
 
+                bytesWritten = output - output_start;
+
+                if (bytesWritten > MAX_VALUE_LENGTH) {
+                    // Overflow! Just bail
+                    return bytesWritten;
+                }
+
                 have_prev = 1;
             }
         }
 
-        bytesWritten = output - output_start;
     }
     else {
         bytesWritten = -1;
