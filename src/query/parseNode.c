@@ -926,7 +926,7 @@ int parseNodeList (const char *query, size_t *index, struct Node *node) {
 
 /**
  * Should take a partially built node tree and add a new mathematical operator
- * in the correct place as detrimined by order of operations rules
+ * in the correct place as determined by order of operations rules
  *
  * Example Trees:
  *
