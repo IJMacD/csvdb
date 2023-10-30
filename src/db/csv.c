@@ -413,22 +413,20 @@ static void prepareHeaders (struct DB *db) {
     write_ptr = db->fields;
 
     // Overwrite fields buffer with itself skipping quotes and inserting nulls
-    while (*read_ptr)
+    while (*read_ptr && *read_ptr != '\n')
     {
-        if(
-            *read_ptr == ','
-            || *read_ptr == '\n'
-            || *read_ptr == '\r'
-        ) {
+        if(*read_ptr == ',') {
             *(write_ptr++) = '\0';
             db->field_count++;
         }
-        else if (*read_ptr != '"') {
+        else if (*read_ptr != '"' && *read_ptr != '\r') {
             *(write_ptr++) = *read_ptr;
         }
 
         read_ptr++;
     }
+
+    *(write_ptr++) = '\0';
 }
 
 /**
