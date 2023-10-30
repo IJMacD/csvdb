@@ -260,9 +260,14 @@ static int indexLines (struct DB *db) {
 
     db->line_indices[count++] = i;
 
+    int quoted = 0;
+
     while (db->data[i] != '\0') {
-        if (db->data[i] == '\n'){
+        if (db->data[i] == '\n' && !quoted){
             db->line_indices[count++] = i + 1;
+        }
+        else if (db->data[i] == '"') {
+            quoted = ~quoted;
         }
 
         if (count == max_size) {

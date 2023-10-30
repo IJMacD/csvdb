@@ -309,8 +309,10 @@ static int indexLines (struct DB *db, int max_rows) {
 
     db->line_indices[count++] = i;
 
+    int quoted = 0;
+
     while (db->data[i] != '\0') {
-        if (db->data[i] == '\n'){
+        if (db->data[i] == '\n' && !quoted){
             if (count == *max_size) {
                 *max_size *= 2;
                 // max_size is the real location of the allocation
@@ -344,6 +346,9 @@ static int indexLines (struct DB *db, int max_rows) {
 
                 return count;
             }
+        }
+        else if (db->data[i] == '"') {
+            quoted = ~quoted;
         }
 
         i++;

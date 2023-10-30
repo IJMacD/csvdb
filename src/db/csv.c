@@ -187,12 +187,17 @@ static int indexLines (struct DB *db) {
 
     db->line_indices[count] = pos;
 
+    int quoted = 0;
+
     do {
         read_size = fread(buffer, 1, buffer_size, db->file);
 
         for (size_t i = 0; i < read_size; i++) {
-            if (buffer[i] == '\n'){
+            if (buffer[i] == '\n' && !quoted){
                 db->line_indices[++count] = pos + i + 1;
+            }
+            else if (buffer[i] == '"') {
+                quoted = ~quoted;
             }
         }
 
