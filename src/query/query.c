@@ -26,6 +26,8 @@
 int query_count = -1;
 #endif
 
+struct DB *stdin_db = NULL;
+
 static int information_query (const char *table, FILE * output);
 
 static int populate_tables (struct Query *q);
@@ -726,6 +728,11 @@ static void destroy_query (struct Query *query) {
 
     if (query->tables != NULL) {
         for (int i = 0; i < query->table_count; i++) {
+            if (query->tables[i].db == stdin_db) {
+                // Don't close special DB created from stdin
+                continue;
+            }
+
             closeDB(query->tables[i].db);
 
             if (query->tables[i].db != NULL) {
@@ -774,6 +781,16 @@ static int populate_tables (struct Query *q) {
             found = 1;
         }
 
+        // stdin can only be consumed once per process, check to see if we're
+        // trying to open it now, and whether or not it's already been opened
+        // for us.
+        if (strcmp(table->name, "stdin") == 0 && stdin_db != NULL) {
+            // It's already open
+            table->db = stdin_db;
+
+            found = 1;
+        }
+
         if (found == 0) {
             // Try to reuse existing open table next
             for (int j = 0; j < i; j++) {
@@ -814,11 +831,19 @@ static int populate_tables (struct Query *q) {
         if (found == 0) {
             table->db = calloc(1, sizeof(*table->db));
 
+            // Ability to retrieve real filename for debugging
             char *resolved = NULL;
 
             if (openDB(table->db, table->name, &resolved) != 0) {
                 fprintf(stderr, "Unable to use file: '%s'\n", table->name);
                 return -1;
+            }
+
+            if (strcmp(table->name, "stdin") == 0) {
+                // If we're going to access stdin more than once per process,
+                // then we need to keep a reference to the DB now that it's
+                // populated.
+                stdin_db = table->db;
             }
 
             if (resolved != NULL) {
