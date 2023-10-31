@@ -1263,7 +1263,7 @@ static void expandFieldStar (struct Query *query) {
             // - SELECT FN(*)
             child_index = -1;
         }
-        else {
+        else if(col->function != FUNC_UNITY) {
             // Could be one of:
             // - SELECT FN(*, 1)
             // - SELECT FN(1, *)
