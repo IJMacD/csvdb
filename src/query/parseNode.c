@@ -578,6 +578,12 @@ static int checkConstantField (struct Field *field) {
 
         // Evaluated later
     }
+    else if (strcmp(field->text, "NULL") == 0) {
+        field->index = FIELD_CONSTANT;
+        field->table_id = -1;
+
+        // Evaluated later
+    }
     else {
         field->index = FIELD_UNKNOWN;
         field->table_id = -1;
