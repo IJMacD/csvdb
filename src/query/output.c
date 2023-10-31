@@ -39,7 +39,6 @@ static void printRecordStart (
 static void printRecordEnd (
     FILE *f,
     enum OutputOption format,
-    int is_last,
     int is_single_column
 );
 static void printRecordSeparator (FILE *f, enum OutputOption format);
@@ -74,7 +73,15 @@ void printResultLine (
     int is_single_column
         = column_count == 1 && strcmp(columns[0].alias, "_") == 0;
 
-    printRecordStart(f, format, result_index == 0, is_single_column);
+    int is_first = result_index == 0;
+
+    // Do separator at start to avoid issues with aggregate queries and not
+    // knowing whether or not there is going to be a record following this one.
+    if (!is_first) {
+        printRecordSeparator(f, format);
+    }
+
+    printRecordStart(f, format, is_first, is_single_column);
 
     struct RowList *row_list = getRowList(list_id);
 
@@ -241,20 +248,9 @@ void printResultLine (
         ) {
             printColumnSeparator(f, format);
         }
-
     }
 
-    int is_last =
-        result_index == row_list->row_count - 1
-        // TODO: Not actually correct, expect bugs in agg queries with record
-        // end formatting (e.g. JSON)
-        && row_list->group == 0;
-
-    printRecordEnd(f, format, is_last, is_single_column);
-
-    if (!is_last) {
-        printRecordSeparator(f, format);
-    }
+    printRecordEnd(f, format, is_single_column);
 }
 
 void printHeaderLine (
@@ -448,6 +444,7 @@ void printPostamble (
     enum OutputOption format = flags & OUTPUT_MASK_FORMAT;
 
     if (format == OUTPUT_FORMAT_HTML) {
+        fprintf(f, "</TBODY>\n");
         fprintf(f, "</TABLE>\n");
     }
     else if (
@@ -788,7 +785,6 @@ static void printColumnSeparator (FILE *f, enum OutputOption format) {
 static void printRecordEnd (
     FILE *f,
     enum OutputOption format,
-    int is_last,
     int is_single_column
 ) {
     if (format == OUTPUT_FORMAT_TAB) {
@@ -799,9 +795,6 @@ static void printRecordEnd (
     }
     else if (format == OUTPUT_FORMAT_HTML) {
         fprintf(f, "</TR>\n");
-        if (is_last) {
-            fprintf(f, "</TBODY>\n");
-        }
     }
     else if (format == OUTPUT_FORMAT_JSON_ARRAY) {
         if (!is_single_column) {
