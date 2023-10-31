@@ -469,6 +469,11 @@ int calendar_fullTableAccess (
         limit_value = db->_record_count;
     }
 
+    if (max_julian == db->_record_count && limit_value == db->_record_count) {
+        fprintf(stderr, "Error: Unbounded CALENDAR\n");
+        exit(-1);
+    }
+
     int count = 0;
 
     struct Table table;

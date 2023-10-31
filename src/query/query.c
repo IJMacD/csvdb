@@ -20,6 +20,7 @@
 #include "../functions/util.h"
 #include "node.h"
 #include "../debug.h"
+#include "check.h"
 
 #ifdef DEBUG
 int query_count = -1;
@@ -536,6 +537,8 @@ int process_query (
         destroyPlan(&plan);
         return result;
     }
+
+    checkPlan(q, &plan);
 
     result = executeQueryPlan(
         q,

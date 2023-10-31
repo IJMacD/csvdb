@@ -337,8 +337,8 @@ enum IndexSearchResult indexSeek (
         exit(-1);
     }
 
-    if (limit > 0 && upper_bound > lower_bound + limit) {
-        upper_bound = lower_bound + limit;
+    if (limit > 0) {
+        upper_bound = MIN(upper_bound, lower_bound + limit);
     }
 
     return indexWalk(
@@ -387,6 +387,7 @@ static int indexWalk(
                 fprintf(stderr, "unable to get value for rowid %d\n", i);
                 exit(-1);
             }
+
             appendRowID(row_list, atoi(value));
         }
     }

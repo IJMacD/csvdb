@@ -187,6 +187,11 @@ int sequence_fullTableAccess (
     }
     #endif
 
+    if (end == db->_record_count) {
+        fprintf(stderr, "Error: Unbounded SEQUENCE\n");
+        exit(-1);
+    }
+
     struct Table table;
     table.db = db;
 
