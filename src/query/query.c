@@ -1211,24 +1211,56 @@ struct Node *allocatePredicateNode (struct Query *q) {
 }
 
 /**
- * Only expands FIELD_STAR, in FUNC_UNITY or self-child optimisation
+ * Expands FIELD_STAR, in FUNC_UNITY, or self-child optimisation, or once in
+ * first level of function params.
  */
 static void expandFieldStar (struct Query *query) {
+    // Count the total number of fields in all tables and cache the
+    // result.
     int table_field_count = 0;
+    for (int j = 0; j < query->table_count; j++) {
+        struct Table *table = &query->tables[j];
+
+        table_field_count += table->db->field_count;
+    }
 
     for (int i = 0; i < query->column_count; i++) {
         struct Node *col = &query->column_nodes[i];
 
-        if (col->field.index == FIELD_STAR) {
-            // Count the total number of fields in all tables and cache the
-            // result.
-            if (table_field_count == 0) {
-                for (int j = 0; j < query->table_count; j++) {
-                    struct Table *table = &query->tables[j];
+        int child_index = NOT_FOUND;
 
-                    table_field_count += table->db->field_count;
+        if (col->field.index == FIELD_STAR) {
+            // Could be one of:
+            // - SELECT *
+            // - SELECT FN(*)
+            child_index = -1;
+        }
+        else {
+            // Could be one of:
+            // - SELECT FN(*, 1)
+            // - SELECT FN(1, *)
+            // - etc.
+
+            // Only go one level deep
+            // Search all children to check there's not more than one '*'
+            for (int j = 0; j < col->child_count; j++) {
+                struct Node *child_col = &col->children[j];
+
+                if (child_col->field.index == FIELD_STAR) {
+                    if (child_index != NOT_FOUND) {
+                        fprintf(
+                            stderr,
+                            "Cannot deal with more than one '*' in params"
+                        );
+                        exit(-1);
+                    }
+
+                    child_index = j;
                 }
             }
+        }
+
+        if (child_index != NOT_FOUND) {
 
             int new_column_count = query->column_count + table_field_count - 1;
 
@@ -1247,27 +1279,30 @@ static void expandFieldStar (struct Query *query) {
 
                     clearNode(new_col);
 
-                    // FN(*) is supported
-                    // i.e. gets expanded to FN(a), FN(b), etc.
-                    // Note: single param only, i.e. FN(*, 1) is not supported
-                    new_col->function = col->function;
-                    // If there's a function, use the self-child optimisation
-                    new_col->child_count = col->function == FUNC_UNITY ? 0 : -1;
-                    new_col->field.table_id = j;
-                    new_col->field.index = k;
+                    if (col->child_count > 0) {
+                        // Clone all children
+                        copyNodeTree(new_col, col);
 
-                    // if (col->function == FUNC_UNITY) {
+                        // Set the field for the relevant node
+                        struct Node *child_col = &new_col->children[child_index];
+                        child_col->field.table_id = j;
+                        child_col->field.index = k;
+
+                        strcpy(child_col->field.text, getFieldName(table->db, k));
+                        strcpy(new_col->alias, child_col->field.text);
+                    }
+                    else {
+                        // FN(*) is supported
+                        // i.e. gets expanded to FN(a), FN(b), etc.
+                        new_col->function = col->function;
+                        // Inherit the self-child optimisation if in place
+                        new_col->child_count = col->child_count;
+                        new_col->field.table_id = j;
+                        new_col->field.index = k;
+
                         strcpy(new_col->field.text, getFieldName(table->db, k));
-                    // } else {
-                    //     char buf[MAX_FIELD_LENGTH];
-                    //     char *end = strchr(col->alias, '(');
-                    //     size_t len = end - col->alias;
-                    //     strncpy(buf, col->alias, len);
-                    //     buf[len] = '\0';
-                    //     sprintf(new_col->field.text, "%s(%s)", buf, getFieldName(table->db, k));
-                    // }
-
-                    strcpy(new_col->alias, new_col->field.text);
+                        strcpy(new_col->alias, new_col->field.text);
+                    }
                 }
             }
 

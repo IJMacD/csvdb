@@ -32,6 +32,8 @@ SELECT COUNT(*) FROM test WHERE name = 'Walter KELLY';
 SELECT COUNT(*) FROM test WHERE birth_date = '2050-01-01';
 SELECT COUNT(*) FROM test WHERE score = 42;
 FROM test WHERE name < 'Bob' AND score > 50 FETCH FIRST 5 ROWS ONLY;
+-- Test * in function params
+FROM SEQUENCE SELECT DATE_ADD('2023-10-31', *) LIMIT 5
 -- Test Join to CALENDAR
 FROM test, CALENDAR ON date = birth_date WHERE name LIKE 'Walter M%' SELECT name, birth_date, yearday FETCH FIRST 5 ROWS ONLY;
 FROM test, CALENDAR ON birth_date = date WHERE name < 'Aaron Z' SELECT name, date, yearday ORDER BY yearday FETCH FIRST 5 ROWS ONLY;

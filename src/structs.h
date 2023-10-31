@@ -6,6 +6,8 @@
 
 #define ROWID_NULL  -1
 
+#define NOT_FOUND   -2
+
 #define DB_SUBQUERY (void *)-1
 
 #define dt(stop,start)  (stop.tv_sec - start.tv_sec) * 1000000 + stop.tv_usec - start.tv_usec
