@@ -221,6 +221,12 @@ struct Node {
     struct Node *children;
 };
 
+enum AliasSearchMode {
+    NO_ALIASES,
+    ALIASES_FIRST,
+    ALIASES_LAST,
+};
+
 enum IndexSearchResult {
     RESULT_FOUND =          0,
     RESULT_NO_ROWS =       -1,

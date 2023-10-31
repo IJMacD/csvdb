@@ -29,7 +29,7 @@ static int information_query (const char *table, FILE * output);
 
 static int populate_tables (struct Query *q);
 
-static int resolveNode (struct Query *query, struct Node *node, int allow_aliases);
+static int resolveNode (struct Query *query, struct Node *node, enum AliasSearchMode allow_aliases);
 
 static void expandFieldStar (struct Query *query);
 
@@ -413,7 +413,7 @@ int process_query (
     // Populate SELECT fields first so that aliases can be used in WHERE or
     // ORDER BY clauses
     for (int i = 0; i < q->column_count; i++) {
-        result = resolveNode(q, &q->column_nodes[i], 0);
+        result = resolveNode(q, &q->column_nodes[i], NO_ALIASES);
         if (result < 0) {
             fprintf(stderr, "Unable to resolve SELECT column %d\n", i);
             return result;
@@ -439,7 +439,7 @@ int process_query (
         struct Node *predicate = &q->predicate_nodes[i];
 
         for (int j = 0; j < predicate->child_count; j++) {
-            result = resolveNode(q, &predicate->children[j], 1);
+            result = resolveNode(q, &predicate->children[j], ALIASES_FIRST);
 
             if (result < 0) {
                 fprintf(stderr, "Unable to resolve WHERE node (%d,%d)\n", i, j);
@@ -472,7 +472,7 @@ int process_query (
 
     // Populate ORDER BY columns
     for (int i = 0; i < q->order_count; i++) {
-        result = resolveNode(q, &q->order_nodes[i], 1);
+        result = resolveNode(q, &q->order_nodes[i], ALIASES_FIRST);
         if (result < 0) {
             fprintf(stderr, "Unable to resolve ORDER BY node %i\n", i);
             return result;
@@ -481,7 +481,7 @@ int process_query (
 
     // Populate GROUP BY columns
     for (int i = 0; i < q->group_count; i++) {
-        result = resolveNode(q, &q->group_nodes[i], 1);
+        result = resolveNode(q, &q->group_nodes[i], ALIASES_LAST);
         if (result < 0) {
             fprintf(stderr, "Unable to resolve GROUP BY node %i\n", i);
             return result;
@@ -832,11 +832,11 @@ static int populate_tables (struct Query *q) {
             table->join.function != OPERATOR_ALWAYS
             && table->join.function != FUNC_UNITY
         ) {
-            result = resolveNode(q, &table->join.children[0], 0);
+            result = resolveNode(q, &table->join.children[0], NO_ALIASES);
             if (result < 0) {
                 return result;
             }
-            result = resolveNode(q, &table->join.children[1], 0);
+            result = resolveNode(q, &table->join.children[1], NO_ALIASES);
             if (result < 0) {
                 return result;
             }
@@ -956,9 +956,14 @@ static int find_field (
  * Will also evaluate constant values.
  * Safe to call multiple times on same column.
  *
+ * @param query
+ * @param node
+ * @param allow_aliases 0 = do not search aliases; 1 = search aliases before
+ * tables; 2 = search aliases after tables
  * @returns 0 on success
  */
-static int resolveNode (struct Query *query, struct Node *node, int allow_aliases) {
+static int resolveNode (struct Query *query, struct Node *node, enum AliasSearchMode allow_aliases) {
+    // Depth first resolving
     if (node->child_count > 0) {
         for (int i = 0; i < node->child_count; i++) {
             int result = resolveNode(query, &node->children[i], allow_aliases);
@@ -967,9 +972,21 @@ static int resolveNode (struct Query *query, struct Node *node, int allow_aliase
         return 0;
     }
 
+    // Deal with constants here
+    if (node->field.index == FIELD_CONSTANT) {
+        evaluateConstantField(node->field.text, &node->field);
+        return 0;
+    }
+
+    // If field has already been resolved there's nothing for us to do.
+    // If field text is empty there's nothing we can do.
+    if (node->field.index != FIELD_UNKNOWN || node->field.text[0] == '\0') {
+        return 0;
+    }
+
     // Check for aliases first
     if (
-        allow_aliases
+        allow_aliases == 1
         && node->function == FUNC_UNITY
         && node->field.index == FIELD_UNKNOWN
         && node->field.text[0] != '\0'
@@ -985,27 +1002,38 @@ static int resolveNode (struct Query *query, struct Node *node, int allow_aliase
         }
     }
 
-    if (node->field.index == FIELD_CONSTANT) {
-        evaluateConstantField(node->field.text, &node->field);
+    // Search all tables for field
+    if (find_field(
+            query,
+            node->field.text,
+            &node->field.table_id,
+            &node->field.index,
+            node->field.text
+        )
+    ) {
+        return 0;
     }
-    else if (
-        node->field.index == FIELD_UNKNOWN
+
+    // Check for aliases last
+    if (
+        allow_aliases == 2
+        && node->function == FUNC_UNITY
+        && node->field.index == FIELD_UNKNOWN
         && node->field.text[0] != '\0'
     ) {
-        if (!find_field(
-                query,
-                node->field.text,
-                &node->field.table_id,
-                &node->field.index,
-                node->field.text
-            )
-        ) {
-            fprintf(stderr, "Unable to find column '%s'\n", node->field.text);
-            return -1;
+        for (int i = 0; i < query->column_count; i++) {
+            if (
+                node != (struct Node *)&query->column_nodes[i]
+                && strcmp(node->field.text, query->column_nodes[i].alias) == 0
+            ) {
+                copyNodeTree(node, (struct Node *)&query->column_nodes[i]);
+                return 0;
+            }
         }
     }
 
-    return 0;
+    fprintf(stderr, "Unable to find column '%s'\n", node->field.text);
+    return -1;
 }
 
 /**
@@ -1228,7 +1256,17 @@ static void expandFieldStar (struct Query *query) {
                     new_col->field.table_id = j;
                     new_col->field.index = k;
 
-                    strcpy(new_col->field.text, getFieldName(table->db, k));
+                    // if (col->function == FUNC_UNITY) {
+                        strcpy(new_col->field.text, getFieldName(table->db, k));
+                    // } else {
+                    //     char buf[MAX_FIELD_LENGTH];
+                    //     char *end = strchr(col->alias, '(');
+                    //     size_t len = end - col->alias;
+                    //     strncpy(buf, col->alias, len);
+                    //     buf[len] = '\0';
+                    //     sprintf(new_col->field.text, "%s(%s)", buf, getFieldName(table->db, k));
+                    // }
+
                     strcpy(new_col->alias, new_col->field.text);
                 }
             }
