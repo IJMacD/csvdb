@@ -180,30 +180,55 @@ int csvMmap_getRecordValue (
         // Are we currently in the correct field?
         if (current_field_index == field_index) {
 
-            // Have we found the end of a quoted value?
-            // We've found the end of a record
-            if (
-                db->data[i] == '"'
-                || (
-                    !quoted_flag
-                    && (
-                        db->data[i] == ','
-                        || db->data[i] == '\n'
-                        || db->data[i] == '\r'
-                    )
+            if (db->data[i] == '"') {
+                // We found a quote. It could be at the end of the field or
+                // could be escaping another quote
+
+                // Move on and see what we get
+                i++;
+
+                if (quoted_flag) {
+                    if (db->data[i] == '"') {
+                        // found two double quotes, copy one to output
+                        value[char_index++] = '"';
+                    }
+                    // If we find comma or newline immediately after one double
+                    // quote then it must be the end of the field.
+                    else if (
+                        db->data[i] == ',' ||
+                        db->data[i] == '\n' ||
+                        db->data[i] == '\r'
+                    ) {
+                        // finish off the string and return the length
+                        value[char_index] = '\0';
+                        return char_index;
+                    }
+                    else {
+                        // illegal quote
+                    }
+                }
+                else {
+                    // illegal quote
+                }
+            }
+            // If we're not quoted, then comma or newline must be the end of the
+            // field.
+            else if (
+                !quoted_flag && (
+                    db->data[i] == ',' ||
+                    db->data[i] == '\n' ||
+                    db->data[i] == '\r'
                 )
             ) {
-
-                // There might be quotes in the middle of a values, who cares?
-                // Let's just ignore that and pretend it won't happen
-
                 // finish off the string and return the length
                 value[char_index] = '\0';
                 return char_index;
             }
-
-            // Copy the current byte
-            value[char_index++] = db->data[i];
+            // Otherwise jsut a normal byte in the string
+            else {
+                // Copy the current byte
+                value[char_index++] = db->data[i];
+            }
 
             // If we've run out of storage space
             if (char_index > value_max_length) {
