@@ -33,7 +33,7 @@ SELECT COUNT(*) FROM test WHERE birth_date = '2050-01-01';
 SELECT COUNT(*) FROM test WHERE score = 42;
 FROM test WHERE name < 'Bob' AND score > 50 FETCH FIRST 5 ROWS ONLY;
 -- Test * in function params
-FROM SEQUENCE SELECT DATE_ADD('2023-10-31', *) LIMIT 5
+FROM SEQUENCE SELECT DATE_ADD('2023-10-31', *) LIMIT 5;
 -- Test Join to CALENDAR
 FROM test, CALENDAR ON date = birth_date WHERE name LIKE 'Walter M%' SELECT name, birth_date, yearday FETCH FIRST 5 ROWS ONLY;
 FROM test, CALENDAR ON birth_date = date WHERE name < 'Aaron Z' SELECT name, date, yearday ORDER BY yearday FETCH FIRST 5 ROWS ONLY;
@@ -58,7 +58,7 @@ FROM suits INNER JOIN ranks ON LENGTH(ranks.name) = LENGTH(suits.name);
 FROM suits LEFT JOIN ranks ON LENGTH(ranks.name) = LENGTH(suits.name);
 FROM suits JOIN ranks USING LENGTH(name);
 -- Test join predicates
-FROM SEQUENCE AS s1 LEFT JOIN SEQUENCE AS s2 ON s1.value - 2 = s2.value AND s2.value < 2 LIMIT 5
+FROM SEQUENCE AS s1 LEFT JOIN SEQUENCE AS s2 ON s1.value - 2 = s2.value AND s2.value < 2 LIMIT 5;
 -- Test FROM column aliasing;
 FROM suits AS s (n, s);
 -- Test multi-column ordering
@@ -107,13 +107,13 @@ SELECT (5 + 3) * 3, 5 * (3 + 3), (5 + 3 * 3), (5 * 3 + 3), ((5 + 3) * 3), (5 + (
 FROM CALENDAR WHERE date BETWEEN CURRENT_DATE AND CURRENT_DATE + 3 SELECT ordinalDate;
 FROM CALENDAR WHERE date >= CURRENT_DATE - 2 SELECT julian, date, date = CURRENT_DATE LIMIT 5;
 -- Dates
-SELECT TODAY(), NOW(), DATE(NOW()), TIME(NOW()), CLOCK()
+SELECT TODAY(), NOW(), DATE(NOW()), TIME(NOW()), CLOCK();
 -- Date arithmetic
 SELECT '2023-07-25' + 5, '2023-07-25' - 5, '2023-08-25' - '2023-07-25';
 FROM test SELECT birth_date, birth_date + 5, birth_date - 5, TODAY() - birth_date FETCH FIRST 5 ROWS ONLY;
 SELECT TODAY() + 10, DATE_DIFF(TODAY() + 10, '2000-01-01') AS a;
 -- FILTER clause
-FROM test SELECT COUNT(*) AS all, COUNT(*) FILTER (WHERE id % 2 = 0) AS even, COUNT(*) FILTER(WHERE id % 2 = 1) AS odd
+FROM test SELECT COUNT(*) AS all, COUNT(*) FILTER (WHERE id % 2 = 0) AS even, COUNT(*) FILTER(WHERE id % 2 = 1) AS odd;
 -- Temp Tables
 CREATE TEMP TABLE ttt AS FROM SEQUENCE LIMIT 10; FROM ttt ORDER BY value DESC FETCH FIRST 5 ROWS ONLY;
 CREATE TEMP TABLE tt2 AS FROM SEQUENCE LIMIT 2; INSERT INTO tt2 VALUES (14),(15),(16); TABLE tt2;

@@ -854,6 +854,8 @@ int parseComplexNode (
 
         cloneNodeIntoChild(node);
 
+        left = &node->children[0].children[0];
+
         node->function = OPERATOR_AND;
 
         struct Node *p2 = addChildNode(node);
