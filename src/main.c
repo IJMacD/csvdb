@@ -57,7 +57,7 @@ void printUsage (const char* name) {
         "\t[-H|--headers] (default)\n"
         "\t[-N|--no-headers]\n"
         "\t[(-F |--format=)(table|tsv|csv|html|json|json_array|sql|sql_values|"
-        "xml|record)]\n"
+        "sql_create|xml|record)]\n"
         "\t[(-o |--output=)<filename>]\n"
         "\t[--stats] (write timing data to 'stats.csv')\n"
         #ifdef DEBUG
@@ -219,6 +219,8 @@ int main (int argc, char * argv[]) {
             flags |= OUTPUT_FORMAT_XML;
         } else if (strcmp(format_val, "sql_values") == 0) {
             flags |= OUTPUT_FORMAT_SQL_VALUES;
+        } else if (strcmp(format_val, "sql_create") == 0) {
+            flags |= OUTPUT_FORMAT_SQL_CREATE;
         } else {
             fprintf(stderr, "Unrecognised format: %s\n", format_val);
             return -1;

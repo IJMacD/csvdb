@@ -182,12 +182,13 @@ void printResultLine (
             );
         }
         #ifdef JSON_BOOL
-        else if (node->function == OPERATOR_ALWAYS &&
+        else if (
+            node->function == OPERATOR_ALWAYS &&
             (
                 format == OUTPUT_FORMAT_JSON ||
-                format == OUTPUT_FORMAT_JSON_ARRAY)
+                format == OUTPUT_FORMAT_JSON_ARRAY
             )
-        {
+        ) {
             printColumnValue(
                 f,
                 format,
@@ -196,12 +197,13 @@ void printResultLine (
                 "true"
             );
         }
-        else if (node->function == OPERATOR_NEVER &&
+        else if (
+            node->function == OPERATOR_NEVER &&
             (
                 format == OUTPUT_FORMAT_JSON ||
-                format == OUTPUT_FORMAT_JSON_ARRAY)
+                format == OUTPUT_FORMAT_JSON_ARRAY
             )
-        {
+        ) {
             printColumnValue(
                 f,
                 format,
@@ -277,6 +279,9 @@ void printHeaderLine (
     }
     else if (format == OUTPUT_FORMAT_SQL_INSERT) {
         fprintf(f, "INSERT INTO \"%s\" (\"", tables[0].alias);
+    }
+    else if (format == OUTPUT_FORMAT_SQL_CREATE) {
+        fprintf(f, "CREATE TABLE \"%1$s\" (\"", tables[0].alias);
     }
     else if (format == OUTPUT_FORMAT_INFO_SEP) {
         printf("\x01"); // Start of Heading
@@ -355,6 +360,9 @@ void printHeaderLine (
     }
     else if (format == OUTPUT_FORMAT_SQL_INSERT) {
         fprintf(f, "\") VALUES\n");
+    }
+    else if (format == OUTPUT_FORMAT_SQL_CREATE) {
+        fprintf(f, "\"); INSERT INTO \"%1$s\" VALUES\n", tables[0].alias);
     }
     else if (format == OUTPUT_FORMAT_TABLE) {
         fprintf(f, "|\n");
@@ -536,7 +544,10 @@ static void printHeaderSeparator (FILE *f, enum OutputOption format) {
     else if (format == OUTPUT_FORMAT_JSON_ARRAY) {
         fprintf(f, "\",\"");
     }
-    else if (format == OUTPUT_FORMAT_SQL_INSERT) {
+    else if (
+        format == OUTPUT_FORMAT_SQL_INSERT ||
+        format == OUTPUT_FORMAT_SQL_CREATE
+    ) {
         fprintf(f, "\",\"");
     }
     else if (format == OUTPUT_FORMAT_INFO_SEP) {
@@ -566,7 +577,10 @@ static void printRecordStart (
     else if (format == OUTPUT_FORMAT_JSON) {
         fprintf(f, "{");
     }
-    else if (format == OUTPUT_FORMAT_SQL_INSERT) {
+    else if (
+        format == OUTPUT_FORMAT_SQL_INSERT ||
+        format == OUTPUT_FORMAT_SQL_CREATE
+    ) {
         fprintf(f, "(");
     }
     else if (format == OUTPUT_FORMAT_INFO_SEP) {
@@ -674,9 +688,27 @@ static void printColumnValue (
         num_fmt = "%ld";
     }
     else if (
-        format == OUTPUT_FORMAT_SQL_INSERT
-        || format == OUTPUT_FORMAT_SQL_VALUES
+        format == OUTPUT_FORMAT_SQL_INSERT ||
+        format == OUTPUT_FORMAT_SQL_VALUES ||
+        format == OUTPUT_FORMAT_SQL_CREATE
     ) {
+        size_t value_length = strlen(value);
+        escaped_value = malloc(value_length * 2);
+        char *clone = malloc(value_length * 2);
+        mallocd = 1;
+
+        replace(clone, value, '\r', "\\r");
+        replace(escaped_value, clone, '\n', "\\n");
+
+        if (strchr(value, '\'')) {
+            replace(clone, escaped_value, '\'', "''");
+            free(escaped_value);
+            escaped_value = clone;
+        }
+        else {
+            free(clone);
+        }
+
         string_fmt = "'%s'";
         num_fmt = "%ld";
     }
@@ -760,8 +792,9 @@ static void printColumnSeparator (FILE *f, enum OutputOption format) {
         fprintf(f, ",");
     }
     else if (
-        format == OUTPUT_FORMAT_SQL_INSERT
-        || format == OUTPUT_FORMAT_SQL_VALUES
+        format == OUTPUT_FORMAT_SQL_INSERT ||
+        format == OUTPUT_FORMAT_SQL_VALUES ||
+        format == OUTPUT_FORMAT_SQL_CREATE
     ) {
         fprintf(f, ",");
     }
@@ -793,8 +826,9 @@ static void printRecordEnd (
         fprintf(f, "}");
     }
     else if (
-        format == OUTPUT_FORMAT_SQL_INSERT
-        || format == OUTPUT_FORMAT_SQL_VALUES
+        format == OUTPUT_FORMAT_SQL_INSERT ||
+        format == OUTPUT_FORMAT_SQL_VALUES ||
+        format == OUTPUT_FORMAT_SQL_CREATE
     ) {
         fprintf(f, ")");
     }
@@ -814,8 +848,9 @@ static void printRecordSeparator (FILE *f, enum OutputOption format) {
         fprintf(f, ",");
     }
     else if (
-        format == OUTPUT_FORMAT_SQL_INSERT
-        || format == OUTPUT_FORMAT_SQL_VALUES
+        format == OUTPUT_FORMAT_SQL_INSERT ||
+        format == OUTPUT_FORMAT_SQL_VALUES ||
+        format == OUTPUT_FORMAT_SQL_CREATE
     ) {
         fprintf(f, ",\n");
     }
