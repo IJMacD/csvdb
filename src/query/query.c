@@ -310,31 +310,36 @@ int process_query (
         q->flags |= FLAG_EXPLAIN;
     }
 
+    // If there are no tables specified then we default to "FROM stdin".
+    // However, the special case of all constant columns means we just want a
+    // dummy row query.
     if (q->table_count == 0) {
-        // No table was specified.
-        // However, if stdin is something more than a tty (i.e pipe or
-        // redirected file) then we can default to it.
+
+        int all_constant = 1;
+
+        if (q->column_count == 0) {
+            all_constant = 0;
+        }
+        else for (int i = 0; i < q->column_count; i++) {
+            if (isConstantNode((struct Node *)&q->column_nodes[i]) == 0) {
+                all_constant = 0;
+                break;
+            }
+        }
+
+        if (!all_constant) {
+            // We *must* have a table
+
         if (!isatty(fileno(stdin))) {
             q->tables = calloc(1, sizeof (struct Table));
             q->table_count = 1;
             strcpy(q->tables[0].name, "stdin");
             strcpy(q->tables[0].alias, "stdin");
         }
-        else  if (q->column_count > 0) {
-            // We could have a constant query which will output a single row
-            // Check if any of the fields are non-constant and abort
-
-            for (int i = 0; i < q->column_count; i++) {
-                if (isConstantNode((struct Node *)&q->column_nodes[i]) == 0) {
-                    fprintf(stderr, "No Tables specified\n");
+            else {
+                fprintf(stderr, "No tables specified\n");
                     return -1;
                 }
-            }
-        }
-        else {
-            // We have an empty query.
-            // We'll just exit without error
-            return 0;
         }
     }
     else if (strcmp(q->tables[0].name, "INFORMATION") == 0) {
