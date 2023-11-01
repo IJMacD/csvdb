@@ -5,6 +5,8 @@
 #include "structs.h"
 #include "query/query.h"
 
+int debug_verbosity = 0;
+
 void printUsage (const char* name) {
     printf(
         "Usage:\n\t%s n [out.csv]\n\tGenerate n records and store in out.csv or"

@@ -65,11 +65,9 @@ void optimiseCollapseConstantNode (struct Node *node)  {
         for (int i = 0; i < node->child_count; i++) {
             // If we have any ALWAYS children then the whole node is ALWAYS
             if (node->children[i].function == OPERATOR_ALWAYS) {
-                #if DEBUG
                 if (debug_verbosity >= 2) {
                     fprintf(stderr, "[OPTIMISE] Constant Collapse (OR)\n");
                 }
-                #endif
                 node->function = OPERATOR_ALWAYS;
                 return;
             }
@@ -104,11 +102,9 @@ void optimiseCollapseConstantNode (struct Node *node)  {
         // If we're evaluating an operator then we can definitively set the node
         // to OPERATOR_ALWAYS or OPERATOR_NEVER
 
-        #if DEBUG
         if (debug_verbosity >= 2) {
             fprintf(stderr, "[OPTIMISE] Constant Collapse (Operator)\n");
         }
-        #endif
 
         // TODO: What about cases with any child count other than 2?
 
@@ -128,11 +124,9 @@ void optimiseCollapseConstantNode (struct Node *node)  {
         }
     }
     else {
-        #if DEBUG
         if (debug_verbosity >= 2) {
             fprintf(stderr, "[OPTIMISE] Constant Collapse\n");
         }
-        #endif
 
         // Evaluate the function and write result to field
         evaluateConstantNode(node, node->field.text);
@@ -180,11 +174,9 @@ void optimiseRowidAlgebra (struct Node *node) {
             if (left_grandchild->field.index == FIELD_ROW_INDEX) {
                 // We should optimise!
 
-                #if DEBUG
                 if (debug_verbosity >= 2) {
                     fprintf(stderr, "[OPTIMISE] RowID algebra\n");
                 }
-                #endif
 
                 // e.g. tree before
                 //          =       |
@@ -246,11 +238,9 @@ void optimiseFlattenANDPredicates (struct Query * query) {
         return;
     }
 
-    #if DEBUG
     if (debug_verbosity >= 2) {
         fprintf(stderr, "[OPTIMISE] Flatten AND predicates (%d)\n", have_AND_predicates);
     }
-    #endif
 
     int new_predicate_count = query->predicate_count + have_AND_predicates;
 
@@ -307,11 +297,9 @@ void optimiseWhereToOn (struct Query *query) {
         if (left_table_id > 0 && is_right_constant) {
             // Success: Expression on a single table!
 
-            #if DEBUG
             if (debug_verbosity >= 2) {
                 fprintf(stderr, "[OPTIMISE] WHERE to ON (Predicate #%d)\n", i);
             }
-            #endif
 
             struct Node *join_node = &query->tables[left_table_id].join;
             if (join_node->function == OPERATOR_ALWAYS) {
@@ -362,11 +350,9 @@ void optimiseOnToWhere (
     if (table_bit_map < (1 << table_id)) {
         // We can optimise
 
-        #if DEBUG
         if (debug_verbosity >= 2) {
             fprintf(stderr, "[OPTIMISE] WHERE to ON (Table %d)\n", table_id);
         }
-        #endif
 
         // Copy to predicate list
         struct Node *target = allocatePredicateNode(query);
