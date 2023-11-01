@@ -117,8 +117,8 @@ $(CGIDDIR)/%.o: $(SRCDIR)/%.c
 test: prep release test/test.csv
 	cd test && ./test.sh
 
-test.csv: $(GENEXE)
-	${GENEXE} 1000000 test.csv
+test/test.csv: $(GENEXE)
+	${GENEXE} 1000000 $@
 
 $(GENEXE): $(GENOBJS)
 	$(CC) $(CFLAGS) $(RELCFLAGS) -o $@ $^
