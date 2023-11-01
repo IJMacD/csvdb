@@ -14,6 +14,8 @@ void repl () {
     enum OutputOption options = OUTPUT_OPTION_HEADERS | OUTPUT_FORMAT_TABLE;
     printf("CSVDB REPL\nType \".help\" for help.\n\n");
 
+    int explain = 0;
+
     while(1) {
         printf("> ");
 
@@ -45,6 +47,12 @@ void repl () {
 
         if (strcmp(token, ".version") == 0) {
             printf("Version: %s\n", gitversion);
+            continue;
+        }
+
+        if (strcmp(token, ".explain") == 0) {
+            explain = !explain;
+            printf("Explain: %s\n", explain ? "ON" : "OFF");
             continue;
         }
 
@@ -80,6 +88,11 @@ void repl () {
             continue;
         }
 
+        options &= ~FLAG_EXPLAIN;
+        if (explain) {
+            options |= FLAG_EXPLAIN;
+        }
+
         const char *end_ptr;
 
         query(line_buffer, options, stdout, &end_ptr);
@@ -98,5 +111,6 @@ static void printHelp () {
         "\t.version\n"
         "\t.exit\n"
         "\t.format tsv|csv|html|json|json_array|sql|sql_values|xml|record\n"
+        "\t.explain\n"
     );
 }

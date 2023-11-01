@@ -135,9 +135,10 @@ int query (
 
     // If we're querying the stats table then we must have stats turned off
     // for this query otherwise they would get overwritten.
+    // Note pretty finicky and defeated by whitespace.
     if (
         strcmp(query, "TABLE stats") == 0
-        || strncmp(query, "FROM stats", 10) == 0
+        || strstr(query, "FROM stats") != NULL
     ) {
         output_flags &= ~OUTPUT_OPTION_STATS;
     }
@@ -330,16 +331,16 @@ int process_query (
         if (!all_constant) {
             // We *must* have a table
 
-        if (!isatty(fileno(stdin))) {
-            q->tables = calloc(1, sizeof (struct Table));
-            q->table_count = 1;
-            strcpy(q->tables[0].name, "stdin");
-            strcpy(q->tables[0].alias, "stdin");
-        }
+            if (!isatty(fileno(stdin))) {
+                q->tables = calloc(1, sizeof (struct Table));
+                q->table_count = 1;
+                strcpy(q->tables[0].name, "stdin");
+                strcpy(q->tables[0].alias, "stdin");
+            }
             else {
                 fprintf(stderr, "No tables specified\n");
-                    return -1;
-                }
+                return -1;
+            }
         }
     }
     else if (strcmp(q->tables[0].name, "INFORMATION") == 0) {
