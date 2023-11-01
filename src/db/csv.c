@@ -344,7 +344,8 @@ int csv_getRecordValue (
                         else if (
                             db->data[i] == ',' ||
                             db->data[i] == '\n' ||
-                            db->data[i] == '\r'
+                            db->data[i] == '\r' ||
+                            db->data[i] == '\0'
                         ) {
                             // finish off the string and return the length
                             value[char_index] = '\0';
@@ -364,7 +365,8 @@ int csv_getRecordValue (
                     !quoted_flag && (
                         db->data[i] == ',' ||
                         db->data[i] == '\n' ||
-                        db->data[i] == '\r'
+                        db->data[i] == '\r' ||
+                        db->data[i] == '\0'
                     )
                 ) {
                     // finish off the string and return the length
@@ -380,6 +382,7 @@ int csv_getRecordValue (
 
                 // If we've run out of storage space
                 if (char_index > value_max_length) {
+                    value[char_index - 1] = '\0';
                     return -1;
                 }
             } else {
@@ -391,6 +394,7 @@ int csv_getRecordValue (
                 // If we got to a newline and we're not in the correct field
                 // then the field was not found
                 if (buffer[i] == '\n') {
+                    value[0] = '\0';
                     return -1;
                 }
             }
