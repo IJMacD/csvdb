@@ -605,18 +605,32 @@ int evaluateAggregateFunction (
         exit(-1);
     }
 
+    int is_count_star = node->function == FUNC_AGG_COUNT && (
+        (node->child_count == -1 && node->field.index == FIELD_STAR) ||
+        (node->child_count == 1 && node->children[0].field.index == FIELD_STAR)
+    );
+
     struct RowList *row_list = getRowList(list_id);
 
-    LongestValue *values = malloc(row_list->row_count * MAX_VALUE_LENGTH);
+    LongestValue *values = NULL;
 
-    if (values == NULL) {
-        fprintf(stderr, "Unable to allocate %d bytes\n", row_list->row_count * MAX_VALUE_LENGTH);
-        exit(-1);
+    // We only need to allocate if it's an agg function other than COUNT(*)
+    if (!is_count_star) {
+        values = malloc(row_list->row_count * MAX_VALUE_LENGTH);
+
+        if (values == NULL) {
+            fprintf(stderr, "Unable to allocate %d bytes\n", row_list->row_count * MAX_VALUE_LENGTH);
+            exit(-1);
+        }
     }
 
     int row_count = 0;
 
-    for (unsigned int i = 0; i < row_list->row_count; i++) {
+    // COUNT(*) without FILTER doesn't need extra processing
+    if (is_count_star && node->filter == NULL) {
+        row_count = row_list->row_count;
+    }
+    else for (unsigned int i = 0; i < row_list->row_count; i++) {
         int include = 1;
 
         if (node->filter != NULL) {
@@ -624,31 +638,35 @@ int evaluateAggregateFunction (
         }
 
         if (include) {
-            if (node->child_count == -1) {
-                // Self-child optimisation
-                // Must be a single field
-                struct Field *field = (struct Field *)node;
 
-                int rowid = getRowID(row_list, field->table_id, i);
+            // We don't need to evaluate nodes if it's COUNT(*)
+            if (!is_count_star) {
+                if (node->child_count == -1) {
+                    // Self-child optimisation
+                    // Must be a single field
+                    struct Field *field = (struct Field *)node;
 
-                getRecordValue(
-                    tables[field->table_id].db,
-                    rowid,
-                    field->index,
-                    values[i],
-                    MAX_VALUE_LENGTH
-                );
-            }
-            else if (node->child_count == 1) {
-                // Evaluate (only) child node for each item in the RowList
-                evaluateNode(
-                    tables,
-                    list_id,
-                    i,
-                    &node->children[0],
-                    values[i],
-                    MAX_VALUE_LENGTH
-                );
+                    int rowid = getRowID(row_list, field->table_id, i);
+
+                    getRecordValue(
+                        tables[field->table_id].db,
+                        rowid,
+                        field->index,
+                        values[i],
+                        MAX_VALUE_LENGTH
+                    );
+                }
+                else if (node->child_count == 1) {
+                    // Evaluate (only) child node for each item in the RowList
+                    evaluateNode(
+                        tables,
+                        list_id,
+                        i,
+                        &node->children[0],
+                        values[i],
+                        MAX_VALUE_LENGTH
+                    );
+                }
             }
 
             row_count++;
@@ -658,10 +676,6 @@ int evaluateAggregateFunction (
     int bytesWritten = 0;
 
     if (node->function == FUNC_AGG_COUNT) {
-        int is_count_star =
-            (node->child_count == -1 && node->field.index == FIELD_STAR) ||
-            (node->child_count == 1 && node->children[0].field.index == FIELD_STAR);
-
         if (is_count_star) {
             bytesWritten = sprintf(output, "%d", row_count);
         }
