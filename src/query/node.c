@@ -100,7 +100,6 @@ void clearNode (struct Node *node) {
     node->field.table_id = -1;
     node->field.text[0] = '\0';
     node->function = FUNC_UNITY;
-    node->alias[0] = '\0';
 }
 
 void freeNode (struct Node *node) {

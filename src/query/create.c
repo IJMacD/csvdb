@@ -194,7 +194,7 @@ static int create_index (
         return -1;
     }
 
-    struct Node *columns = malloc(sizeof(*columns) * (field_count + 1));
+    struct Column *columns = malloc(sizeof(*columns) * (field_count + 1));
 
     for (int i = 0; i < field_count; i++) {
         int index_field_index = getFieldIndex(&db, index_field[i]);
@@ -206,20 +206,20 @@ static int create_index (
 
         // Defaults to ASC
         // columns[i].alias[0] = ORDER_ASC;
-        columns[i].function = FUNC_UNITY;
+        columns[i].node.function = FUNC_UNITY;
         strcpy(columns[i].alias, index_field[i]);
-        columns[i].field.table_id = 0;
-        columns[i].field.index = index_field_index;
-        columns[i].child_count = 0;
-        columns[i].children = NULL;
+        columns[i].node.field.table_id = 0;
+        columns[i].node.field.index = index_field_index;
+        columns[i].node.child_count = 0;
+        columns[i].node.children = NULL;
     }
 
-    columns[field_count].function = FUNC_UNITY;
+    columns[field_count].node.function = FUNC_UNITY;
     strcpy(columns[field_count].alias, "rowid");
-    columns[field_count].field.table_id = 0;
-    columns[field_count].field.index = FIELD_ROW_INDEX;
-    columns[field_count].child_count = 0;
-    columns[field_count].children = NULL;
+    columns[field_count].node.field.table_id = 0;
+    columns[field_count].node.field.index = FIELD_ROW_INDEX;
+    columns[field_count].node.child_count = 0;
+    columns[field_count].node.children = NULL;
 
     char file_name[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12];
     sprintf(
@@ -264,7 +264,7 @@ static int create_index (
             getRecordValue(
                 &db,
                 row_id,
-                columns[0].field.index,
+                columns[0].node.field.index,
                 values[i % 2],
                 MAX_VALUE_LENGTH
             );

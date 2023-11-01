@@ -211,7 +211,6 @@ struct Field {
 struct Node {
     struct Field field;
     enum Function function;
-    char alias[MAX_FIELD_LENGTH];
     /**
      * @brief When function != FUNC_UNITY, child_count = -1 means this node is
      * it's own child.
@@ -221,6 +220,14 @@ struct Node {
     int child_count;
     /* Can only be used when function is not FUNC_UNITY */
     struct Node *children;
+};
+
+// Since Node is first field of Column, it means that Column can be cast to Node
+struct Column {
+    struct Node node;
+    char alias[MAX_FIELD_LENGTH];
+    /* To filter aggregate functions */
+    struct Node *filter;
 };
 
 enum AliasSearchMode {
@@ -300,8 +307,8 @@ enum PlanStepType {
 struct PlanStep {
     enum PlanStepType type;
     int limit;
-    int node_count;
-    struct Node *nodes;
+    int column_count;
+    struct Column *columns;
 };
 
 struct Plan {
@@ -364,7 +371,7 @@ struct Query {
     enum QueryFlag flags;
     struct Table *tables;
     int table_count;
-    struct Node *column_nodes;
+    struct Column *column_nodes;
     int column_count;
     struct Node *predicate_nodes;
     int predicate_count;
