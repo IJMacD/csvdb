@@ -83,13 +83,19 @@ void copyNodeTree (struct Node *dest, struct Node *src) {
 
     dest->children = NULL;
 
-    if (src->children != NULL && src->child_count > 0) {
+    dest->filter = NULL;
 
-        dest->children = calloc( src->child_count, sizeof(*dest));
+    if (src->children != NULL && src->child_count > 0) {
+        dest->children = calloc(src->child_count, sizeof(*dest));
 
         for (int i = 0; i < src->child_count; i++) {
             copyNodeTree(&dest->children[i], &src->children[i]);
         }
+    }
+
+    if (src->filter != NULL) {
+        dest->filter = calloc(1, sizeof(*dest));
+        copyNodeTree(dest->filter, src->filter);
     }
 }
 
@@ -101,6 +107,7 @@ void clearNode (struct Node *node) {
     node->field.text[0] = '\0';
     node->function = FUNC_UNITY;
     node->alias[0] = '\0';
+    node->filter = NULL;
 }
 
 void freeNode (struct Node *node) {
@@ -113,6 +120,11 @@ void freeNode (struct Node *node) {
     if (node->children != NULL) {
         free(node->children);
         node->children = NULL;
+    }
+
+    if (node->filter != NULL) {
+        free(node->filter);
+        node->filter = NULL;
     }
 }
 

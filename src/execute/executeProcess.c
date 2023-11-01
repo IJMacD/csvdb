@@ -88,7 +88,7 @@ int executeGroupSorted (
 
     // debugRowList(getRowList(row_list), 2);
 
-    for (int i = 0; i < getRowList(list_id)->row_count; i++) {
+    for (unsigned int i = 0; i < getRowList(list_id)->row_count; i++) {
         char *curr_value = values[i%2];
         char *prev_value = values[(i+1)%2];
 
@@ -156,7 +156,7 @@ int executeGroupBucket (
 
     // Iterate rows
 
-    for (int i = 0; i < getRowList(list_id)->row_count; i++) {
+    for (unsigned int i = 0; i < getRowList(list_id)->row_count; i++) {
         char value[MAX_VALUE_LENGTH] = {0};
 
         // Evaluate group key

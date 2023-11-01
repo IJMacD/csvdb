@@ -93,7 +93,7 @@ void appendJoinedRowID (
     }
 
     int dest_index = dest_list->row_count;
-    int i = 0;
+    unsigned int i = 0;
     for(; i < src_list->join_count; i++) {
         writeRowID(dest_list, i, dest_index, getRowID(src_list, i, src_index));
     }
@@ -127,7 +127,7 @@ void copyResultRow (
         exit(-1);
     }
 
-    for(int i = 0; i < src_list->join_count; i++) {
+    for(unsigned int i = 0; i < src_list->join_count; i++) {
         writeRowID(
             dest_list,
             i,
@@ -140,7 +140,7 @@ void copyResultRow (
 }
 
 /**
- * @brief Flip all ros in a RowList. First row becomes last and vice-versa.
+ * @brief Flip all rows in a RowList. First row becomes last and vice-versa.
  *
  * @param row_list
  * @param limit -1 for no limit
@@ -151,22 +151,22 @@ void reverseRowList (struct RowList * row_list, int limit) {
         reverse_array(row_list->row_ids, row_list->row_count);
     }
     else {
-        for (int i = 0; i < row_list->row_count / 2; i++) {
+        for (unsigned int i = 0; i < row_list->row_count / 2; i++) {
             int i1 = row_list->row_count - i - 1;
 
-            for (int j = 0; j < row_list->join_count; j++) {
+            for (unsigned int j = 0; j < row_list->join_count; j++) {
                 int temp = getRowID(row_list, j, i1);
                 writeRowID(row_list, j, i1, getRowID(row_list, j, i));
                 writeRowID(row_list, j, i, temp);
             }
 
-            if (limit > -1 && i >= limit) {
+            if (limit > -1 && i >= (unsigned)limit) {
                 break;
             }
         }
     }
 
-    if (limit > -1 && limit < row_list->row_count) {
+    if (limit > -1 && (unsigned)limit < row_list->row_count) {
         row_list->row_count = limit;
     }
 }
@@ -194,9 +194,9 @@ void copyRowList (struct RowList *dest_list, struct RowList *src_list) {
         memcpy(dest_list->row_ids, src_list->row_ids, src_list->row_count);
     }
     else {
-        for (int i = 0; i < src_list->row_count; i++) {
+        for (unsigned int i = 0; i < src_list->row_count; i++) {
 
-            for (int j = 0; j < src_list->join_count; j++) {
+            for (unsigned int j = 0; j < src_list->join_count; j++) {
                 writeRowID(dest_list, j, i, getRowID(src_list, j, i));
             }
         }
@@ -211,7 +211,7 @@ void copyRowList (struct RowList *dest_list, struct RowList *src_list) {
  * @param index_b
  */
 void swapRows (struct RowList *row_list, int index_a, int index_b) {
-    for (int i = 0; i < row_list->join_count; i++) {
+    for (unsigned int i = 0; i < row_list->join_count; i++) {
         int tmp = getRowID(row_list, i, index_b);
         writeRowID(row_list, i, index_b, getRowID(row_list, i, index_a));
         writeRowID(row_list, i, index_a, tmp);

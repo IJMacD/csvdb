@@ -327,23 +327,6 @@ int parseSimpleNode (
 
         parseFunctionParams(query, index, node);
 
-        // Special treatment for COUNT(*)
-        if (node->function == FUNC_AGG_COUNT
-            &&
-            (
-                (   node->child_count == 1
-                    && node->children[0].field.index == FIELD_STAR
-                )
-                || (   node->child_count == -1
-                    && node->field.index == FIELD_STAR
-                )
-            )
-        ) {
-            node->function = FUNC_UNITY;
-            node->field.index = FIELD_COUNT_STAR;
-            node->field.table_id = -1;
-        }
-
         return flags;
     }
 
@@ -362,7 +345,8 @@ int parseSimpleNode (
 #define MAX_PARENS 10
 
 /**
- * Parses simple nodes and maths nodes:
+ * @brief Parses simple nodes and maths nodes:
+ *
  *  Simple nodes: => <node>
  *      <field>
  *      <constant>

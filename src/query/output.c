@@ -121,15 +121,6 @@ void printResultLine (
                     }
                 }
             }
-            else if (node->field.index == FIELD_COUNT_STAR) {
-                printColumnValueNumber(
-                    f,
-                    format,
-                    NULL,
-                    node->alias,
-                    row_list->row_count
-                );
-            }
             else if (node->field.index == FIELD_ROW_NUMBER) {
                 // ROW_NUMBER() is 1-indexed
                 printColumnValueNumber(
@@ -330,9 +321,6 @@ void printHeaderLine (
         }
         else if (node->alias[0] != '\0') {
             printHeaderName(f, format, NULL, node->alias);
-        }
-        else if (node->field.index == FIELD_COUNT_STAR) {
-            printHeaderName(f, format, NULL, "COUNT(*)");
         }
         else if (node->field.index == FIELD_ROW_NUMBER) {
             printHeaderName(f, format, NULL, "ROW_NUMBER()");

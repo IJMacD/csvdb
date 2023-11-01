@@ -39,7 +39,7 @@ int executeTableAccessRowid (
 
             if (
                 step->limit > -1
-                && getRowList(row_list)->row_count >= step->limit
+                && getRowList(row_list)->row_count >= (unsigned)step->limit
             ) {
                 break;
             }
@@ -61,7 +61,7 @@ int executeSlice (
     RowListIndex row_list = popRowList(result_set);
 
     // Apply limit (including offset rows - which will be omitted later)
-    if (step->limit >= 0 && step->limit < getRowList(row_list)->row_count) {
+    if (step->limit >= 0 && (unsigned)step->limit < getRowList(row_list)->row_count) {
         getRowList(row_list)->row_count = step->limit;
     }
 

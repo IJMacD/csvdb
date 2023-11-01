@@ -370,7 +370,7 @@ int fullTableAccess (
         }
 
         // Implement early exit FETCH FIRST/LIMIT for cases with no ORDER clause
-        if (limit_value >= 0 && getRowList(row_list)->row_count >= limit_value) {
+        if (limit_value >= 0 && getRowList(row_list)->row_count >= (unsigned)limit_value) {
             break;
         }
     }

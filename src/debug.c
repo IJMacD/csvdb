@@ -77,9 +77,9 @@ void debugRowList (struct RowList * list, int verbosity) {
     );
 
     if (verbosity >= 5) {
-        for (int i = 0; i < list->row_count; i++) {
+        for (unsigned int i = 0; i < list->row_count; i++) {
             fprintf(stderr, "Index %3d, Rowids: (", i);
-            for (int j = 0; j < list->join_count; j++) {
+            for (unsigned int j = 0; j < list->join_count; j++) {
                 if (j > 0) {
                     fprintf(stderr, ", ");
                 }
@@ -298,7 +298,9 @@ void debugAST (FILE *output, struct Query *query) {
         for (int i = 0; i < query->column_count; i++) {
             struct Node *node = &query->column_nodes[i];
 
-            if (node->field.index == FIELD_STAR) {
+            if (node->function == FUNC_UNITY &&
+                node->field.index == FIELD_STAR
+            ) {
                 fprintf(
                     output,
                     "{\"column\": \"*\"}"
@@ -307,10 +309,26 @@ void debugAST (FILE *output, struct Query *query) {
             else {
                 fprintf(output, "{\"column\": ");
 
-                debugASTNode(output, node);
+                if (node->function == FUNC_AGG_COUNT &&
+                    node->field.index == FIELD_STAR
+                ) {
+                    fprintf(
+                        output,
+                        "\"COUNT(*)\""
+                    );
+                }
+                else {
+                    debugASTNode(output, node);
+                }
 
                 if (strlen(node->alias)) {
                     fprintf(output, ", \"alias\": \"%s\"", node->alias);
+                }
+
+                if (node->filter != NULL) {
+                    fprintf(output, ", \"filter\": ");
+
+                    debugASTNode(output, node->filter);
                 }
 
                 fprintf(output, "}");

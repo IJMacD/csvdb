@@ -198,7 +198,7 @@ int sequence_fullTableAccess (
     struct RowList *row_list = getRowList(list_id);
     int start_row_count = row_list->row_count;
     for (int i = start + start_offset; i < end; i += step) {
-        if (limit_value >= 0 && row_list->row_count >= limit_value) {
+        if (limit_value >= 0 && row_list->row_count >= (unsigned)limit_value) {
             break;
         }
 

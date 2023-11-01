@@ -195,7 +195,6 @@ enum Function {
 enum FieldIndex {
     FIELD_UNKNOWN =                     -1,
     FIELD_STAR =                        -2,
-    FIELD_COUNT_STAR =                  -3,
     FIELD_ROW_NUMBER =                  -4,
     FIELD_ROW_INDEX =                   -5,
     FIELD_CONSTANT =                    -6,
@@ -221,6 +220,8 @@ struct Node {
     int child_count;
     /* Can only be used when function is not FUNC_UNITY */
     struct Node *children;
+    /* To filter aggregate functions */
+    struct Node *filter;
 };
 
 enum AliasSearchMode {
@@ -381,8 +382,8 @@ typedef int RowListIndex;
 #define ROWLIST_ROWID -1
 
 struct RowList {
-    int row_count;
-    int join_count;
+    unsigned int row_count;
+    unsigned int join_count;
     int group;
     int * row_ids;
 };

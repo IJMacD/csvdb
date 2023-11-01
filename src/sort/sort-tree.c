@@ -50,7 +50,7 @@ void sortResultRows (
 
     int numeric_mode = 0;
 
-    for (int i = 0; i < source_list->row_count; i++) {
+    for (unsigned int i = 0; i < source_list->row_count; i++) {
         struct TreeNode *treenode = &pool[i];
         treenode->key = i;
 
@@ -129,7 +129,7 @@ void sortResultRowsMultiple (
     struct TreeNode *pool = malloc(sizeof (*pool) * source_list->row_count);
     struct TreeNode *root = NULL;
 
-    for (int i = 0; i < source_list->row_count; i++) {
+    for (unsigned int i = 0; i < source_list->row_count; i++) {
         struct TreeNode *node = &pool[i];
         node->key = i;
 

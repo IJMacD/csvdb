@@ -77,6 +77,9 @@ int evaluateNode (
         return evaluateFunction(output, node->function, (char **)values, 1);
     }
 
+    // Function has 0 or more child nodes (parameters)
+    // Evaluate all children first
+
     int value_count = node->child_count;
     if (value_count == 0) {
         value_count = 1;
@@ -109,6 +112,8 @@ int evaluateNode (
         );
         // fprintf(stderr, "[EVALUATE] operand = '%s'\n", values_ptrs[i]);
     }
+
+    // Children have all been evaluated. Now evaluate the actual function.
 
     int result = evaluateFunction(
         output,

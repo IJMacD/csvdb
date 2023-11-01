@@ -10,8 +10,9 @@
 
 /**
  * Evaluate an OPERATOR node
+ * @return 1 if evaluates to true; 0 if evaluates to false
  */
-int evaluateOperatorNode (struct Table *tables, RowListIndex row_list, int row_index, struct Node *node) {
+int evaluateOperatorNode (struct Table *tables, RowListIndex list_id, int row_index, struct Node *node) {
     if ((node->function & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR) {
         fprintf(
             stderr,
@@ -30,11 +31,11 @@ int evaluateOperatorNode (struct Table *tables, RowListIndex row_list, int row_i
     }
 
     if (node->function == OPERATOR_OR) {
-        return evaluateOperatorNodeListOR(tables, row_list, row_index, node->children, node->child_count);
+        return evaluateOperatorNodeListOR(tables, list_id, row_index, node->children, node->child_count);
     }
 
     if (node->function == OPERATOR_AND) {
-        return evaluateOperatorNodeListAND(tables, row_list, row_index, node->children, node->child_count);
+        return evaluateOperatorNodeListAND(tables, list_id, row_index, node->children, node->child_count);
     }
 
     char value_left[MAX_VALUE_LENGTH] = {0};
@@ -42,7 +43,7 @@ int evaluateOperatorNode (struct Table *tables, RowListIndex row_list, int row_i
 
     evaluateNode(
         tables,
-        row_list,
+        list_id,
         row_index,
         &node->children[0],
         value_left,
@@ -50,7 +51,7 @@ int evaluateOperatorNode (struct Table *tables, RowListIndex row_list, int row_i
     );
     evaluateNode(
         tables,
-        row_list,
+        list_id,
         row_index,
         &node->children[1],
         value_right,

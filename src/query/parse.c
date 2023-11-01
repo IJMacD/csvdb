@@ -254,6 +254,43 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                 skipWhitespace(query, &index);
 
+                if (strncmp(query + index, "FILTER", 6) == 0) {
+                    index += 6;
+
+                    skipWhitespace(query, &index);
+
+                    if (query[index] != '(') {
+                        fprintf(stderr, "Expected '(', got %c\n", query[index]);
+                        return -1;
+                    }
+
+                    index++;
+
+                    skipWhitespace(query, &index);
+
+                    if (strncmp(query + index, "WHERE ", 6) != 0) {
+                        fprintf(stderr, "Expected 'WHERE', got %c\n", query[index]);
+                        return -1;
+                    }
+
+                    index += 6;
+
+                    skipWhitespace(query, &index);
+
+                    node->filter = calloc(1, sizeof *node->filter);
+
+                    parseComplexNode(query, &index, node->filter);
+
+                    if (query[index] != ')') {
+                        fprintf(stderr, "Expected ')', got %c\n", query[index]);
+                        return -1;
+                    }
+
+                    index++;
+
+                    skipWhitespace(query, &index);
+                }
+
                 if (strncmp(query + index, "AS ", 3) == 0) {
                     index += 3;
 

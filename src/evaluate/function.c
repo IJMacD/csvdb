@@ -7,6 +7,7 @@
 #include "../functions/date.h"
 #include "../evaluate/evaluate.h"
 #include "../query/result.h"
+#include "./predicates.h"
 #include "../db/db.h"
 
 #define IS_NOT_NULL(x) (x[0])
@@ -599,59 +600,88 @@ int evaluateAggregateFunction (
         return -1;
     }
 
+    if (node->child_count > 1) {
+        fprintf(stderr, "Not supported: Multi-param agg functions\n");
+        exit(-1);
+    }
+
     struct RowList *row_list = getRowList(list_id);
 
     LongestValue *values = malloc(row_list->row_count * MAX_VALUE_LENGTH);
 
-    if (node->child_count == -1) {
-        // Self-child optimisation
-        // Must be a single field
-        struct Field *field = (struct Field *)node;
-
-        for (int i = 0; i < row_list->row_count; i++) {
-            int rowid = getRowID(row_list, field->table_id, i);
-
-            getRecordValue(
-                tables[field->table_id].db,
-                rowid,
-                field->index,
-                values[i],
-                MAX_VALUE_LENGTH
-            );
-        }
+    if (values == NULL) {
+        fprintf(stderr, "Unable to allocate %d bytes\n", row_list->row_count * MAX_VALUE_LENGTH);
+        exit(-1);
     }
-    else if (node->child_count == 1) {
-        // Evaluate child node for each item in the RowList
-        for (int i = 0; i < row_list->row_count; i++) {
-            evaluateNode(
-                tables,
-                list_id,
-                i,
-                &node->children[0],
-                values[i],
-                MAX_VALUE_LENGTH
-            );
+
+    int row_count = 0;
+
+    for (unsigned int i = 0; i < row_list->row_count; i++) {
+        int include = 1;
+
+        if (node->filter != NULL) {
+            include = evaluateOperatorNode(tables, list_id, i, node->filter);
+        }
+
+        if (include) {
+            if (node->child_count == -1) {
+                // Self-child optimisation
+                // Must be a single field
+                struct Field *field = (struct Field *)node;
+
+                int rowid = getRowID(row_list, field->table_id, i);
+
+                getRecordValue(
+                    tables[field->table_id].db,
+                    rowid,
+                    field->index,
+                    values[i],
+                    MAX_VALUE_LENGTH
+                );
+            }
+            else if (node->child_count == 1) {
+                // Evaluate (only) child node for each item in the RowList
+                evaluateNode(
+                    tables,
+                    list_id,
+                    i,
+                    &node->children[0],
+                    values[i],
+                    MAX_VALUE_LENGTH
+                );
+            }
+
+            row_count++;
         }
     }
 
     int bytesWritten = 0;
 
     if (node->function == FUNC_AGG_COUNT) {
-        int count = 0;
+        int is_count_star =
+            (node->child_count == -1 && node->field.index == FIELD_STAR) ||
+            (node->child_count == 1 && node->children[0].field.index == FIELD_STAR);
 
-        for (int i = 0; i < row_list->row_count; i++) {
-            // Count up the non-NULL values
-            if (IS_NOT_NULL(values[i])) {
-                count++;
-            }
+        if (is_count_star) {
+            bytesWritten = sprintf(output, "%d", row_count);
         }
+        else {
+            int count = 0;
 
-        bytesWritten = sprintf(output, "%d", count);
+            for (int i = 0; i < row_count; i++) {
+                // Count up the non-NULL values
+                if (IS_NOT_NULL(values[i])) {
+                    count++;
+                }
+            }
+
+            bytesWritten = sprintf(output, "%d", count);
+        }
     }
     else if (node->function == FUNC_AGG_MIN) {
         int min = INT_MAX;
 
-        for (int i = 0; i < row_list->row_count; i++) {
+        for (int i = 0; i < row_count; i++) {
             // Only consider the non-NULL values
             if (IS_NOT_NULL(values[0])) {
                 int v = atoi(values[i]);
@@ -667,7 +697,7 @@ int evaluateAggregateFunction (
     else if (node->function == FUNC_AGG_MAX) {
         int max = INT_MIN;
 
-        for (int i = 0; i < row_list->row_count; i++) {
+        for (int i = 0; i < row_count; i++) {
             // Only consider the non-NULL values
             if (IS_NOT_NULL(values[i])) {
                 int v = atoi(values[i]);
@@ -684,7 +714,7 @@ int evaluateAggregateFunction (
         int sum = 0;
         int non_null = 0;
 
-        for (int i = 0; i < row_list->row_count; i++) {
+        for (int i = 0; i < row_count; i++) {
             // Sum the non-NULL values
             if (IS_NOT_NULL(values[i])) {
                 non_null = 1;
@@ -701,7 +731,7 @@ int evaluateAggregateFunction (
         int count = 0;
         int sum = 0;
 
-        for (int i = 0; i < row_list->row_count; i++) {
+        for (int i = 0; i < row_count; i++) {
             // Count up the non-NULL values
             if (IS_NOT_NULL(values[i])) {
                 count++;
@@ -719,7 +749,7 @@ int evaluateAggregateFunction (
 
         char *output_start = output;
 
-        for (int i = 0; i < row_list->row_count; i++) {
+        for (int i = 0; i < row_count; i++) {
             // Count up the non-NULL values
             if (IS_NOT_NULL(values[i])) {
                 if (have_prev == 1) {

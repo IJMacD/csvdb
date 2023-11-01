@@ -991,12 +991,19 @@ static int find_field (
  * @returns 0 on success
  */
 static int resolveNode (struct Query *query, struct Node *node, enum AliasSearchMode allow_aliases) {
-    // Depth first resolving
+    if (node->filter != NULL) {
+        int result = resolveNode(query, node->filter, allow_aliases);
+        if (result < 0) return -1;
+    }
+
     if (node->child_count > 0) {
         for (int i = 0; i < node->child_count; i++) {
             int result = resolveNode(query, &node->children[i], allow_aliases);
             if (result < 0) return -1;
         }
+
+        // If there are children then it means there won't be any fields on this
+        // node to resolve.
         return 0;
     }
 
@@ -1256,6 +1263,11 @@ static void expandFieldStar (struct Query *query) {
         struct Node *col = &query->column_nodes[i];
 
         int child_index = NOT_FOUND;
+
+        if (col->function == FUNC_AGG_COUNT) {
+            // COUNT(*) is special
+            continue;
+        }
 
         if (col->field.index == FIELD_STAR) {
             // Could be one of:

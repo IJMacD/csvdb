@@ -42,7 +42,7 @@ int executeCrossJoin (
         new_length
     );
 
-    for (int i = 0; i < getRowList(list_id)->row_count; i++) {
+    for (unsigned int i = 0; i < getRowList(list_id)->row_count; i++) {
         int done = 0;
 
         for (int j = 0; j < record_count; j++) {
@@ -50,7 +50,7 @@ int executeCrossJoin (
 
             if (
                 step->limit > -1
-                && getRowList(new_list)->row_count >= step->limit
+                && getRowList(new_list)->row_count >= (unsigned)step->limit
             ) {
                 done = 1;
                 break;
@@ -152,7 +152,7 @@ int executeConstantJoin (
 
             if (
                 step->limit > -1
-                && getRowList(new_list)->row_count >= step->limit
+                && getRowList(new_list)->row_count >= (unsigned)step->limit
             ) {
                 done = 1;
                 break;
@@ -169,7 +169,7 @@ int executeConstantJoin (
 
             if (
                 step->limit > -1
-                && getRowList(new_list)->row_count >= step->limit
+                && getRowList(new_list)->row_count >= (unsigned)step->limit
             ) {
                 done = 1;
                 break;
@@ -222,7 +222,7 @@ int executeLoopJoin (
     // Prepare a temporary list that can hold every record in the table
     RowListIndex tmp_list = createRowList(1, record_count);
 
-    for (int i = 0; i < getRowList(list_id)->row_count; i++) {
+    for (unsigned int i = 0; i < getRowList(list_id)->row_count; i++) {
         int done = 0;
 
         // Make a local copy of predicate
@@ -254,7 +254,7 @@ int executeLoopJoin (
         freeNode(&p);
 
         // Append each row we've just found to the main getRowList(row_list)
-        for (int j = 0; j < getRowList(tmp_list)->row_count; j++) {
+        for (unsigned int j = 0; j < getRowList(tmp_list)->row_count; j++) {
             int rowid = getRowID(getRowList(tmp_list), 0, j);
 
             appendJoinedRowID(
@@ -266,7 +266,7 @@ int executeLoopJoin (
 
             if (
                 step->limit > -1
-                && getRowList(new_list)->row_count >= step->limit
+                && getRowList(new_list)->row_count >= (unsigned)step->limit
             ) {
                 done = 1;
                 break;
@@ -364,7 +364,7 @@ int executeUniqueJoin (
 
     int rowid_field = getFieldIndex(&index_db, "rowid");
 
-    for (int i = 0; i < getRowList(list_id)->row_count; i++) {
+    for (unsigned int i = 0; i < getRowList(list_id)->row_count; i++) {
         char value[MAX_VALUE_LENGTH];
         int output_status;
 
@@ -411,7 +411,7 @@ int executeUniqueJoin (
 
         if (
             step->limit > -1
-            && getRowList(new_list)->row_count >= step->limit
+            && getRowList(new_list)->row_count >= (unsigned)step->limit
         ) {
             break;
         }
@@ -496,7 +496,7 @@ int executeIndexJoin (
     // table
     int rowid_col = getFieldIndex(&index_db, "rowid");
 
-    for (int i = 0; i < getRowList(list_id)->row_count; i++) {
+    for (unsigned int i = 0; i < getRowList(list_id)->row_count; i++) {
         char value[MAX_VALUE_LENGTH];
         int done = 0;
 
@@ -532,7 +532,7 @@ int executeIndexJoin (
 
                 if (
                     step->limit > -1
-                    && getRowList(new_list)->row_count >= step->limit
+                    && getRowList(new_list)->row_count >= (unsigned)step->limit
                 ) {
                     done = 1;
                     break;
@@ -553,7 +553,7 @@ int executeIndexJoin (
             done
             || (
                 step->limit > -1
-                && getRowList(new_list)->row_count >= step->limit
+                && getRowList(new_list)->row_count >= (unsigned)step->limit
             )
         ) {
             break;

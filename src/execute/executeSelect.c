@@ -54,7 +54,7 @@ int executeSelect (
             );
             row_count++;
         }
-        else for (int i = 0; i < row_list->row_count; i++) {
+        else for (unsigned int i = 0; i < row_list->row_count; i++) {
             printResultLine(
                 output,
                 tables,
