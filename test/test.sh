@@ -30,12 +30,12 @@ for sql in "${lines[@]}"; do
 
     printf "\n$GREY -- Plan: --\n"
 
-    $CSVDB -E "$sql"
+    $CSVDB -E -F table "$sql"
 
     printf "$NC"
 
     start=`date +%s%N`
-    $CSVDB -o $OUTFILE $stats "$sql"
+    $CSVDB -o $OUTFILE $stats -F table "$sql"
     result=$?
     end=`date +%s%N`
 
@@ -46,7 +46,7 @@ for sql in "${lines[@]}"; do
             if [[ ! -z $stats ]]; then
                 printf "\n$GREY -- Stats: (microseconds) --\n"
 
-                ./release/csvdb "TABLE stats"
+                $CSVDB "TABLE stats"
 
                 printf "$NC"
             fi

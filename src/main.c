@@ -225,9 +225,11 @@ int main (int argc, char * argv[]) {
             fprintf(stderr, "Unrecognised format: %s\n", format_val);
             return -1;
         }
+    } else if (isatty(fileno(stdout))) {
+        flags |= OUTPUT_FORMAT_TABLE;
     } else {
         // Disable next line for some fun just dumping data with no delineation
-        flags |= OUTPUT_FORMAT_TABLE;
+        flags |= OUTPUT_FORMAT_COMMA;
     }
 
     if (output_name != NULL) {
