@@ -2,7 +2,7 @@
 # Compiler flags
 #
 CC     = gcc
-CFLAGS = -Wall -Werror -Wextra -Wno-format-overflow
+CFLAGS = -Wall -Werror -Wextra -Wno-format-overflow -fdata-sections -ffunction-sections
 
 #
 # Project files
@@ -24,7 +24,7 @@ DBGDIR = debug
 DBGEXE = $(DBGDIR)/$(EXE)
 DBGSRCS = $(SRCS) repl.c gitversion.c debug.c
 DBGOBJS = $(addprefix $(DBGDIR)/, $(DBGSRCS:.c=.o))
-DBGCFLAGS = -g -O0 -DDEBUG -DJSON_NULL -DJSON_BOOL
+DBGCFLAGS = -g -O0 -DDEBUG -DJSON_NULL -DJSON_BOOL -DCOMPILE_CALENDAR -DCOMPILE_SEQUENCE -DCOMPILE_CSV_MMAP
 
 #
 # Release build settings
@@ -33,7 +33,7 @@ RELDIR = release
 RELEXE = $(RELDIR)/$(EXE)
 RELSRCS = $(SRCS) repl.c gitversion.c
 RELOBJS = $(addprefix $(RELDIR)/, $(RELSRCS:.c=.o))
-RELCFLAGS = -O3 -DNDEBUG -DJSON_NULL -DJSON_BOOL
+RELCFLAGS = -O3 -DNDEBUG -DJSON_NULL -DJSON_BOOL -DCOMPILE_CALENDAR -DCOMPILE_SEQUENCE -DCOMPILE_CSV_MMAP
 
 #
 # CGI build settings
@@ -54,10 +54,11 @@ CGIDOBJS = $(addprefix $(CGIDDIR)/, $(CGIDSRCS:.c=.o))
 #
 # GEN build settings
 #
-GENDIR = release
+GENDIR = gen
 GENEXE = $(GENDIR)/gen
 GENSRCS = $(filter-out main.c, $(SRCS)) gen.c
 GENOBJS = $(addprefix $(GENDIR)/, $(GENSRCS:.c=.o))
+GENCFLAGS = -O3 -DNDEBUG -DJSON_NULL -DJSON_BOOL -DCOMPILE_SAMPLE
 
 .PHONY: all clean debug prep release remake cgi test install
 
@@ -82,7 +83,7 @@ $(DBGDIR)/%.o: $(SRCDIR)/%.c
 release: prep $(RELEXE)
 
 $(RELEXE): $(RELOBJS)
-	$(CC) $(CFLAGS) $(RELCFLAGS) -o $(RELEXE) $^
+	$(CC) $(CFLAGS) $(RELCFLAGS) -o $(RELEXE) -Wl,--gc-sections $^
 
 $(RELDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) -c $(CFLAGS) $(RELCFLAGS) -o $@ $<
@@ -93,7 +94,7 @@ $(RELDIR)/%.o: $(SRCDIR)/%.c
 cgi: prep $(CGIEXE)
 
 $(CGIEXE): $(CGIOBJS)
-	$(CC) $(CFLAGS) -o $(CGIEXE) $^
+	$(CC) $(CFLAGS) -o $(CGIEXE) -Wl,--gc-sections $^
 
 # Warning: overlaps with $(RELDIR)/%.o: $(SRCDIR)/%.c
 $(CGIDIR)/%.o: $(SRCDIR)/%.c
@@ -114,20 +115,23 @@ $(CGIDDIR)/%.o: $(SRCDIR)/%.c
 #
 # Test rules
 #
-test: prep release test/test.csv
+test: prep test/test.csv
 	cd test && ./test.sh
 
 test/test.csv: $(GENEXE)
 	${GENEXE} 1000000 $@
 
 $(GENEXE): $(GENOBJS)
-	$(CC) $(CFLAGS) $(RELCFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) $(GENCFLAGS) -o $@ -Wl,--gc-sections $^
+
+$(GENDIR)/%.o: $(SRCDIR)/%.c
+	$(CC) -c $(CFLAGS) $(GENCFLAGS) -o $@ $<
 
 #
 # Other rules
 #
 prep:
-	@mkdir -p $(DBGDIR) $(addprefix $(DBGDIR)/, $(SUBDIRS)) $(RELDIR) $(addprefix $(RELDIR)/, $(SUBDIRS))
+	@mkdir -p $(DBGDIR) $(addprefix $(DBGDIR)/, $(SUBDIRS)) $(RELDIR) $(addprefix $(RELDIR)/, $(SUBDIRS)) $(GENDIR) $(addprefix $(GENDIR)/, $(SUBDIRS))
 
 $(SRCDIR)/gitversion.c: .git/HEAD .git/index
 	echo "const char *gitversion = \"$(shell git rev-parse HEAD)$(shell git diff-index --quiet HEAD && git show -s --format=' (%cd)' --date=iso-strict || (echo "-dirty built @" && date -Iseconds))\";" > $@

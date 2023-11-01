@@ -19,6 +19,7 @@
 #include "db.h"
 #include "../functions/util.h"
 #include "../evaluate/function.h"
+#include "../debug.h"
 
 struct VFS VFS_Table[VFS_COUNT] = {
     [VFS_NULL] = {
@@ -47,6 +48,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
     [VFS_VIEW] = {
         .openDB = &view_openDB,
     },
+    #ifdef COMPILE_CALENDAR
     [VFS_CALENDAR] = {
         .openDB = &calendar_openDB,
         .closeDB = &calendar_closeDB,
@@ -58,6 +60,8 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .fullTableAccess = &calendar_fullTableAccess,
         .indexSearch = &calendar_indexSearch,
     },
+    #endif
+    #ifdef COMPILE_SEQUENCE
     [VFS_SEQUENCE] = {
         .openDB = &sequence_openDB,
         .getFieldIndex = &sequence_getFieldIndex,
@@ -66,6 +70,8 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordValue = &sequence_getRecordValue,
         .fullTableAccess = &sequence_fullTableAccess,
     },
+    #endif
+    #ifdef COMPILE_SAMPLE
     [VFS_SAMPLE] = {
         .openDB = &sample_openDB,
         .getFieldIndex = &sample_getFieldIndex,
@@ -73,6 +79,8 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordCount = &sample_getRecordCount,
         .getRecordValue = &sample_getRecordValue,
     },
+    #endif
+    #ifdef COMPILE_DIR
     [VFS_DIR] = {
         .openDB = &dir_openDB,
         .closeDB = &dir_closeDB,
@@ -81,6 +89,8 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordCount = &dir_getRecordCount,
         .getRecordValue = &dir_getRecordValue,
     },
+    #endif
+    #ifdef COMPILE_TSV
     [VFS_TSV] = {
         .openDB = &tsv_openDB,
         .closeDB = &tsv_closeDB,
@@ -92,6 +102,8 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .insertRow = &tsv_insertRow,
         .insertFromQuery = &tsv_insertFromQuery,
     },
+    #endif
+    #ifdef COMPILE_CSV_MMAP
     [VFS_CSV_MMAP] = {
         .openDB = &csvMmap_openDB,
         .closeDB = &csvMmap_closeDB,
@@ -100,6 +112,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordCount = &csvMmap_getRecordCount,
         .getRecordValue = &csvMmap_getRecordValue,
     },
+    #endif
     [VFS_TEMP] = {
         .openDB = &temp_openDB,
     },
@@ -159,8 +172,10 @@ int openDB (struct DB *db, const char *filename, char **resolved) {
             return -1;
         }
 
-        char * path = realpath(buffer, NULL);
-        fprintf(stderr, "Resolved path: %s\n", path);
+        if (debug_verbosity > 1) {
+            char * path = realpath(buffer, NULL);
+            fprintf(stderr, "Resolved path: %s\n", path);
+        }
     }
 
     // Try to seek to see if we have a stream
@@ -298,13 +313,17 @@ enum IndexSearchType findIndex(
     int index_type_flags,
     char **resolved
 ) {
+    #ifdef COMPILE_CALENDAR
     if (strcmp(table_name, "CALENDAR") == 0) {
         return calendar_findIndex(db, table_name, node, index_type_flags, resolved);
     }
+    #endif
 
+    #ifdef COMPILE_SEQUENCE
     if (strncmp(table_name, "SEQUENCE(", 9) == 0) {
         return sequence_findIndex(db, table_name, node, index_type_flags, resolved);
     }
+    #endif
 
     return csv_findIndex(db, table_name, node, index_type_flags, resolved);
 }
