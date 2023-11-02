@@ -414,10 +414,18 @@ const char *csvMem_fromValues(struct DB *db, const char *input, int length) {
 
     db->line_indices = malloc(max_line_count * sizeof (long));
 
-    // Headers
     db->line_indices[0] = 0;
-    const char headers[]
-        = "col1\0col2\0col3\0col4\0col5\0col6\0col7\0col8\0col9\0col10\n";
+
+    // Headers
+    // We don't know how many columns we'll need but we need to reserve space
+    // for them now. Hopefully 50 columns will be enough.
+    // The actual number of columns is counted later.
+    const char headers[] =
+        "col1\0col2\0col3\0col4\0col5\0col6\0col7\0col8\0col9\0"
+        "col10\0col11\0col12\0col13\0col14\0col15\0col16\0col17\0col18\0col19\0"
+        "col20\0col21\0col22\0col23\0col24\0col25\0col26\0col27\0col28\0col29\0"
+        "col30\0col31\0col32\0col33\0col34\0col35\0col36\0col37\0col38\0col39\0"
+        "col40\0col41\0col42\0col43\0col44\0col45\0col46\0col47\0col48\0col49\0";
     memcpy(out_ptr, headers, sizeof(headers));
     out_ptr += sizeof(headers);
 
@@ -454,10 +462,15 @@ const char *csvMem_fromValues(struct DB *db, const char *input, int length) {
 
         int line_length = find_matching_parenthesis(in_ptr);
 
+        if (line_length < 0) {
+            fprintf(stderr, "Can't find matching parenthesis\n");
+            exit(-1);
+        }
+
         // Check to see if we need to extend the data allocation
         // NOTE: db->fields is the start of the allocation
         size_t len = out_ptr - db->fields;
-        if (len + line_length >= max_data_size) {
+        while (len + line_length >= max_data_size) {
             max_data_size *= 2;
             // NOTE: db->fields is the start of the allocation
             void *ptr = realloc(db->fields, max_data_size);
@@ -476,7 +489,9 @@ const char *csvMem_fromValues(struct DB *db, const char *input, int length) {
 
         strncpy(out_ptr, in_ptr + 1, line_length - 2);
 
-        // Swap quotes '\'' -> '"'
+        // Swap quotes ' -> "
+        //  (SQL quotes -> CSV quotes)
+        // TODO: Fix problems below
         // Warning: will break quotes in string (converts to space)
         // Warning: can't cope with escaped quotes in string
         for (int i = 0; i < line_length - 2; i++) {

@@ -138,6 +138,7 @@ int readUTF8 (__uint8_t *input, __uint8_t **end_ptr) {
  * (including the open and closing parentheses). This function allows nested
  * parentheses.
  * First character must be '('.
+ * Ignores anything in single quotes.
  *
  * @param string
  * @return int Length including opening and closing parentheses
@@ -145,6 +146,7 @@ int readUTF8 (__uint8_t *input, __uint8_t **end_ptr) {
 int find_matching_parenthesis (const char *string) {
     int offset = 0;
     int depth = 1;
+    int quoted = 0;
 
     if (string[offset] != '(') {
         fprintf(
@@ -160,11 +162,17 @@ int find_matching_parenthesis (const char *string) {
 
     while(string[offset] != '\0') {
         char c = string[offset++];
-        if (c == '(') {
-            depth++;
+
+        if (c == '\'') {
+            quoted = ~quoted;
         }
-        else if(c == ')') {
-            depth--;
+        else if (!quoted) {
+            if (c == '(') {
+                depth++;
+            }
+            else if(c == ')') {
+                depth--;
+            }
         }
 
         if (depth == 0) {
