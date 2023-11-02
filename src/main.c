@@ -231,7 +231,6 @@ int main (int argc, char * argv[]) {
         }
     }
 
-
     if (argc > argi) {
         char *write_ptr;
 

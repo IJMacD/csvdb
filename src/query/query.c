@@ -74,6 +74,17 @@ int runQueries (
     const char *end_ptr = query_string;
 
     while(*end_ptr != '\0') {
+        // Skip leading whitespace
+        while(*end_ptr != '\0' && isspace(*end_ptr)) {
+            end_ptr++;
+        }
+
+        // There wasn't actually another query
+        if (*end_ptr == '\0') {
+            return 0;
+        }
+
+        // Save start position
         const char *query_start = end_ptr;
         int result = query(query_start, output_flags, output, &end_ptr);
 
