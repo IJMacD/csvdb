@@ -12,6 +12,7 @@
 #include "repl.h"
 
 static int read_file(FILE *file, char **output);
+static enum OutputOption get_format_flag (const char *format_val);
 
 extern char* gitversion;
 int debug_verbosity = 0;
@@ -56,8 +57,8 @@ void printUsage (const char* name) {
         "\t[-E|--explain]\n"
         "\t[-H|--headers] (default)\n"
         "\t[-N|--no-headers]\n"
-        "\t[(-F |--format=)(table|tsv|csv|html|json|json_array|sql|sql_values|"
-        "sql_create|xml|record)]\n"
+        "\t[(-F |--format=)(table|tsv|csv|html|json[:(object|array)]|"
+        "sql[:(insert|create|values)]|xml|record)]\n"
         "\t[(-o |--output=)<filename>]\n"
         "\t[--stats] (write timing data to 'stats.csv')\n"
         #ifdef DEBUG
@@ -199,32 +200,12 @@ int main (int argc, char * argv[]) {
     }
 
     if (format_val != NULL) {
-        if(strcmp(format_val, "tsv") == 0) {
-            flags |= OUTPUT_FORMAT_TAB;
-        } else if (strcmp(format_val, "csv") == 0) {
-            flags |= OUTPUT_FORMAT_COMMA;
-        } else if (strcmp(format_val, "html") == 0) {
-            flags |= OUTPUT_FORMAT_HTML;
-        } else if (strcmp(format_val, "json_array") == 0) {
-            flags |= OUTPUT_FORMAT_JSON_ARRAY;
-        } else if (strcmp(format_val, "json") == 0) {
-            flags |= OUTPUT_FORMAT_JSON;
-        } else if (strcmp(format_val, "sql") == 0) {
-            flags |= OUTPUT_FORMAT_SQL_INSERT;
-        } else if (strcmp(format_val, "table") == 0) {
-            flags |= OUTPUT_FORMAT_TABLE;
-        } else if (strcmp(format_val, "record") == 0) {
-            flags |= OUTPUT_FORMAT_INFO_SEP;
-        } else if (strcmp(format_val, "xml") == 0) {
-            flags |= OUTPUT_FORMAT_XML;
-        } else if (strcmp(format_val, "sql_values") == 0) {
-            flags |= OUTPUT_FORMAT_SQL_VALUES;
-        } else if (strcmp(format_val, "sql_create") == 0) {
-            flags |= OUTPUT_FORMAT_SQL_CREATE;
-        } else {
+        int format_flag = get_format_flag(format_val);
+        if (format_flag < 0) {
             fprintf(stderr, "Unrecognised format: %s\n", format_val);
             return -1;
         }
+        flags |= format_flag;
     } else if (isatty(fileno(stdout))) {
         flags |= OUTPUT_FORMAT_TABLE;
     } else {
@@ -349,4 +330,68 @@ static int read_file (FILE *file, char **output) {
     *output = buffer;
 
     return count;
+}
+
+static enum OutputOption get_format_flag (const char *format_val) {
+
+    if(strcmp(format_val, "tsv") == 0) {
+        return OUTPUT_FORMAT_TAB;
+    }
+
+    if (strcmp(format_val, "csv") == 0) {
+        return OUTPUT_FORMAT_COMMA;
+    }
+
+    if (strcmp(format_val, "html") == 0) {
+        return OUTPUT_FORMAT_HTML;
+    }
+
+    if (
+        strcmp(format_val, "json") == 0 ||
+        strcmp(format_val, "json:object") == 0
+    ) {
+        return OUTPUT_FORMAT_JSON;
+    }
+
+    if (
+        strcmp(format_val, "json:array") == 0 ||
+        strcmp(format_val, "json_array") == 0 // compat
+    ) {
+        return OUTPUT_FORMAT_JSON_ARRAY;
+    }
+
+    if (strcmp(format_val, "table") == 0) {
+        return OUTPUT_FORMAT_TABLE;
+    }
+
+    if (strcmp(format_val, "record") == 0) {
+        return OUTPUT_FORMAT_INFO_SEP;
+    }
+
+    if (strcmp(format_val, "xml") == 0) {
+        return OUTPUT_FORMAT_XML;
+    }
+
+    if (
+        strcmp(format_val, "sql") == 0 ||
+        strcmp(format_val, "sql:insert") == 0
+    ) {
+        return OUTPUT_FORMAT_SQL_INSERT;
+    }
+
+    if (
+        strcmp(format_val, "sql:values") == 0 ||
+        strcmp(format_val, "sql_values") == 0 // compat
+    ) {
+        return OUTPUT_FORMAT_SQL_VALUES;
+    }
+
+    if (
+        strcmp(format_val, "sql:create") == 0 ||
+        strcmp(format_val, "sql_create") == 0 // compat
+    ) {
+        return OUTPUT_FORMAT_SQL_CREATE;
+    }
+
+    return -1;
 }
