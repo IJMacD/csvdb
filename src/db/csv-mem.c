@@ -5,6 +5,7 @@
 
 #include "../structs.h"
 #include "../functions/util.h"
+#include "../functions/csv.h"
 #include "../query/query.h"
 
 static int countFields (const char *ptr);
@@ -151,102 +152,7 @@ int csvMem_getRecordValue (
 
     long file_offset = db->line_indices[record_index];
 
-    int current_field_index = 0;
-    size_t char_index = 0;
-    int quoted_flag = 0;
-    size_t i = file_offset;
-
-    while (db->data[i] != '\0') {
-        if (char_index == 0 && db->data[i] == '"') {
-            quoted_flag = !quoted_flag;
-            i++;
-            continue;
-        }
-
-        // Are we currently in the correct field?
-        if (current_field_index == field_index) {
-
-            if (db->data[i] == '"') {
-                // We found a quote. It could be at the end of the field or
-                // could be escaping another quote
-
-                // Move on and see what we get
-                i++;
-
-                if (quoted_flag) {
-                    if (db->data[i] == '"') {
-                        // found two double quotes, copy one to output
-                        value[char_index++] = '"';
-                    }
-                    // If we find comma or newline immediately after one double
-                    // quote then it must be the end of the field.
-                    else if (
-                        db->data[i] == ',' ||
-                        db->data[i] == '\n' ||
-                        db->data[i] == '\r'||
-                        db->data[i] == '\0'
-                    ) {
-                        // finish off the string and return the length
-                        value[char_index] = '\0';
-                        return char_index;
-                    }
-                    else {
-                        // illegal quote
-                    }
-                }
-                else {
-                    // illegal quote
-                }
-            }
-            // If we're not quoted, then comma or newline must be the end of the
-            // field.
-            else if (
-                !quoted_flag && (
-                    db->data[i] == ',' ||
-                    db->data[i] == '\n' ||
-                    db->data[i] == '\r'
-                )
-            ) {
-                // finish off the string and return the length
-                value[char_index] = '\0';
-                return char_index;
-            }
-            // Otherwise jsut a normal byte in the string
-            else {
-                // Copy the current byte
-                value[char_index++] = db->data[i];
-            }
-
-            // If we've run out of storage space
-            if (char_index > value_max_length) {
-                value[char_index-1] = '\0';
-                return -1;
-            }
-        } else {
-            // If we've found a comma we're moving on to the next field
-            if (!quoted_flag && db->data[i] == ',') {
-                current_field_index++;
-            }
-
-            // If we got to a newline and we're not in the correct field then
-            // the field was not found.
-            if (db->data[i] == '\n') {
-                value[0] = '\0';
-                return -1;
-            }
-        }
-
-        i++;
-    }
-
-    // Getting the very last record from the file
-    if (current_field_index == field_index) {
-        value[char_index] = '\0';
-        return char_index;
-    }
-
-    // Ran out of file
-    return -1;
+    return csv_get_record_from_line(db->data + file_offset, field_index, value, value_max_length);
 }
 
 static int prepareHeaders (struct DB *db) {
