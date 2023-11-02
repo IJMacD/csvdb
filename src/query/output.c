@@ -713,6 +713,16 @@ static void printColumnValue (
         num_fmt = "%ld";
     }
     else if (format == OUTPUT_FORMAT_TABLE) {
+        // If there are any new lines in the value, they should be replaced.
+        if (strchr(value, '\r') || strchr(value, '\n')) {
+            size_t value_length = strlen(value);
+            escaped_value = malloc(value_length * 3);
+            char *clone = malloc(value_length * 3);
+            mallocd = 1;
+            replace(clone,         value, '\r', "␍");
+            replace(escaped_value, clone, '\n', "␊");
+        }
+
         string_fmt = "%-19s";
         num_fmt = "%18ld ";
     }
