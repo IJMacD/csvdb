@@ -232,21 +232,20 @@ int main (int argc, char * argv[]) {
     }
 
 
-    int bare_args = argc - argi;
+    if (argc > argi) {
+        char *write_ptr;
 
-    if (bare_args) {
-        buffer = malloc(1024);
-
-        if (bare_args == 1) {
-            strcpy(buffer, argv[argi]);
+        if (buffer == NULL) {
+            buffer = malloc(1024);
+            write_ptr = buffer;
         }
-        else if (bare_args > 1) {
-            int offset = 0;
+        else {
+            write_ptr = buffer + strlen(buffer);
+            *(write_ptr++) = ' ';
+        }
 
-            while (argi < argc) {
-                offset += sprintf(buffer + offset, "%s ", argv[argi]);
-                argi++;
-            }
+        while (argi < argc) {
+            write_ptr += sprintf(write_ptr, "%s ", argv[argi++]);
         }
     }
 
