@@ -17,16 +17,16 @@
 
 enum VFSType {
     VFS_NULL        = 0,
-    VFS_CSV         = 1,
-    VFS_CSV_MEM     = 2,
-    VFS_VIEW        = 3,
-    VFS_CALENDAR    = 4,
-    VFS_SEQUENCE    = 5,
-    VFS_SAMPLE      = 6,
-    VFS_DIR         = 7,
-    VFS_TSV         = 8,
-    VFS_CSV_MMAP    = 9,
-    VFS_TEMP        = 10,
+    VFS_TEMP        = 1,
+    VFS_CSV_MMAP    = 2,
+    VFS_CSV_MEM     = 3,
+    VFS_CSV         = 4,
+    VFS_VIEW        = 5,
+    VFS_CALENDAR    = 6,
+    VFS_SEQUENCE    = 7,
+    VFS_SAMPLE      = 9,
+    VFS_DIR         = 9,
+    VFS_TSV         = 10,
 
     VFS_COUNT
 };

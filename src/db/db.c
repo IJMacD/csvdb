@@ -134,10 +134,7 @@ int openDB (struct DB *db, const char *filename, char **resolved) {
         return csvMem_openDB(db, filename + 7, resolved);
     }
 
-    // Need to skip CSV and CSV_MEM for now because they are not very picky and
-    // will attempt to find files with the same name, which might not be what
-    // we want.
-    for (int i = VFS_VIEW; i < VFS_COUNT; i++) {
+    for (int i = 1; i < VFS_COUNT; i++) {
         int (*vfs_openDB) (struct DB *, const char *filename, char **resolved)
             = VFS_Table[i].openDB;
 
