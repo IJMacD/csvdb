@@ -336,6 +336,7 @@ enum OutputOption {
     OUTPUT_FORMAT_XML =            9,
     OUTPUT_FORMAT_SQL_VALUES =    10,
     OUTPUT_FORMAT_SQL_CREATE =    11,
+    OUTPUT_FORMAT_CSV_EXCEL =     12,
 };
 
 enum QueryFlag {

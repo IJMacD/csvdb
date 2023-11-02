@@ -170,6 +170,16 @@ static int prepareHeaders (struct DB *db) {
     read_ptr = db->fields;
     write_ptr = db->fields;
 
+    // Suppoprt Excel CSV UTF-8.
+    // Check for BOM
+    if (
+        read_ptr[0] == '\xef' &&
+        read_ptr[1] == '\xbb' &&
+        read_ptr[2] == '\xbf'
+    ) {
+        read_ptr += 3;
+    }
+
     // Overwrite fields buffer with itself skipping quotes and inserting nulls
     while (*read_ptr && *read_ptr != '\n')
     {

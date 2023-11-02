@@ -437,6 +437,16 @@ static void prepareHeaders (struct DB *db) {
 
     db->fields[header_length - 1] = '\0';
 
+    // Suppoprt Excel CSV UTF-8.
+    // Check for BOM
+    if (
+        db->fields[0] == '\xef' &&
+        db->fields[1] == '\xbb' &&
+        db->fields[2] == '\xbf'
+    ) {
+        memmove(db->fields, db->fields + 3, header_length - 3);
+    }
+
     char *read_ptr, *write_ptr;
 
     read_ptr = db->fields;

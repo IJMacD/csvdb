@@ -292,6 +292,9 @@ void printHeaderLine (
     else if (format == OUTPUT_FORMAT_SQL_VALUES) {
         return;
     }
+    else if (format == OUTPUT_FORMAT_CSV_EXCEL) {
+        printf("\xef\xbb\xbf"); //BOM
+    }
 
     /********************
      * Header Name
@@ -349,7 +352,10 @@ void printHeaderLine (
     if (format == OUTPUT_FORMAT_TAB) {
         fprintf(f, "\n");
     }
-    else if (format == OUTPUT_FORMAT_COMMA) {
+    else if (
+        format == OUTPUT_FORMAT_COMMA ||
+        format == OUTPUT_FORMAT_CSV_EXCEL
+    ) {
         fprintf(f, "\n");
     }
     else if (format == OUTPUT_FORMAT_HTML) {
@@ -362,7 +368,7 @@ void printHeaderLine (
         fprintf(f, "\") VALUES\n");
     }
     else if (format == OUTPUT_FORMAT_SQL_CREATE) {
-        fprintf(f, "\"); INSERT INTO \"%1$s\" VALUES\n", tables[0].alias);
+        fprintf(f, "\");\nINSERT INTO \"%1$s\" VALUES\n", tables[0].alias);
     }
     else if (format == OUTPUT_FORMAT_TABLE) {
         fprintf(f, "|\n");
@@ -444,14 +450,15 @@ void printPostamble (
         fprintf(f, "</TABLE>\n");
     }
     else if (
-        format == OUTPUT_FORMAT_JSON_ARRAY
-        || format == OUTPUT_FORMAT_JSON
+        format == OUTPUT_FORMAT_JSON_ARRAY ||
+        format == OUTPUT_FORMAT_JSON
     ) {
         fprintf(f, "]\n");
     }
     else if (
-        format == OUTPUT_FORMAT_SQL_INSERT
-        || format == OUTPUT_FORMAT_SQL_VALUES
+        format == OUTPUT_FORMAT_SQL_INSERT ||
+        format == OUTPUT_FORMAT_SQL_VALUES ||
+        format == OUTPUT_FORMAT_SQL_CREATE
     ) {
         fprintf(f, "\n");
     }
@@ -535,7 +542,10 @@ static void printHeaderSeparator (FILE *f, enum OutputOption format) {
     if (format == OUTPUT_FORMAT_TAB) {
         fprintf(f, "\t");
     }
-    else if (format == OUTPUT_FORMAT_COMMA) {
+    else if (
+        format == OUTPUT_FORMAT_COMMA ||
+        format == OUTPUT_FORMAT_CSV_EXCEL
+    ) {
         fprintf(f, ",");
     }
     else if (format == OUTPUT_FORMAT_HTML) {
@@ -618,14 +628,25 @@ static void printColumnValue (
             fprintf(f, "\"%s\": ", name);
         }
     }
-    // For XML output a column alias of "_" means create a text node rather than
-    // an element. Can be used to create a flat list of elements for example.
-    else if (format == OUTPUT_FORMAT_XML && strcmp(name, "_")) {
-        if (prefix) {
-            fprintf(f, "<%s.%s>", prefix, name);
-        }
-        else {
-            fprintf(f, "<%s>", name);
+    else if (format == OUTPUT_FORMAT_XML) {
+        size_t value_length = strlen(value);
+        escaped_value = malloc(value_length * 5);
+        char *clone = malloc(value_length * 5);
+        mallocd = 1;
+
+        replace(clone, value, '\r', "&#13;");
+        replace(escaped_value, clone, '\n', "&#10;");
+
+        // For XML output a column alias of "_" means create a text node rather
+        // than an element. Can be used to create a flat list of elements for
+        // example.
+        if (strcmp(name, "_")) {
+            if (prefix) {
+                fprintf(f, "<%s.%s>", prefix, name);
+            }
+            else {
+                fprintf(f, "<%s>", name);
+            }
         }
     }
     else if (format == OUTPUT_FORMAT_TABLE) {
@@ -643,29 +664,31 @@ static void printColumnValue (
     const char * string_fmt = "%s";
     const char * num_fmt = string_fmt;
 
-    if (format == OUTPUT_FORMAT_COMMA) {
+    if (
+        format == OUTPUT_FORMAT_COMMA ||
+        format == OUTPUT_FORMAT_CSV_EXCEL ||
+        format == OUTPUT_FORMAT_TAB
+    ) {
+        char sep = format == OUTPUT_FORMAT_TAB ? '\t' : ',';
 
-        // Raw newlines can appear in CSV as long as they're in a quoted field
-        if (strchr(value, ',') || strchr(value, '\n')) {
-
+        // If there are any double quotes in the value, they need to be
+        // double-double quoted
+        if (strchr(value, '"')) {
             string_fmt = "\"%s\"";
-
-            // If there are any double quotes in the value, they need to be
-            // double-double quoted
-            if (strchr(value, '"')) {
-                size_t value_length = strlen(value);
-                escaped_value = malloc(value_length * 2);
-                mallocd = 1;
-                replace(escaped_value, value, '"', "\"\"");
-            }
+            size_t value_length = strlen(value);
+            escaped_value = malloc(value_length * 2);
+            mallocd = 1;
+            replace(escaped_value, value, '"', "\"\"");
         }
-
+        // Raw newlines can appear in CSV as long as they're in a quoted field
+        if (strchr(value, sep) || strchr(value, '\n')) {
+            string_fmt = "\"%s\"";
+        }
     }
-    else if (format == OUTPUT_FORMAT_JSON_ARRAY) {
-        string_fmt = "\"%s\"";
-        num_fmt = "%ld";
-    }
-    else if (format == OUTPUT_FORMAT_JSON) {
+    else if (
+        format == OUTPUT_FORMAT_JSON ||
+        format == OUTPUT_FORMAT_JSON_ARRAY
+    ) {
 
         size_t value_length = strlen(value);
         escaped_value = malloc(value_length * 2);
@@ -725,6 +748,17 @@ static void printColumnValue (
 
         string_fmt = "%-19s";
         num_fmt = "%18ld ";
+    }
+    else if (format == OUTPUT_FORMAT_HTML) {
+        // If there are any new lines in the value, they should be replaced.
+        if (strchr(value, '\r') || strchr(value, '\n')) {
+            size_t value_length = strlen(value);
+            escaped_value = malloc(value_length * 3);
+            char *clone = malloc(value_length * 3);
+            mallocd = 1;
+            replace(clone,         value, '\r', "");
+            replace(escaped_value, clone, '\n', "<BR/>");
+        }
     }
 
     #ifdef JSON_NULL
@@ -792,7 +826,10 @@ static void printColumnSeparator (FILE *f, enum OutputOption format) {
     if (format == OUTPUT_FORMAT_TAB) {
         fprintf(f, "\t");
     }
-    else if (format == OUTPUT_FORMAT_COMMA) {
+    else if (
+        format == OUTPUT_FORMAT_COMMA ||
+        format == OUTPUT_FORMAT_CSV_EXCEL
+    ) {
         fprintf(f, ",");
     }
     else if (format == OUTPUT_FORMAT_JSON_ARRAY) {
@@ -821,7 +858,10 @@ static void printRecordEnd (
     if (format == OUTPUT_FORMAT_TAB) {
         fprintf(f, "\n");
     }
-    else if (format == OUTPUT_FORMAT_COMMA) {
+    else if (
+        format == OUTPUT_FORMAT_COMMA ||
+        format == OUTPUT_FORMAT_CSV_EXCEL
+    ) {
         fprintf(f, "\n");
     }
     else if (format == OUTPUT_FORMAT_HTML) {

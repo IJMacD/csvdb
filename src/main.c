@@ -57,7 +57,7 @@ void printUsage (const char* name) {
         "\t[-E|--explain]\n"
         "\t[-H|--headers] (default)\n"
         "\t[-N|--no-headers]\n"
-        "\t[(-F |--format=)(table|tsv|csv|html|json[:(object|array)]|"
+        "\t[(-F |--format=)(table|tsv|csv[:excel]|html|json[:(object|array)]|"
         "sql[:(insert|create|values)]|xml|record)]\n"
         "\t[(-o |--output=)<filename>]\n"
         "\t[--stats] (write timing data to 'stats.csv')\n"
@@ -338,6 +338,10 @@ static enum OutputOption get_format_flag (const char *format_val) {
 
     if (strcmp(format_val, "csv") == 0) {
         return OUTPUT_FORMAT_COMMA;
+    }
+
+    if (strcmp(format_val, "csv:excel") == 0) {
+        return OUTPUT_FORMAT_CSV_EXCEL;
     }
 
     if (strcmp(format_val, "html") == 0) {
