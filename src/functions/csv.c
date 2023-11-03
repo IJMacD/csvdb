@@ -33,9 +33,7 @@ int csv_get_record_from_line (const char *in_ptr, int field_index, char *out_ptr
             if (*in_ptr == '"') {
                 in_ptr++;
 
-                quoted_flag = !quoted_flag;
-
-                if (!quoted_flag && is_end_of_field(*in_ptr)) {
+                if (is_end_of_field(*in_ptr)) {
                     break;
                 }
             }
