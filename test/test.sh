@@ -6,11 +6,17 @@ ORANGE='\033[0;33m'
 GREY='\033[0;90m'
 NC='\033[0m' # No Color
 
-readarray -t lines < ./test-cases.sql
-
-CSVDB=../release/csvdb
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+TEST_FILE="$SCRIPT_DIR/test-cases.sql"
+CSVDB="$SCRIPT_DIR/../release/csvdb"
 OUTFILE=/tmp/test.out
-STATFILE=test-cases-stats.csv
+STATFILE="$SCRIPT_DIR/test-cases-stats.csv"
+
+# Get array of test cases
+readarray -t lines < $TEST_FILE
+
+# cd so that csvdb is working in the correct dir to find csv files
+cd $SCRIPT_DIR
 
 stats=""
 if [[ $1 == "stats" ]]; then

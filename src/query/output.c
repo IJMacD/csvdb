@@ -636,6 +636,8 @@ static void printColumnValue (
 
         replace(clone, value, '\r', "&#13;");
         replace(escaped_value, clone, '\n', "&#10;");
+        replace(clone, value, '&', "&amp;");
+        replace(escaped_value, clone, '<', "&lt;");
 
         // For XML output a column alias of "_" means create a text node rather
         // than an element. Can be used to create a flat list of elements for
