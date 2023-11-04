@@ -66,12 +66,20 @@ enum Function {
     // Family 000x (0x00) Basic
     // FUNC_FAM_BASIC =             0x00,
 
+    // Does nothing
     FUNC_UNITY =                    0x00,
+    // Converts integer codepoint to UTF-8 bytes
     FUNC_CHR =                      0x01,
+    // Converts base 10 integer to base 16 integer with '0x' prefix
     FUNC_TO_HEX =                   0x02,
+    // Reads a single UTF-8 sequence and returns codepoint as integer
     FUNC_CODEPOINT =                0x03,
+    // Maps badly encoded Windows 1252 characters into true UTF-8 bytes
     FUNC_W1252 =                    0x04,
+    // For each byte in string, return two hex digits. (Based on MySQL HEX())
+    FUNC_HEX =                      0x05,
 
+    // Produces random integer between 0 and MAX_INT
     FUNC_RANDOM =                   0x0A,
 
     // Maths functions

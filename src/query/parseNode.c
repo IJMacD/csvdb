@@ -242,6 +242,9 @@ int parseSimpleNode (
         else if (strcmp(value, "TO_HEX") == 0) {
             node->function = FUNC_TO_HEX;
         }
+        else if (strcmp(value, "HEX") == 0) {
+            node->function = FUNC_HEX;
+        }
         else if (strcmp(value, "LENGTH") == 0) {
             node->function = FUNC_LENGTH;
         }

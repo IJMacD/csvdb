@@ -96,6 +96,17 @@ int evaluateFunction(
 
     //     return sprintf(output, "%d", 0);
     // }
+    else if (function == FUNC_HEX) {
+        __uint8_t *ptr = (__uint8_t*)values[0];
+        int len = 0;
+        while (*ptr != '\0') {
+            len += sprintf(output, "%02X", *ptr);
+            output += 2;
+            ptr++;
+        }
+        *output = '\0';
+        return len + 1;
+    }
     else if (function == FUNC_W1252) {
         __uint8_t *end_ptr = (void *)values[0];
         int i = 0;
