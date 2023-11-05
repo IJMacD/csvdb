@@ -5,14 +5,14 @@ An esoteric toy command line app for processing CSV using a custom SQL dialect.
 ## command line interface
 
     Usage:
-            csvdb <options> "<query>"
-            csvdb <options> -f file.sql
-            csvdb <options> -f - (expects SQL on stdin)
-            csvdb "CREATE [UNIQUE] INDEX [<index_file>] ON <file> (<field>)"
-            csvdb "CREATE TABLE <file> AS <query>"
-            csvdb "INSERT INTO <file> <query>"
-            csvdb "CREATE VIEW <file> AS <query>"
-            csvdb -h|--help
+        csvdb <options> "<query>"
+        csvdb <options> -f file.sql
+        csvdb <options> -f - (expects SQL on stdin)
+        csvdb "CREATE [UNIQUE] INDEX [<index_file>] ON <file> (<field>)"
+        csvdb "CREATE TABLE <file> AS <query>"
+        csvdb "INSERT INTO <file> <query>"
+        csvdb "CREATE VIEW <file> AS <query>"
+        csvdb -h|--help
 
     Where <query> is one of:
         SELECT <fields, ...> FROM <file> [JOIN <file> [ON ...]] [WHERE]
@@ -31,14 +31,18 @@ An esoteric toy command line app for processing CSV using a custom SQL dialect.
         table data from stdin.
 
     Options:
-            [-h|--help]
-            [-f (<filename.sql>|-)] (read SQL from file, '-' for stdin)
-            [-E|--explain]
-            [-H|--headers] (default)
-            [-N|--no-headers]
-            [(-F |--format=)(table|tsv|csv|html|json|json_array|sql|sql_values|xml|record)]
-            [(-o |--output=)<filename>]
-            [--stats] (write timing data to 'stats.csv')
+        [-h|--help]
+        [-f (<filename.sql>|-)] Read SQL from file ('-' for stdin)
+        [-E|--explain]
+        [-H|--headers] (default)
+        [-N|--no-headers]
+        [(-F |--format=)<format>] Set output formatting (TTY default: table)
+        [(-i |--input=)<filename>] Read from file instead of stdin
+        [(-o |--output=)<filename>] Write output to file instead of stdout
+        [--stats] Write timing data to 'stats.csv'
+
+    Where <format> is one of:
+        (table|tsv|csv[:excel]|html|json[:(object|array)]|sql[:(insert|create|values)]|xml|record)
 
 ## Features
 
@@ -98,5 +102,6 @@ VALUES ('a',1),('b',2),('c',3);
 WITH r1 AS (FROM ranks WHERE value < 8 SELECT name, symbol) FROM r1 ORDER BY name;
 -- FILTER clause
 FROM test SELECT COUNT(*) AS all, COUNT(*) FILTER (WHERE id % 2 = 0) AS even, COUNT(*) FILTER(WHERE id % 2 = 1) AS odd
-
+-- Esoteric Syntax (Apply functions to every column)
+FROM test LIMIT 5 SELECT LEFT(*, 2)
 ```
