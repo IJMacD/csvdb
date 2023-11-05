@@ -53,18 +53,24 @@ void printUsage (const char* name) {
         "\n"
         "Options:\n"
         "\t[-h|--help]\n"
-        "\t[-f (<filename.sql>|-)] (read SQL from file, '-' for stdin)\n"
+        "\t[-f (<filename.sql>|-)] Read SQL from file ('-' for stdin)\n"
         "\t[-E|--explain]\n"
         "\t[-H|--headers] (default)\n"
         "\t[-N|--no-headers]\n"
-        "\t[(-F |--format=)(table|tsv|csv[:excel]|html|json[:(object|array)]|"
-        "sql[:(insert|create|values)]|xml|record)]\n"
-        "\t[(-o |--output=)<filename>]\n"
-        "\t[--stats] (write timing data to 'stats.csv')\n"
+        "\t[(-F |--format=)<format>] Set output formatting (TTY default: table)\n"
+        "\t[(-i |--input=)<filename>] Read from file instead of stdin\n"
+        "\t[(-o |--output=)<filename>] Write output to file instead of stdout\n"
+        "\t[--stats] Write timing data to 'stats.csv'\n"
         #ifdef DEBUG
         "\t[-v|-vv|-vvv|--verbose=n] Set DEBUG verbosity\n"
         "\t[-A] Output AST"
         #endif
+        "\n"
+        "\n"
+        "Where <format> is one of:\n"
+        "\t(table|tsv|csv[:excel]|html|json[:(object|array)]|"
+        "sql[:(insert|create|values)]|xml|record)"
+        "\n"
         "\n"
         "Version: %2$s %3$s\n"
     , name, gitversion, version_debug);
@@ -80,6 +86,7 @@ int main (int argc, char * argv[]) {
 
     FILE * output = stdout;
     const char * format_val = NULL;
+    const char * input_name = NULL;
     const char * output_name = NULL;
     char *buffer = NULL;
 
@@ -114,8 +121,28 @@ int main (int argc, char * argv[]) {
         else if (strncmp(arg, "--format=", 9) == 0) {
             format_val = arg + 9;
         }
+        else if (strcmp(arg, "-i") == 0) {
+            if (
+                argi + 1 >= argc ||
+                (argv[argi+1][0] == '-' && argv[argi+1][1] != '\0')
+            ) {
+                fprintf(stderr,
+                    "Expected input name to be specified after -i\n"
+                );
+                printUsage(argv[0]);
+                exit(-1);
+            }
+
+            input_name = argv[++argi];
+        }
+        else if (strncmp(arg, "--input=", 8) == 0) {
+            input_name = arg + 8;
+        }
         else if (strcmp(arg, "-o") == 0) {
-            if (argi + 1 >= argc) {
+            if (
+                argi + 1 >= argc ||
+                (argv[argi+1][0] == '-' && argv[argi+1][1] != '\0')
+            ) {
                 fprintf(stderr,
                     "Expected output name to be specified after -o\n"
                 );
@@ -199,18 +226,23 @@ int main (int argc, char * argv[]) {
         argi++;
     }
 
-    if (format_val != NULL) {
-        int format_flag = get_format_flag(format_val);
-        if (format_flag < 0) {
-            fprintf(stderr, "Unrecognised format: %s\n", format_val);
-            return -1;
+    if (input_name != NULL) {
+        if(strcmp(input_name, "-") == 0) {
+            // Do nothing, it's already stdin
         }
-        flags |= format_flag;
-    } else if (isatty(fileno(stdout))) {
-        flags |= OUTPUT_FORMAT_TABLE;
-    } else {
-        // Disable next line for some fun just dumping data with no delineation
-        flags |= OUTPUT_FORMAT_COMMA;
+        else {
+            // Swap the process's stdin for the file specified on the command
+            // line.
+            FILE *result = freopen(input_name, "r", stdin);
+            if (result == NULL) {
+                fprintf(
+                    stderr,
+                    "Couldn't open file '%s' for reading\n",
+                    input_name
+                );
+                return -1;
+            }
+        }
     }
 
     if (output_name != NULL) {
@@ -229,6 +261,20 @@ int main (int argc, char * argv[]) {
                 return -1;
             }
         }
+    }
+
+    if (format_val != NULL) {
+        int format_flag = get_format_flag(format_val);
+        if (format_flag < 0) {
+            fprintf(stderr, "Unrecognised format: %s\n", format_val);
+            return -1;
+        }
+        flags |= format_flag;
+    } else if (isatty(fileno(output))) {
+        flags |= OUTPUT_FORMAT_TABLE;
+    } else {
+        // Disable next line for some fun just dumping data with no delineation
+        flags |= OUTPUT_FORMAT_COMMA;
     }
 
     if (argc > argi) {
