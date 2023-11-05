@@ -1357,7 +1357,11 @@ static void expandFieldStar (struct Query *query) {
                         new_col->field.table_id = j;
                         new_col->field.index = k;
 
-                        strcpy(new_col->field.text, getFieldName(table->db, k));
+                        // Avoid overflow
+                        const char *fieldName = getFieldName(table->db, k);
+                        strncpy(new_col->field.text, fieldName, 31);
+                        new_col->field.text[31] = '\0';
+
                         strcpy(new_col->alias, new_col->field.text);
                     }
                 }
