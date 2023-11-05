@@ -103,5 +103,5 @@ WITH r1 AS (FROM ranks WHERE value < 8 SELECT name, symbol) FROM r1 ORDER BY nam
 -- FILTER clause
 FROM test SELECT COUNT(*) AS all, COUNT(*) FILTER (WHERE id % 2 = 0) AS even, COUNT(*) FILTER(WHERE id % 2 = 1) AS odd
 -- Esoteric Syntax (Apply functions to every column)
-FROM test LIMIT 5 SELECT LEFT(*, 2)
+FROM test LIMIT 5 SELECT LEFT(*, 2) AS left_
 ```

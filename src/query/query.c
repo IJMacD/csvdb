@@ -1336,6 +1336,13 @@ static void expandFieldStar (struct Query *query) {
 
                     clearNode(new_col);
 
+                    size_t alias_prefix_len = 0;
+
+                    if (strchr(col->alias, '*') == NULL) {
+                        strcpy(new_col->alias, col->alias);
+                        alias_prefix_len = strlen(col->alias);
+                    }
+
                     if (col->child_count > 0) {
                         // Clone all children
                         copyNodeTree(new_col, col);
@@ -1345,8 +1352,16 @@ static void expandFieldStar (struct Query *query) {
                         child_col->field.table_id = j;
                         child_col->field.index = k;
 
-                        strcpy(child_col->field.text, getFieldName(table->db, k));
-                        strcpy(new_col->alias, child_col->field.text);
+                        // Avoid overflow
+                        const char *fieldName = getFieldName(table->db, k);
+                        strncpy(child_col->field.text, fieldName, 31);
+                        child_col->field.text[31] = '\0';
+
+                        strncpy(
+                            new_col->alias + alias_prefix_len,
+                            fieldName,
+                            MAX_FIELD_LENGTH - alias_prefix_len
+                        );
                     }
                     else {
                         // FN(*) is supported
@@ -1362,7 +1377,11 @@ static void expandFieldStar (struct Query *query) {
                         strncpy(new_col->field.text, fieldName, 31);
                         new_col->field.text[31] = '\0';
 
-                        strcpy(new_col->alias, new_col->field.text);
+                        strncpy(
+                            new_col->alias + alias_prefix_len,
+                            fieldName,
+                            MAX_FIELD_LENGTH - alias_prefix_len
+                        );
                     }
                 }
             }
