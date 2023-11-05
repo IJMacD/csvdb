@@ -562,7 +562,7 @@ int parseQuery (struct Query *q, const char *query, const char **end_ptr) {
 
                 skipWhitespace(query, &index);
 
-                if (strncmp(query + index, "AND ", 4) == 0) {
+                if (strncmp(query + index, "AND", 3) == 0) {
                     index += 4;
                 } else {
                     break;
