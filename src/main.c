@@ -23,8 +23,9 @@ const char *version_debug = "DEBUG";
 const char *version_debug = "";
 #endif
 
-void printUsage (const char* name) {
-    printf(
+void printUsage (const char* name, FILE *file) {
+    fprintf(
+        file,
         "Usage:\n"
         "\t%1$s <options> \"<query>\"\n"
         "\t%1$s <options> -f file.sql\n"
@@ -96,7 +97,7 @@ int main (int argc, char * argv[]) {
         const char *arg = argv[argi];
 
         if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
-            printUsage(argv[0]);
+            printUsage(argv[0], stdout);
             return 0;
         }
 
@@ -112,7 +113,7 @@ int main (int argc, char * argv[]) {
         else if (strcmp(arg, "-F") == 0) {
             if (argi + 1 >= argc) {
                 fprintf(stderr, "Expected format to be specified after -F\n");
-                printUsage(argv[0]);
+                printUsage(argv[0], stderr);
                 exit(-1);
             }
 
@@ -129,7 +130,7 @@ int main (int argc, char * argv[]) {
                 fprintf(stderr,
                     "Expected input name to be specified after -i\n"
                 );
-                printUsage(argv[0]);
+                printUsage(argv[0], stderr);
                 exit(-1);
             }
 
@@ -146,7 +147,7 @@ int main (int argc, char * argv[]) {
                 fprintf(stderr,
                     "Expected output name to be specified after -o\n"
                 );
-                printUsage(argv[0]);
+                printUsage(argv[0], stderr);
                 exit(-1);
             }
 
@@ -184,7 +185,7 @@ int main (int argc, char * argv[]) {
         else if (strcmp(arg, "-f") == 0) {
             if (argi + 1 >= argc) {
                 fprintf(stderr, "Expected file to be specified after -f\n");
-                printUsage(argv[0]);
+                printUsage(argv[0], stderr);
                 exit(-1);
             }
 
@@ -219,7 +220,7 @@ int main (int argc, char * argv[]) {
         }
         else {
             fprintf(stderr, "Unknown option %s\n", arg);
-            printUsage(argv[0]);
+            printUsage(argv[0], stderr);
             return -1;
         }
 
