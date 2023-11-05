@@ -343,16 +343,16 @@ int executeSourceTableScan (
         }
     }
 
-    int record_count = limit;
+    int record_count = getRecordCount(tables[0].db);
 
-    if (record_count < 0) {
-        record_count = getRecordCount(tables[0].db) - start_rowid;
+    if (limit >= 0) {
+        record_count = MIN(record_count, limit);
     }
 
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);
 
-    fullTableScan(table->db, row_list, start_rowid, limit);
+    fullTableScan(table->db, row_list, start_rowid, record_count);
 
     return 0;
 }
