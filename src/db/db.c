@@ -453,7 +453,7 @@ int pkSearch (struct DB *db, const char * value) {
  * @brief (Binary) Search a sorted table for a value and return associated rowid
  *
  * @param db must be an index with sorted column 0
- * @param value value to search for in cilumn 0 of db
+ * @param value value to search for in column 0 of db
  * @param mode MODE_UNIQUE: index is unique; MODE_LOWER_BOUND: return first
  * matching rowid; MODE_UPPER_BOUND: return last matching rowid
  * @param output_flag 0: value found; RESULT_BETWEEN: value not found but would
@@ -466,8 +466,8 @@ int pkSearch (struct DB *db, const char * value) {
 int indexSearch (
     struct DB *db,
     const char *search_value,
-    int mode,
-    int * output_flag
+    enum IndexScanMode mode,
+    enum IndexSearchResult *output_flag
 ) {
     if (db->vfs == 0) {
         fprintf(stderr, "Trying to perform index search on uninitialised DB\n");
@@ -483,7 +483,7 @@ int indexSearch (
 
     // VFS-Agnostic implementation
 
-    // By definition
+    // By definition must be 0 (first column)
     int index_column = 0;
 
     int index_a = 0;

@@ -145,8 +145,8 @@ enum IndexSearchResult indexUniqueSeek (
         exit(-1);
     }
 
-    if (limit > 0 && upper_bound > lower_bound + limit) {
-        upper_bound = lower_bound + limit;
+    if (limit >= 0) {
+        upper_bound = MIN(upper_bound, lower_bound + limit);
     }
 
     return indexWalk(
@@ -178,7 +178,11 @@ enum IndexSearchResult indexScan (
     // (inclusive)
     int lower_bound = 0;
     // (exclusive)
-    int upper_bound = limit < 0 ? getRecordCount(index_db) : limit;
+    int upper_bound = getRecordCount(index_db);
+
+    if (limit >= 0) {
+        upper_bound = MIN(upper_bound, lower_bound + limit);
+    }
 
     return indexWalk(
         index_db,
@@ -337,7 +341,7 @@ enum IndexSearchResult indexSeek (
         exit(-1);
     }
 
-    if (limit > 0) {
+    if (limit >= 0) {
         upper_bound = MIN(upper_bound, lower_bound + limit);
     }
 

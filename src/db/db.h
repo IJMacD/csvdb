@@ -28,7 +28,12 @@ enum IndexSearchType findIndex(
 
 int pkSearch(struct DB *db, const char *value);
 
-int indexSearch(struct DB *db, const char *value, int mode, int * output_flag);
+int indexSearch (
+    struct DB *db,
+    const char *value,
+    enum IndexScanMode mode,
+    enum IndexSearchResult *output_flag
+);
 
 int uniqueIndexSearch(struct DB *db, const char *value, int * output_flag);
 
