@@ -23,6 +23,7 @@ if [[ $1 == "stats" ]]; then
     stats="--stats"
 fi
 
+tests=0
 errors=0
 
 echo "duration" > $STATFILE
@@ -70,12 +71,13 @@ for sql in "${lines[@]}"; do
         printf "\n$GREY -- ${RED}ERROR${GREY} --$NC\n\n\n";
         ((errors=errors+1))
     fi
+    ((tests=tests+1))
 
 done
 
 rm -f $OUTFILE
 
-printf " All tests complete: "
+printf " All tests ($tests) complete: "
 
 if [ $errors -eq 0 ]; then
     printf "${GREEN}NO ERRORS${NC} (Check output above)\n\n";
