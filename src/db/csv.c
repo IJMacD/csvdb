@@ -486,7 +486,20 @@ enum IndexSearchType csv_findIndex(
     char **resolved
 ) {
     int found_unique = 0;
-    const char *field_name = field_name = node->field.text;
+    const char *field_name;
+    if (
+        (node->function == FUNC_UNITY && node->child_count == 0) ||
+        node->child_count == -1
+    ) {
+        field_name = node->field.text;
+    }
+    else if (node->child_count == 1) {
+        field_name = node->children[0].field.text;
+    }
+    else {
+        return INDEX_NONE;
+    }
+
     size_t field_len = strlen(field_name);
     int fn = node->function;
 

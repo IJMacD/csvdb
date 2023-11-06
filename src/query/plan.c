@@ -64,6 +64,8 @@ static enum PlanStepType findIndexSource (struct Query *query);
 
 static const char *getNodeFieldName (struct Node *node);
 
+static int index_function_node (struct Query *query);
+
 int makePlan (struct Query *q, struct Plan *plan) {
     plan->step_count = 0;
 
@@ -214,6 +216,26 @@ static void addPredicateSource (struct Plan *plan, struct Query *query) {
 
     // First table
     struct Table *table = &query->tables[0];
+
+    // Check for INDEX() or UNIQUE()
+    int index_fn_node = index_function_node(query);
+    if (index_fn_node >= 0) {
+        if (query->table_count > 1) {
+            fprintf(stderr, "INDEX() not supported with more than one table\n");
+            exit(-1);
+        }
+
+        struct Node *predicate = &query->predicate_nodes[index_fn_node];
+        struct Node *left = &predicate->children[0];
+
+        enum PlanStepType step_type = predicate->function == OPERATOR_EQ ?
+            (left->function == FUNC_UNIQUE ? PLAN_UNIQUE : PLAN_INDEX_RANGE) :
+            (left->function == FUNC_UNIQUE ? PLAN_UNIQUE_RANGE : PLAN_INDEX_RANGE);
+
+        addStepWithNode(plan, step_type, predicate);
+
+        return;
+    }
 
     // First predicate
     struct Node *p = &query->predicate_nodes[0];
@@ -1375,4 +1397,46 @@ static const char *getNodeFieldName (struct Node *node) {
     }
 
     return node->field.text;
+}
+
+/**
+ * Looks for:
+ * - INDEX('a') = 'x'
+ * - UNIQUE('a') = 'x'
+ *
+ * Node:
+ * - Must be first predicate
+ * - Must be operator node
+ * - Can be any operator
+ * Index Function Node:
+ * - Must be on left
+ * - Must have single constant child (or self-child)
+ *
+ * @return -1 if not found; or predicate index of match (currently only 0)
+ */
+static int index_function_node (struct Query *query) {
+    if (query->predicate_count == 0) {
+        return -1;
+    }
+
+    struct Node *node = &query->predicate_nodes[0];
+
+    if ((node->function & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR) {
+        return -1;
+    }
+
+    if (node->child_count != 2) {
+        fprintf(stderr, "Expected operator to have 2 children\n");
+        exit(-1);
+    }
+
+    struct Node *left = &node->children[0];
+
+    if (left->function == FUNC_INDEX || left->function == FUNC_UNIQUE) {
+        if (left->child_count == -1 || left->child_count == 1) {
+            return 0;
+        }
+    }
+
+    return -1;
 }

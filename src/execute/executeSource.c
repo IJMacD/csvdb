@@ -125,8 +125,10 @@ int executeSourceIndexSeek (
         return -1;
     }
 
-    int record_count = (step->limit > -1)
-        ? step->limit : getRecordCount(&index_db);
+    int record_count =  getRecordCount(&index_db);
+    if (step->limit > -1) {
+        record_count = MIN(record_count, step->limit);
+    }
 
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);

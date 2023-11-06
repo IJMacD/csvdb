@@ -584,6 +584,7 @@ int evaluateFunction(
         );
     }
     else {
+        fprintf(stderr, "Unable to evaluate function %d\n", function);
         return -1;
     }
 

@@ -41,7 +41,7 @@ int evaluateOperatorNode (struct Table *tables, RowListIndex list_id, int row_in
     char value_left[MAX_VALUE_LENGTH] = {0};
     char value_right[MAX_VALUE_LENGTH] = {0};
 
-    evaluateNode(
+    int result = evaluateNode(
         tables,
         list_id,
         row_index,
@@ -49,7 +49,12 @@ int evaluateOperatorNode (struct Table *tables, RowListIndex list_id, int row_in
         value_left,
         MAX_VALUE_LENGTH
     );
-    evaluateNode(
+    if (result < 0) {
+        fprintf(stderr, "Unable to evaluate node\n");
+        exit(-1);
+    }
+
+    result = evaluateNode(
         tables,
         list_id,
         row_index,
@@ -57,6 +62,10 @@ int evaluateOperatorNode (struct Table *tables, RowListIndex list_id, int row_in
         value_right,
         MAX_VALUE_LENGTH
     );
+    if (result < 0) {
+        fprintf(stderr, "Unable to evaluate node\n");
+        exit(-1);
+    }
 
     if (!evaluateExpression(node->function, value_left, value_right)) {
         return 0;

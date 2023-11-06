@@ -18,6 +18,9 @@ SELECT name, birth_date FROM test WHERE birth_date = '2050-01-02';
 SELECT name, birth_date FROM test WHERE birth_date > '2050-01-01' FETCH FIRST 5 ROWS ONLY;
 SELECT name, birth_date FROM test WHERE '2050-01-01' < birth_date  FETCH FIRST 5 ROWS ONLY;
 SELECT name, birth_date, score FROM test WHERE birth_date > '2050-01-01' AND score > 95 ORDER BY name FETCH FIRST 5 ROWS ONLY;
+-- Test explicit indexes
+FROM test WHERE INDEX('test__name.index') = 'Claude MILLS';
+FROM test WHERE UNIQUE('test__birth_date.unique') >= '0990-03-26' LIMIT 2;
 -- SELECT name, birth_date FROM test WHERE PK(id) = 769;
 -- SELECT id, name, birth_date FROM test WHERE PK(id) < 51;
 -- SELECT id, name, birth_date FROM test WHERE 51 >= PK(id);

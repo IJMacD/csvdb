@@ -14,6 +14,14 @@ void optimiseCollapseConstantNode (struct Node *node)  {
         return;
     }
 
+    if (
+        node->function == FUNC_INDEX ||
+        node->function == FUNC_UNIQUE ||
+        node->function == FUNC_PK
+    ) {
+        return;
+    }
+
     if (node->function == FUNC_RANDOM) {
         // RANDOM is non-deterministic so cannot be collapsed
         return;
@@ -129,7 +137,12 @@ void optimiseCollapseConstantNode (struct Node *node)  {
         }
 
         // Evaluate the function and write result to field
-        evaluateConstantNode(node, node->field.text);
+        int result = evaluateConstantNode(node, node->field.text);
+        if (result < 0) {
+            // (There might be an alias to help identify)
+            fprintf(stderr, "Unable to evaluate constant node %s\n", node->alias);
+            exit(-1);
+        }
 
         // Mark the node as constant and remove function marker
         node->field.index = FIELD_CONSTANT;
