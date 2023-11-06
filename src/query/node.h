@@ -13,3 +13,5 @@ struct Node * cloneNodeIntoChild (struct Node *node);
 int getTableBitMap (struct Node *node);
 
 void swapNodes (struct Node *nodeA, struct Node *nodeB);
+
+const char *nodeGetFieldName (struct Node *node);

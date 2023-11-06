@@ -170,11 +170,13 @@ int explain_select_query (
 
             char *t = tables[join_count].alias;
 
+            const char *field_name = nodeGetFieldName(&s.nodes[0].children[0]);
+
             sprintf(
                 table,
                 "%s__%s",
                 t,
-                s.nodes[0].children[0].field.text
+                field_name
             );
             rows = 1;
             cost = log_rows;
@@ -185,11 +187,13 @@ int explain_select_query (
             // char *t = basename(tables[join_count].name);
             char *t = tables[join_count].alias;
 
+            const char *field_name = nodeGetFieldName(&s.nodes[0].children[0]);
+
             sprintf(
                 table,
                 "%s__%s",
                 t,
-                s.nodes[0].children[0].field.text
+                field_name
             );
             rows = getRecordCount(tables[join_count].db) / 2;
             cost = rows;

@@ -6,6 +6,7 @@
 #include "db.h"
 #include "csv-mem.h"
 #include "../query/query.h"
+#include "../query/node.h"
 
 static int makeDB (struct DB *db, FILE *f);
 
@@ -486,17 +487,10 @@ enum IndexSearchType csv_findIndex(
     char **resolved
 ) {
     int found_unique = 0;
-    const char *field_name;
-    if (
-        (node->function == FUNC_UNITY && node->child_count == 0) ||
-        node->child_count == -1
-    ) {
-        field_name = node->field.text;
-    }
-    else if (node->child_count == 1) {
-        field_name = node->children[0].field.text;
-    }
-    else {
+    const char *field_name = nodeGetFieldName(node);
+
+    // There as no field, then we don't have an index
+    if (field_name == NULL) {
         return INDEX_NONE;
     }
 
@@ -507,17 +501,6 @@ enum IndexSearchType csv_findIndex(
         // indexes on functions are not supported yet
         return INDEX_NONE;
     }
-
-    char table_filename[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12];
-
-    // If the table name ends in '.csv' remove that before searching for a
-    // matching index
-    size_t t_len = strlen(table_name);
-    if (strcmp(table_name + t_len - 4, ".csv") == 0) {
-        t_len -= 4;
-    }
-    strncpy(table_filename, table_name, t_len);
-    table_filename[t_len] = '\0';
 
     // Allocate working buffer
     char index_filename[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12];
@@ -542,6 +525,17 @@ enum IndexSearchType csv_findIndex(
     }
     else {
         // Start trying auto names
+
+        char table_filename[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12];
+
+        // If the table name ends in '.csv' remove that before searching for a
+        // matching index
+        size_t t_len = strlen(table_name);
+        if (strcmp(table_name + t_len - 4, ".csv") == 0) {
+            t_len -= 4;
+        }
+        strncpy(table_filename, table_name, t_len);
+        table_filename[t_len] = '\0';
 
         sprintf(
             index_filename,

@@ -176,3 +176,21 @@ void swapNodes (struct Node *nodeA, struct Node *nodeB) {
     memcpy(nodeA, nodeB, sizeof(tmp));
     memcpy(nodeB, &tmp, sizeof(tmp));
 }
+
+/**
+ * Helper function
+ * Just for convenience
+ */
+const char *nodeGetFieldName (struct Node *node) {
+    const char *field_name = NULL;
+    if (
+        (node->function == FUNC_UNITY && node->child_count == 0) ||
+        node->child_count == -1
+    ) {
+        field_name = node->field.text;
+    }
+    else if (node->child_count == 1) {
+        field_name = node->children[0].field.text;
+    }
+    return field_name;
+}
