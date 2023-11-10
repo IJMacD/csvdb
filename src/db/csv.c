@@ -10,8 +10,6 @@
 
 static int makeDB (struct DB *db, FILE *f);
 
-static int countFields (FILE *f);
-
 static int countLines (FILE *f);
 
 static int measureLine (FILE *f, size_t byte_offset);
@@ -83,6 +81,9 @@ int csv_getRecordCount (struct DB *db) {
     return db->_record_count;
 }
 
+/**
+ * TODO: Very bad! Presumes no embedded '\n'
+ */
 static int countLines (FILE *f) {
     size_t buffer_size = 1024;
     int count = 0;
@@ -115,33 +116,9 @@ static int countLines (FILE *f) {
     return count;
 }
 
-static int countFields (FILE *f) {
-    size_t buffer_size = 1024;
-    int count = 1;
-    char buffer[buffer_size];
-    size_t read_size;
-
-    fseek(f, 0, SEEK_SET);
-
-    do {
-        read_size = fread(buffer, 1, buffer_size, f);
-
-        for (size_t i = 0; i < read_size; i++) {
-            if (buffer[i] == '\n'){
-                return count;
-            }
-
-            if (buffer[i] == ','){
-                count++;
-            }
-        }
-    } while (read_size > 0);
-
-    return count;
-}
-
 /**
  * Including \n
+ * TODO: Very bad! Presumes no embedded '\n'
  */
 static int measureLine (FILE *f, size_t byte_offset) {
     size_t buffer_size = 1024;
@@ -413,8 +390,7 @@ int csv_getRecordValue (
 }
 
 static void prepareHeaders (struct DB *db) {
-
-    db->field_count = countFields(db->file);
+    db->field_count = 1;
 
     int header_length = measureLine(db->file, 0);
 

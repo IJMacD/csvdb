@@ -13,6 +13,8 @@
 #include "view.h"
 #include "temp.h"
 #include "tsv.h"
+#include "tsv-mem.h"
+#include "wsv-mem.h"
 #include "../evaluate/predicates.h"
 #include "../evaluate/evaluate.h"
 #include "../query/result.h"
@@ -102,6 +104,28 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .insertRow = &tsv_insertRow,
         .insertFromQuery = &tsv_insertFromQuery,
     },
+    [VFS_TSV_MEM] = {
+        .openDB = &tsvMem_openDB,
+        .closeDB = &tsvMem_closeDB,
+        .getFieldIndex = &tsvMem_getFieldIndex,
+        .getFieldName = &tsvMem_getFieldName,
+        .getRecordCount = &tsvMem_getRecordCount,
+        .getRecordValue = &tsvMem_getRecordValue,
+        .findIndex = &tsvMem_findIndex,
+        .insertRow = &tsvMem_insertRow,
+    },
+    #endif
+    #ifdef COMPILE_WSV
+    [VFS_WSV_MEM] = {
+        .openDB = &wsvMem_openDB,
+        .closeDB = &wsvMem_closeDB,
+        .getFieldIndex = &wsvMem_getFieldIndex,
+        .getFieldName = &wsvMem_getFieldName,
+        .getRecordCount = &wsvMem_getRecordCount,
+        .getRecordValue = &wsvMem_getRecordValue,
+        .findIndex = &wsvMem_findIndex,
+        .insertRow = &wsvMem_insertRow,
+    },
     #endif
     #ifdef COMPILE_CSV_MMAP
     [VFS_CSV_MMAP] = {
@@ -134,7 +158,7 @@ int openDB (struct DB *db, const char *filename, char **resolved) {
         return csvMem_openDB(db, filename + 7, resolved);
     }
 
-    for (int i = 1; i < VFS_COUNT; i++) {
+    for (enum VFSType i = 1; i < VFS_COUNT; i++) {
         int (*vfs_openDB) (struct DB *, const char *filename, char **resolved)
             = VFS_Table[i].openDB;
 
