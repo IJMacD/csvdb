@@ -3,17 +3,14 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "helper.h"
 #include "../structs.h"
 #include "../functions/util.h"
 #include "../query/query.h"
 
 static int prepareHeaders (struct DB *db);
 
-static int indexLines (struct DB *db);
-
-static void consumeStream (struct DB *db, FILE *stream);
-
-static char * get_end_of_data (struct DB *db);
+static char *get_end_of_data (struct DB *db);
 
 static int tsv_get_record_from_line (
     const char *in_ptr,
@@ -22,22 +19,7 @@ static int tsv_get_record_from_line (
     size_t max_length
 );
 
-int tsvMem_makeDB (struct DB *db, FILE *f) {
-    db->vfs = VFS_TSV_MEM;
-
-    // It would be nice to have a streaming solution but I don't think it's
-    // realistically possible. We will just read the entire stream into memory.
-    consumeStream(db, f);
-
-    int result = prepareHeaders(db);
-    if (result < 0) {
-        return -1;
-    }
-
-    db->_record_count = -1;
-
-    return 0;
-}
+static int makeDB (struct DB *db, FILE *f);
 
 /**
  * @brief Opens, consumes, and closes file specified by filename
@@ -76,7 +58,7 @@ int tsvMem_openDB (struct DB *db, const char *filename, char **resolved) {
         }
     }
 
-    int result = tsvMem_makeDB(db, f);
+    int result = makeDB(db, f);
 
     fclose(f);
 
@@ -85,7 +67,9 @@ int tsvMem_openDB (struct DB *db, const char *filename, char **resolved) {
 
 void tsvMem_closeDB (struct DB *db) {
     if (db->line_indices != NULL) {
-        free(db->line_indices);
+        // max_size of allocation is stored at start of real block
+        void *ptr = db->line_indices;
+        free(ptr - sizeof(int));
         db->line_indices = NULL;
     }
 
@@ -125,8 +109,8 @@ char *tsvMem_getFieldName (struct DB *db, int field_index) {
 }
 
 int tsvMem_getRecordCount (struct DB *db) {
-    if (db->_record_count == -1) {
-        indexLines(db);
+    if (db->_record_count < 0) {
+        indexLines(db, -1, '\0');
     }
 
     return db->_record_count;
@@ -142,12 +126,16 @@ int tsvMem_getRecordValue (
     char *value,
     size_t value_max_length
 ) {
-    if (db->_record_count == -1) {
-        indexLines(db);
+    if (db->_record_count < 0) {
+        // Just index as many rows as we need
+        if (indexLines(db, record_index + 1, '"') < 0) {
+            return -1;
+        }
     }
-
-    if (record_index < 0 || record_index >= db->_record_count) {
-        return -1;
+    else {
+        if (record_index >= db->_record_count) {
+            return -1;
+        }
     }
 
     if (field_index < 0 || field_index >= db->field_count) {
@@ -157,6 +145,23 @@ int tsvMem_getRecordValue (
     long file_offset = db->line_indices[record_index];
 
     return tsv_get_record_from_line(db->data + file_offset, field_index, value, value_max_length);
+}
+
+static int makeDB (struct DB *db, FILE *f) {
+    db->vfs = VFS_TSV_MEM;
+
+    // It would be nice to have a streaming solution but I don't think it's
+    // realistically possible. We will just read the entire stream into memory.
+    consumeStream(db, f);
+
+    int result = prepareHeaders(db);
+    if (result < 0) {
+        return -1;
+    }
+
+    db->_record_count = -1;
+
+    return 0;
 }
 
 static int prepareHeaders (struct DB *db) {
@@ -204,59 +209,6 @@ static int prepareHeaders (struct DB *db) {
     return 0;
 }
 
-/**
- * Assumes quotes are not special i.e. no embedded tabs or newline
- */
-static int indexLines (struct DB *db) {
-    int count = 0;
-    size_t i = 0;
-
-    int max_size = 32;
-
-    db->line_indices = malloc(sizeof(*db->line_indices) * max_size);
-
-    db->line_indices[count++] = i;
-
-    while (db->data[i] != '\0') {
-        if (db->data[i] == '\n'){
-            db->line_indices[count++] = i + 1;
-        }
-
-        if (count == max_size) {
-            max_size *= 2;
-
-            void *ptr = realloc(
-                db->line_indices,
-                sizeof(*db->line_indices) * max_size
-            );
-
-            if (ptr == NULL) {
-                fprintf(
-                    stderr,
-                    "Unable to allocate memory for %d line_indices\n",
-                    max_size
-                );
-                exit(-1);
-            }
-            db->line_indices = ptr;
-        }
-
-        i++;
-    }
-
-    if (db->data[i-1] == '\n') {
-        count--;
-    }
-
-    // Add final count to track file size
-    db->line_indices[count] = i;
-
-    db->_record_count = count;
-
-    return count;
-}
-
-
 // No Indexes on memory table
 int tsvMem_findIndex(
     __attribute__((unused)) struct DB *db,
@@ -266,43 +218,6 @@ int tsvMem_findIndex(
     __attribute__((unused)) char **resolved
 ) {
     return 0;
-}
-
-static void consumeStream (struct DB *db, FILE *stream) {
-    // 4 KB blocks
-    int block_size = 4 * 1024;
-
-    db->data = NULL;
-
-    int read_size = -1;
-    int block_count = 0;
-
-    int offset = 0;
-
-    do {
-        block_count++;
-
-        if (db->data == NULL) {
-            db->data = malloc(block_size);
-        } else {
-            void * ptr = realloc(db->data, block_size * block_count);
-
-            if (ptr == NULL) {
-                fprintf(stderr, "Unable to assign memory");
-                exit(-1);
-            }
-
-            db->data = ptr;
-        }
-
-        read_size = fread(db->data + offset, 1, block_size, stream);
-
-        offset += read_size;
-    } while (read_size > 0);
-
-    // Add null terminator to end of stream.
-    // Necessary when more than one query is executed in same process.
-    db->data[offset] = '\0';
 }
 
 /**
@@ -541,8 +456,8 @@ int tsvMem_insertRow (struct DB *db, const char *row) {
 }
 
 static char * get_end_of_data (struct DB *db) {
-    if (db->_record_count == -1) {
-        indexLines(db);
+    if (db->_record_count < 0) {
+        indexLines(db, -1, '\0');
     }
 
     return db->data + db->line_indices[db->_record_count];

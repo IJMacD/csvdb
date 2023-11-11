@@ -3,6 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "helper.h"
 #include "../structs.h"
 #include "../functions/util.h"
 #include "../functions/csv.h"
@@ -11,10 +12,6 @@
 static int countFields (const char *ptr);
 
 static int prepareHeaders (struct DB *db);
-
-static int indexLines (struct DB *db);
-
-static void consumeStream (struct DB *db, FILE *stream);
 
 static char * get_end_of_data (struct DB *db);
 
@@ -81,7 +78,9 @@ int csvMem_openDB (struct DB *db, const char *filename, char **resolved) {
 
 void csvMem_closeDB (struct DB *db) {
     if (db->line_indices != NULL) {
-        free(db->line_indices);
+        // max_size of allocation is stored at start of real block
+        void *ptr = db->line_indices;
+        free(ptr - sizeof(int));
         db->line_indices = NULL;
     }
 
@@ -121,8 +120,8 @@ char *csvMem_getFieldName (struct DB *db, int field_index) {
 }
 
 int csvMem_getRecordCount (struct DB *db) {
-    if (db->_record_count == -1) {
-        indexLines(db);
+    if (db->_record_count < 0) {
+        indexLines(db, -1, '"');
     }
 
     return db->_record_count;
@@ -138,12 +137,16 @@ int csvMem_getRecordValue (
     char *value,
     size_t value_max_length
 ) {
-    if (db->_record_count == -1) {
-        indexLines(db);
+    if (db->_record_count < 0) {
+        // Just index as many rows as we need
+        if (indexLines(db, record_index + 1, '"') < 0) {
+            return -1;
+        }
     }
-
-    if (record_index < 0 || record_index >= db->_record_count) {
-        return -1;
+    else {
+        if (record_index >= db->_record_count) {
+            return -1;
+        }
     }
 
     if (field_index < 0 || field_index >= db->field_count) {
@@ -201,61 +204,6 @@ static int prepareHeaders (struct DB *db) {
     return 0;
 }
 
-static int indexLines (struct DB *db) {
-    int count = 0;
-    size_t i = 0;
-
-    int max_size = 32;
-
-    db->line_indices = malloc(sizeof(*db->line_indices) * max_size);
-
-    db->line_indices[count++] = i;
-
-    int quoted = 0;
-
-    while (db->data[i] != '\0') {
-        if (db->data[i] == '\n' && !quoted){
-            db->line_indices[count++] = i + 1;
-        }
-        else if (db->data[i] == '"') {
-            quoted = ~quoted;
-        }
-
-        if (count == max_size) {
-            max_size *= 2;
-
-            void *ptr = realloc(
-                db->line_indices,
-                sizeof(*db->line_indices) * max_size
-            );
-
-            if (ptr == NULL) {
-                fprintf(
-                    stderr,
-                    "Unable to allocate memory for %d line_indices\n",
-                    max_size
-                );
-                exit(-1);
-            }
-            db->line_indices = ptr;
-        }
-
-        i++;
-    }
-
-    if (db->data[i-1] == '\n') {
-        count--;
-    }
-
-    // Add final count to track file size
-    db->line_indices[count] = i;
-
-    db->_record_count = count;
-
-    return count;
-}
-
-
 // No Indexes on memory table
 int csvMem_findIndex(
     __attribute__((unused)) struct DB *db,
@@ -265,43 +213,6 @@ int csvMem_findIndex(
     __attribute__((unused)) char **resolved
 ) {
     return 0;
-}
-
-static void consumeStream (struct DB *db, FILE *stream) {
-    // 4 KB blocks
-    int block_size = 4 * 1024;
-
-    db->data = NULL;
-
-    int read_size = -1;
-    int block_count = 0;
-
-    int offset = 0;
-
-    do {
-        block_count++;
-
-        if (db->data == NULL) {
-            db->data = malloc(block_size);
-        } else {
-            void * ptr = realloc(db->data, block_size * block_count);
-
-            if (ptr == NULL) {
-                fprintf(stderr, "Unable to assign memory");
-                exit(-1);
-            }
-
-            db->data = ptr;
-        }
-
-        read_size = fread(db->data + offset, 1, block_size, stream);
-
-        offset += read_size;
-    } while (read_size > 0);
-
-    // Add null terminator to end of stream.
-    // Necessary when more than one query is executed in same process.
-    db->data[offset] = '\0';
 }
 
 /**
@@ -328,7 +239,8 @@ const char *csvMem_fromValues(struct DB *db, const char *input, int length) {
 
     int max_line_count = 100;
 
-    db->line_indices = malloc(max_line_count * sizeof (long));
+    // Offset by one int, becuse closeDB expects it
+    db->line_indices = malloc(max_line_count * sizeof (long)) + sizeof(int);
 
     db->line_indices[0] = 0;
 
@@ -547,15 +459,15 @@ int csvMem_insertRow (struct DB *db, const char *row) {
     db->_record_count++;
 
     // IF THERE'S A BUG CHECK HERE!
-    // We're not checking if db->line_inidices is big enough
+    // We're not checking if db->line_indices is big enough
     db->line_indices[db->_record_count] = data_len + len;
 
     return 0;
 }
 
 static char * get_end_of_data (struct DB *db) {
-    if (db->_record_count == -1) {
-        indexLines(db);
+    if (db->_record_count < 0) {
+        indexLines(db, -1, '"');
     }
 
     return db->data + db->line_indices[db->_record_count];

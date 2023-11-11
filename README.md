@@ -52,6 +52,7 @@ An esoteric toy command line app for processing CSV using a custom SQL dialect.
 * Builtin calendar table
 * `SELECT` clause is optional (defaults to `SELECT *`)
 * `FROM` clause is optional (defaults to `FROM stdin`)
+* SQL is a declarative language. Clauses can be ordered arbitrarily.
 * Supports many standard SQL features such as: subqueries, views, `TABLE` clause, `VALUES` clause, CTEs
 * Basic table creation, insertion, and temp tables
 * Can process multiple queries separated by `;`

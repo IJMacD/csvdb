@@ -6,8 +6,6 @@ int tsvMem_openDB (struct DB *db, const char *filename, char **resolved);
 
 void tsvMem_closeDB (struct DB *db);
 
-int tsvMem_makeDB (struct DB *db, FILE *f);
-
 /**
  * Max header length 1024 characters
  */
