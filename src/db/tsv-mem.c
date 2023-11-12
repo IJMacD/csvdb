@@ -31,12 +31,12 @@ static int makeDB (struct DB *db, FILE *f);
  * malloc'd for it.
  */
 int tsvMem_openDB (struct DB *db, const char *filename, char **resolved) {
-    FILE *f;
+    FILE *f = NULL;
 
     if (strcmp(filename, "stdin.tsv") == 0) {
         f = stdin;
     }
-    else {
+    else if (ends_with(filename, ".tsv")) {
         f = fopen(filename, "r");
 
         if (resolved != NULL) {
@@ -45,17 +45,7 @@ int tsvMem_openDB (struct DB *db, const char *filename, char **resolved) {
     }
 
     if (!f) {
-        char buffer[FILENAME_MAX];
-        sprintf(buffer, "%s.tsv", filename);
-        f = fopen(buffer, "r");
-
-        if (!f) {
-            return -1;
-        }
-
-        if (resolved != NULL) {
-            *resolved = realpath(buffer, *resolved);
-        }
+        return -1;
     }
 
     int result = makeDB(db, f);

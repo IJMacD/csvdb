@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "../structs.h"
 
@@ -130,4 +131,11 @@ int indexLines (struct DB *db, int max_lines, char quote_char) {
     db->_record_count = count;
 
     return count;
+}
+
+int ends_with (const char *string, const char *search) {
+    int string_len = strlen(string);
+    int search_len = strlen(search);
+
+    return strcmp(string + string_len - search_len, search) == 0;
 }

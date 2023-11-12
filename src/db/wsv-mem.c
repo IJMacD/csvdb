@@ -23,7 +23,7 @@ static int makeDB (struct DB *db, FILE *f);
 
 /**
  * @brief Opens, consumes, and closes file specified by filename
- * Whitespace Seperated Values i.e. output from standard commands
+ * Whitespace Separated Values
  *
  * @param db
  * @param filename can also be "stdin.wsv"
@@ -32,12 +32,12 @@ static int makeDB (struct DB *db, FILE *f);
  * malloc'd for it.
  */
 int wsvMem_openDB (struct DB *db, const char *filename, char **resolved) {
-    FILE *f;
+    FILE *f = NULL;
 
     if (strcmp(filename, "stdin.wsv") == 0) {
         f = stdin;
     }
-    else {
+    else if (ends_with(filename, ".wsv")) {
         f = fopen(filename, "r");
 
         if (resolved != NULL) {
@@ -46,17 +46,7 @@ int wsvMem_openDB (struct DB *db, const char *filename, char **resolved) {
     }
 
     if (!f) {
-        char buffer[FILENAME_MAX];
-        sprintf(buffer, "%s.wsv", filename);
-        f = fopen(buffer, "r");
-
-        if (!f) {
-            return -1;
-        }
-
-        if (resolved != NULL) {
-            *resolved = realpath(buffer, *resolved);
-        }
+        return -1;
     }
 
     int result = makeDB(db, f);

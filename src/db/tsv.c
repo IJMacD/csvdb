@@ -4,6 +4,7 @@
 
 #include "../structs.h"
 #include "db.h"
+#include "helper.h"
 #include "csv-mem.h"
 #include "../query/query.h"
 
@@ -17,7 +18,7 @@ static int measureLine (FILE *f, size_t byte_offset);
 
 static void prepareHeaders (struct DB *db);
 
-static int indexLines (struct DB *db);
+static int tsv_indexLines (struct DB *db);
 
 static int makeDB (struct DB *db, FILE *f) {
     db->vfs = VFS_TSV;
@@ -34,19 +35,21 @@ static int makeDB (struct DB *db, FILE *f) {
  * Returns 0 on success; -1 on failure
  */
 int tsv_openDB (struct DB *db, const char *filename, char **resolved) {
-    int filename_length = strlen(filename);
-    if (strcmp(filename + filename_length - 4, ".tsv") != 0) {
-        return -1;
-    }
+    FILE *f = NULL;
 
-    FILE *f = fopen(filename, "r+");
+    if (strcmp(filename, "stdin.tsv") == 0) {
+        f = stdin;
+    }
+    else if (ends_with(filename, ".tsv")) {
+        f = fopen(filename, "r");
+
+        if (resolved != NULL) {
+            *resolved = realpath(filename, *resolved);
+        }
+    }
 
     if (!f) {
         return -1;
-    }
-
-    if (resolved != NULL) {
-        *resolved = realpath(filename, *resolved);
     }
 
     return makeDB(db, f);
@@ -71,7 +74,7 @@ void tsv_closeDB (struct DB *db) {
 
 int tsv_getRecordCount (struct DB *db) {
     if (db->_record_count == -1) {
-        indexLines(db);
+        tsv_indexLines(db);
     }
 
     return db->_record_count;
@@ -160,7 +163,7 @@ static int measureLine (FILE *f, size_t byte_offset) {
     return count + read_size;
 }
 
-static int indexLines (struct DB *db) {
+static int tsv_indexLines (struct DB *db) {
     int line_count = countLines(db->file);
 
     db->_record_count = line_count - 1;
@@ -281,7 +284,7 @@ int tsv_getRecordValue (
     size_t value_max_length
 ) {
     if (db->_record_count == -1) {
-        indexLines(db);
+        tsv_indexLines(db);
     }
 
     if (record_index < 0 || record_index >= db->_record_count) {
@@ -619,7 +622,7 @@ int tsv_insertRow (struct DB *db, const char *row) {
 
     fputc('\n', db->file);
 
-    indexLines(db);
+    tsv_indexLines(db);
 
     return 0;
 }
@@ -639,7 +642,7 @@ int tsv_insertFromQuery (
         return -1;
     }
 
-    indexLines(db);
+    tsv_indexLines(db);
 
     return 0;
 }

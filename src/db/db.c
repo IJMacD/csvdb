@@ -15,6 +15,7 @@
 #include "tsv.h"
 #include "tsv-mem.h"
 #include "wsv-mem.h"
+#include "col-mem.h"
 #include "../evaluate/predicates.h"
 #include "../evaluate/evaluate.h"
 #include "../query/result.h"
@@ -125,6 +126,17 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordValue = &wsvMem_getRecordValue,
         .findIndex = &wsvMem_findIndex,
         .insertRow = &wsvMem_insertRow,
+    },
+    #endif
+    #ifdef COMPILE_COL
+    [VFS_COL_MEM] = {
+        .openDB = &colMem_openDB,
+        .closeDB = &colMem_closeDB,
+        .getFieldIndex = &colMem_getFieldIndex,
+        .getFieldName = &colMem_getFieldName,
+        .getRecordCount = &colMem_getRecordCount,
+        .getRecordValue = &colMem_getRecordValue,
+        .findIndex = &colMem_findIndex,
     },
     #endif
     #ifdef COMPILE_CSV_MMAP
