@@ -144,6 +144,34 @@ int query (
         return insert_query(query, end_ptr);
     }
 
+    if (strncmp(query, "DROP ", 5) == 0) {
+        if (output_flags & FLAG_READ_ONLY) {
+            fprintf(stderr, "Tried to DROP while in read-only mode\n");
+            return -1;
+        }
+
+        if (output_flags & FLAG_EXPLAIN) {
+            return 0;
+        }
+
+        while (*query != ';' && *query != '\0') query++;
+
+        *end_ptr = query;
+
+        // return drop_query(query, end_ptr);
+        return -1;
+    }
+
+    if (strncmp(query, "LOCK ", 5) == 0) {
+        // NO OP
+
+        while (*query != ';' && *query != '\0') query++;
+
+        *end_ptr = query;
+
+        return 0;
+    }
+
     // If we're querying the stats table then we must have stats turned off
     // for this query otherwise they would get overwritten.
     // Note pretty finicky and defeated by whitespace.
@@ -343,14 +371,18 @@ int process_query (
             // We *must* have a table
 
             if (!isatty(fileno(stdin))) {
+                // If there's something on stdin then default to 'FROM stdin'
                 q->tables = calloc(1, sizeof (struct Table));
                 q->table_count = 1;
                 strcpy(q->tables[0].name, "stdin");
                 strcpy(q->tables[0].alias, "stdin");
             }
             else {
-                fprintf(stderr, "No tables specified\n");
-                return -1;
+                // Empty query
+                // e.g. crap in mysqldump file
+                // fprintf(stderr, "No tables specified\n");
+                // return -1;
+                return 0;
             }
         }
     }
