@@ -12,6 +12,8 @@
 #include "query/query.h"
 #include "db/temp.h"
 
+int debug_verbosity = 0;
+
 /*
  * CGI Spec:
  *
@@ -25,26 +27,27 @@
 
 static void urldecode2(char *dst, const char *src);
 
-static int setDataDir (const char * datadir);
+static int setDataDir(const char *datadir);
 
-static void printError (int format, FILE *error);
+static void printError(int format, FILE *error);
 
-static char *getSession ();
+static char *getSession();
 
-void set_session_temp_db (const char * session_id);
+void set_session_temp_db(const char *session_id);
 
-int main () {
+int main()
+{
 
     char query_buffer[1024];
     int flags = OUTPUT_OPTION_HEADERS | OUTPUT_OPTION_STATS;
     int format = OUTPUT_FORMAT_TABLE;
 
-    FILE * output = stdout;
+    FILE *output = stdout;
 
-    srand((unsigned) time(NULL) * getpid());
+    srand((unsigned)time(NULL) * getpid());
 
     // open tmp file to collect errors
-    FILE * error = fopen("/tmp/csvdb_error", "w+");
+    FILE *error = fopen("/tmp/csvdb_error", "w+");
 
     // Redirect stderr -> error file
     dup2(fileno(error), STDERR_FILENO);
@@ -53,8 +56,10 @@ int main () {
     // fprintf(stderr, "debug: cwd %s\n", getcwd(dirname, 255));
 
     char *data_dir = getenv("CSVDB_DATA_DIR");
-    if (data_dir) {
-        if (setDataDir(data_dir) < 0) {
+    if (data_dir)
+    {
+        if (setDataDir(data_dir) < 0)
+        {
             fclose(error);
             return -1;
         }
@@ -62,23 +67,30 @@ int main () {
 
     char *accept_env = getenv("HTTP_ACCEPT");
 
-    if (accept_env != NULL) {
-        if (strstr(accept_env, "text/html") != NULL) {
+    if (accept_env != NULL)
+    {
+        if (strstr(accept_env, "text/html") != NULL)
+        {
             format = OUTPUT_FORMAT_HTML;
         }
-        else if (strstr(accept_env, "application/json") != NULL) {
+        else if (strstr(accept_env, "application/json") != NULL)
+        {
             format = OUTPUT_FORMAT_JSON;
         }
-        else if (strstr(accept_env, "text/csv") != NULL) {
+        else if (strstr(accept_env, "text/csv") != NULL)
+        {
             format = OUTPUT_FORMAT_COMMA;
         }
-        else if (strstr(accept_env, "text/tab-separated-values") != NULL) {
+        else if (strstr(accept_env, "text/tab-separated-values") != NULL)
+        {
             format = OUTPUT_FORMAT_TAB;
         }
-        else if (strstr(accept_env, "application/sql") != NULL) {
+        else if (strstr(accept_env, "application/sql") != NULL)
+        {
             format = OUTPUT_FORMAT_SQL_INSERT;
         }
-        else if (strstr(accept_env, "application/xml") != NULL) {
+        else if (strstr(accept_env, "application/xml") != NULL)
+        {
             format = OUTPUT_FORMAT_XML;
         }
     }
@@ -86,7 +98,8 @@ int main () {
     // Don't modify char * returned from getenv
     char *query_string = getenv("QUERY_STRING");
 
-    if (query_string == NULL) {
+    if (query_string == NULL)
+    {
         printf("HTTP/1.1 500 Server Error\n");
         printf("Content-Type: text/plain\n\n");
         printf("No query string was provided\n");
@@ -95,52 +108,75 @@ int main () {
         return -1;
     }
 
-    while (*query_string != '\0') {
-        char * eq = strchr(query_string, '=');
-        if (eq == NULL) {
+    while (*query_string != '\0')
+    {
+        char *eq = strchr(query_string, '=');
+        if (eq == NULL)
+        {
             break;
         }
         *eq = '\0';
-        char * key = query_string;
+        char *key = query_string;
         query_string = eq + 1;
 
-        char * amp = strchr(query_string, '&');
-        char * value = query_string;
-        if (amp != NULL) {
+        char *amp = strchr(query_string, '&');
+        char *value = query_string;
+        if (amp != NULL)
+        {
             *amp = '\0';
             query_string = amp + 1;
         }
 
         // printf("Query-Value: %s: %s\n", key, value);
 
-        if (strcmp(key, "format") == 0) {
+        if (strcmp(key, "format") == 0)
+        {
 
-            if (strcmp(value, "txt") == 0) {
-                format = OUTPUT_FORMAT_TABLE;
-            } else if (strcmp(value, "csv") == 0) {
-                format = OUTPUT_FORMAT_COMMA;
-            } else if (strcmp(value, "tsv") == 0) {
-                format = OUTPUT_FORMAT_TAB;
-            } else if (strcmp(value, "html") == 0) {
-                format = OUTPUT_FORMAT_HTML;
-            } else if (strcmp(value, "json") == 0) {
-                format = OUTPUT_FORMAT_JSON;
-            } else if (strcmp(value, "json_array") == 0) {
-                format = OUTPUT_FORMAT_JSON_ARRAY;
-            } else if (strcmp(value, "sql") == 0) {
-                format = OUTPUT_FORMAT_SQL_INSERT;
-            } else if (strcmp(value, "xml") == 0) {
-                format = OUTPUT_FORMAT_XML;
-            } else if (strcmp(value, "markdown") == 0) {
+            if (strcmp(value, "txt") == 0)
+            {
                 format = OUTPUT_FORMAT_TABLE;
             }
-
-        } else if (strcmp(key, "query") == 0) {
+            else if (strcmp(value, "csv") == 0)
+            {
+                format = OUTPUT_FORMAT_COMMA;
+            }
+            else if (strcmp(value, "tsv") == 0)
+            {
+                format = OUTPUT_FORMAT_TAB;
+            }
+            else if (strcmp(value, "html") == 0)
+            {
+                format = OUTPUT_FORMAT_HTML;
+            }
+            else if (strcmp(value, "json") == 0)
+            {
+                format = OUTPUT_FORMAT_JSON;
+            }
+            else if (strcmp(value, "json_array") == 0)
+            {
+                format = OUTPUT_FORMAT_JSON_ARRAY;
+            }
+            else if (strcmp(value, "sql") == 0)
+            {
+                format = OUTPUT_FORMAT_SQL_INSERT;
+            }
+            else if (strcmp(value, "xml") == 0)
+            {
+                format = OUTPUT_FORMAT_XML;
+            }
+            else if (strcmp(value, "markdown") == 0)
+            {
+                format = OUTPUT_FORMAT_TABLE;
+            }
+        }
+        else if (strcmp(key, "query") == 0)
+        {
             urldecode2(query_buffer, value);
         }
     }
 
-    if (query_buffer[0] == '\0') {
+    if (query_buffer[0] == '\0')
+    {
         printf("HTTP/1.1 500 Server Error\n");
         printf("Access-Control-Allow-Origin: *\n");
         printf("Content-Type: text/plain\n\n");
@@ -152,7 +188,8 @@ int main () {
 
     char *session = getSession();
 
-    if (session == NULL) {
+    if (session == NULL)
+    {
         return -1;
     }
 
@@ -162,28 +199,33 @@ int main () {
 
     printf("Access-Control-Allow-Origin: *\n");
 
-    if (format == OUTPUT_FORMAT_COMMA) {
+    if (format == OUTPUT_FORMAT_COMMA)
+    {
         printf("Content-Type: text/csv; charset=utf-8\n");
     }
-    else if (format == OUTPUT_FORMAT_TAB) {
+    else if (format == OUTPUT_FORMAT_TAB)
+    {
         printf("Content-Type: text/tab-separated-values; charset=utf-8\n");
     }
-    else if (format == OUTPUT_FORMAT_HTML) {
+    else if (format == OUTPUT_FORMAT_HTML)
+    {
         printf("Content-Type: text/html; charset=utf-8\n");
     }
     else if (
-        format == OUTPUT_FORMAT_JSON
-        || format == OUTPUT_FORMAT_JSON_ARRAY
-    ) {
+        format == OUTPUT_FORMAT_JSON || format == OUTPUT_FORMAT_JSON_ARRAY)
+    {
         printf("Content-Type: application/json; charset=utf-8\n");
     }
-    else if (format == OUTPUT_FORMAT_SQL_INSERT) {
+    else if (format == OUTPUT_FORMAT_SQL_INSERT)
+    {
         printf("Content-Type: application/sql; charset=utf-8\n");
     }
-    else if (format == OUTPUT_FORMAT_XML) {
+    else if (format == OUTPUT_FORMAT_XML)
+    {
         printf("Content-Type: application/xml; charset=utf-8\n");
     }
-    else {
+    else
+    {
         printf("Content-Type: text/plain; charset=utf-8\n");
     }
 
@@ -193,7 +235,8 @@ int main () {
     // Double newline to end headers
     printf("\n");
 
-    if (query(query_buffer, flags, output, NULL)) {
+    if (query(query_buffer, flags, output, NULL))
+    {
         // Write errors to stdout now
         printError(format, error);
         fclose(error);
@@ -207,46 +250,58 @@ int main () {
 static void urldecode2(char *dst, const char *src)
 {
     char a, b;
-    while (*src) {
+    while (*src)
+    {
         if ((*src == '%') &&
             ((a = src[1]) && (b = src[2])) &&
-            (isxdigit(a) && isxdigit(b))) {
-                if (a >= 'a')
-                    a -= 'a'-'A';
-                if (a >= 'A')
-                    a -= ('A' - 10);
-                else
-                    a -= '0';
-                if (b >= 'a')
-                    b -= 'a'-'A';
-                if (b >= 'A')
-                    b -= ('A' - 10);
-                else
-                    b -= '0';
-                *dst++ = 16*a+b;
-                src+=3;
-        } else if (*src == '+') {
+            (isxdigit(a) && isxdigit(b)))
+        {
+            if (a >= 'a')
+                a -= 'a' - 'A';
+            if (a >= 'A')
+                a -= ('A' - 10);
+            else
+                a -= '0';
+            if (b >= 'a')
+                b -= 'a' - 'A';
+            if (b >= 'A')
+                b -= ('A' - 10);
+            else
+                b -= '0';
+            *dst++ = 16 * a + b;
+            src += 3;
+        }
+        else if (*src == '+')
+        {
             *dst++ = ' ';
             src++;
-        } else {
+        }
+        else
+        {
             *dst++ = *src++;
         }
     }
     *dst++ = '\0';
 }
 
-static int setDataDir (const char * datadir) {
-    if (datadir != NULL) {
-        if (chdir(datadir)) {
-            if (errno == ENOENT) {
-                if (mkdir(datadir, S_IRWXU|S_IRGRP|S_IXGRP)) {
+static int setDataDir(const char *datadir)
+{
+    if (datadir != NULL)
+    {
+        if (chdir(datadir))
+        {
+            if (errno == ENOENT)
+            {
+                if (mkdir(datadir, S_IRWXU | S_IRGRP | S_IXGRP))
+                {
                     printf("HTTP/1.1 500 Server Error\n");
                     printf("Content-Type: text/plain\n\n");
                     printf("%s\n", strerror(errno));
                     return -1;
                 }
                 // fprintf(stderr, "[DEBUG] created dir: %s\n", datadir);
-                if (chdir(datadir)) {
+                if (chdir(datadir))
+                {
                     printf("HTTP/1.1 500 Server Error\n");
                     printf("Content-Type: text/plain\n\n");
                     printf("%s\n", strerror(errno));
@@ -254,7 +309,8 @@ static int setDataDir (const char * datadir) {
                     return -1;
                 }
             }
-            else  {
+            else
+            {
                 printf("HTTP/1.1 500 Server Error\n");
                 printf("Content-Type: text/plain\n\n");
                 printf("%s\n", strerror(errno));
@@ -266,14 +322,18 @@ static int setDataDir (const char * datadir) {
     return 0;
 }
 
-static void printError (int format, FILE *error) {
-    if (format == OUTPUT_FORMAT_HTML) {
+static void printError(int format, FILE *error)
+{
+    if (format == OUTPUT_FORMAT_HTML)
+    {
         printf("<p style=\"font-family: sans-serif;color: red\">");
     }
-    else if (format == OUTPUT_FORMAT_JSON) {
+    else if (format == OUTPUT_FORMAT_JSON)
+    {
         printf("{\"error\": \"");
     }
-    else if (format == OUTPUT_FORMAT_XML) {
+    else if (format == OUTPUT_FORMAT_XML)
+    {
         printf("<results><error>");
     }
 
@@ -284,21 +344,27 @@ static void printError (int format, FILE *error) {
     int size = fread(buffer, 1, sizeof(buffer), error);
 
     // JSON doesn't allow newlines
-    if (format == OUTPUT_FORMAT_JSON) {
-        for (char *c = buffer; *c; c++) {
-            if (*c == '\n') *c = ' ';
+    if (format == OUTPUT_FORMAT_JSON)
+    {
+        for (char *c = buffer; *c; c++)
+        {
+            if (*c == '\n')
+                *c = ' ';
         }
     }
 
     fwrite(buffer, 1, size, stdout);
 
-    if (format == OUTPUT_FORMAT_HTML) {
+    if (format == OUTPUT_FORMAT_HTML)
+    {
         printf("</p>");
     }
-    else if (format == OUTPUT_FORMAT_JSON) {
+    else if (format == OUTPUT_FORMAT_JSON)
+    {
         printf("\"}");
     }
-    else if (format == OUTPUT_FORMAT_XML) {
+    else if (format == OUTPUT_FORMAT_XML)
+    {
         printf("</error></results>");
     }
 }
@@ -308,24 +374,29 @@ static void printError (int format, FILE *error) {
  *
  * @return char* a malloc'd pointer. Caller must free.
  */
-static char *getSession () {
+static char *getSession()
+{
     char *session_id = malloc(32);
 
     char *cookie = getenv("HTTP_COOKIE");
 
-    if (cookie != NULL) {
+    if (cookie != NULL)
+    {
         char *start_ptr = strstr(cookie, "CSVDB_SESSION=");
-        if (start_ptr != NULL) {
+        if (start_ptr != NULL)
+        {
             start_ptr += sizeof("CSVDB_SESSION=");
 
             char *end_ptr = strstr(start_ptr, ";");
 
-            if (end_ptr) {
+            if (end_ptr)
+            {
                 int len = end_ptr - start_ptr;
                 strncpy(session_id, start_ptr, len);
                 session_id[len] = '\0';
             }
-            else {
+            else
+            {
                 strcpy(session_id, start_ptr);
             }
 
@@ -348,13 +419,13 @@ static char *getSession () {
         // asctime() adds \n at end
         "Set-Cookie: CSVDB_SESSION=%s; path=/; expires=%s",
         session_id,
-        asctime(expires)
-    );
+        asctime(expires));
 
     return session_id;
 }
 
-void set_session_temp_db (const char * session_id) {
+void set_session_temp_db(const char *session_id)
+{
     char temp_mapping_filename[MAX_TABLE_LENGTH];
 
     sprintf(temp_mapping_filename, "/tmp/csvdb.session.%s.temp.csv", session_id);

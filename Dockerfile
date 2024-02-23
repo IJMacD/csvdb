@@ -1,7 +1,8 @@
 FROM alpine:3.13 AS build
 RUN apk add --update build-base
 WORKDIR /csvdb
-COPY . .
+COPY makefile ./
+COPY src/ ./src/
 RUN make cgi
 
 FROM sebp/lighttpd

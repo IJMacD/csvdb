@@ -1,0 +1,15 @@
+hostname: "csvdb.ijmacd.com"
+web:
+  replicaCount: 1
+  repository:
+    image: docker.io/ijmacd/csvdb
+    tag: ""
+  persistence:
+    web_data:
+      enabled: true
+      storage_class: local-path
+      capacity: 1Gi
+  tls:
+    enabled: false
+  local:
+    enabled: false
