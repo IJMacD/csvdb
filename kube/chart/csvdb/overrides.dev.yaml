@@ -3,7 +3,6 @@ web:
   replicaCount: 1
   repository:
     image: k3d-registry.localhost:5111/ijmacd/csvdb
-    tag: ""
   persistence:
     web_data:
       enabled: false

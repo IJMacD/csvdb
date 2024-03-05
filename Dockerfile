@@ -6,6 +6,8 @@ COPY src/ ./src/
 RUN make cgi
 
 FROM sebp/lighttpd
+COPY ./lighttpd/startup.sh /startup.sh
 COPY ./lighttpd/lighttpd.conf /etc/lighttpd/
 COPY ./lighttpd/htdocs /var/www/html
 COPY --from=build /csvdb/release/csvdb.cgi /var/www/html/cgi-bin/csvdb
+CMD ["/startup.sh"]

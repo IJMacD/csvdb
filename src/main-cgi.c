@@ -21,6 +21,7 @@ int debug_verbosity = 0;
  *
  * $PATH_INFO = /extra/path
  * $QUERY_STRING = query=string
+ * $HTTP_ACCEPT = Accept: header etc.
  *
  * POST data: stdin
  */
@@ -230,6 +231,7 @@ int main()
     }
 
     // This will end up as a header
+    // (Sometimes?)
     // fprintf(stderr, "query: %s\n", query_buffer);
 
     // Double newline to end headers

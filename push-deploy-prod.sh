@@ -22,4 +22,4 @@ done
 helm upgrade --install ${APPNAME} \
   $SCRIPT_DIR/kube/chart/${APPNAME}/ \
   --namespace ${APPNAME} --create-namespace \
-  --set web.repository.tag=${GIT_TAG}
+  --set appVersion=${GIT_TAG}

@@ -27,4 +27,4 @@ helm upgrade --install ${APPNAME} \
   $SCRIPT_DIR/kube/chart/${APPNAME}/ \
   --namespace ${APPNAME} --create-namespace \
   -f ${SCRIPT_DIR}/kube/chart/${APPNAME}/overrides.dev.yaml \
-  --set web.repository.tag=${GIT_TAG}
+  --set appVersion=${GIT_TAG}

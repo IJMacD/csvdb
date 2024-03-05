@@ -1,4 +1,4 @@
 
-Version {{ .Chart.AppVersion }} of the application has been deployed as "{{ .Release.Name }}" in the {{ .Release.Namespace }} namespace.
+Version {{ .Values.appVersion }} of the application has been deployed as "{{ .Release.Name }}" in the {{ .Release.Namespace }} namespace.
 
 In a few moments it will be available at https://{{ .Values.hostname }}/

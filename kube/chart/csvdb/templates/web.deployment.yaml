@@ -22,10 +22,11 @@ spec:
     spec:
       containers:
         - name: web
-          image: '{{ .Values.web.repository.image }}{{ if ne .Values.web.repository.tag "" }}:{{ .Values.web.repository.tag }}{{ end }}'
+          image: '{{ .Values.web.repository.image }}{{ if ne .Values.appVersion "" }}:{{ .Values.appVersion }}{{ end }}'
           ports:
             - name: web
               containerPort: 80
+          tty: true
           env:
             - name: CSVDB_DATA_DIR
               value: /data
