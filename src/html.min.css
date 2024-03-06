@@ -1,1 +1,4 @@
-.csvdb{font-family:sans-serif;width:100%;border-collapse:collapse}.csvdb th{text-transform:capitalize}.csvdb th{border-bottom:1px solid #333}.csvdb td{padding:.5em 0}.csvdb tr:hover td{background-color:#f8f8f8}
+.csvdb { border-collapse: collapse; margin-bottom: 1em; font-family: 'Microsoft Sans Serif', Arial, Helvetica, sans-serif; font-size: 10pt; outline: 1px solid #ABADB3; outline-offset: -1px; }
+.csvdb th { font-weight: normal; padding: 0.25em 0.4em; text-align: left; border: 1px solid #E5E5E5; }
+.csvdb td { padding: 0.25em 0.6em; border: 1px solid #F0F0F0; }
+.csvdb td:active, .csvdb td:focus { outline: 1px dotted #000000; outline-offset: -1px; background-color: #E8EDF2; }

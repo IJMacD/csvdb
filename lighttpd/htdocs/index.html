@@ -2,6 +2,8 @@
 <html>
 
 <head>
+    <link rel="stylesheet" href="https://ijmacd.github.io/code-editor-syntax-highlighter/cesh.min.css" />
+
     <title>CSVDB</title>
     <style>
         body {
@@ -11,6 +13,7 @@
             flex-direction: column;
             min-height: 100vh;
             box-sizing: border-box;
+            font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
         }
 
         #history {
@@ -35,14 +38,13 @@
             cursor: pointer;
         }
 
-        form {
-            display: flex;
+        textarea {
+            height: 150px;
+            flex: 1;
         }
 
-        textarea {
-            display: block;
-            min-height: 150px;
-            flex: 1;
+        iframe {
+            border: 0;
         }
 
         iframe.loading {
@@ -58,42 +60,74 @@
 
 <body>
     <div id="history"></div>
-    <form action="/cgi-bin/csvdb" method="get" target="output">
-        <textarea name="query"></textarea>
+    <form action="/cgi-bin/csvdb" method="get" target="output" style="display: flex;">
+        <textarea name="query" id="query"></textarea>
         <button>Run</button>
     </form>
 
+    <h2 id="results-heading" style="display: none;">Results:</h2>
+
     <iframe name="output" style="flex: 1"></iframe>
+
+    <script src="https://ijmacd.github.io/code-editor-syntax-highlighter/cesh.umd.min.js"></script>
     <script>
         const hist = document.getElementById("history");
         const form = document.forms[0];
         const textarea = document.querySelector("textarea");
+        const editor = document.querySelector("#editor");
         const frame = document.querySelector("iframe");
+        const resultsHeading = document.querySelector("#results-heading");
+
+        let history = [];
+        const savedHistory = localStorage.getItem("csvdb.history");
+        if (savedHistory) {
+            try {
+                history = JSON.parse(savedHistory);
+                updateHistory();
+            } catch (e) { }
+        }
+
+        function pushHistory(query) {
+            history = history.filter(h => h !== query);
+            history.push(query);
+            localStorage.setItem("csvdb.history", JSON.stringify(history));
+
+            updateHistory();
+        }
         function updateHistory() {
-            const query = new FormData(form).get("query");
-            const p = document.createElement("p");
-            p.textContent = query;
-            hist.appendChild(p);
+            hist.innerHTML = "";
+            for (const entry of history) {
+                const p = document.createElement("p");
+                p.innerHTML = cesh.markup(entry, cesh.sqlTokenizer(entry));
+                hist.appendChild(p);
+            }
             hist.scrollTo(0, 1e6);
         }
         form.addEventListener("submit", () => {
-            updateHistory();
+            pushHistory(textarea.value);
+            resultsHeading.style.display = "block";
             frame.classList.add("loading");
         });
         hist.addEventListener("click", e => {
-            if (e.target instanceof HTMLParagraphElement) {
-                textarea.value = e.target.textContent;
+            const p = e.target.closest("p");
+            if (p) {
+                textarea.value = p.textContent;
+                textarea.dispatchEvent(new Event("input"));
             }
         });
         document.addEventListener("keyup", e => {
-            if (e.key === "F9") {
-                form.submit();
+            if (e.key === "F9" || (e.key === "Enter" && e.ctrlKey)) {
                 // form.submit does not call onSubmit
-                updateHistory();
-                frame.classList.add("loading");
+                if (form.dispatchEvent(new Event("submit"))) {
+                    form.submit();
+                }
             }
         });
         frame.addEventListener("load", () => frame.classList.remove("loading"));
+
+        cesh.editor(textarea, { tokenizer: cesh.sqlTokenizer });
+
+        textarea.focus();
     </script>
 </body>
 
