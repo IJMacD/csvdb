@@ -13,58 +13,65 @@
 #include "query.h"
 #include "../functions/util.h"
 
-static int create_table_query (const char * query, const char **end_ptr);
+static int create_table_query(const char *query, const char **end_ptr);
 
-static int create_view_query (const char * query, const char **end_ptr);
+static int create_view_query(const char *query, const char **end_ptr);
 
-static int create_index_query (const char * query, const char **end_ptr);
+static int create_index_query(const char *query, const char **end_ptr);
 
-static int create_index (
+static int create_index(
     const char *index_name,
     const char *table_name,
     const char (*index_field)[32],
     int field_count,
-    int unique_flag
-);
+    int unique_flag);
 
-static int create_temp_table_query (const char * query, const char **end_ptr);
+static int create_temp_table_query(const char *query, const char **end_ptr);
 
-int create_query (const char *query, const char **end_ptr) {
+int create_query(const char *query, const char **end_ptr)
+{
     size_t index = 0;
 
     char keyword[MAX_FIELD_LENGTH] = {0};
 
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-    if (strcmp(keyword, "CREATE") != 0) {
+    if (strcmp(keyword, "CREATE") != 0)
+    {
         fprintf(stderr, "Expected CREATE got '%s'\n", keyword);
         return -1;
     }
 
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-    if (strcmp(keyword, "TEMP") == 0) {
+    if (strcmp(keyword, "TEMP") == 0)
+    {
 
         getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-        if (strcmp(keyword, "TABLE") == 0) {
+        if (strcmp(keyword, "TABLE") == 0)
+        {
             return create_temp_table_query(query, end_ptr);
         }
-        else {
+        else
+        {
             fprintf(stderr, "Expected 'TEMP TABLE' got 'TEMP %s'\n", keyword);
             return -1;
         }
     }
 
-    if (strcmp(keyword, "TABLE") == 0) {
+    if (strcmp(keyword, "TABLE") == 0)
+    {
         return create_table_query(query, end_ptr);
     }
 
-    if (strcmp(keyword, "VIEW") == 0) {
+    if (strcmp(keyword, "VIEW") == 0)
+    {
         return create_view_query(query, end_ptr);
     }
 
-    if (strcmp(keyword, "INDEX") == 0 || strcmp(keyword, "UNIQUE") == 0) {
+    if (strcmp(keyword, "INDEX") == 0 || strcmp(keyword, "UNIQUE") == 0)
+    {
         return create_index_query(query, end_ptr);
     }
 
@@ -72,7 +79,8 @@ int create_query (const char *query, const char **end_ptr) {
     return -1;
 }
 
-int create_index_query (const char * query, const char **end_ptr) {
+int create_index_query(const char *query, const char **end_ptr)
+{
     int unique_flag = 0;
     int auto_name = 0;
 
@@ -82,7 +90,8 @@ int create_index_query (const char * query, const char **end_ptr) {
 
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-    if (strcmp(keyword, "CREATE") != 0) {
+    if (strcmp(keyword, "CREATE") != 0)
+    {
         fprintf(stderr, "Expected CREATE got '%s'\n", keyword);
         return -1;
     }
@@ -95,29 +104,35 @@ int create_index_query (const char * query, const char **end_ptr) {
     char index_field[10][MAX_FIELD_LENGTH] = {0};
     int field_count = 0;
 
-    if (strcmp(keyword, "UNIQUE") == 0) {
+    if (strcmp(keyword, "UNIQUE") == 0)
+    {
         unique_flag = 1;
 
         getToken(query, &index, keyword, MAX_FIELD_LENGTH);
     }
 
-    if (strcmp(keyword, "INDEX") != 0) {
+    if (strcmp(keyword, "INDEX") != 0)
+    {
         fprintf(stderr, "Expected INDEX got '%s'\n", keyword);
         return -1;
     }
 
     skipWhitespace(query, &index);
 
-    if (strncmp(&query[index], "ON ", 3) == 0) {
+    if (strncmp(&query[index], "ON ", 3) == 0)
+    {
         // Auto generated index name
         auto_name = 1;
-    } else {
+    }
+    else
+    {
         getQuotedToken(query, &index, index_name, MAX_TABLE_LENGTH);
     }
 
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-    if (strcmp(keyword, "ON") != 0) {
+    if (strcmp(keyword, "ON") != 0)
+    {
         fprintf(stderr, "Expected ON got '%s'\n", keyword);
         return -1;
     }
@@ -126,80 +141,90 @@ int create_index_query (const char * query, const char **end_ptr) {
 
     skipWhitespace(query, &index);
 
-    if (query[index++] != '(') {
-        fprintf(stderr, "Expected ( got '%c'\n", query[index-1]);
+    if (query[index++] != '(')
+    {
+        fprintf(stderr, "Expected ( got '%c'\n", query[index - 1]);
         return -1;
     }
 
-    while (query[index] != '\0') {
+    while (query[index] != '\0')
+    {
         skipWhitespace(query, &index);
 
         getQuotedToken(
             query,
             &index,
             index_field[field_count++],
-            MAX_TABLE_LENGTH
-        );
+            MAX_TABLE_LENGTH);
 
         skipWhitespace(query, &index);
 
-        if (query[index] != ',') {
+        if (query[index] != ',')
+        {
             break;
         }
 
         index++;
     }
 
-    if (query[index++] != ')') {
+    if (query[index++] != ')')
+    {
         fprintf(stderr, "Expected ) got '%c'\n", query[index]);
         return -1;
     }
 
-    if (auto_name) {
+    if (auto_name)
+    {
         sprintf(index_name, "%s__%s", table_name, index_field[0]);
     }
 
     create_index(index_name, table_name, index_field, field_count, unique_flag);
 
-    if (query[index] == ';') {
+    if (query[index] == ';')
+    {
         index++;
     }
 
-    if (end_ptr != NULL) {
+    if (end_ptr != NULL)
+    {
         *end_ptr = &query[index];
     }
 
     return 0;
 }
 
-static int create_index (
+static int create_index(
     const char *index_name,
     const char *table_name,
     const char (*index_field)[32],
     int field_count,
-    int unique_flag
-) {
+    int unique_flag)
+{
     struct DB db;
     struct Table table = {0};
     table.db = &db;
     strcpy(table.name, table_name);
 
-    if (openDB(&db, table_name, NULL) != 0) {
+    if (openDB(&db, table_name, NULL) != 0)
+    {
         fprintf(stderr, "File not found: '%s'\n", table_name);
         return -1;
     }
 
-    if (unique_flag && field_count > 1) {
+    if (unique_flag && field_count > 1)
+    {
         fprintf(stderr, "Unable to create unique index on multiple columns.\n");
         return -1;
     }
 
     struct Node *columns = malloc(sizeof(*columns) * (field_count + 1));
 
-    for (int i = 0; i < field_count; i++) {
+    for (int i = 0; i < field_count; i++)
+    {
         int index_field_index = getFieldIndex(&db, index_field[i]);
 
-        if (index_field_index < 0) {
+        if (index_field_index < 0)
+        {
             fprintf(stderr, "Field does not exist: '%s'\n", index_field[i]);
             return -1;
         }
@@ -226,12 +251,12 @@ static int create_index (
         file_name,
         "%s.%s.csv",
         index_name,
-        unique_flag ? "unique" : "index"
-    );
+        unique_flag ? "unique" : "index");
 
     FILE *f = fopen(file_name, "w");
 
-    if (!f) {
+    if (!f)
+    {
         fprintf(stderr, "Unable to create file for index: '%s'\n", file_name);
         return -1;
     }
@@ -252,29 +277,29 @@ static int create_index (
         1,
         columns,
         field_count + 1,
-        OUTPUT_FORMAT_COMMA
-    );
+        OUTPUT_FORMAT_COMMA);
 
     char values[2][MAX_VALUE_LENGTH];
 
-    for (int i = 0; i < record_count; i++) {
+    for (int i = 0; i < record_count; i++)
+    {
         // Check for UNIQUE
-        if (unique_flag) {
+        if (unique_flag)
+        {
             int row_id = getRowID(getRowList(row_list), 0, i);
             getRecordValue(
                 &db,
                 row_id,
                 columns[0].field.index,
                 values[i % 2],
-                MAX_VALUE_LENGTH
-            );
+                MAX_VALUE_LENGTH);
 
-            if (i > 0 && strcmp(values[0], values[1]) == 0) {
+            if (i > 0 && strcmp(values[0], values[1]) == 0)
+            {
                 fprintf(
                     stderr,
                     "UNIQUE constraint failed. Multiple values for: '%s'\n",
-                    values[0]
-                );
+                    values[0]);
                 fclose(f);
                 remove(file_name);
                 exit(-1);
@@ -289,8 +314,7 @@ static int create_index (
             field_count + 1,
             i,
             row_list,
-            OUTPUT_FORMAT_COMMA
-        );
+            OUTPUT_FORMAT_COMMA);
     }
 
     fclose(f);
@@ -300,7 +324,8 @@ static int create_index (
     return 0;
 }
 
-static int create_table_query (const char * query, const char **end_ptr) {
+static int create_table_query(const char *query, const char **end_ptr)
+{
 
     size_t index = 0;
 
@@ -310,14 +335,16 @@ static int create_table_query (const char * query, const char **end_ptr) {
 
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-    if (strcmp(keyword, "CREATE") != 0) {
+    if (strcmp(keyword, "CREATE") != 0)
+    {
         fprintf(stderr, "Expected CREATE got '%s'\n", keyword);
         return -1;
     }
 
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-    if (strcmp(keyword, "TABLE") != 0) {
+    if (strcmp(keyword, "TABLE") != 0)
+    {
         fprintf(stderr, "Expected TABLE got '%s'\n", keyword);
         return -1;
     }
@@ -330,32 +357,38 @@ static int create_table_query (const char * query, const char **end_ptr) {
 
     char header_buffer[MAX_VALUE_LENGTH];
 
-    if (query[index] == '(') {
+    if (query[index] == '(')
+    {
         int length = find_matching_parenthesis(query + index);
         strncpy(header_buffer, query + index + 1, length - 2);
-        header_buffer[length-1] = '\0';
+        header_buffer[length - 1] = '\0';
         index += length;
     }
-    else {
+    else
+    {
         header_buffer[0] = '\0';
     }
 
     const char *sub_query = NULL;
 
-    if (getToken(query, &index, keyword, MAX_FIELD_LENGTH) > 0) {
-        if (strcmp(keyword, "AS") == 0) {
+    if (getToken(query, &index, keyword, MAX_FIELD_LENGTH) > 0)
+    {
+        if (strcmp(keyword, "AS") == 0)
+        {
             skipWhitespace(query, &index);
 
             sub_query = query + index;
         }
 
-        else {
+        else
+        {
             fprintf(stderr, "Unexpected keyword: '%s'\n", keyword);
             exit(-1);
         }
     }
 
-    if (sub_query == NULL && header_buffer[0] == '\0') {
+    if (sub_query == NULL && header_buffer[0] == '\0')
+    {
         fprintf(stderr, "Expected column spec or AS keyword.\n");
         exit(-1);
     }
@@ -367,15 +400,15 @@ static int create_table_query (const char * query, const char **end_ptr) {
         table_name,
         sub_query,
         end_ptr,
-        header_buffer[0] == '\0' ? NULL : header_buffer
-    );
+        header_buffer[0] == '\0' ? NULL : header_buffer);
 
     closeDB(&db);
 
     return result;
 }
 
-static int create_temp_table_query (const char * query, const char **end_ptr) {
+static int create_temp_table_query(const char *query, const char **end_ptr)
+{
 
     size_t index = 0;
 
@@ -385,21 +418,24 @@ static int create_temp_table_query (const char * query, const char **end_ptr) {
 
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-    if (strcmp(keyword, "CREATE") != 0) {
+    if (strcmp(keyword, "CREATE") != 0)
+    {
         fprintf(stderr, "Expected CREATE got '%s'\n", keyword);
         return -1;
     }
 
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-    if (strcmp(keyword, "TEMP") != 0) {
+    if (strcmp(keyword, "TEMP") != 0)
+    {
         fprintf(stderr, "Expected TEMP got '%s'\n", keyword);
         return -1;
     }
 
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-    if (strcmp(keyword, "TABLE") != 0) {
+    if (strcmp(keyword, "TABLE") != 0)
+    {
         fprintf(stderr, "Expected TABLE got '%s'\n", keyword);
         return -1;
     }
@@ -410,7 +446,8 @@ static int create_temp_table_query (const char * query, const char **end_ptr) {
 
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-    if (strcmp(keyword, "AS") != 0) {
+    if (strcmp(keyword, "AS") != 0)
+    {
         fprintf(stderr, "Expected AS got '%s'\n", keyword);
         return -1;
     }
@@ -420,7 +457,8 @@ static int create_temp_table_query (const char * query, const char **end_ptr) {
     return temp_create(table_name, query + index, end_ptr);
 }
 
-static int create_view_query (const char * query, const char **end_ptr) {
+static int create_view_query(const char *query, const char **end_ptr)
+{
     size_t index = 0;
 
     char keyword[MAX_FIELD_LENGTH] = {0};
@@ -429,14 +467,16 @@ static int create_view_query (const char * query, const char **end_ptr) {
 
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-    if (strcmp(keyword, "CREATE") != 0) {
+    if (strcmp(keyword, "CREATE") != 0)
+    {
         fprintf(stderr, "Expected CREATE got '%s'\n", keyword);
         return -1;
     }
 
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-    if (strcmp(keyword, "VIEW") != 0) {
+    if (strcmp(keyword, "VIEW") != 0)
+    {
         fprintf(stderr, "Expected VIEW got '%s'\n", keyword);
         return -1;
     }
@@ -447,7 +487,8 @@ static int create_view_query (const char * query, const char **end_ptr) {
 
     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-    if (strcmp(keyword, "AS") != 0) {
+    if (strcmp(keyword, "AS") != 0)
+    {
         fprintf(stderr, "Expected AS got '%s'\n", keyword);
         return -1;
     }
@@ -459,7 +500,8 @@ static int create_view_query (const char * query, const char **end_ptr) {
 
     FILE *f = fopen(file_name, "w");
 
-    if (!f) {
+    if (!f)
+    {
         fprintf(stderr, "Unable to create file for view: '%s'\n", file_name);
         return -1;
     }
@@ -467,7 +509,8 @@ static int create_view_query (const char * query, const char **end_ptr) {
     // Warning! can't cope with semicolons legally embedded in SQL
     char *c = strchr(query + index, ';');
 
-    if (c != NULL) {
+    if (c != NULL)
+    {
         int view_len = c - (query + index);
         char *s = malloc(view_len + 1);
         strncpy(s, query + index, view_len);
@@ -475,13 +518,17 @@ static int create_view_query (const char * query, const char **end_ptr) {
 
         fputs(s, f);
 
-        if (end_ptr != NULL) {
+        if (end_ptr != NULL)
+        {
             *end_ptr = c;
         }
-    } else {
+    }
+    else
+    {
         fputs(query + index, f);
 
-        if (end_ptr != NULL) {
+        if (end_ptr != NULL)
+        {
             *end_ptr = strchr(query + index, '\0');
         }
     }
@@ -493,14 +540,16 @@ static int create_view_query (const char * query, const char **end_ptr) {
     return 0;
 }
 
-int insert_query (const char * query, const char **end_ptr) {
+int insert_query(const char *query, const char **end_ptr)
+{
     size_t index = 0;
 
     char keyword[MAX_FIELD_LENGTH] = {0};
 
     char table_name[MAX_TABLE_LENGTH] = {0};
 
-    if (strncmp(query, "INSERT INTO", 11) != 0) {
+    if (strncmp(query, "INSERT INTO", 11) != 0)
+    {
         fprintf(stderr, "Expected INSERT INTO got '%s'\n", keyword);
         return -1;
     }
@@ -515,7 +564,8 @@ int insert_query (const char * query, const char **end_ptr) {
 
     struct DB db = {0};
 
-    // Try temp first. If it finds a valid TEMP db it'll write the filename to
+    // Try temp first.
+    // If `temp_findTable()` finds a valid TEMP db it'll write the filename to
     // the location pointed to by the second param, otherwise it'll leave it
     // alone.
     temp_findTable(table_name, table_name);
@@ -523,7 +573,8 @@ int insert_query (const char * query, const char **end_ptr) {
     // Must force VFS_CSV to make sure changes are persisted
     int result = csv_openDB(&db, table_name, NULL);
 
-    if (result == 0) {
+    if (result == 0)
+    {
         result = insertFromQuery(&db, query + index, end_ptr);
     }
 

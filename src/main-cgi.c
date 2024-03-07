@@ -48,20 +48,21 @@ int main()
     srand((unsigned)time(NULL) * getpid());
 
     // open tmp file to collect errors
-    FILE *error = fopen("/tmp/csvdb_error", "w+");
+    FILE *error_log = fopen("/tmp/csvdb_error", "w+");
 
     // Redirect stderr -> error file
-    dup2(fileno(error), STDERR_FILENO);
+    dup2(fileno(error_log), STDERR_FILENO);
 
-    // char dirname[255];
-    // fprintf(stderr, "debug: cwd %s\n", getcwd(dirname, 255));
+    char dirname[255];
+    fprintf(stderr, "debug: cwd %s\n", getcwd(dirname, 255));
 
     char *data_dir = getenv("CSVDB_DATA_DIR");
     if (data_dir)
     {
         if (setDataDir(data_dir) < 0)
         {
-            fclose(error);
+            fprintf(stderr, "Unable to chdir\n");
+            fclose(error_log);
             return -1;
         }
     }
@@ -101,11 +102,11 @@ int main()
 
     if (query_string == NULL)
     {
-        printf("HTTP/1.1 500 Server Error\n");
+        printf("HTTP/1.1 400 Server Error\n");
         printf("Content-Type: text/plain\n\n");
         printf("No query string was provided\n");
 
-        fclose(error);
+        fclose(error_log);
         return -1;
     }
 
@@ -178,12 +179,12 @@ int main()
 
     if (query_buffer[0] == '\0')
     {
-        printf("HTTP/1.1 500 Server Error\n");
+        printf("HTTP/1.1 400 Server Error\n");
         printf("Access-Control-Allow-Origin: *\n");
         printf("Content-Type: text/plain\n\n");
         printf("No query was provided in the query string\n");
 
-        fclose(error);
+        fclose(error_log);
         return -1;
     }
 
@@ -191,6 +192,7 @@ int main()
 
     if (session == NULL)
     {
+        fprintf(stderr, "Unable to create session\n");
         return -1;
     }
 
@@ -230,9 +232,8 @@ int main()
         printf("Content-Type: text/plain; charset=utf-8\n");
     }
 
-    // This will end up as a header
-    // (Sometimes?)
-    // fprintf(stderr, "query: %s\n", query_buffer);
+    // Get's redirected to /tmp/csvdb_error
+    fprintf(stderr, "query: %s\n", query_buffer);
 
     // Double newline to end headers
     printf("\n");
@@ -240,12 +241,12 @@ int main()
     if (query(query_buffer, flags, output, NULL))
     {
         // Write errors to stdout now
-        printError(format, error);
-        fclose(error);
+        printError(format, error_log);
+        fclose(error_log);
         return -1;
     }
 
-    fclose(error);
+    fclose(error_log);
     return 0;
 }
 
@@ -324,7 +325,11 @@ static int setDataDir(const char *datadir)
     return 0;
 }
 
-static void printError(int format, FILE *error)
+/**
+ * Copies accumulated errors from `error_file` (set to /tmp/csvdb_error) to
+ * stdout.
+ */
+static void printError(int format, FILE *error_file)
 {
     if (format == OUTPUT_FORMAT_HTML)
     {
@@ -341,9 +346,9 @@ static void printError(int format, FILE *error)
 
     printf("Error processing query: ");
 
-    fseek(error, 0, SEEK_SET);
+    fseek(error_file, 0, SEEK_SET);
     char buffer[4096] = {0};
-    int size = fread(buffer, 1, sizeof(buffer), error);
+    int size = fread(buffer, 1, sizeof(buffer), error_file);
 
     // JSON doesn't allow newlines
     if (format == OUTPUT_FORMAT_JSON)

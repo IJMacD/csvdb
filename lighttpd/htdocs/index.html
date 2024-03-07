@@ -65,8 +65,6 @@
         <button>Run</button>
     </form>
 
-    <h2 id="results-heading" style="display: none;">Results:</h2>
-
     <iframe name="output" style="flex: 1"></iframe>
 
     <script src="https://ijmacd.github.io/code-editor-syntax-highlighter/cesh.umd.min.js"></script>
@@ -76,7 +74,6 @@
         const textarea = document.querySelector("textarea");
         const editor = document.querySelector("#editor");
         const frame = document.querySelector("iframe");
-        const resultsHeading = document.querySelector("#results-heading");
 
         let history = [];
         const savedHistory = localStorage.getItem("csvdb.history");
@@ -105,7 +102,6 @@
         }
         form.addEventListener("submit", () => {
             pushHistory(textarea.value);
-            resultsHeading.style.display = "block";
             frame.classList.add("loading");
         });
         hist.addEventListener("click", e => {

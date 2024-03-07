@@ -6,20 +6,19 @@
 #include "helper.h"
 #include "../structs.h"
 #include "../functions/util.h"
-#include "../query/query.h"
+#include "../query/select.h"
 
-static int prepareHeaders (struct DB *db);
+static int prepareHeaders(struct DB *db);
 
-static char *get_end_of_data (struct DB *db);
+static char *get_end_of_data(struct DB *db);
 
-static int wsv_get_record_from_line (
+static int wsv_get_record_from_line(
     const char *in_ptr,
     int field_index,
     char *out_ptr,
-    size_t max_length
-);
+    size_t max_length);
 
-static int makeDB (struct DB *db, FILE *f);
+static int makeDB(struct DB *db, FILE *f);
 
 /**
  * @brief Opens, consumes, and closes file specified by filename
@@ -31,21 +30,26 @@ static int makeDB (struct DB *db, FILE *f);
  * to by this pointer. If this pointer points to NULL then a buffer will be
  * malloc'd for it.
  */
-int wsvMem_openDB (struct DB *db, const char *filename, char **resolved) {
+int wsvMem_openDB(struct DB *db, const char *filename, char **resolved)
+{
     FILE *f = NULL;
 
-    if (strcmp(filename, "stdin.wsv") == 0) {
+    if (strcmp(filename, "stdin.wsv") == 0)
+    {
         f = stdin;
     }
-    else if (ends_with(filename, ".wsv")) {
+    else if (ends_with(filename, ".wsv"))
+    {
         f = fopen(filename, "r");
 
-        if (resolved != NULL) {
+        if (resolved != NULL)
+        {
             *resolved = realpath(filename, *resolved);
         }
     }
 
-    if (!f) {
+    if (!f)
+    {
         return -1;
     }
 
@@ -56,26 +60,32 @@ int wsvMem_openDB (struct DB *db, const char *filename, char **resolved) {
     return result;
 }
 
-void wsvMem_closeDB (struct DB *db) {
-    if (db->line_indices != NULL) {
+void wsvMem_closeDB(struct DB *db)
+{
+    if (db->line_indices != NULL)
+    {
         // max_size of allocation is stored at start of real block
         void *ptr = db->line_indices;
         free(ptr - sizeof(int));
         db->line_indices = NULL;
     }
 
-    if (db->fields != NULL) {
+    if (db->fields != NULL)
+    {
         // db->data is in the same block as db->fields
         free(db->fields);
         db->fields = NULL;
     }
 }
 
-int wsvMem_getFieldIndex (struct DB *db, const char *field) {
+int wsvMem_getFieldIndex(struct DB *db, const char *field)
+{
     char *curr_field = db->fields;
 
-    for (int i = 0; i < db->field_count; i++) {
-        if (strcmp(field, curr_field) == 0) {
+    for (int i = 0; i < db->field_count; i++)
+    {
+        if (strcmp(field, curr_field) == 0)
+        {
             return i;
         }
 
@@ -85,11 +95,14 @@ int wsvMem_getFieldIndex (struct DB *db, const char *field) {
     return -1;
 }
 
-char *wsvMem_getFieldName (struct DB *db, int field_index) {
+char *wsvMem_getFieldName(struct DB *db, int field_index)
+{
     char *curr_field = db->fields;
 
-    for (int i = 0; i < db->field_count; i++) {
-        if (i == field_index) {
+    for (int i = 0; i < db->field_count; i++)
+    {
+        if (i == field_index)
+        {
             return curr_field;
         }
 
@@ -99,8 +112,10 @@ char *wsvMem_getFieldName (struct DB *db, int field_index) {
     return "\0";
 }
 
-int wsvMem_getRecordCount (struct DB *db) {
-    if (db->_record_count < 0) {
+int wsvMem_getRecordCount(struct DB *db)
+{
+    if (db->_record_count < 0)
+    {
         indexLines(db, -1, '\0');
     }
 
@@ -110,26 +125,31 @@ int wsvMem_getRecordCount (struct DB *db) {
 /**
  * Returns the number of bytes read, or -1 on error
  */
-int wsvMem_getRecordValue (
+int wsvMem_getRecordValue(
     struct DB *db,
     int record_index,
     int field_index,
     char *value,
-    size_t value_max_length
-) {
-    if (db->_record_count < 0) {
+    size_t value_max_length)
+{
+    if (db->_record_count < 0)
+    {
         // Just index as many rows as we need
-        if (indexLines(db, record_index + 1, '"') < 0) {
+        if (indexLines(db, record_index + 1, '"') < 0)
+        {
             return -1;
         }
     }
-    else {
-        if (record_index >= db->_record_count) {
+    else
+    {
+        if (record_index >= db->_record_count)
+        {
             return -1;
         }
     }
 
-    if (field_index < 0 || field_index >= db->field_count) {
+    if (field_index < 0 || field_index >= db->field_count)
+    {
         return -1;
     }
 
@@ -138,7 +158,8 @@ int wsvMem_getRecordValue (
     return wsv_get_record_from_line(db->data + file_offset, field_index, value, value_max_length);
 }
 
-static int makeDB (struct DB *db, FILE *f) {
+static int makeDB(struct DB *db, FILE *f)
+{
     db->vfs = VFS_WSV_MEM;
 
     // It would be nice to have a streaming solution but I don't think it's
@@ -146,7 +167,8 @@ static int makeDB (struct DB *db, FILE *f) {
     consumeStream(db, f);
 
     int result = prepareHeaders(db);
-    if (result < 0) {
+    if (result < 0)
+    {
         return -1;
     }
 
@@ -155,12 +177,14 @@ static int makeDB (struct DB *db, FILE *f) {
     return 0;
 }
 
-static int prepareHeaders (struct DB *db) {
+static int prepareHeaders(struct DB *db)
+{
     db->field_count = 1;
 
     db->fields = db->data;
 
-    if (db->data[0] == '\0') {
+    if (db->data[0] == '\0')
+    {
         fprintf(stderr, "Empty file\n");
         return -1;
     }
@@ -173,21 +197,23 @@ static int prepareHeaders (struct DB *db) {
     // Overwrite fields buffer with itself skipping quotes and inserting nulls
     while (*read_ptr && *read_ptr != '\n')
     {
-        if(isspace(*read_ptr)) {
+        if (isspace(*read_ptr))
+        {
             *(write_ptr++) = '\0';
             read_ptr++;
 
             db->field_count++;
 
             // Found a space, consume all following whitespace except newline
-            while (*read_ptr != '\0' && *read_ptr != '\n' && isspace(*read_ptr)) {
+            while (*read_ptr != '\0' && *read_ptr != '\n' && isspace(*read_ptr))
+            {
                 read_ptr++;
             }
         }
-        else {
+        else
+        {
             *(write_ptr++) = *(read_ptr++);
         }
-
     }
 
     *(write_ptr++) = '\0';
@@ -203,8 +229,8 @@ int wsvMem_findIndex(
     __attribute__((unused)) const char *table_name,
     __attribute__((unused)) struct Node *node,
     __attribute__((unused)) int index_type_flags,
-    __attribute__((unused)) char **resolved
-) {
+    __attribute__((unused)) char **resolved)
+{
     return 0;
 }
 
@@ -217,7 +243,8 @@ int wsvMem_findIndex(
  * @returns char * pointer to end of query (i.e. if it came accross a '\0' or
  * ';')
  */
-const char *wsvMem_fromValues(struct DB *db, const char *input, int length) {
+const char *wsvMem_fromValues(struct DB *db, const char *input, int length)
+{
     const char *in_ptr = input;
     const char *end_ptr = input + length - 1;
     char *out_ptr;
@@ -232,7 +259,7 @@ const char *wsvMem_fromValues(struct DB *db, const char *input, int length) {
 
     int max_line_count = 100;
 
-    db->line_indices = malloc(max_line_count * sizeof (long));
+    db->line_indices = malloc(max_line_count * sizeof(long));
 
     db->line_indices[0] = 0;
 
@@ -254,26 +281,29 @@ const char *wsvMem_fromValues(struct DB *db, const char *input, int length) {
 
     int line_index = 0;
 
-    while(*in_ptr != '\0' && *in_ptr != ';' && in_ptr != end_ptr) {
+    while (*in_ptr != '\0' && *in_ptr != ';' && in_ptr != end_ptr)
+    {
 
-        if (*in_ptr != '(') {
+        if (*in_ptr != '(')
+        {
             fprintf(
                 stderr,
                 "VALUES: expected row %d to start with '('. Found: %c\n",
                 line_index,
-                *in_ptr
-            );
+                *in_ptr);
             exit(-1);
         }
 
         db->line_indices[line_index++] = out_ptr - db->data;
 
         // Check to see if we need to extend the line index allocation
-        if (line_index == max_line_count) {
+        if (line_index == max_line_count)
+        {
             max_line_count *= 2;
             size_t size = max_line_count * sizeof(long);
             long *ptr = realloc(db->line_indices, size);
-            if (ptr == NULL) {
+            if (ptr == NULL)
+            {
                 fprintf(stderr, "Unable to allocate memory: %ld\n", size);
                 exit(-1);
             }
@@ -282,7 +312,8 @@ const char *wsvMem_fromValues(struct DB *db, const char *input, int length) {
 
         int line_length = find_matching_parenthesis(in_ptr);
 
-        if (line_length < 0) {
+        if (line_length < 0)
+        {
             fprintf(stderr, "Can't find matching parenthesis\n");
             exit(-1);
         }
@@ -290,16 +321,17 @@ const char *wsvMem_fromValues(struct DB *db, const char *input, int length) {
         // Check to see if we need to extend the data allocation
         // NOTE: db->fields is the start of the allocation
         size_t len = out_ptr - db->fields;
-        while (len + line_length >= max_data_size) {
+        while (len + line_length >= max_data_size)
+        {
             max_data_size *= 2;
             // NOTE: db->fields is the start of the allocation
             void *ptr = realloc(db->fields, max_data_size);
-            if (ptr == NULL) {
+            if (ptr == NULL)
+            {
                 fprintf(
                     stderr,
                     "Unable to allocate memory: %ld\n",
-                    max_data_size
-                );
+                    max_data_size);
                 exit(-1);
             }
             db->fields = ptr;
@@ -316,36 +348,43 @@ const char *wsvMem_fromValues(struct DB *db, const char *input, int length) {
          * Warning: field will spaces at beginning and end!
          */
         int in_field = 0;
-        for (int i = 0; i < line_length - 2; i++) {
-            if (*out_ptr == '\'')  {
+        for (int i = 0; i < line_length - 2; i++)
+        {
+            if (*out_ptr == '\'')
+            {
                 *out_ptr = ' ';
                 in_field = ~in_field;
             }
-            else if (*out_ptr == ',' || !in_field) *out_ptr = '\t';
+            else if (*out_ptr == ',' || !in_field)
+                *out_ptr = '\t';
             out_ptr++;
         }
 
         in_ptr += line_length;
 
         // End of file
-        if (*in_ptr == '\0') {
+        if (*in_ptr == '\0')
+        {
             break;
         }
         // End of line
-        else if (*in_ptr == ',') {
+        else if (*in_ptr == ',')
+        {
             in_ptr++;
             *(out_ptr++) = '\n';
         }
 
         // Skip whitespace
-        while (isspace(*in_ptr)) {
+        while (isspace(*in_ptr))
+        {
             in_ptr++;
         }
     }
 
     *out_ptr = '\0';
 
-    if (*in_ptr == ';') {
+    if (*in_ptr == ';')
+    {
         in_ptr++;
     }
 
@@ -362,7 +401,8 @@ const char *wsvMem_fromValues(struct DB *db, const char *input, int length) {
  * @param db
  * @param headers "col1,col2" etc.
  */
-void wsvMem_fromHeaders (struct DB *db, const char *headers) {
+void wsvMem_fromHeaders(struct DB *db, const char *headers)
+{
     db->vfs = VFS_CSV_MEM;
 
     db->data = malloc(strlen(headers) + 1);
@@ -380,7 +420,8 @@ void wsvMem_fromHeaders (struct DB *db, const char *headers) {
     db->_record_count = 0;
 }
 
-int wsvMem_fromQuery (struct DB *db, struct Query *query) {
+int wsvMem_fromQuery(struct DB *db, struct Query *query)
+{
     db->vfs = VFS_TSV_MEM;
 
     size_t size;
@@ -390,12 +431,12 @@ int wsvMem_fromQuery (struct DB *db, struct Query *query) {
     int result = process_query(
         query,
         OUTPUT_OPTION_HEADERS | OUTPUT_FORMAT_TAB,
-        f
-    );
+        f);
 
     fclose(f);
 
-    if (result < 0) {
+    if (result < 0)
+    {
         return -1;
     }
 
@@ -406,7 +447,8 @@ int wsvMem_fromQuery (struct DB *db, struct Query *query) {
     return 0;
 }
 
-int wsvMem_insertRow (struct DB *db, const char *row) {
+int wsvMem_insertRow(struct DB *db, const char *row)
+{
     int len = strlen(row);
     char *data_end = get_end_of_data(db);
     int data_len = data_end - db->data;
@@ -417,7 +459,8 @@ int wsvMem_insertRow (struct DB *db, const char *row) {
 
     db->fields = realloc(db->fields, new_size);
 
-    if (db->fields == NULL) {
+    if (db->fields == NULL)
+    {
         fprintf(stderr, "Unable to allocate %d for wsv_insertRow\n", new_size);
         exit(-1);
     }
@@ -428,7 +471,8 @@ int wsvMem_insertRow (struct DB *db, const char *row) {
     data_end = get_end_of_data(db);
 
     strcpy(data_end, row);
-    if (row[len - 1] != '\n') {
+    if (row[len - 1] != '\n')
+    {
         data_end[len] = '\n';
         data_end[len + 1] = '\0';
         len++;
@@ -443,28 +487,32 @@ int wsvMem_insertRow (struct DB *db, const char *row) {
     return 0;
 }
 
-static char *get_end_of_data (struct DB *db) {
-    if (db->_record_count < 0) {
+static char *get_end_of_data(struct DB *db)
+{
+    if (db->_record_count < 0)
+    {
         indexLines(db, -1, '\0');
     }
 
     return db->data + db->line_indices[db->_record_count];
 }
 
-static int wsv_is_end_of_line (const char c) {
+static int wsv_is_end_of_line(const char c)
+{
     return c == '\0' || c == '\n' || c == '\r';
 }
 
-static int wsv_is_end_of_field (const char c) {
+static int wsv_is_end_of_field(const char c)
+{
     return isspace(c);
 }
 
-static int wsv_get_record_from_line (
+static int wsv_get_record_from_line(
     const char *in_ptr,
     int field_index,
     char *out_ptr,
-    size_t max_length
-) {
+    size_t max_length)
+{
     int current_field_index = 0;
 
     char *out_start_ptr = out_ptr;
@@ -473,17 +521,21 @@ static int wsv_get_record_from_line (
     // Just in case we don't find anything
     *out_ptr = '\0';
 
-    while (!wsv_is_end_of_line(*in_ptr)) {
+    while (!wsv_is_end_of_line(*in_ptr))
+    {
         // Start of the field
 
         // Consume whole field
-        while (!wsv_is_end_of_field(*in_ptr)) {
+        while (!wsv_is_end_of_field(*in_ptr))
+        {
             // If we're in the correct field, copy to output
-            if (current_field_index == field_index) {
+            if (current_field_index == field_index)
+            {
                 *(out_ptr++) = *in_ptr;
 
                 // Have we run out of space?
-                if (out_ptr == out_end_ptr) {
+                if (out_ptr == out_end_ptr)
+                {
                     out_ptr--;
                     break;
                 }
@@ -492,17 +544,20 @@ static int wsv_get_record_from_line (
             in_ptr++;
         }
 
-        if (current_field_index == field_index) {
+        if (current_field_index == field_index)
+        {
             *(out_ptr++) = '\0';
 
             return out_ptr - out_start_ptr;
         }
 
-        if (isspace(*in_ptr)) {
+        if (isspace(*in_ptr))
+        {
             current_field_index++;
 
             // Found a space, consume all whitespace except newline
-            while (*in_ptr != '\0' && *in_ptr != '\n' && isspace(*in_ptr)) {
+            while (*in_ptr != '\0' && *in_ptr != '\n' && isspace(*in_ptr))
+            {
                 in_ptr++;
             }
         }

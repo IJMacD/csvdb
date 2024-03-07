@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 #include "../structs.h"
-#include "../query/query.h"
+#include "../query/select.h"
 #include "db.h"
 #include "temp.h"
 #include "csv-mem.h"
@@ -11,7 +11,7 @@
 
 struct DB *temp_mapping = NULL;
 
-int find_table_rowid (const char *table_name);
+int find_table_rowid(const char *table_name);
 
 /**
  * @brief
@@ -20,21 +20,26 @@ int find_table_rowid (const char *table_name);
  * @param table_name
  * @return int 0 on success; -1 on failure
  */
-int temp_openDB (
+int temp_openDB(
     struct DB *db,
     const char *table_name,
-    char **resolved
-) {
+    char **resolved)
+{
     char filename[MAX_TABLE_LENGTH];
 
-    if (temp_findTable(table_name, filename) == 0) {
+    fprintf(stderr, "temp_openDB\n");
+
+    if (temp_findTable(table_name, filename) == 0)
+    {
+        fprintf(stderr, "temp_findTable() == 0\n");
         return csvMmap_openDB(db, filename, resolved);
     }
 
     return -1;
 }
 
-void temp_setMappingDB (struct DB *db) {
+void temp_setMappingDB(struct DB *db)
+{
     temp_mapping = db;
 }
 
@@ -45,14 +50,17 @@ void temp_setMappingDB (struct DB *db) {
  * @param query
  * @return int 0 on success; -1 on failure
  */
-int temp_create (const char *name, const char *query, const char ** end_ptr) {
-    if (temp_mapping == NULL) {
+int temp_create(const char *name, const char *query, const char **end_ptr)
+{
+    if (temp_mapping == NULL)
+    {
         temp_mapping = temp_openMappingDB(NULL);
     }
 
     // Check if table already exists in mapping.
     int result = find_table_rowid(name);
-    if (result >= 0) {
+    if (result >= 0)
+    {
         fprintf(stderr, "TEMP table '%s' already exists.\n", name);
         return -1;
     }
@@ -64,7 +72,8 @@ int temp_create (const char *name, const char *query, const char ** end_ptr) {
     result = select_subquery_file(query, filename, end_ptr);
 
     // failed to open so just delete temp file
-    if (result < 0) {
+    if (result < 0)
+    {
         remove(filename);
         return -1;
     }
@@ -79,20 +88,25 @@ int temp_create (const char *name, const char *query, const char ** end_ptr) {
     return 0;
 }
 
-void temp_drop (const char *name) {
-    if (temp_mapping == NULL) {
+void temp_drop(const char *name)
+{
+    if (temp_mapping == NULL)
+    {
         return;
     }
 
     char filename[MAX_TABLE_LENGTH];
 
-    if (temp_findTable(name, filename) == 0) {
+    if (temp_findTable(name, filename) == 0)
+    {
         remove(filename);
     }
 }
 
-void temp_dropAll () {
-    if (temp_mapping == NULL) {
+void temp_dropAll()
+{
+    if (temp_mapping == NULL)
+    {
         return;
     }
 
@@ -100,14 +114,14 @@ void temp_dropAll () {
 
     char filename[MAX_TABLE_LENGTH];
 
-    for (int i = 0; i < getRecordCount(temp_mapping); i++) {
+    for (int i = 0; i < getRecordCount(temp_mapping); i++)
+    {
         getRecordValue(
             temp_mapping,
             i,
             filename_index,
             filename,
-            MAX_TABLE_LENGTH
-        );
+            MAX_TABLE_LENGTH);
 
         remove(filename);
     }
@@ -121,8 +135,10 @@ void temp_dropAll () {
  * @param filename
  * @return int 0 if found; -1 if not found
  */
-int temp_findTable (const char *table_name, char *filename) {
-    if (temp_mapping == NULL) {
+int temp_findTable(const char *table_name, char *filename)
+{
+    if (temp_mapping == NULL)
+    {
         temp_mapping = temp_openMappingDB(NULL);
     }
 
@@ -130,7 +146,8 @@ int temp_findTable (const char *table_name, char *filename) {
 
     int result = find_table_rowid(table_name);
 
-    if (result < 0) {
+    if (result < 0)
+    {
         return -1;
     }
 
@@ -139,8 +156,7 @@ int temp_findTable (const char *table_name, char *filename) {
         result,
         filename_index,
         filename,
-        MAX_TABLE_LENGTH
-    );
+        MAX_TABLE_LENGTH);
 
     return 0;
 }
@@ -153,11 +169,13 @@ int temp_findTable (const char *table_name, char *filename) {
  * @param filename can be NULL for an in-memory mapping
  * @return struct DB*
  */
-struct DB *temp_openMappingDB (const char *filename) {
+struct DB *temp_openMappingDB(const char *filename)
+{
     struct DB *db = malloc(sizeof(*db));
 
     // First deal with in-memory mapping.
-    if (filename == NULL) {
+    if (filename == NULL)
+    {
         csvMem_fromHeaders(db, "table,filename");
         return db;
     }
@@ -165,7 +183,8 @@ struct DB *temp_openMappingDB (const char *filename) {
     // Next, check if the mapping file already exists.
     // Must specifically choose VFS_CSV to make sure changes are persisted to
     // disk.
-    if (csv_openDB(db, filename, NULL) == 0) {
+    if (csv_openDB(db, filename, NULL) == 0)
+    {
         return db;
     }
 
@@ -173,7 +192,8 @@ struct DB *temp_openMappingDB (const char *filename) {
     // Must specifically choose VFS_CSV to make sure it is persisted to disk.
     int result = csv_fromHeaders(db, filename, "table,filename");
 
-    if (result < 0) {
+    if (result < 0)
+    {
         fprintf(stderr, "Unable to create mapping DB at %s\n", filename);
         exit(-1);
     }
@@ -181,15 +201,18 @@ struct DB *temp_openMappingDB (const char *filename) {
     return db;
 }
 
-int find_table_rowid (const char *table_name) {
+int find_table_rowid(const char *table_name)
+{
     int table_index = getFieldIndex(temp_mapping, "table");
 
     char value[MAX_FIELD_LENGTH];
 
-    for (int i = 0; i < getRecordCount(temp_mapping); i++) {
+    for (int i = 0; i < getRecordCount(temp_mapping); i++)
+    {
         getRecordValue(temp_mapping, i, table_index, value, MAX_FIELD_LENGTH);
 
-        if (strcmp(table_name, value) == 0) {
+        if (strcmp(table_name, value) == 0)
+        {
             return i;
         }
     }

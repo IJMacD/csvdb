@@ -7,15 +7,16 @@
 #include "../structs.h"
 #include "../functions/util.h"
 #include "../functions/csv.h"
-#include "../query/query.h"
+#include "../query/select.h"
 
-static int countFields (const char *ptr);
+static int countFields(const char *ptr);
 
-static int prepareHeaders (struct DB *db);
+static int prepareHeaders(struct DB *db);
 
-static char * get_end_of_data (struct DB *db);
+static char *get_end_of_data(struct DB *db);
 
-int csvMem_makeDB (struct DB *db, FILE *f) {
+int csvMem_makeDB(struct DB *db, FILE *f)
+{
     db->vfs = VFS_CSV_MEM;
 
     // It would be nice to have a streaming solution but I don't think it's
@@ -23,7 +24,8 @@ int csvMem_makeDB (struct DB *db, FILE *f) {
     consumeStream(db, f);
 
     int result = prepareHeaders(db);
-    if (result < 0) {
+    if (result < 0)
+    {
         return -1;
     }
 
@@ -41,30 +43,37 @@ int csvMem_makeDB (struct DB *db, FILE *f) {
  * to by this pointer. If this pointer points to NULL then a buffer will be
  * malloc'd for it.
  */
-int csvMem_openDB (struct DB *db, const char *filename, char **resolved) {
+int csvMem_openDB(struct DB *db, const char *filename, char **resolved)
+{
     FILE *f;
 
-    if (strcmp(filename, "stdin") == 0) {
+    if (strcmp(filename, "stdin") == 0)
+    {
         f = stdin;
     }
-    else {
+    else
+    {
         f = fopen(filename, "r");
 
-        if (resolved != NULL) {
+        if (resolved != NULL)
+        {
             *resolved = realpath(filename, *resolved);
         }
     }
 
-    if (!f) {
+    if (!f)
+    {
         char buffer[FILENAME_MAX];
         sprintf(buffer, "%s.csv", filename);
         f = fopen(buffer, "r");
 
-        if (!f) {
+        if (!f)
+        {
             return -1;
         }
 
-        if (resolved != NULL) {
+        if (resolved != NULL)
+        {
             *resolved = realpath(buffer, *resolved);
         }
     }
@@ -76,26 +85,32 @@ int csvMem_openDB (struct DB *db, const char *filename, char **resolved) {
     return result;
 }
 
-void csvMem_closeDB (struct DB *db) {
-    if (db->line_indices != NULL) {
+void csvMem_closeDB(struct DB *db)
+{
+    if (db->line_indices != NULL)
+    {
         // max_size of allocation is stored at start of real block
         void *ptr = db->line_indices;
         free(ptr - sizeof(int));
         db->line_indices = NULL;
     }
 
-    if (db->fields != NULL) {
+    if (db->fields != NULL)
+    {
         // db->data is in the same block as db->fields
         free(db->fields);
         db->fields = NULL;
     }
 }
 
-int csvMem_getFieldIndex (struct DB *db, const char *field) {
+int csvMem_getFieldIndex(struct DB *db, const char *field)
+{
     char *curr_field = db->fields;
 
-    for (int i = 0; i < db->field_count; i++) {
-        if (strcmp(field, curr_field) == 0) {
+    for (int i = 0; i < db->field_count; i++)
+    {
+        if (strcmp(field, curr_field) == 0)
+        {
             return i;
         }
 
@@ -105,11 +120,14 @@ int csvMem_getFieldIndex (struct DB *db, const char *field) {
     return -1;
 }
 
-char *csvMem_getFieldName (struct DB *db, int field_index) {
+char *csvMem_getFieldName(struct DB *db, int field_index)
+{
     char *curr_field = db->fields;
 
-    for (int i = 0; i < db->field_count; i++) {
-        if (i == field_index) {
+    for (int i = 0; i < db->field_count; i++)
+    {
+        if (i == field_index)
+        {
             return curr_field;
         }
 
@@ -119,8 +137,10 @@ char *csvMem_getFieldName (struct DB *db, int field_index) {
     return "\0";
 }
 
-int csvMem_getRecordCount (struct DB *db) {
-    if (db->_record_count < 0) {
+int csvMem_getRecordCount(struct DB *db)
+{
+    if (db->_record_count < 0)
+    {
         indexLines(db, -1, '"');
     }
 
@@ -130,26 +150,31 @@ int csvMem_getRecordCount (struct DB *db) {
 /**
  * Returns the number of bytes read, or -1 on error
  */
-int csvMem_getRecordValue (
+int csvMem_getRecordValue(
     struct DB *db,
     int record_index,
     int field_index,
     char *value,
-    size_t value_max_length
-) {
-    if (db->_record_count < 0) {
+    size_t value_max_length)
+{
+    if (db->_record_count < 0)
+    {
         // Just index as many rows as we need
-        if (indexLines(db, record_index + 1, '"') < 0) {
+        if (indexLines(db, record_index + 1, '"') < 0)
+        {
             return -1;
         }
     }
-    else {
-        if (record_index >= db->_record_count) {
+    else
+    {
+        if (record_index >= db->_record_count)
+        {
             return -1;
         }
     }
 
-    if (field_index < 0 || field_index >= db->field_count) {
+    if (field_index < 0 || field_index >= db->field_count)
+    {
         return -1;
     }
 
@@ -158,12 +183,14 @@ int csvMem_getRecordValue (
     return csv_get_record_from_line(db->data + file_offset, field_index, value, value_max_length);
 }
 
-static int prepareHeaders (struct DB *db) {
+static int prepareHeaders(struct DB *db)
+{
     db->field_count = 1;
 
     db->fields = db->data;
 
-    if (db->data[0] == '\0') {
+    if (db->data[0] == '\0')
+    {
         fprintf(stderr, "Empty file\n");
         return -1;
     }
@@ -178,19 +205,21 @@ static int prepareHeaders (struct DB *db) {
     if (
         read_ptr[0] == '\xef' &&
         read_ptr[1] == '\xbb' &&
-        read_ptr[2] == '\xbf'
-    ) {
+        read_ptr[2] == '\xbf')
+    {
         read_ptr += 3;
     }
 
     // Overwrite fields buffer with itself skipping quotes and inserting nulls
     while (*read_ptr && *read_ptr != '\n')
     {
-        if(*read_ptr == ',') {
+        if (*read_ptr == ',')
+        {
             *(write_ptr++) = '\0';
             db->field_count++;
         }
-        else if (*read_ptr != '"' && *read_ptr != '\r') {
+        else if (*read_ptr != '"' && *read_ptr != '\r')
+        {
             *(write_ptr++) = *read_ptr;
         }
 
@@ -210,8 +239,8 @@ int csvMem_findIndex(
     __attribute__((unused)) const char *table_name,
     __attribute__((unused)) struct Node *node,
     __attribute__((unused)) int index_type_flags,
-    __attribute__((unused)) char **resolved
-) {
+    __attribute__((unused)) char **resolved)
+{
     return 0;
 }
 
@@ -224,7 +253,8 @@ int csvMem_findIndex(
  * @returns char * pointer to end of query (i.e. if it came accross a '\0' or
  * ';')
  */
-const char *csvMem_fromValues(struct DB *db, const char *input, int length) {
+const char *csvMem_fromValues(struct DB *db, const char *input, int length)
+{
     const char *in_ptr = input;
     const char *end_ptr = input + length - 1;
     char *out_ptr;
@@ -240,7 +270,7 @@ const char *csvMem_fromValues(struct DB *db, const char *input, int length) {
     int max_line_count = 100;
 
     // Offset by one int, becuse closeDB expects it
-    db->line_indices = malloc(max_line_count * sizeof (long)) + sizeof(int);
+    db->line_indices = malloc(max_line_count * sizeof(long)) + sizeof(int);
 
     db->line_indices[0] = 0;
 
@@ -262,26 +292,29 @@ const char *csvMem_fromValues(struct DB *db, const char *input, int length) {
 
     int line_index = 0;
 
-    while(*in_ptr != '\0' && *in_ptr != ';' && in_ptr != end_ptr) {
+    while (*in_ptr != '\0' && *in_ptr != ';' && in_ptr != end_ptr)
+    {
 
-        if (*in_ptr != '(') {
+        if (*in_ptr != '(')
+        {
             fprintf(
                 stderr,
                 "VALUES: expected row %d to start with '('. Found: %c\n",
                 line_index,
-                *in_ptr
-            );
+                *in_ptr);
             exit(-1);
         }
 
         db->line_indices[line_index++] = out_ptr - db->data;
 
         // Check to see if we need to extend the line index allocation
-        if (line_index == max_line_count) {
+        if (line_index == max_line_count)
+        {
             max_line_count *= 2;
             size_t size = max_line_count * sizeof(long);
             long *ptr = realloc(db->line_indices, size);
-            if (ptr == NULL) {
+            if (ptr == NULL)
+            {
                 fprintf(stderr, "Unable to allocate memory: %ld\n", size);
                 exit(-1);
             }
@@ -290,7 +323,8 @@ const char *csvMem_fromValues(struct DB *db, const char *input, int length) {
 
         int line_length = find_matching_parenthesis(in_ptr);
 
-        if (line_length < 0) {
+        if (line_length < 0)
+        {
             fprintf(stderr, "Can't find matching parenthesis\n");
             exit(-1);
         }
@@ -298,16 +332,17 @@ const char *csvMem_fromValues(struct DB *db, const char *input, int length) {
         // Check to see if we need to extend the data allocation
         // NOTE: db->fields is the start of the allocation
         size_t len = out_ptr - db->fields;
-        while (len + line_length >= max_data_size) {
+        while (len + line_length >= max_data_size)
+        {
             max_data_size *= 2;
             // NOTE: db->fields is the start of the allocation
             void *ptr = realloc(db->fields, max_data_size);
-            if (ptr == NULL) {
+            if (ptr == NULL)
+            {
                 fprintf(
                     stderr,
                     "Unable to allocate memory: %ld\n",
-                    max_data_size
-                );
+                    max_data_size);
                 exit(-1);
             }
             db->fields = ptr;
@@ -322,33 +357,40 @@ const char *csvMem_fromValues(struct DB *db, const char *input, int length) {
         // TODO: Fix problems below
         // Warning: will break quotes in string (converts to space)
         // Warning: can't cope with escaped quotes in string
-        for (int i = 0; i < line_length - 2; i++) {
-            if (*out_ptr == '\'') *out_ptr = '"';
-            else if (*out_ptr == '"') *out_ptr = ' ';
+        for (int i = 0; i < line_length - 2; i++)
+        {
+            if (*out_ptr == '\'')
+                *out_ptr = '"';
+            else if (*out_ptr == '"')
+                *out_ptr = ' ';
             out_ptr++;
         }
 
         in_ptr += line_length;
 
         // End of file
-        if (*in_ptr == '\0') {
+        if (*in_ptr == '\0')
+        {
             break;
         }
         // End of line
-        else if (*in_ptr == ',') {
+        else if (*in_ptr == ',')
+        {
             in_ptr++;
             *(out_ptr++) = '\n';
         }
 
         // Skip whitespace
-        while (isspace(*in_ptr)) {
+        while (isspace(*in_ptr))
+        {
             in_ptr++;
         }
     }
 
     *out_ptr = '\0';
 
-    if (*in_ptr == ';') {
+    if (*in_ptr == ';')
+    {
         in_ptr++;
     }
 
@@ -365,7 +407,8 @@ const char *csvMem_fromValues(struct DB *db, const char *input, int length) {
  * @param db
  * @param headers "col1,col2" etc.
  */
-void csvMem_fromHeaders (struct DB *db, const char *headers) {
+void csvMem_fromHeaders(struct DB *db, const char *headers)
+{
     db->vfs = VFS_CSV_MEM;
 
     db->data = malloc(strlen(headers) + 1);
@@ -383,7 +426,8 @@ void csvMem_fromHeaders (struct DB *db, const char *headers) {
     db->_record_count = 0;
 }
 
-int csvMem_fromQuery (struct DB *db, struct Query *query) {
+int csvMem_fromQuery(struct DB *db, struct Query *query)
+{
     db->vfs = VFS_CSV_MEM;
 
     size_t size;
@@ -393,12 +437,12 @@ int csvMem_fromQuery (struct DB *db, struct Query *query) {
     int result = process_query(
         query,
         OUTPUT_OPTION_HEADERS | OUTPUT_FORMAT_COMMA,
-        f
-    );
+        f);
 
     fclose(f);
 
-    if (result < 0) {
+    if (result < 0)
+    {
         return -1;
     }
 
@@ -409,16 +453,20 @@ int csvMem_fromQuery (struct DB *db, struct Query *query) {
     return 0;
 }
 
-static int countFields (const char *ptr) {
+static int countFields(const char *ptr)
+{
     int count = 1;
 
     // Note: abritrary line limit
-    while (*ptr != '\0') {
-        if (*ptr == '\n'){
+    while (*ptr != '\0')
+    {
+        if (*ptr == '\n')
+        {
             return count;
         }
 
-        if (*ptr == ','){
+        if (*ptr == ',')
+        {
             count++;
         }
 
@@ -428,7 +476,8 @@ static int countFields (const char *ptr) {
     return count;
 }
 
-int csvMem_insertRow (struct DB *db, const char *row) {
+int csvMem_insertRow(struct DB *db, const char *row)
+{
     int len = strlen(row);
     char *data_end = get_end_of_data(db);
     int data_len = data_end - db->data;
@@ -439,7 +488,8 @@ int csvMem_insertRow (struct DB *db, const char *row) {
 
     db->fields = realloc(db->fields, new_size);
 
-    if (db->fields == NULL) {
+    if (db->fields == NULL)
+    {
         fprintf(stderr, "Unable to allocate %d for csv_insertRow\n", new_size);
         exit(-1);
     }
@@ -450,7 +500,8 @@ int csvMem_insertRow (struct DB *db, const char *row) {
     data_end = get_end_of_data(db);
 
     strcpy(data_end, row);
-    if (row[len - 1] != '\n') {
+    if (row[len - 1] != '\n')
+    {
         data_end[len] = '\n';
         data_end[len + 1] = '\0';
         len++;
@@ -465,8 +516,10 @@ int csvMem_insertRow (struct DB *db, const char *row) {
     return 0;
 }
 
-static char * get_end_of_data (struct DB *db) {
-    if (db->_record_count < 0) {
+static char *get_end_of_data(struct DB *db)
+{
+    if (db->_record_count < 0)
+    {
         indexLines(db, -1, '"');
     }
 
