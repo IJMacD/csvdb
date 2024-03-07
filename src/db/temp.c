@@ -27,11 +27,8 @@ int temp_openDB(
 {
     char filename[MAX_TABLE_LENGTH];
 
-    fprintf(stderr, "temp_openDB\n");
-
     if (temp_findTable(table_name, filename) == 0)
     {
-        fprintf(stderr, "temp_findTable() == 0\n");
         return csvMmap_openDB(db, filename, resolved);
     }
 
@@ -137,6 +134,8 @@ void temp_dropAll()
  */
 int temp_findTable(const char *table_name, char *filename)
 {
+    // If we haven't been configured with an on-disk mapping table, then create
+    // one now in memory.
     if (temp_mapping == NULL)
     {
         temp_mapping = temp_openMappingDB(NULL);

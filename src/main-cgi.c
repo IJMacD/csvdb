@@ -38,7 +38,6 @@ void set_session_temp_db(const char *session_id);
 
 int main()
 {
-
     char query_buffer[1024];
     int flags = OUTPUT_OPTION_HEADERS | OUTPUT_OPTION_STATS;
     int format = OUTPUT_FORMAT_TABLE;
@@ -53,8 +52,8 @@ int main()
     // Redirect stderr -> error file
     dup2(fileno(error_log), STDERR_FILENO);
 
-    char dirname[255];
-    fprintf(stderr, "debug: cwd %s\n", getcwd(dirname, 255));
+    // char dirname[255];
+    // fprintf(stderr, "debug: cwd %s\n", getcwd(dirname, 255));
 
     char *data_dir = getenv("CSVDB_DATA_DIR");
     if (data_dir)
@@ -233,7 +232,7 @@ int main()
     }
 
     // Get's redirected to /tmp/csvdb_error
-    fprintf(stderr, "query: %s\n", query_buffer);
+    // fprintf(stderr, "query: %s\n", query_buffer);
 
     // Double newline to end headers
     printf("\n");

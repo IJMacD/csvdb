@@ -23,10 +23,6 @@
 #include "../debug.h"
 #include "check.h"
 
-#ifdef DEBUG
-int query_count = -1;
-#endif
-
 /**
  * returns process exit code; negative for error
  */

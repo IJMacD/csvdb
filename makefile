@@ -139,7 +139,7 @@ $(SRCDIR)/gitversion.c: .git/HEAD .git/index
 remake: clean all
 
 clean:
-	rm -f $(RELEXE) $(RELOBJS) $(DBGEXE) $(DBGOBJS) $(CGIEXE) ${CGIOBJS} ${GENOBJS} ${GENEXE} $(SRCDIR)/gitversion.c
+	rm -f $(RELEXE) $(RELOBJS) $(DBGEXE) $(DBGOBJS) $(CGIEXE) $(CGIDEXE) ${CGIOBJS} ${GENOBJS} ${GENEXE} $(SRCDIR)/gitversion.c
 
 install: release
 	cp $(RELEXE) $(INSTALL_DIR)

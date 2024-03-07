@@ -353,7 +353,7 @@ int csv_getRecordValue(
             if (current_field_index == field_index)
             {
 
-                if (db->data[i] == '"')
+                if (buffer[i] == '"')
                 {
                     // We found a quote. It could be at the end of the field or
                     // could be escaping another quote
@@ -363,7 +363,7 @@ int csv_getRecordValue(
 
                     if (quoted_flag)
                     {
-                        if (db->data[i] == '"')
+                        if (buffer[i] == '"')
                         {
                             // found two double quotes, copy one to output
                             value[char_index++] = '"';
@@ -371,10 +371,10 @@ int csv_getRecordValue(
                         // If we find comma or newline immediately after one double
                         // quote then it must be the end of the field.
                         else if (
-                            db->data[i] == ',' ||
-                            db->data[i] == '\n' ||
-                            db->data[i] == '\r' ||
-                            db->data[i] == '\0')
+                            buffer[i] == ',' ||
+                            buffer[i] == '\n' ||
+                            buffer[i] == '\r' ||
+                            buffer[i] == '\0')
                         {
                             // finish off the string and return the length
                             value[char_index] = '\0';
@@ -393,10 +393,10 @@ int csv_getRecordValue(
                 // If we're not quoted, then comma or newline must be the end of the
                 // field.
                 else if (
-                    !quoted_flag && (db->data[i] == ',' ||
-                                     db->data[i] == '\n' ||
-                                     db->data[i] == '\r' ||
-                                     db->data[i] == '\0'))
+                    !quoted_flag && (buffer[i] == ',' ||
+                                     buffer[i] == '\n' ||
+                                     buffer[i] == '\r' ||
+                                     buffer[i] == '\0'))
                 {
                     // finish off the string and return the length
                     value[char_index] = '\0';
@@ -406,7 +406,7 @@ int csv_getRecordValue(
                 else
                 {
                     // Copy the current byte
-                    value[char_index++] = db->data[i];
+                    value[char_index++] = buffer[i];
                 }
 
                 // If we've run out of storage space
