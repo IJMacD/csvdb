@@ -104,6 +104,8 @@ enum Function {
     FUNC_RIGHT =                    0x23,
     FUNC_CONCAT =                   0x24,
 
+    FUNC_CAST_INT =                 0x31,
+
     // Family 010x (0x40) Extract
     FUNC_FAM_EXTRACT =              0x40,
 

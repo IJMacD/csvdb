@@ -418,6 +418,12 @@ int evaluateFunction(
 
             return count;
         }
+        else if (function == FUNC_CAST_INT)
+        {
+            long result = strtol(values[0], NULL, 10);
+
+            return sprintf(output, "%ld", result);
+        }
     }
     else if ((function & MASK_FUNC_FAMILY) == FUNC_FAM_EXTRACT)
     {
@@ -694,13 +700,9 @@ int evaluateFunction(
             "%04d-%02d-%02dT%02d:%02d:%02d",
             y, m, d, h, i, s);
     }
-    else
-    {
-        fprintf(stderr, "Unable to evaluate function %d\n", function);
-        return -1;
-    }
 
-    return 0;
+    fprintf(stderr, "Unable to evaluate function %d\n", function);
+    return -1;
 }
 
 typedef char LongestValue[MAX_VALUE_LENGTH];
