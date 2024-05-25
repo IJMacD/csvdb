@@ -94,6 +94,7 @@ void debugTree (struct TreeNode * node) {
     printf(
         "{ \"key\": %d, \"value\": \"%s\", \"left\": ",
         node->key,
+        // TODO: escape double quote as necessary
         node->value
     );
 
