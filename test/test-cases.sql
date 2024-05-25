@@ -125,3 +125,5 @@ CREATE TEMP TABLE tt3 AS FROM (FROM test FETCH FIRST 40 ROWS ONLY) ORDER BY scor
 FROM suits WHERE name IN ('spades')
 FROM suits WHERE name IN ('spades','hearts')
 FROM suits WHERE name IN ('spades','hearts','diamonds')
+-- Avoid stack smashing
+FROM suits WHERE name IN ('spades','spades','spades','spades','spades','spades','spades','spades','spades','spades','spades','spades')

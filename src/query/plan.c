@@ -655,6 +655,12 @@ static struct PlanStep *addStep(struct Plan *plan, int type)
 
     plan->step_count++;
 
+    if (plan->step_count > MAX_PLAN_STEPS)
+    {
+        fprintf(stderr, "Cannot have more than %d steps\n", MAX_PLAN_STEPS);
+        exit(-1);
+    }
+
     return &plan->steps[i];
 }
 
@@ -701,6 +707,12 @@ static struct PlanStep *addStepWithNodes(
 
     plan->step_count++;
 
+    if (plan->step_count > MAX_PLAN_STEPS)
+    {
+        fprintf(stderr, "Cannot have more than %d steps\n", MAX_PLAN_STEPS);
+        exit(-1);
+    }
+
     return &plan->steps[i];
 }
 
@@ -714,6 +726,12 @@ static struct PlanStep *addStepWithLimit(struct Plan *plan, int type, int limit)
     plan->steps[i].limit = limit;
 
     plan->step_count++;
+
+    if (plan->step_count > MAX_PLAN_STEPS)
+    {
+        fprintf(stderr, "Cannot have more than %d steps\n", MAX_PLAN_STEPS);
+        exit(-1);
+    }
 
     return &plan->steps[i];
 }
