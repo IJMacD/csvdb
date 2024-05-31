@@ -13,3 +13,9 @@ web:
     enabled: false
   local:
     enabled: false
+  resources:
+    requests:
+      cpu: 5m
+      memory: 10Mi
+    limits:
+      memory: 10Mi

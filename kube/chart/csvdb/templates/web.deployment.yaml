@@ -39,6 +39,8 @@ spec:
             - name: cgi-bin
               mountPath: /var/www/html/cgi-bin
             {{- end }}
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}
       volumes:
         - name: data
           {{- if  .Values.web.persistence.web_data.enabled }}

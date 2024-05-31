@@ -2,5 +2,4 @@ apiVersion: v2
 description: A helm chart for csvdb
 name: csvdb
 type: application
-version: 1.0.0
-appVersion: 1.0.0
+version: 1.3.0
