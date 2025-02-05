@@ -61,7 +61,7 @@ int evaluateNode(
 
     if (node->child_count == -1)
     {
-        // Optimistation where node is its own child
+        // Optimisation where node is its own child
 
         char value[MAX_VALUE_LENGTH];
         evaluateField(
@@ -340,7 +340,7 @@ int evaluateConstantField(char *output, struct Field *field)
     {
         fprintf(
             stderr,
-            "Tried to evaluate non-contant value as constant: %s\n",
+            "Tried to evaluate non-constant value as constant: %s\n",
             field->text);
         exit(-1);
     }
@@ -382,7 +382,7 @@ int evaluateConstantField(char *output, struct Field *field)
 int isConstantNode(struct Node *node)
 {
     if (node->function == FUNC_UNITY
-        // Optimistation where node is its own child
+        // Optimisation where node is its own child
         || node->child_count == -1)
     {
         return node->field.index == FIELD_CONSTANT;

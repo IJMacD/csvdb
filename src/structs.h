@@ -409,7 +409,8 @@ struct ResultSet {
     int *row_list_indices;
 };
 
-struct DateTime {
+struct DateTime
+{
     /** Year, range approx -32768 to 32767 */
     short year;
     /** Month, 1-based indexing */
@@ -417,7 +418,7 @@ struct DateTime {
     /** Day of month */
     unsigned char day;
     /** Hour */
-    unsigned char hour;
+    short hour;
     /** Minute */
     unsigned char minute;
     /** Second */

@@ -222,9 +222,15 @@ int evaluateFunction(
     }
     else if (function == FUNC_ADD)
     {
+        // We can add:
+        // * int + int
+        // * date + int (days)
+        // * time + int (seconds)
+
         long val = 0;
         struct DateTime dt = {0};
         int is_date = 0;
+        int is_time = 0;
 
         for (int i = 0; i < value_count; i++)
         {
@@ -242,6 +248,20 @@ int evaluateFunction(
                     return 0;
                 }
             }
+            else if (parseTime(values[i], &dt))
+            {
+                if (i == 0)
+                {
+                    val = timeInSeconds(&dt);
+                    is_time = 1;
+                }
+                else
+                {
+                    fprintf(stderr, "Unexpected Time: %s\n", values[i]);
+                    output[0] = 0;
+                    return 0;
+                }
+            }
             else
             {
                 val += atol(values[i]);
@@ -254,18 +274,37 @@ int evaluateFunction(
             return sprintDate(output, &dt);
         }
 
+        if (is_time)
+        {
+            timeFromSeconds(&dt, val);
+            return sprintTime(output, &dt);
+        }
+
         return sprintf(output, "%ld", val);
     }
     else if (function == FUNC_SUB)
     {
+        // We can subtract:
+        // * int - int
+        // * date - int     (days)
+        // * date - date    (days)
+        // * time - int     (seconds)
+        // * time - time    (seconds)
+
         long val = 0;
         struct DateTime dt = {0};
         int is_date = 0;
+        int is_time = 0;
 
         if (parseDateTime(values[0], &dt))
         {
             val = datetimeGetJulian(&dt);
             is_date = 1;
+        }
+        else if (parseTime(values[0], &dt))
+        {
+            val = timeInSeconds(&dt);
+            is_time = 1;
         }
         else
         {
@@ -288,6 +327,20 @@ int evaluateFunction(
                     return 0;
                 }
             }
+            else if (parseTime(values[i], &dt))
+            {
+                if (i == 1)
+                {
+                    val -= timeInSeconds(&dt);
+                    is_time = 0;
+                }
+                else
+                {
+                    fprintf(stderr, "Unexpected Time: %s\n", values[i]);
+                    output[0] = 0;
+                    return 0;
+                }
+            }
             else
             {
                 val -= atol(values[i]);
@@ -300,22 +353,69 @@ int evaluateFunction(
             return sprintDate(output, &dt);
         }
 
+        if (is_time)
+        {
+            timeFromSeconds(&dt, val);
+            return sprintTime(output, &dt);
+        }
+
         return sprintf(output, "%ld", val);
     }
     else if (function == FUNC_MUL)
     {
+        // We can do:
+        //  int * int
+        //  time * int
+
         long val = 1;
+        struct DateTime dt = {0};
+        int is_time = 0;
 
         for (int i = 0; i < value_count; i++)
         {
-            val *= atol(values[i]);
+            if (parseTime(values[i], &dt))
+            {
+                if (i == 0)
+                {
+                    val = timeInSeconds(&dt);
+                    is_time = 1;
+                }
+                else
+                {
+                    fprintf(stderr, "Unexpected Time: %s\n", values[i]);
+                    output[0] = 0;
+                    return 0;
+                }
+            }
+            else
+            {
+                val *= atol(values[i]);
+            }
+        }
+
+        if (is_time)
+        {
+            timeFromSeconds(&dt, val);
+            return sprintTime(output, &dt);
         }
 
         return sprintf(output, "%ld", val);
     }
     else if (function == FUNC_DIV)
     {
+        // We can do:
+        //  int / int
+        //  time / int
+
         long val = atol(values[0]);
+        struct DateTime dt = {0};
+        int is_time = 0;
+
+        if (parseTime(values[0], &dt))
+        {
+            val = timeInSeconds(&dt);
+            is_time = 1;
+        }
 
         for (int i = 1; i < value_count; i++)
         {
@@ -328,6 +428,12 @@ int evaluateFunction(
             }
 
             val /= val2;
+        }
+
+        if (is_time)
+        {
+            timeFromSeconds(&dt, val);
+            return sprintTime(output, &dt);
         }
 
         return sprintf(output, "%ld", val);

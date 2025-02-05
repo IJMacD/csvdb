@@ -101,7 +101,7 @@ int parseDateTime(const char *input, struct DateTime *output) {
         return 1;
     }
 
-    // We should only parse formats that are clearly and explicity dates.
+    // We should only parse formats that are clearly and explicitly dates.
     // e.g. FUNC_ADD always tests if its operands are dates.
     // This breaks when trying to add 7 or 8 digit numbers
     // if (checkFormat(input, "nnnnnnnn")) {
@@ -304,10 +304,65 @@ int parseDateTime(const char *input, struct DateTime *output) {
 }
 
 /**
+ * Parses a time 01:23:45 into a DateTime object
+ * @returns 1 for success; 0 for failure
+ */
+int parseTime(const char *input, struct DateTime *output)
+{
+    if (checkFormat(input, "nn:nn:nn"))
+    {
+        output->year = 0;
+        output->month = 0;
+        output->day = 0;
+
+        output->hour = atoi(input);
+        output->minute = atoi(input + 3);
+        output->second = atoi(input + 6);
+
+        return 1;
+    }
+
+    // Hours are allowed to roll over
+    if (checkFormat(input, "nnn:nn:nn"))
+    {
+        output->year = 0;
+        output->month = 0;
+        output->day = 0;
+
+        output->hour = atoi(input);
+        output->minute = atoi(input + 4);
+        output->second = atoi(input + 7);
+
+        return 1;
+    }
+
+    // Hours are allowed to roll over
+    if (checkFormat(input, "nnnn:nn:nn"))
+    {
+        output->year = 0;
+        output->month = 0;
+        output->day = 0;
+
+        output->hour = atoi(input);
+        output->minute = atoi(input + 5);
+        output->second = atoi(input + 8);
+
+        return 1;
+    }
+
+    return 0;
+}
+
+/**
  * `output` must be at least 11 chars long
  */
 int sprintDate (char *output, struct DateTime *dt) {
     return sprintf(output, "%04d-%02d-%02d", dt->year, dt->month, dt->day);
+}
+
+int sprintTime(char *output, struct DateTime *dt)
+{
+    return sprintf(output, "%02d:%02d:%02d", dt->hour, dt->minute, dt->second);
 }
 
 /**
@@ -506,4 +561,20 @@ void datetimeFromJulian (struct DateTime *dt, int julian) {
         dt->month -= 12;
     }
     dt->year = dt->month <= 2 ? C-4715 : C-4716;
+}
+
+int timeInSeconds(struct DateTime *dt)
+{
+    return dt->hour * 3600 + dt->minute * 60 + dt->second;
+}
+
+void timeFromSeconds(struct DateTime *dt, int seconds)
+{
+    dt->year = 0;
+    dt->month = 0;
+    dt->day = 0;
+
+    dt->hour = seconds / 3600;
+    dt->minute = (seconds / 60) % 60;
+    dt->second = seconds % 60;
 }

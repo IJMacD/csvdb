@@ -2,7 +2,11 @@
 
 int parseDateTime(const char *input, struct DateTime *output);
 
-int sprintDate (char *output, struct DateTime *dt);
+int parseTime(const char *input, struct DateTime *output);
+
+int sprintDate(char *output, struct DateTime *dt);
+
+int sprintTime(char *output, struct DateTime *dt);
 
 int isLeapYear(int year);
 
@@ -10,11 +14,11 @@ int datetimeGetYearDay(struct DateTime *dt);
 
 int datetimeGetDayDiff(struct DateTime *dt1, struct DateTime *dt2);
 
-int datetimeGetWeek (struct DateTime *dt);
+int datetimeGetWeek(struct DateTime *dt);
 
-int datetimeGetWeekYear (struct DateTime *dt);
+int datetimeGetWeekYear(struct DateTime *dt);
 
-int datetimeGetWeekDay (struct DateTime *dt);
+int datetimeGetWeekDay(struct DateTime *dt);
 
 /**
  * Gives integer Julian day number at midnight at the beginning of the provided
@@ -33,6 +37,10 @@ int datetimeGetWeekDay (struct DateTime *dt);
  * 2459574.5 However, the value is truncated and 2459574 is returned for an
  * input date of 2021-12-26.
  */
-int datetimeGetJulian (struct DateTime *dt);
+int datetimeGetJulian(struct DateTime *dt);
 
-void datetimeFromJulian (struct DateTime *dt, int julian);
+void datetimeFromJulian(struct DateTime *dt, int julian);
+
+int timeInSeconds(struct DateTime *dt);
+
+void timeFromSeconds(struct DateTime *dt, int seconds);
