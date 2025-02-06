@@ -93,7 +93,7 @@ int dir_getRecordValue (
 
     // inode
     if (field_index == 0) {
-        return sprintf(value, "%ld", dp->d_ino);
+        return sprintf(value, "%llu", dp->d_ino);
     }
 
     // name
@@ -132,7 +132,7 @@ int dir_getRecordValue (
             return 0;
         }
 
-        return sprintf(value, "%ld", s.st_size);
+        return sprintf(value, "%llu", s.st_size);
     }
 
     // created

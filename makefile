@@ -2,7 +2,7 @@
 # Compiler flags
 #
 CC     = gcc
-CFLAGS = -Wall -Werror -Wextra -Wno-format-overflow -fdata-sections -ffunction-sections
+CFLAGS = -Wall -Werror -Wextra -fdata-sections -ffunction-sections
 
 #
 # Project files
@@ -83,7 +83,7 @@ $(DBGDIR)/%.o: $(SRCDIR)/%.c
 release: prep $(RELEXE)
 
 $(RELEXE): $(RELOBJS)
-	$(CC) $(CFLAGS) $(RELCFLAGS) -o $(RELEXE) -Wl,--gc-sections $^
+	$(CC) $(CFLAGS) $(RELCFLAGS) -o $(RELEXE) $^
 
 $(RELDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) -c $(CFLAGS) $(RELCFLAGS) -o $@ $<
@@ -94,7 +94,7 @@ $(RELDIR)/%.o: $(SRCDIR)/%.c
 cgi: prep $(CGIEXE)
 
 $(CGIEXE): $(CGIOBJS)
-	$(CC) $(CFLAGS) -o $(CGIEXE) -Wl,--gc-sections $^
+	$(CC) $(CFLAGS) -o $(CGIEXE) $^
 
 # Warning: overlaps with $(RELDIR)/%.o: $(SRCDIR)/%.c
 $(CGIDIR)/%.o: $(SRCDIR)/%.c
@@ -122,7 +122,7 @@ test/test.csv: $(GENEXE)
 	${GENEXE} 1000000 $@
 
 $(GENEXE): $(GENOBJS)
-	$(CC) $(CFLAGS) $(GENCFLAGS) -o $@ -Wl,--gc-sections $^
+	$(CC) $(CFLAGS) $(GENCFLAGS) -o $@ $^
 
 $(GENDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) -c $(CFLAGS) $(GENCFLAGS) -o $@ $<
