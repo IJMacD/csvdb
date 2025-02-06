@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -28,6 +28,13 @@ errors=0
 
 echo "duration" > $STATFILE
 
+if [ `date +%N | grep N` ]; then
+    echo "(Precise timings not supported)";
+    D="date +%s"
+else
+    D="date +%s%N"
+fi
+
 for sql in "${lines[@]}"; do
     if [[ "$sql" == --* ]]; then
         continue
@@ -41,12 +48,16 @@ for sql in "${lines[@]}"; do
 
     printf "$NC"
 
-    start=`date +%s%N`
+    start=`$D`
     $CSVDB -o $OUTFILE $stats -F table "$sql"
     result=$?
-    end=`date +%s%N`
+    end=`$D`
 
-    runtime=$(((end-start)/1000000))
+    if [[ $D == "date +%s%N" ]]; then
+        runtime="$(((end-start)/1000000)) ms"
+    else 
+        runtime="$((end-start)) s"
+    fi
 
     if [ $result -eq 0 ]; then
         if [ -s $OUTFILE ]; then
@@ -61,9 +72,9 @@ for sql in "${lines[@]}"; do
             printf "\n$GREY -- Results: --$NC\n"
 
             cat $OUTFILE
-            printf "\n$GREY -- ${GREEN}OK${GREY} (Check output above) Time: $runtime ms --$NC\n\n";
+            printf "\n$GREY -- ${GREEN}OK${GREY} (Check output for correctness) Time: $runtime --$NC\n\n";
         else
-            printf "\n$GREY -- ${ORANGE}NO OUTPUT${GREY} Time: $runtime ms --$NC\n\n";
+            printf "\n$GREY -- ${ORANGE}NO OUTPUT${GREY} Time: $runtime --$NC\n\n";
         fi
 
         echo $runtime >> $STATFILE
@@ -80,7 +91,7 @@ rm -f $OUTFILE
 printf " All tests ($tests) complete: "
 
 if [ $errors -eq 0 ]; then
-    printf "${GREEN}NO ERRORS${NC} (Check output above)\n\n";
+    printf "${GREEN}NO ERRORS${NC} (Check output for correctness)\n\n";
 elif [ $errors -eq 1 ]; then
     printf "${RED}$errors ERROR${NC}\n\n";
 else

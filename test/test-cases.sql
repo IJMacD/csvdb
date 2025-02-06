@@ -127,3 +127,9 @@ FROM suits WHERE name IN ('spades','hearts')
 FROM suits WHERE name IN ('spades','hearts','diamonds')
 -- Avoid stack smashing
 FROM suits WHERE name IN ('spades','spades','spades','spades','spades','spades','spades','spades','spades','spades','spades','spades')
+-- CAST
+SELECT CAST('99' AS INT)
+SELECT CAST('00:15:00' AS INT)
+SELECT CAST('00:15:00' AS INTERVAL)
+SELECT CAST(900 AS DURATION)
+SELECT INTERVAL('00:15:00')

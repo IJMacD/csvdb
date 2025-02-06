@@ -220,7 +220,8 @@ int parseSimpleNode(
 
             return flags;
         }
-        else if (strcmp(value, "CAST") == 0)
+
+        if (strcmp(value, "CAST") == 0)
         {
             struct Node *child = addChildNode(node);
 
@@ -242,7 +243,7 @@ int parseSimpleNode(
             char type[32];
             getToken(query, index, type, sizeof type);
 
-            if (strcmp(type, "INT") == 0)
+            if (strcmp(type, "INT") == 0 || strcmp(type, "INTERVAL") == 0)
             {
                 node->function = FUNC_CAST_INT;
             }
@@ -272,6 +273,7 @@ int parseSimpleNode(
             return flags;
         }
 
+        // Regular functions
         if (strcmp(value, "PK") == 0)
         {
             node->function = FUNC_PK;
@@ -405,6 +407,11 @@ int parseSimpleNode(
         else if (strcmp(value, "MAKE_DATETIME") == 0)
         {
             node->function = FUNC_MAKE_DATETIME;
+        }
+        else if (strcmp(value, "INTERVAL") == 0)
+        {
+            // Synonym for CAST(X AS INT)
+            node->function = FUNC_CAST_INT;
         }
         else if (strcmp(value, "COUNT") == 0)
         {
