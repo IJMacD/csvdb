@@ -9,11 +9,11 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
     - uses: actions/checkout@v3
     - name: make
       run: make
-    - name: make test
-      run: make test
+    - name: Run tests
+      run: ./test/test.sh

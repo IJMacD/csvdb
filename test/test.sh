@@ -56,13 +56,16 @@ for sql in "${lines[@]}"; do
     result=$?
     end=`$D`
 
-    if [[ ! -f "$SNAPSHOT_DIR/$tests.no_snapshot" ]]; then
-        if [[ -f "$SNAPSHOT_DIR/$tests" ]]; then
-            if [[ `md5 -q "$SNAPSHOT_DIR/$tests"` != `md5 -q $OUTFILE` ]]; then
-                result=1
+    if [[ $result == 0 ]]; then
+        if [[ ! -f "$SNAPSHOT_DIR/$tests.no_snapshot" ]]; then
+            if [[ -f "$SNAPSHOT_DIR/$tests" ]]; then
+                if [[ `md5sum "$SNAPSHOT_DIR/$tests" | cut -d ' ' -f 1` != `md5sum "$OUTFILE" | cut -d ' ' -f 1` ]]; then
+                    result=1
+                    echo "Output does not match snapshot"
+                fi
+            else 
+                cp "$OUTFILE" "$SNAPSHOT_DIR/$tests"
             fi
-        else 
-            cp "$OUTFILE" "$SNAPSHOT_DIR/$tests"
         fi
     fi
 
