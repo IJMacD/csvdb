@@ -1,0 +1,3 @@
+| LISTAGG(name)      |
+|--------------------|
+| spades,clubs,hearts,diamonds|

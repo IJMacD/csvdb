@@ -1,0 +1,9 @@
+| name               | symbol             | value              | name               | symbol             |
+|--------------------|--------------------|--------------------|--------------------|--------------------|
+| spades             | ♠                |                    |                    |                    |
+| clubs              | ♣                |                  3 | Three              |                  3 |
+| clubs              | ♣                |                  7 | Seven              |                  7 |
+| clubs              | ♣                |                  8 | Eight              |                  8 |
+| clubs              | ♣                |                 12 | Queen              | Q                  |
+| hearts             | ♥                |                    |                    |                    |
+| diamonds           | ♦                |                    |                    |                    |

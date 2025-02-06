@@ -1,0 +1,8 @@
+| name               | symbol             | name               | symbol             |
+|--------------------|--------------------|--------------------|--------------------|
+| clubs              | ♣                | hearts             | ♥                |
+| clubs              | ♣                | diamonds           | ♦                |
+| clubs              | ♣                | spades             | ♠                |
+| diamonds           | ♦                | spades             | ♠                |
+| diamonds           | ♦                | hearts             | ♥                |
+| hearts             | ♥                | spades             | ♠                |

@@ -11,6 +11,9 @@ TEST_FILE="$SCRIPT_DIR/test-cases.sql"
 CSVDB="$SCRIPT_DIR/../release/csvdb"
 OUTFILE=/tmp/test.out
 STATFILE="$SCRIPT_DIR/test-cases-stats.csv"
+SNAPSHOT_DIR="$SCRIPT_DIR/__snapshots__"
+
+mkdir -p "$SNAPSHOT_DIR"
 
 # Get array of test cases
 readarray -t lines < $TEST_FILE
@@ -52,6 +55,16 @@ for sql in "${lines[@]}"; do
     $CSVDB -o $OUTFILE $stats -F table "$sql"
     result=$?
     end=`$D`
+
+    if [[ ! -f "$SNAPSHOT_DIR/$tests.no_snapshot" ]]; then
+        if [[ -f "$SNAPSHOT_DIR/$tests" ]]; then
+            if [[ `md5 -q "$SNAPSHOT_DIR/$tests"` != `md5 -q $OUTFILE` ]]; then
+                result=1
+            fi
+        else 
+            cp "$OUTFILE" "$SNAPSHOT_DIR/$tests"
+        fi
+    fi
 
     if [[ $D == "date +%s%N" ]]; then
         runtime="$(((end-start)/1000000)) ms"
