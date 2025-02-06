@@ -59,9 +59,12 @@ for sql in "${lines[@]}"; do
     if [[ $result == 0 ]]; then
         if [[ ! -f "$SNAPSHOT_DIR/$tests.no_snapshot" ]]; then
             if [[ -f "$SNAPSHOT_DIR/$tests" ]]; then
-                if [[ `md5sum "$SNAPSHOT_DIR/$tests" | cut -d ' ' -f 1` != `md5sum "$OUTFILE" | cut -d ' ' -f 1` ]]; then
+                if ! cmp -s "$SNAPSHOT_DIR/$tests" "$OUTFILE"; then
                     result=1
-                    echo "Output does not match snapshot"
+
+                    printf "\n$GREY -- Results: --$NC\n"
+                    printf "Output does not match snapshot\n\n"
+                    diff -u --color=always "$OUTFILE" "$SNAPSHOT_DIR/$tests" | tail -n +5
                 fi
             else 
                 cp "$OUTFILE" "$SNAPSHOT_DIR/$tests"
