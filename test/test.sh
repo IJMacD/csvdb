@@ -65,6 +65,7 @@ for sql in "${lines[@]}"; do
                 fi
             else 
                 cp "$OUTFILE" "$SNAPSHOT_DIR/$tests"
+                echo "(Wrote new snapshot)"
             fi
         fi
     fi

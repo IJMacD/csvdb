@@ -194,3 +194,33 @@ const char *nodeGetFieldName (struct Node *node) {
     }
     return field_name;
 }
+
+/**
+ * Performs deep comparison of two node trees to evaluate if they are
+ * functionally equivalent.
+ * @returns 1 if equal; 0 if not equal
+ */
+int areNodesEqual(struct Node *nodeA, struct Node *nodeB)
+{
+    if (
+        nodeA->function != nodeB->function ||
+        nodeA->field.table_id != nodeB->field.table_id ||
+        nodeA->field.index != nodeB->field.index ||
+        strcmp(nodeA->field.text, nodeB->field.text) != 0 ||
+        nodeA->child_count != nodeB->child_count)
+    {
+        return 0;
+    }
+
+    for (int i = 0; i < nodeA->child_count; i++)
+    {
+        int children_equal = areNodesEqual(&nodeA->children[i], &nodeB->children[i]);
+
+        if (!children_equal)
+        {
+            return 0;
+        }
+    }
+
+    return 1;
+}

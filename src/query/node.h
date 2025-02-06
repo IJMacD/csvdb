@@ -15,3 +15,5 @@ int getTableBitMap (struct Node *node);
 void swapNodes (struct Node *nodeA, struct Node *nodeB);
 
 const char *nodeGetFieldName (struct Node *node);
+
+int areNodesEqual(struct Node *nodeA, struct Node *nodeB);

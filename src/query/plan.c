@@ -3,6 +3,7 @@
 
 #include "../structs.h"
 #include "./node.h"
+#include "./optimise.h"
 #include "../functions/util.h"
 #include "../db/db.h"
 #include "../evaluate/predicates.h"
@@ -47,8 +48,6 @@ static int applySortLogic(
 static void checkCoveringIndex(
     struct Query *q,
     struct Plan *plan);
-
-static int areNodesEqual(struct Node *nodeA, struct Node *nodeB);
 
 static int haveNonUniqueJoins(struct Plan *plan);
 
@@ -493,9 +492,11 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
     }
     /* table_count == 1 */
     // Special case if the only predicate is an OR operator node
+    // ONLY WORKS IF EACH 'OR' CHILD IS UNIQUE! <- Even then I'm not sure if strictly true
     else if (
         query->predicate_count == 1 &&
-        query->predicate_nodes[0].function == OPERATOR_OR)
+        query->predicate_nodes[0].function == OPERATOR_OR &&
+        areChildrenUnique(&query->predicate_nodes[0]))
     {
         struct Node *or_children = query->predicate_nodes[0].children;
 
@@ -1263,11 +1264,6 @@ static int applySortLogic(
     }
 
     return sorts_added;
-}
-
-static int areNodesEqual(struct Node *nodeA, struct Node *nodeB)
-{
-    return nodeA->function == nodeB->function && nodeA->field.table_id == nodeB->field.table_id && nodeA->field.index == nodeB->field.index;
 }
 
 /**

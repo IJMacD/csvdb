@@ -13,3 +13,7 @@ void optimiseOnToWhere (
     struct Node *joinNode,
     struct Query *query
 );
+
+void optimiseUniqueOr(struct Node *node);
+
+int areChildrenUnique(struct Node *node);

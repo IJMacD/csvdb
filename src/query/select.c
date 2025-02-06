@@ -396,6 +396,8 @@ int process_query(
         optimiseRowidAlgebra(predicate);
 
         optimiseCollapseConstantNode(predicate);
+
+        optimiseUniqueOr(predicate);
     }
 
     optimiseWhereToOn(q);

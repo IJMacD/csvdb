@@ -431,3 +431,52 @@ void optimiseOnToWhere(
         joinNode->function = OPERATOR_ALWAYS;
     }
 }
+
+void optimiseUniqueOr(struct Node *node)
+{
+    if (node->function != OPERATOR_OR)
+    {
+        return;
+    }
+
+    for (int i = 1; i < node->child_count; i++)
+    {
+        for (int j = 0; j < i; j++)
+        {
+            int are_equal = areNodesEqual(&node->children[i], &node->children[j]);
+
+            if (are_equal)
+            {
+                if (debug_verbosity >= 2)
+                {
+                    fprintf(stderr, "[OPTIMISE] Unique OR: Found two identical nodes (%d vs. %d)\n", i, j);
+                }
+
+                // TODO: implement
+            }
+        }
+    }
+}
+
+/**
+ * Checks if the children of a node are a mathematical set (i.e. they are
+ * all different)
+ * @returns 1 if all children are unique; 0 if any two children are the same
+ */
+int areChildrenUnique(struct Node *node)
+{
+    for (int i = 1; i < node->child_count; i++)
+    {
+        for (int j = 0; j < i; j++)
+        {
+            int are_equal = areNodesEqual(&node->children[i], &node->children[j]);
+
+            if (are_equal)
+            {
+                return 0;
+            }
+        }
+    }
+
+    return 1;
+}
