@@ -246,6 +246,10 @@ int parseSimpleNode(
             {
                 node->function = FUNC_CAST_INT;
             }
+            else if (strcmp(type, "DURATION") == 0)
+            {
+                node->function = FUNC_CAST_DURATION;
+            }
             else
             {
                 fprintf(stderr, "cannot cast to %s\n", type);

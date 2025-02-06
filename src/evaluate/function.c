@@ -530,6 +530,19 @@ int evaluateFunction(
 
             return sprintf(output, "%ld", result);
         }
+        else if (function == FUNC_CAST_DURATION)
+        {
+            struct DateTime dt = {0};
+            if (parseTime(values[0], &dt))
+            {
+                int result = timeInSeconds(&dt);
+
+                return sprintf(output, "%d", result);
+            }
+
+            *output = '\0';
+            return 0;
+        }
     }
     else if ((function & MASK_FUNC_FAMILY) == FUNC_FAM_EXTRACT)
     {
