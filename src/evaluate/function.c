@@ -526,12 +526,10 @@ int evaluateFunction(
         }
         else if (function == FUNC_CAST_INT)
         {
-            long result = strtol(values[0], NULL, 10);
+            // Casts:
+            //   numbers to integers
+            //   duration to integer ('00:01:30' to 900)
 
-            return sprintf(output, "%ld", result);
-        }
-        else if (function == FUNC_CAST_DURATION)
-        {
             struct DateTime dt = {0};
             if (parseTime(values[0], &dt))
             {
@@ -540,8 +538,28 @@ int evaluateFunction(
                 return sprintf(output, "%d", result);
             }
 
-            *output = '\0';
-            return 0;
+            long result = strtol(values[0], NULL, 10);
+
+            return sprintf(output, "%ld", result);
+        }
+        else if (function == FUNC_CAST_DURATION)
+        {
+            // Casts:
+            //   numbers to durations (900 to '00:15:00')
+
+            struct DateTime dt = {0};
+
+            if (parseTime(values[0], &dt))
+            {
+                // Already a duration
+                return sprintf(output, "%s", values[0]);
+            }
+
+            long result = strtol(values[0], NULL, 10);
+
+            timeFromSeconds(&dt, result);
+
+            return sprintTime(output, &dt);
         }
     }
     else if ((function & MASK_FUNC_FAMILY) == FUNC_FAM_EXTRACT)
