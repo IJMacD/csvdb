@@ -571,7 +571,7 @@ enum IndexSearchType csv_findIndex(
     {
         // Start trying auto names
 
-        char table_filename[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12];
+        char table_filename[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12 - 13];
 
         // If the table name ends in '.csv' remove that before searching for a
         // matching index
