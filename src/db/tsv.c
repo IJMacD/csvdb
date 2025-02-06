@@ -489,7 +489,7 @@ enum IndexSearchType tsv_findIndex(
         return INDEX_NONE;
     }
 
-    char table_filename[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12];
+    char table_filename[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12 - 13];
 
     // If the table name ends in '.tsv' remove that before searching for a
     // matching index
