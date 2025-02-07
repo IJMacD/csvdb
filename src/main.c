@@ -62,19 +62,19 @@ void printUsage (const char* name, FILE *file) {
         "\t[(-i |--input=)<filename>] Read from file instead of stdin\n"
         "\t[(-o |--output=)<filename>] Write output to file instead of stdout\n"
         "\t[--stats] Write timing data to 'stats.csv'\n"
-        #ifdef DEBUG
+#ifdef DEBUG
         "\t[-v|-vv|-vvv|--verbose=n] Set DEBUG verbosity\n"
         "\t[-A] Output AST"
-        #endif
+#endif
         "\n"
         "\n"
         "Where <format> is one of:\n"
-        "\t(table|tsv|csv[:excel]|html|json[:(object|array)]|"
+        "\t(table|box|tsv|csv[:excel]|html|json[:(object|array)]|"
         "sql[:(insert|create|values)]|xml|record)"
         "\n"
         "\n"
-        "Version: %2$s %3$s\n"
-    , name, gitversion, version_debug);
+        "Version: %2$s %3$s\n",
+        name, gitversion, version_debug);
 }
 
 int main (int argc, char * argv[]) {
@@ -272,7 +272,7 @@ int main (int argc, char * argv[]) {
         }
         flags |= format_flag;
     } else if (isatty(fileno(output))) {
-        flags |= OUTPUT_FORMAT_TABLE;
+        flags |= OUTPUT_FORMAT_BOX;
     } else {
         // Disable next line for some fun just dumping data with no delineation
         flags |= OUTPUT_FORMAT_COMMA;
@@ -440,6 +440,11 @@ static enum OutputOption get_format_flag (const char *format_val) {
         strcmp(format_val, "sql_create") == 0 // compat
     ) {
         return OUTPUT_FORMAT_SQL_CREATE;
+    }
+
+    if (strcmp(format_val, "box") == 0)
+    {
+        return OUTPUT_FORMAT_BOX;
     }
 
     return -1;

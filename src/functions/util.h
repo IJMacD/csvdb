@@ -23,3 +23,5 @@ int whichBit(int bit_map);
 int w1252Map(int w1252Char);
 
 void replace(char *out, const char *input, char search, char *replace);
+
+int countCodePoints(char *string);

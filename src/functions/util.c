@@ -369,3 +369,17 @@ void replace(char *output, const char *input, char search, char *replace)
     }
     *output = '\0';
 }
+
+int countCodePoints(char *string)
+{
+    int count = 0;
+    while (*string++)
+    {
+        char c = *string;
+        if ((c & 0b11000000) != 0b10000000)
+        {
+            count++;
+        }
+    }
+    return count;
+}

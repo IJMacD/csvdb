@@ -300,6 +300,60 @@ void printHeaderLine(
     {
         printf("\xef\xbb\xbf"); // BOM
     }
+    else if (format == OUTPUT_FORMAT_BOX)
+    {
+        for (int i = 0; i < column_count; i++)
+        {
+            struct Node *node = &columns[i];
+
+            if (node->field.index == FIELD_STAR)
+            {
+                if (node->field.table_id >= 0)
+                {
+                    struct DB *db = tables[node->field.table_id].db;
+                    for (int j = 0; j < db->field_count; j++)
+                    {
+                        if (i == 0 && j == 0)
+                        {
+                            fprintf(f, "┌────────────────────");
+                        }
+                        else
+                        {
+                            fprintf(f, "┬────────────────────");
+                        }
+                    }
+                }
+                else
+                {
+                    for (int m = 0; m < table_count; m++)
+                    {
+                        struct DB *db = tables[m].db;
+                        for (int j = 0; j < db->field_count; j++)
+                        {
+                            if (i == 0 && j == 0)
+                            {
+                                fprintf(f, "┌────────────────────");
+                            }
+                            else
+                            {
+                                fprintf(f, "┬────────────────────");
+                            }
+                        }
+                    }
+                }
+            }
+            else if (i == 0)
+            {
+                fprintf(f, "┌────────────────────");
+            }
+            else
+            {
+                fprintf(f, "┬────────────────────");
+            }
+        }
+
+        fprintf(f, "┐\n");
+    }
 
     /********************
      * Header Name
@@ -391,9 +445,12 @@ void printHeaderLine(
     {
         fprintf(f, "\");\nINSERT INTO \"%1$s\" VALUES\n", tables[0].alias);
     }
-    else if (format == OUTPUT_FORMAT_TABLE)
+    else if (format == OUTPUT_FORMAT_TABLE || format == OUTPUT_FORMAT_BOX)
     {
-        fprintf(f, "|\n");
+        fprintf(f, format == OUTPUT_FORMAT_TABLE ? "|\n" : "│\n");
+
+        char *field = format == OUTPUT_FORMAT_TABLE ? "|--------------------" : "├────────────────────";
+        char *fieldNext = format == OUTPUT_FORMAT_TABLE ? "|--------------------" : "┼────────────────────";
 
         for (int i = 0; i < column_count; i++)
         {
@@ -406,7 +463,8 @@ void printHeaderLine(
                     struct DB *db = tables[node->field.table_id].db;
                     for (int j = 0; j < db->field_count; j++)
                     {
-                        fprintf(f, "|--------------------");
+                        fprintf(f, "%s", field);
+                        field = fieldNext;
                     }
                 }
                 else
@@ -416,17 +474,20 @@ void printHeaderLine(
                         struct DB *db = tables[m].db;
                         for (int j = 0; j < db->field_count; j++)
                         {
-                            fprintf(f, "|--------------------");
+                            fprintf(f, "%s", field);
+                            field = fieldNext;
                         }
                     }
                 }
             }
             else
             {
-                fprintf(f, "|--------------------");
+                fprintf(f, "%s", field);
+                field = fieldNext;
             }
         }
-        fprintf(f, "|\n");
+
+        fprintf(f, format == OUTPUT_FORMAT_TABLE ? "|\n" : "┤\n");
     }
 }
 
@@ -466,10 +527,10 @@ void printPreamble(
 
 void printPostamble(
     FILE *f,
-    __attribute__((unused)) struct Table *table,
-    __attribute__((unused)) int table_count,
+    struct Table *tables,
+    int table_count,
     __attribute__((unused)) struct Node columns[],
-    __attribute__((unused)) int column_count,
+    int column_count,
     __attribute__((unused)) int result_count,
     enum OutputOption flags)
 {
@@ -497,6 +558,60 @@ void printPostamble(
     else if (format == OUTPUT_FORMAT_XML)
     {
         fprintf(f, "</results>\n");
+    }
+    else if (format == OUTPUT_FORMAT_BOX)
+    {
+        for (int i = 0; i < column_count; i++)
+        {
+            struct Node *node = &columns[i];
+
+            if (node->field.index == FIELD_STAR)
+            {
+                if (node->field.table_id >= 0)
+                {
+                    struct DB *db = tables[node->field.table_id].db;
+                    for (int j = 0; j < db->field_count; j++)
+                    {
+                        if (i == 0 && j == 0)
+                        {
+                            fprintf(f, "└────────────────────");
+                        }
+                        else
+                        {
+                            fprintf(f, "┴────────────────────");
+                        }
+                    }
+                }
+                else
+                {
+                    for (int m = 0; m < table_count; m++)
+                    {
+                        struct DB *db = tables[m].db;
+                        for (int j = 0; j < db->field_count; j++)
+                        {
+                            if (i == 0 && j == 0)
+                            {
+                                fprintf(f, "└────────────────────");
+                            }
+                            else
+                            {
+                                fprintf(f, "┴────────────────────");
+                            }
+                        }
+                    }
+                }
+            }
+            else if (i == 0)
+            {
+                fprintf(f, "└────────────────────");
+            }
+            else
+            {
+                fprintf(f, "┴────────────────────");
+            }
+        }
+
+        fprintf(f, "┘\n");
     }
 }
 
@@ -561,7 +676,7 @@ static void printHeaderName(
     {
         if (prefix)
         {
-            char s[MAX_FIELD_LENGTH];
+            char s[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 1];
             sprintf(s, "%s.%s", prefix, name);
             fprintf(f, "| %-19s", s);
         }
@@ -569,6 +684,27 @@ static void printHeaderName(
         {
             fprintf(f, "| %-19s", name);
         }
+    }
+    else if (format == OUTPUT_FORMAT_BOX)
+    {
+        char s[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 1];
+
+        if (prefix)
+        {
+            sprintf(s, "%s.%s", prefix, name);
+        }
+        else
+        {
+            sprintf(s, "%s", name);
+        }
+
+        // Should really be codepoint/glyph length
+        if (strlen(s) > 18)
+        {
+            strcpy(s + 18, "…");
+        }
+
+        fprintf(f, "│ %-19s", s);
     }
     else
     {
@@ -720,6 +856,10 @@ static void printColumnValue(
     {
         fprintf(f, "| ");
     }
+    else if (format == OUTPUT_FORMAT_BOX)
+    {
+        fprintf(f, "│ ");
+    }
     else if (format == OUTPUT_FORMAT_HTML)
     {
         if (value_is_numeric)
@@ -812,7 +952,7 @@ static void printColumnValue(
         string_fmt = "'%s'";
         num_fmt = "%ld";
     }
-    else if (format == OUTPUT_FORMAT_TABLE)
+    else if (format == OUTPUT_FORMAT_TABLE || format == OUTPUT_FORMAT_BOX)
     {
         // If there are any new lines in the value, they should be replaced.
         if (strchr(value, '\r') || strchr(value, '\n'))
@@ -823,6 +963,29 @@ static void printColumnValue(
             mallocd = 1;
             replace(clone, value, '\r', "␍");
             replace(escaped_value, clone, '\n', "␊");
+        }
+
+        if (format == OUTPUT_FORMAT_BOX && !value_is_numeric)
+        {
+            int len = strlen(escaped_value);
+            int codePoints = countCodePoints(escaped_value);
+            char *c = escaped_value + len;
+            if (codePoints > 19)
+            {
+                strcpy(escaped_value + 18, "…");
+            }
+            else
+                while (codePoints++ < 19)
+                {
+                    *c++ = ' ';
+                }
+            *c = '\0';
+            fprintf(f, "%s", escaped_value);
+            if (mallocd)
+            {
+                free(escaped_value);
+            }
+            return;
         }
 
         string_fmt = "%-19s";
@@ -985,6 +1148,10 @@ static void printRecordEnd(
     else if (format == OUTPUT_FORMAT_TABLE)
     {
         fprintf(f, "|\n");
+    }
+    else if (format == OUTPUT_FORMAT_BOX)
+    {
+        fprintf(f, "│\n");
     }
 }
 
