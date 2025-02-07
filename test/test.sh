@@ -69,7 +69,7 @@ for sql in "${lines[@]}"; do
                 fi
             else 
                 cp "$OUTFILE" "$SNAPSHOT_DIR/$tests"
-                echo "(Wrote new snapshot)"
+                printf "\n${ORANGE}(Wrote new snapshot)${NC}\n"
             fi
         fi
     fi

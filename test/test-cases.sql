@@ -122,14 +122,21 @@ CREATE TEMP TABLE ttt AS FROM SEQUENCE LIMIT 10; FROM ttt ORDER BY value DESC FE
 CREATE TEMP TABLE tt2 AS FROM SEQUENCE LIMIT 2; INSERT INTO tt2 VALUES (14),(15),(16); TABLE tt2;
 CREATE TEMP TABLE tt3 AS FROM (FROM test FETCH FIRST 40 ROWS ONLY) ORDER BY score, name; FROM tt3 GROUP BY score SELECT score, COUNT(*) FETCH FIRST 5 ROWS ONLY;
 -- IN Operator
-FROM suits WHERE name IN ('spades')
-FROM suits WHERE name IN ('spades','hearts')
-FROM suits WHERE name IN ('spades','hearts','diamonds')
+FROM suits WHERE name IN ('spades');
+FROM suits WHERE name IN ('spades','hearts');
+FROM suits WHERE name IN ('spades','hearts','diamonds');
 -- Avoid stack smashing
-FROM suits WHERE name IN ('spades','spades','spades','spades','spades','spades','spades','spades','spades','spades','spades','spades')
+FROM suits WHERE name IN ('spades','spades','spades','spades','spades','spades','spades','spades','spades','spades','spades','spades');
 -- CAST
-SELECT CAST('99' AS INT)
-SELECT CAST('00:15:00' AS INT)
-SELECT CAST('00:15:00' AS INTERVAL)
-SELECT CAST(900 AS DURATION)
-SELECT INTERVAL('00:15:00')
+SELECT CAST('99' AS INT);
+SELECT CAST('00:15:00' AS INT);
+SELECT CAST('00:15:00' AS INTERVAL);
+SELECT CAST(900 AS DURATION);
+SELECT INTERVAL('00:15:00');
+-- DateTime Arithmetic
+SELECT '2024-01-18T10:00:00' + 9000;
+SELECT 900000 + '2024-01-18T10:00:00';
+SELECT '2024-01-18T10:00:00' - 900
+SELECT '2024-01-18T10:00:00' - '2024-01-18T00:00:00';
+SELECT '2024-01-18T10:00:00' < '2024-01-01T00:00:00';
+SELECT '2024-01-18T10:00:00' > '2024-01-01T00:00:00';
