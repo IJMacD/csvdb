@@ -17,7 +17,7 @@
                 // "test.sql"
             ],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/test",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",

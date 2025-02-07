@@ -631,7 +631,7 @@ static void getSingleJulianRange (
         || field_left->index == COL_WEEKDAY_STRING
     ) {
         struct DateTime dt = {0};
-        parseDateTime(field_right->text, &dt);
+        parseDate(field_right->text, &dt);
         *julian_start = datetimeGetJulian(&dt);
         *julian_end = *julian_start + 1;
         return;
@@ -684,11 +684,11 @@ static void getSingleJulianRange (
     if (field_left->index == COL_WEEK_STRING) {
         // Does not support years outside range 0000 - 9999
         if (strlen(field_right->text) == 8) {
-            char buffer[12] = {0};
+            char buffer[MAX_FIELD_LENGTH + 2] = {0};
             sprintf(buffer, "%s-1", field_right->text);
 
             struct DateTime dt;
-            parseDateTime(buffer, &dt);
+            parseDate(buffer, &dt);
 
             *julian_start = datetimeGetJulian(&dt);
             *julian_end = *julian_start + 7;
@@ -782,7 +782,8 @@ int calendar_indexSearch(
         if (db->data[0] == COL_DATE) {
             struct DateTime dt;
 
-            if (parseDateTime(value, &dt)) {
+            if (parseDate(value, &dt))
+            {
                 *output_flag = RESULT_FOUND;
                 return datetimeGetJulian(&dt);
             }

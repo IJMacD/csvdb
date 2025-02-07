@@ -65,7 +65,7 @@ for sql in "${lines[@]}"; do
 
                     printf "\n$GREY -- Results: --$NC\n"
                     printf "Output does not match snapshot\n\n"
-                    diff -u --color=always "$OUTFILE" "$SNAPSHOT_DIR/$tests" | tail -n +4
+                    diff -u --color=always "$SNAPSHOT_DIR/$tests" "$OUTFILE" | tail -n +4
                 fi
             else 
                 cp "$OUTFILE" "$SNAPSHOT_DIR/$tests"

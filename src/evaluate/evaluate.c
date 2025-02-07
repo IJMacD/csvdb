@@ -355,14 +355,14 @@ int evaluateConstantField(char *output, struct Field *field)
     if (strcmp(field->text, "CURRENT_DATE") == 0)
     {
         struct DateTime dt;
-        parseDateTime("CURRENT_DATE", &dt);
+        parseDate("CURRENT_DATE", &dt);
         return sprintDate(output, &dt);
     }
 
     if (strcmp(field->text, "CURRENT_TIME") == 0)
     {
         struct DateTime dt;
-        parseDateTime("CURRENT_TIME", &dt);
+        parseTime("CURRENT_TIME", &dt);
         return sprintf(output, "%02d:%02d:%02d", dt.hour, dt.minute, dt.second);
     }
 

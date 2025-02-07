@@ -118,7 +118,8 @@ int evaluateExpression (enum Function op, const char *left, const char *right) {
     }
 
     struct DateTime dt_left, dt_right;
-    if (parseDateTime(left, &dt_left) && parseDateTime(right, &dt_right)) {
+    if (parseDate(left, &dt_left) && parseDate(right, &dt_right))
+    {
         // Date comparison
         int julian_left = datetimeGetJulian(&dt_left);
         int julian_right = datetimeGetJulian(&dt_right);

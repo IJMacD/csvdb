@@ -38,7 +38,7 @@ int evaluateFunction(
     if (function == FUNC_DATE_TODAY)
     {
         struct DateTime dt;
-        parseDateTime("CURRENT_DATE", &dt);
+        parseDate("CURRENT_DATE", &dt);
         return sprintf(output, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
     }
 
@@ -46,8 +46,8 @@ int evaluateFunction(
     if (function == FUNC_DATE_NOW)
     {
         struct DateTime dt = {0};
-        parseDateTime("CURRENT_DATE", &dt);
-        parseDateTime("CURRENT_TIME", &dt);
+        parseDate("CURRENT_DATE", &dt);
+        parseTime("CURRENT_TIME", &dt);
         return sprintf(
             output,
             "%04d-%02d-%02dT%02d:%02d:%02d",
@@ -59,7 +59,7 @@ int evaluateFunction(
     if (function == FUNC_DATE_CLOCK)
     {
         struct DateTime dt = {0};
-        parseDateTime("CURRENT_TIME", &dt);
+        parseTime("CURRENT_TIME", &dt);
         return sprintf(
             output,
             "%02d:%02d:%02d",
@@ -225,21 +225,24 @@ int evaluateFunction(
         // We can add:
         // * int + int
         // * date + int (days)
+        // * int + date (days)
         // * time + int (seconds)
+        // * int + time (seconds)
+        // * time + time
 
         long val = 0;
         struct DateTime dt = {0};
-        int is_date = 0;
-        int is_time = 0;
+
+        enum OperandType result_type = OPERAND_INT;
 
         for (int i = 0; i < value_count; i++)
         {
-            if (parseDateTime(values[i], &dt))
+            if (parseDate(values[i], &dt))
             {
-                if (i == 0)
+                if (result_type == OPERAND_INT)
                 {
-                    val = datetimeGetJulian(&dt);
-                    is_date = 1;
+                    result_type = OPERAND_DATE;
+                    val += datetimeGetJulian(&dt);
                 }
                 else
                 {
@@ -250,10 +253,10 @@ int evaluateFunction(
             }
             else if (parseTime(values[i], &dt))
             {
-                if (i == 0)
+                if (result_type == OPERAND_INT || result_type == OPERAND_TIME)
                 {
-                    val = timeInSeconds(&dt);
-                    is_time = 1;
+                    result_type = OPERAND_TIME;
+                    val += timeInSeconds(&dt);
                 }
                 else
                 {
@@ -268,19 +271,17 @@ int evaluateFunction(
             }
         }
 
-        if (is_date)
+        switch (result_type)
         {
+        case OPERAND_DATE:
             datetimeFromJulian(&dt, val);
             return sprintDate(output, &dt);
-        }
-
-        if (is_time)
-        {
+        case OPERAND_TIME:
             timeFromSeconds(&dt, val);
             return sprintTime(output, &dt);
+        default:
+            return sprintf(output, "%ld", val);
         }
-
-        return sprintf(output, "%ld", val);
     }
     else if (function == FUNC_SUB)
     {
@@ -293,32 +294,22 @@ int evaluateFunction(
 
         long val = 0;
         struct DateTime dt = {0};
-        int is_date = 0;
-        int is_time = 0;
 
-        if (parseDateTime(values[0], &dt))
-        {
-            val = datetimeGetJulian(&dt);
-            is_date = 1;
-        }
-        else if (parseTime(values[0], &dt))
-        {
-            val = timeInSeconds(&dt);
-            is_time = 1;
-        }
-        else
-        {
-            val = atol(values[0]);
-        }
+        enum OperandType result_type = OPERAND_UNKNOWN;
 
-        for (int i = 1; i < value_count; i++)
+        for (int i = 0; i < value_count; i++)
         {
-            if (parseDateTime(values[i], &dt))
+            if (parseDate(values[i], &dt))
             {
-                if (i == 1)
+                if (result_type == OPERAND_UNKNOWN)
+                {
+                    val = datetimeGetJulian(&dt);
+                    result_type = OPERAND_DATE;
+                }
+                else if (result_type == OPERAND_DATE)
                 {
                     val -= datetimeGetJulian(&dt);
-                    is_date = 0;
+                    result_type = OPERAND_INT;
                 }
                 else
                 {
@@ -329,10 +320,15 @@ int evaluateFunction(
             }
             else if (parseTime(values[i], &dt))
             {
-                if (i == 1)
+                if (result_type == OPERAND_UNKNOWN)
+                {
+                    val = timeInSeconds(&dt);
+                    result_type = OPERAND_TIME;
+                }
+                else if (result_type == OPERAND_TIME)
                 {
                     val -= timeInSeconds(&dt);
-                    is_time = 0;
+                    result_type = OPERAND_INT;
                 }
                 else
                 {
@@ -343,23 +339,29 @@ int evaluateFunction(
             }
             else
             {
-                val -= atol(values[i]);
+                if (result_type == OPERAND_UNKNOWN)
+                {
+                    val = atol(values[i]);
+                    result_type = OPERAND_INT;
+                }
+                else
+                {
+                    val -= atol(values[i]);
+                }
             }
         }
 
-        if (is_date)
+        switch (result_type)
         {
+        case OPERAND_DATE:
             datetimeFromJulian(&dt, val);
             return sprintDate(output, &dt);
-        }
-
-        if (is_time)
-        {
+        case OPERAND_TIME:
             timeFromSeconds(&dt, val);
             return sprintTime(output, &dt);
+        default:
+            return sprintf(output, "%ld", val);
         }
-
-        return sprintf(output, "%ld", val);
     }
     else if (function == FUNC_MUL)
     {
@@ -566,7 +568,7 @@ int evaluateFunction(
     {
         struct DateTime dt;
 
-        if (!parseDateTime(values[0], &dt))
+        if (!parseDate(values[0], &dt))
         {
             return 0;
         }
@@ -665,7 +667,7 @@ int evaluateFunction(
         struct DateTime dt1;
         struct DateTime dt2;
 
-        if (!parseDateTime(values[0], &dt1))
+        if (!parseDate(values[0], &dt1))
         {
             return 0;
         }
@@ -684,7 +686,7 @@ int evaluateFunction(
         struct DateTime dt1;
         struct DateTime dt2;
 
-        if (!parseDateTime(values[0], &dt1))
+        if (!parseDate(values[0], &dt1))
         {
             return 0;
         }
@@ -703,12 +705,12 @@ int evaluateFunction(
         struct DateTime dt1;
         struct DateTime dt2;
 
-        if (!parseDateTime(values[0], &dt1))
+        if (!parseDate(values[0], &dt1))
         {
             return 0;
         }
 
-        if (!parseDateTime(values[1], &dt2))
+        if (!parseDate(values[1], &dt2))
         {
             return 0;
         }

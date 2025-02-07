@@ -476,3 +476,12 @@ struct VFS {
         const char **end_ptr
     );
 };
+
+enum OperandType
+{
+    OPERAND_UNKNOWN = 0,
+    OPERAND_INT = 1,
+    OPERAND_DATE_TIME = 2,
+    OPERAND_DATE = 3,
+    OPERAND_TIME = 4,
+};
