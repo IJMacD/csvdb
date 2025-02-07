@@ -289,12 +289,12 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                     len = end - col_start_index;
                 }
 
-                if (len > 0 && len < MAX_FIELD_LENGTH)
+                if (len > 0)
                 {
                     whitespaceCollapse(
                         node->alias,
                         query + col_start_index,
-                        len);
+                        len < MAX_FIELD_LENGTH ? len : MAX_FIELD_LENGTH - 1);
                 }
 
                 q->flags |= result;

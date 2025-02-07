@@ -12,6 +12,7 @@ CSVDB="$SCRIPT_DIR/../release/csvdb"
 OUTFILE=/tmp/test.out
 STATFILE="$SCRIPT_DIR/test-cases-stats.csv"
 SNAPSHOT_DIR="$SCRIPT_DIR/__snapshots__"
+ENABLE_SNAPSHOT="1"
 
 mkdir -p "$SNAPSHOT_DIR"
 
@@ -56,7 +57,7 @@ for sql in "${lines[@]}"; do
     result=$?
     end=`$D`
 
-    if [[ $result == 0 ]]; then
+    if [[ $result == 0 && ! -z $ENABLE_SNAPSHOT ]]; then
         if [[ ! -f "$SNAPSHOT_DIR/$tests.no_snapshot" ]]; then
             if [[ -f "$SNAPSHOT_DIR/$tests" ]]; then
                 if ! cmp -s "$SNAPSHOT_DIR/$tests" "$OUTFILE"; then
@@ -64,7 +65,7 @@ for sql in "${lines[@]}"; do
 
                     printf "\n$GREY -- Results: --$NC\n"
                     printf "Output does not match snapshot\n\n"
-                    diff -u --color=always "$OUTFILE" "$SNAPSHOT_DIR/$tests" | tail -n +5
+                    diff -u --color=always "$OUTFILE" "$SNAPSHOT_DIR/$tests" | tail -n +4
                 fi
             else 
                 cp "$OUTFILE" "$SNAPSHOT_DIR/$tests"
