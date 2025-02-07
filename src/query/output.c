@@ -699,7 +699,7 @@ static void printHeaderName(
         }
 
         // Should really be codepoint/glyph length
-        if (strlen(s) > 18)
+        if (strlen(s) > 19)
         {
             strcpy(s + 18, "…");
         }
@@ -975,11 +975,13 @@ static void printColumnValue(
                 strcpy(escaped_value + 18, "…");
             }
             else
+            {
                 while (codePoints++ < 19)
                 {
                     *c++ = ' ';
                 }
-            *c = '\0';
+                *c = '\0';
+            }
             fprintf(f, "%s", escaped_value);
             if (mallocd)
             {

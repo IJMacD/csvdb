@@ -1,3 +1,4 @@
+#include "time.h"
 #include "../structs.h"
 
 int parseDateTime(const char *input, struct DateTime *output);
@@ -5,6 +6,8 @@ int parseDateTime(const char *input, struct DateTime *output);
 int parseDate(const char *input, struct DateTime *output);
 
 int parseTime(const char *input, struct DateTime *output);
+
+int sprintDateTime(char *output, struct DateTime *dt);
 
 int sprintDate(char *output, struct DateTime *dt);
 
@@ -42,6 +45,10 @@ int datetimeGetWeekDay(struct DateTime *dt);
 int datetimeGetJulian(struct DateTime *dt);
 
 void datetimeFromJulian(struct DateTime *dt, int julian);
+
+long datetimeGetUnix(struct DateTime *dt);
+
+void datetimeFromUnix(struct DateTime *dt, time_t time);
 
 int timeInSeconds(struct DateTime *dt);
 

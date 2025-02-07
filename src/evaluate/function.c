@@ -224,6 +224,8 @@ int evaluateFunction(
     {
         // We can add:
         // * int + int
+        // * dateTime + int (seconds)
+        // * int + dateTime (seconds)
         // * date + int (days)
         // * int + date (days)
         // * time + int (seconds)
@@ -237,7 +239,21 @@ int evaluateFunction(
 
         for (int i = 0; i < value_count; i++)
         {
-            if (parseDate(values[i], &dt))
+            if (parseDateTime(values[i], &dt))
+            {
+                if (result_type == OPERAND_INT)
+                {
+                    result_type = OPERAND_DATE_TIME;
+                    val += datetimeGetUnix(&dt);
+                }
+                else
+                {
+                    fprintf(stderr, "Unexpected DateTime: %s\n", values[i]);
+                    output[0] = 0;
+                    return 0;
+                }
+            }
+            else if (parseDate(values[i], &dt))
             {
                 if (result_type == OPERAND_INT)
                 {
@@ -273,6 +289,9 @@ int evaluateFunction(
 
         switch (result_type)
         {
+        case OPERAND_DATE_TIME:
+            datetimeFromUnix(&dt, val);
+            return sprintDateTime(output, &dt);
         case OPERAND_DATE:
             datetimeFromJulian(&dt, val);
             return sprintDate(output, &dt);
@@ -287,6 +306,8 @@ int evaluateFunction(
     {
         // We can subtract:
         // * int - int
+        // * dateTime - int (seconds)
+        // * dateTime - dateTime
         // * date - int     (days)
         // * date - date    (days)
         // * time - int     (seconds)
@@ -299,7 +320,27 @@ int evaluateFunction(
 
         for (int i = 0; i < value_count; i++)
         {
-            if (parseDate(values[i], &dt))
+
+            if (parseDateTime(values[i], &dt))
+            {
+                if (result_type == OPERAND_UNKNOWN)
+                {
+                    val = datetimeGetUnix(&dt);
+                    result_type = OPERAND_DATE_TIME;
+                }
+                else if (result_type == OPERAND_DATE_TIME)
+                {
+                    val -= datetimeGetUnix(&dt);
+                    result_type = OPERAND_INT;
+                }
+                else
+                {
+                    fprintf(stderr, "Unexpected DateTime: %s\n", values[i]);
+                    output[0] = 0;
+                    return 0;
+                }
+            }
+            else if (parseDate(values[i], &dt))
             {
                 if (result_type == OPERAND_UNKNOWN)
                 {
@@ -353,6 +394,9 @@ int evaluateFunction(
 
         switch (result_type)
         {
+        case OPERAND_DATE_TIME:
+            datetimeFromUnix(&dt, val);
+            return sprintDateTime(output, &dt);
         case OPERAND_DATE:
             datetimeFromJulian(&dt, val);
             return sprintDate(output, &dt);

@@ -118,6 +118,29 @@ int evaluateExpression (enum Function op, const char *left, const char *right) {
     }
 
     struct DateTime dt_left, dt_right;
+
+    if (parseDateTime(left, &dt_left) && parseDateTime(right, &dt_right))
+    {
+        // Date comparison
+        int unix_left = datetimeGetUnix(&dt_left);
+        int unix_right = datetimeGetUnix(&dt_right);
+
+        if (op == OPERATOR_EQ)
+            return unix_left == unix_right;
+        if (op == OPERATOR_NE)
+            return unix_left != unix_right;
+        if (op == OPERATOR_LT)
+            return unix_left < unix_right;
+        if (op == OPERATOR_LE)
+            return unix_left <= unix_right;
+        if (op == OPERATOR_GT)
+            return unix_left > unix_right;
+        if (op == OPERATOR_GE)
+            return unix_left >= unix_right;
+
+        return 0;
+    }
+
     if (parseDate(left, &dt_left) && parseDate(right, &dt_right))
     {
         // Date comparison

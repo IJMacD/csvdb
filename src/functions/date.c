@@ -372,9 +372,18 @@ int parseTime(const char *input, struct DateTime *output)
 }
 
 /**
+ * `output` must be at least 19 chars long
+ */
+int sprintDateTime(char *output, struct DateTime *dt)
+{
+    return sprintf(output, "%04d-%02d-%02dT%02d:%02d:%02d", dt->year, dt->month, dt->day, dt->hour, dt->minute, dt->second);
+}
+
+/**
  * `output` must be at least 11 chars long
  */
-int sprintDate (char *output, struct DateTime *dt) {
+int sprintDate(char *output, struct DateTime *dt)
+{
     return sprintf(output, "%04d-%02d-%02d", dt->year, dt->month, dt->day);
 }
 
@@ -595,4 +604,29 @@ void timeFromSeconds(struct DateTime *dt, int seconds)
     dt->hour = seconds / 3600;
     dt->minute = (seconds / 60) % 60;
     dt->second = seconds % 60;
+}
+
+long datetimeGetUnix(struct DateTime *dt)
+{
+    struct tm tp = {0};
+    tp.tm_year = dt->year - 1900;
+    tp.tm_mon = dt->month - 1;
+    tp.tm_mday = dt->day;
+    tp.tm_hour = dt->hour;
+    tp.tm_min = dt->minute;
+    tp.tm_sec = dt->second;
+
+    return mktime(&tp);
+}
+
+void datetimeFromUnix(struct DateTime *dt, time_t time)
+{
+    struct tm *tp = localtime(&time);
+
+    dt->year = tp->tm_year + 1900;
+    dt->month = tp->tm_mon + 1;
+    dt->day = tp->tm_mday;
+    dt->hour = tp->tm_hour;
+    dt->minute = tp->tm_min;
+    dt->second = tp->tm_sec;
 }
