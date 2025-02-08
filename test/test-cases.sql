@@ -21,7 +21,7 @@ SELECT name, birth_date, score FROM test WHERE birth_date > '2050-01-01' AND sco
 -- Test explicit indexes
 FROM test WHERE INDEX('test__name.index') = 'Claude MILLS';
 FROM test WHERE UNIQUE('test__birth_date.unique') >= '0990-03-26' LIMIT 2;
-SELECT name, birth_date FROM test WHERE PK(id) = 769;
+SELECT name, birth_date FROM test WHERE PK(id) = 1000;
 SELECT id, name, birth_date FROM test WHERE PK(id) < 51;
 SELECT id, name, birth_date FROM test WHERE 51 >= PK(id);
 -- Test EXTRACT
