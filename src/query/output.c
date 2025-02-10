@@ -300,60 +300,6 @@ void printHeaderLine(
     {
         printf("\xef\xbb\xbf"); // BOM
     }
-    else if (format == OUTPUT_FORMAT_BOX)
-    {
-        for (int i = 0; i < column_count; i++)
-        {
-            struct Node *node = &columns[i];
-
-            if (node->field.index == FIELD_STAR)
-            {
-                if (node->field.table_id >= 0)
-                {
-                    struct DB *db = tables[node->field.table_id].db;
-                    for (int j = 0; j < db->field_count; j++)
-                    {
-                        if (i == 0 && j == 0)
-                        {
-                            fprintf(f, "┌────────────────────");
-                        }
-                        else
-                        {
-                            fprintf(f, "┬────────────────────");
-                        }
-                    }
-                }
-                else
-                {
-                    for (int m = 0; m < table_count; m++)
-                    {
-                        struct DB *db = tables[m].db;
-                        for (int j = 0; j < db->field_count; j++)
-                        {
-                            if (i == 0 && j == 0)
-                            {
-                                fprintf(f, "┌────────────────────");
-                            }
-                            else
-                            {
-                                fprintf(f, "┬────────────────────");
-                            }
-                        }
-                    }
-                }
-            }
-            else if (i == 0)
-            {
-                fprintf(f, "┌────────────────────");
-            }
-            else
-            {
-                fprintf(f, "┬────────────────────");
-            }
-        }
-
-        fprintf(f, "┐\n");
-    }
 
     /********************
      * Header Name
@@ -493,10 +439,10 @@ void printHeaderLine(
 
 void printPreamble(
     FILE *f,
-    __attribute__((unused)) struct Table *table,
-    __attribute__((unused)) int table_count,
-    __attribute__((unused)) struct Node columns[],
-    __attribute__((unused)) int column_count,
+    struct Table *tables,
+    int table_count,
+    struct Node columns[],
+    int column_count,
     enum OutputOption flags)
 {
     enum OutputOption format = flags & OUTPUT_MASK_FORMAT;
@@ -523,13 +469,67 @@ void printPreamble(
     {
         fprintf(f, "VALUES\n");
     }
+    else if (format == OUTPUT_FORMAT_BOX)
+    {
+        for (int i = 0; i < column_count; i++)
+        {
+            struct Node *node = &columns[i];
+
+            if (node->field.index == FIELD_STAR)
+            {
+                if (node->field.table_id >= 0)
+                {
+                    struct DB *db = tables[node->field.table_id].db;
+                    for (int j = 0; j < db->field_count; j++)
+                    {
+                        if (i == 0 && j == 0)
+                        {
+                            fprintf(f, "┌────────────────────");
+                        }
+                        else
+                        {
+                            fprintf(f, "┬────────────────────");
+                        }
+                    }
+                }
+                else
+                {
+                    for (int m = 0; m < table_count; m++)
+                    {
+                        struct DB *db = tables[m].db;
+                        for (int j = 0; j < db->field_count; j++)
+                        {
+                            if (i == 0 && j == 0)
+                            {
+                                fprintf(f, "┌────────────────────");
+                            }
+                            else
+                            {
+                                fprintf(f, "┬────────────────────");
+                            }
+                        }
+                    }
+                }
+            }
+            else if (i == 0)
+            {
+                fprintf(f, "┌────────────────────");
+            }
+            else
+            {
+                fprintf(f, "┬────────────────────");
+            }
+        }
+
+        fprintf(f, "┐\n");
+    }
 }
 
 void printPostamble(
     FILE *f,
     struct Table *tables,
     int table_count,
-    __attribute__((unused)) struct Node columns[],
+    struct Node columns[],
     int column_count,
     __attribute__((unused)) int result_count,
     enum OutputOption flags)
