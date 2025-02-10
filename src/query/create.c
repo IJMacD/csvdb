@@ -22,7 +22,7 @@ static int create_index_query(const char *query, const char **end_ptr);
 static int create_index(
     const char *index_name,
     const char *table_name,
-    const char (*index_field)[32],
+    const char (*index_field)[MAX_FIELD_LENGTH],
     int field_count,
     int unique_flag);
 
@@ -196,7 +196,7 @@ int create_index_query(const char *query, const char **end_ptr)
 static int create_index(
     const char *index_name,
     const char *table_name,
-    const char (*index_field)[32],
+    const char (*index_field)[MAX_FIELD_LENGTH],
     int field_count,
     int unique_flag)
 {

@@ -274,21 +274,6 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                     len = end - col_start_index;
                 }
 
-                // If it's a single-quoted string
-                if (query[col_start_index] == '\'')
-                {
-                    int end;
-                    for (
-                        end = col_start_index + len - 1;
-                        end > col_start_index && query[end] != '\'';
-                        end--)
-                    {
-                    }
-
-                    col_start_index++;
-                    len = end - col_start_index;
-                }
-
                 if (len > 0)
                 {
                     whitespaceCollapse(

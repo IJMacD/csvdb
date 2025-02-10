@@ -23,8 +23,18 @@ readarray -t lines < $TEST_FILE
 cd $SCRIPT_DIR
 
 stats=""
-if [[ $1 == "stats" ]]; then
+if [[ $* == "--stats" ]]; then
     stats="--stats"
+fi
+
+ci=""
+if [[ $* == "--ci" ]]; then
+    ci=1
+fi
+
+update=""
+if [[ $* == "--update-snapshots" ]]; then
+    update=1
 fi
 
 tests=0
@@ -63,7 +73,10 @@ for sql in "${lines[@]}"; do
 
     if [[ $result == 0 && ! -z $ENABLE_SNAPSHOT ]]; then
         if [[ ! -f "$SNAPSHOT_DIR/$tests.no_snapshot" ]]; then
-            if [[ -f "$SNAPSHOT_DIR/$tests" ]]; then
+            if [[ ! -z $update ]]; then
+                cp "$OUTFILE" "$SNAPSHOT_DIR/$tests"
+                printf "\n${ORANGE}(Wrote new snapshot)${NC}\n"
+            elif [[ -f "$SNAPSHOT_DIR/$tests" ]]; then
                 if ! cmp -s "$SNAPSHOT_DIR/$tests" "$OUTFILE"; then
                     result=1
 
@@ -71,9 +84,12 @@ for sql in "${lines[@]}"; do
                     printf "Output does not match snapshot\n\n"
                     diff -u --color=always "$SNAPSHOT_DIR/$tests" "$OUTFILE" | tail -n +4
                 fi
-            else 
+            elif [[ -z $ci ]]; then
                 cp "$OUTFILE" "$SNAPSHOT_DIR/$tests"
                 printf "\n${ORANGE}(Wrote new snapshot)${NC}\n"
+            else 
+                printf "${RED}Test %d does not have a snapshot${NC}\n" $tests
+                exit 1
             fi
         fi
     fi

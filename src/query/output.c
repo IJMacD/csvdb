@@ -559,6 +559,13 @@ void printPostamble(
     {
         fprintf(f, "</results>\n");
     }
+    else if (format == OUTPUT_FORMAT_TABLE)
+    {
+        // Print a new line between query outputs so output can be redirected
+        // straight to Markdown file.
+        // For example: `csvdb -F table ... > results.md`
+        fprintf(f, "\n");
+    }
     else if (format == OUTPUT_FORMAT_BOX)
     {
         for (int i = 0; i < column_count; i++)
@@ -682,7 +689,22 @@ static void printHeaderName(
         }
         else
         {
-            fprintf(f, "| %-19s", name);
+            // Pipe needs to be escaped for table format
+            if (strchr(name, '|'))
+            {
+                size_t value_length = strlen(name);
+
+                char *clone = malloc(value_length * 2);
+                replace(clone, name, '|', "\\|");
+
+                fprintf(f, "| %-19s", clone);
+
+                free(clone);
+            }
+            else
+            {
+                fprintf(f, "| %-19s", name);
+            }
         }
     }
     else if (format == OUTPUT_FORMAT_BOX)
@@ -955,16 +977,40 @@ static void printColumnValue(
     else if (format == OUTPUT_FORMAT_TABLE || format == OUTPUT_FORMAT_BOX)
     {
         // If there are any new lines in the value, they should be replaced.
-        if (strchr(value, '\r') || strchr(value, '\n'))
+        if (strchr(escaped_value, '\r') || strchr(escaped_value, '\n'))
         {
-            size_t value_length = strlen(value);
-            escaped_value = malloc(value_length * 3);
+            size_t value_length = strlen(escaped_value);
+
             char *clone = malloc(value_length * 3);
+            replace(clone, escaped_value, '\r', "␍");
+
+            escaped_value = malloc(value_length * 3);
             mallocd = 1;
-            replace(clone, value, '\r', "␍");
             replace(escaped_value, clone, '\n', "␊");
+
+            free(clone);
         }
 
+        // Pipe also needs to be escaped for table format
+        if (format == OUTPUT_FORMAT_TABLE && strchr(escaped_value, '|'))
+        {
+            size_t value_length = strlen(escaped_value);
+
+            char *clone = malloc(value_length * 2);
+            replace(clone, escaped_value, '|', "\\|");
+
+            if (mallocd)
+            {
+                free(escaped_value);
+            }
+
+            escaped_value = clone;
+        }
+
+        // Count code points (as an approximation for glyphs) and pad the string
+        // to get better box alignment.
+        // (Still doesn't work for double width glyphs such as CJK charcters or
+        // emoji)
         if (format == OUTPUT_FORMAT_BOX && !value_is_numeric)
         {
             int len = strlen(escaped_value);
@@ -1004,6 +1050,7 @@ static void printColumnValue(
             mallocd = 1;
             replace(clone, value, '\r', "");
             replace(escaped_value, clone, '\n', "<BR/>");
+            free(clone);
         }
     }
 
