@@ -500,10 +500,23 @@ int parseNode(
     {
         (*index)++;
 
+        // Check to see if it looks like a subquery
+        if (strncmp(query + *index, "SELECT", 6) == 0 ||
+            strncmp(query + *index, "FROM", 4) == 0)
+        {
+            fprintf(stderr, "Subqueries in SELECT clause are not supported.\n");
+            return -1;
+        }
+
         node->function = FUNC_PARENS;
         struct Node *root = addChildNode(node);
 
         flags |= parseNode(query, index, root);
+
+        if (flags < 0)
+        {
+            return flags;
+        }
 
         if (query[*index] != ')')
         {
