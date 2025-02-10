@@ -404,6 +404,11 @@ static int create_table_query(const char *query, const char **end_ptr)
 
     closeDB(&db);
 
+    if (end_ptr != NULL)
+    {
+        *end_ptr = query + index;
+    }
+
     return result;
 }
 

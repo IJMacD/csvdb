@@ -35,8 +35,8 @@ int runQueries(
 
     while (*end_ptr != '\0')
     {
-        // Skip leading whitespace
-        while (*end_ptr != '\0' && isspace(*end_ptr))
+        // Skip leading whitespace and semi-colons
+        while (*end_ptr != '\0' && (isspace(*end_ptr) || *end_ptr == ';'))
         {
             end_ptr++;
         }
