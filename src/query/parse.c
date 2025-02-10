@@ -249,7 +249,7 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 
                 int col_start_index = index;
 
-                int result = parseNodeList(query, &index, node);
+                int result = parseNodeList(query, &index, node, q);
 
                 if (result < 0)
                 {
@@ -314,7 +314,7 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 
                     node->filter = calloc(1, sizeof *node->filter);
 
-                    parseComplexNode(query, &index, node->filter);
+                    parseComplexNode(query, &index, node->filter, q);
 
                     if (query[index] != ')')
                     {
@@ -522,7 +522,7 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 
                     struct Node *p = &table->join;
 
-                    parseNodeList(query, &index, p);
+                    parseNodeList(query, &index, p, q);
 
                     skipWhitespace(query, &index);
                 }
@@ -539,7 +539,7 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                     struct Node *left = &p->children[0];
                     struct Node *right = &p->children[1];
 
-                    int result = parseNode(query, &index, left);
+                    int result = parseNode(query, &index, left, q);
                     if (result < 0)
                     {
                         fprintf(stderr, "Unable to parse USING node\n");
@@ -613,7 +613,7 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
             {
                 struct Node *p = allocatePredicateNode(q);
 
-                int result = parseComplexNode(query, &index, p);
+                int result = parseComplexNode(query, &index, p, q);
                 if (result < 0)
                 {
                     return result;
@@ -725,7 +725,7 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 
                 skipWhitespace(query, &index);
 
-                int result = parseNode(query, &index, &q->order_nodes[i]);
+                int result = parseNode(query, &index, &q->order_nodes[i], q);
                 if (result < 0)
                 {
                     return -1;
@@ -788,7 +788,7 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 
                 skipWhitespace(query, &index);
 
-                int result = parseNode(query, &index, &q->group_nodes[i]);
+                int result = parseNode(query, &index, &q->group_nodes[i], q);
                 if (result < 0)
                 {
                     return -1;

@@ -94,6 +94,7 @@ enum Function {
     FUNC_MOD =                      0x15,
     FUNC_POW =                      0x16,
 
+    FUNC_SUBQUERY =                 0x1E,
     FUNC_PARENS =                   0x1F,
 
     // Family 001x (0x20) String

@@ -3,6 +3,7 @@
 #include "../structs.h"
 #include "token.h"
 #include "node.h"
+#include "select.h"
 #include "../functions/util.h"
 
 #include "parseNode.h"
@@ -14,7 +15,8 @@ static struct Node *constructExpressionTree(
 static int parseFunctionParams(
     const char *query,
     size_t *index,
-    struct Node *node);
+    struct Node *node,
+    struct Query *q);
 
 static int parseOperator(const char *input);
 
@@ -37,7 +39,8 @@ static enum Function parseSimpleOperators(const char *query, size_t *index);
 int parseSimpleNode(
     const char *query,
     size_t *index,
-    struct Node *node)
+    struct Node *node,
+    struct Query *q)
 {
     char value[MAX_FIELD_LENGTH];
     int flags = 0;
@@ -201,7 +204,7 @@ int parseSimpleNode(
 
             struct Node *child = addChildNode(node);
 
-            parseNode(query, index, child);
+            parseNode(query, index, child, q);
 
             skipWhitespace(query, index);
 
@@ -225,7 +228,7 @@ int parseSimpleNode(
         {
             struct Node *child = addChildNode(node);
 
-            parseNode(query, index, child);
+            parseNode(query, index, child, q);
 
             skipWhitespace(query, index);
 
@@ -449,7 +452,7 @@ int parseSimpleNode(
             return -1;
         }
 
-        parseFunctionParams(query, index, node);
+        parseFunctionParams(query, index, node, q);
 
         return flags;
     }
@@ -490,7 +493,8 @@ int parseSimpleNode(
 int parseNode(
     const char *query,
     size_t *index,
-    struct Node *node)
+    struct Node *node,
+    struct Query *q)
 {
     skipWhitespace(query, index);
 
@@ -504,32 +508,55 @@ int parseNode(
         if (strncmp(query + *index, "SELECT", 6) == 0 ||
             strncmp(query + *index, "FROM", 4) == 0)
         {
-            fprintf(stderr, "Subqueries in SELECT clause are not supported.\n");
-            return -1;
+            int len = find_matching_parenthesis(query + *index - 1);
+
+            if (len >= MAX_TABLE_LENGTH)
+            {
+                fprintf(
+                    stderr,
+                    "Subqueries longer than %d are not supported. Subquery was "
+                    "%d bytes.\n",
+                    MAX_TABLE_LENGTH,
+                    len);
+                return -1;
+            }
+
+            struct Table *table = allocateTable(q);
+
+            strncpy(table->name, query + *index, len - 2);
+            table->db = DB_SUBQUERY;
+
+            node->field.index = 0;
+            node->field.table_id = q->table_count - 1;
+            node->function = FUNC_UNITY;
+
+            (*index) += len - 1;
         }
-
-        node->function = FUNC_PARENS;
-        struct Node *root = addChildNode(node);
-
-        flags |= parseNode(query, index, root);
-
-        if (flags < 0)
+        else
         {
-            return flags;
-        }
+            node->function = FUNC_PARENS;
+            struct Node *root = addChildNode(node);
 
-        if (query[*index] != ')')
-        {
-            fprintf(stderr, "Expecting ')' after expression\n");
-            return -1;
-        }
+            flags |= parseNode(query, index, root, q);
 
-        (*index)++;
+            if (flags < 0)
+            {
+                return flags;
+            }
+
+            if (query[*index] != ')')
+            {
+                fprintf(stderr, "Expecting ')' after expression\n");
+                return -1;
+            }
+
+            (*index)++;
+        }
     }
     else
     {
         // Parse first simple node
-        flags |= parseSimpleNode(query, index, node);
+        flags |= parseSimpleNode(query, index, node, q);
     }
 
     while (query[*index] != '\0' && query[*index] != ';')
@@ -551,7 +578,7 @@ int parseNode(
             next_child->function = FUNC_PARENS;
             next_child = addChildNode(next_child);
 
-            flags |= parseNode(query, index, next_child);
+            flags |= parseNode(query, index, next_child, q);
 
             if (query[*index] != ')')
             {
@@ -563,7 +590,7 @@ int parseNode(
         }
         else
         {
-            flags |= parseSimpleNode(query, index, next_child);
+            flags |= parseSimpleNode(query, index, next_child, q);
         }
     }
 
@@ -581,7 +608,8 @@ int parseNode(
 static int parseFunctionParams(
     const char *query,
     size_t *index,
-    struct Node *node)
+    struct Node *node,
+    struct Query *q)
 {
     while (query[*index] != '\0' && query[*index] != ')')
     {
@@ -597,7 +625,7 @@ static int parseFunctionParams(
         }
         else
         {
-            parseNode(query, index, child_node);
+            parseNode(query, index, child_node, q);
         }
 
         skipWhitespace(query, index);
@@ -838,7 +866,8 @@ static int parseOperator(const char *input)
 int parseComplexNode(
     const char *query,
     size_t *index,
-    struct Node *node)
+    struct Node *node,
+    struct Query *q)
 {
     if (node->child_count != 0)
     {
@@ -852,7 +881,7 @@ int parseComplexNode(
      * Parse Left Side
      *******************/
 
-    int flags = parseNode(query, index, node);
+    int flags = parseNode(query, index, node, q);
     if (flags < 0)
     {
         return flags;
@@ -917,7 +946,7 @@ int parseComplexNode(
         (*index)++;
 
         // Parse first child
-        int result = parseNode(query, index, right);
+        int result = parseNode(query, index, right, q);
         if (result != 0)
         {
             return result;
@@ -962,7 +991,7 @@ int parseComplexNode(
 
                 copyNodeTree(next_left, &clone->children[0]);
 
-                int result = parseNode(query, index, next_right);
+                int result = parseNode(query, index, next_right, q);
                 if (result != 0)
                 {
                     return result;
@@ -994,7 +1023,7 @@ int parseComplexNode(
      * Parse Right Side
      *******************/
 
-    int result = parseNode(query, index, right);
+    int result = parseNode(query, index, right, q);
     if (result != 0)
     {
         return result;
@@ -1055,7 +1084,7 @@ int parseComplexNode(
 
         copyNodeTree(left2, left);
 
-        int result = parseNode(query, index, right2);
+        int result = parseNode(query, index, right2, q);
         if (result != 0)
         {
             return result;
@@ -1071,9 +1100,9 @@ int parseComplexNode(
  * Parses:
  *      <complex node> AND <complex node> AND ...
  */
-int parseNodeList(const char *query, size_t *index, struct Node *node)
+int parseNodeList(const char *query, size_t *index, struct Node *node, struct Query *q)
 {
-    int flags = parseComplexNode(query, index, node);
+    int flags = parseComplexNode(query, index, node, q);
     if (flags < 0)
     {
         return flags;
@@ -1099,7 +1128,7 @@ int parseNodeList(const char *query, size_t *index, struct Node *node)
 
         struct Node *next_child = addChildNode(node);
 
-        int result = parseComplexNode(query, index, next_child);
+        int result = parseComplexNode(query, index, next_child, q);
         if (result < 0)
         {
             return result;
