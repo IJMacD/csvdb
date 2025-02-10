@@ -260,7 +260,7 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                 int len = index - col_start_index;
 
                 // If it's a single double-quoted column
-                if (query[col_start_index] == '"')
+                if (query[col_start_index] == '"' && node->function == FUNC_UNITY)
                 {
                     int end;
                     for (

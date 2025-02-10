@@ -143,3 +143,6 @@ SELECT '2024-01-18T10:00:00' > '2024-01-01T00:00:00';
 -- Function on *
 FROM test LIMIT 5 SELECT LEFT(*, 2) AS left_;
 FROM(FROM test LIMIT 5) SELECT LISTAGG(*) AS agg_;
+-- Subqueries in SELECT
+SELECT (SELECT LISTAGG(name) FROM suits) AS n FROM ranks LIMIT 2;
+SELECT (SELECT SUM(value) FROM ranks) + 10 FROM suits;
