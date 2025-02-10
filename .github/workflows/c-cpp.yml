@@ -19,4 +19,4 @@ jobs:
     - name: Build
       run: make
     - name: Run tests
-      run: ./test/test.sh
+      run: ./test/test.sh --ci
