@@ -30,6 +30,10 @@ fi
 tests=0
 errors=0
 
+echo "csvdb version:" `$CSVDB -v` 
+
+echo
+
 echo "duration" > $STATFILE
 
 if [ `date +%N | grep N` ]; then
@@ -44,7 +48,7 @@ for sql in "${lines[@]}"; do
         continue
     fi
 
-    printf "$GREY -- SQL:$NC %s $GREY--$NC\n" "$sql";
+    printf "$GREY -- Test [%03d] SQL:$NC %s $GREY--$NC\n" "$tests" "$sql";
 
     printf "\n$GREY -- Plan: --\n"
 

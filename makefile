@@ -134,7 +134,7 @@ prep:
 	@mkdir -p $(DBGDIR) $(addprefix $(DBGDIR)/, $(SUBDIRS)) $(RELDIR) $(addprefix $(RELDIR)/, $(SUBDIRS)) $(GENDIR) $(addprefix $(GENDIR)/, $(SUBDIRS))
 
 $(SRCDIR)/gitversion.c: .git/HEAD .git/index
-	echo "const char *gitversion = \"$(shell git rev-parse HEAD)$(shell git diff-index --quiet HEAD && git show -s --format=' (%cd)' --date=iso-strict || (echo "-dirty built @" && date -Iseconds))\";" > $@
+	echo "const char *gitversion = \"$(shell git describe --tags) $(shell git rev-parse HEAD)$(shell git diff-index --quiet HEAD && git show -s --format=' (%cd)' --date=iso-strict || (echo "-dirty built @" && date -Iseconds))\";" > $@
 
 remake: clean all
 
