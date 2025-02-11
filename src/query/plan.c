@@ -115,8 +115,10 @@ int makePlan(struct Query *q, struct Plan *plan)
 
         struct Table *table = &q->tables[0];
 
+        struct DB index_db;
+
         enum IndexSearchType index_type = findIndex(
-            NULL,
+            &index_db,
             table->name,
             &q->order_nodes[0],
             INDEX_ANY,
@@ -129,11 +131,43 @@ int makePlan(struct Query *q, struct Plan *plan)
         {
             addStepWithNode(plan, PLAN_UNIQUE_RANGE, &q->order_nodes[0]);
         }
-        // Nearly sorted sorts are *really* expensive, if there's more than one
-        // ORDER BY node then it's probably not worth it
-        else if (index_type != INDEX_NONE && q->order_count == 1)
+        else if (index_type != INDEX_NONE)
         {
-            addStepWithNode(plan, PLAN_INDEX_SCAN, &q->order_nodes[0]);
+            // We have found an index. Now check how many fields from the index are usable.
+
+            enum Order primary_sort_dir = q->order_nodes[0].alias[0];
+
+            // The first field is already fixed
+            int i = 1;
+            for (; i < q->order_count; i++)
+            {
+                int index = getFieldIndex(&index_db, nodeGetFieldName(&q->order_nodes[i]));
+
+                if (index != i)
+                {
+                    // fields in the ORDER BY clause need to match the index exactly
+                    break;
+                }
+
+                // To use the index all ORDER BY nodes need to be the same direction
+                enum Order sort_dir = q->order_nodes[i].alias[0];
+                if (sort_dir != primary_sort_dir)
+                {
+                    // We can't use the index
+                    break;
+                }
+            }
+
+            // Nearly sorted sorts are *really* expensive, if the sort can't be
+            // completely covered by the index it probably isn't worth it.
+            if (index_type != INDEX_NONE && q->order_count == i)
+            {
+                addStepWithNodes(plan, PLAN_INDEX_SCAN, q->order_nodes, i);
+            }
+            else
+            {
+                addStep(plan, PLAN_TABLE_SCAN);
+            }
         }
         else
         {
@@ -976,9 +1010,8 @@ static void addLimitStepIfRequired(struct Plan *plan, struct Query *query)
             /// TODO: better tracking of predicates
             // maybe they don't matter here. They might have been taken care of
             // in joins etc.
-            query->predicate_count == 0
-
-            && query->order_count == 0 && !(query->flags & FLAG_GROUP))
+            query->predicate_count == 0 &&
+            query->order_count == 0 && !(query->flags & FLAG_GROUP))
         {
 
             // First thing to check is if we have all LEFT joins.
@@ -1154,7 +1187,10 @@ static int applySortLogic(
             struct Node *left = &predicate->children[0];
 
             if (
-                predicate->function == OPERATOR_EQ && left->function == q->order_nodes[i].function && left->field.table_id == q->order_nodes[i].field.table_id && left->field.index == q->order_nodes[i].field.index)
+                predicate->function == OPERATOR_EQ &&
+                left->function == q->order_nodes[i].function &&
+                left->field.table_id == q->order_nodes[i].field.table_id &&
+                left->field.index == q->order_nodes[i].field.index)
             {
                 // OK we don't need to sort by this field
 
@@ -1223,9 +1259,9 @@ static int applySortLogic(
             }
 
             if (
-                (
-                    first_step->type == PLAN_UNIQUE || first_step->type == PLAN_UNIQUE_RANGE) &&
-                left->field.table_id == primary_sort_col->field.table_id && left->field.index == primary_sort_col->field.index)
+                (first_step->type == PLAN_UNIQUE || first_step->type == PLAN_UNIQUE_RANGE) &&
+                left->field.table_id == primary_sort_col->field.table_id &&
+                left->field.index == primary_sort_col->field.index)
             {
                 // Rows were returned in INDEX order.
                 // The first order column is the index column,
@@ -1243,14 +1279,26 @@ static int applySortLogic(
             }
 
             if (
-                (
-                    first_step->type == PLAN_INDEX_RANGE || first_step->type == PLAN_INDEX_SCAN) &&
-                sorts_added == 1 && left->function == primary_sort_col->function && left->field.table_id == primary_sort_col->field.table_id && left->field.index == primary_sort_col->field.index)
+                (first_step->type == PLAN_INDEX_RANGE || first_step->type == PLAN_INDEX_SCAN) &&
+                left->function == primary_sort_col->function &&
+                left->field.table_id == primary_sort_col->field.table_id &&
+                left->field.index == primary_sort_col->field.index)
             {
-                // Rows were returned in INDEX order.
-                // The first order column is the index column,
-                // and since it is only one sort column,
-                // we never need to sort.
+                // To use the index, all ORDER BY nodes need to be the same direction
+                for (int i = 1; i < first_step->node_count; i++)
+                {
+                    int sort_idx = sorts_needed[i];
+                    struct Node *sort_col = &q->order_nodes[sort_idx];
+                    enum Order sort_dir = sort_col->alias[0];
+                    if (sort_dir != primary_sort_dir)
+                    {
+                        // We can't use the index
+
+                        return sorts_added;
+                    }
+                }
+
+                // If we've got to here then we can use the index
 
                 if (primary_sort_dir == ORDER_DESC)
                 {
