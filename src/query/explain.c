@@ -205,10 +205,9 @@ int explain_select_query (
             findIndex(
                 NULL,
                 tables[join_count].name,
-                &s.nodes[0].children[0],
+                &s.nodes[0],
                 INDEX_ANY,
-                &index_filename
-            );
+                &index_filename);
 
             strcpy(table, basename(index_filename));
             free(index_filename);
@@ -223,10 +222,9 @@ int explain_select_query (
             findIndex(
                 NULL,
                 tables[join_count].name,
-                &s.nodes[0].children[0],
+                &s.nodes[0],
                 INDEX_ANY,
-                &index_filename
-            );
+                &index_filename);
 
             strcpy(table, basename(index_filename));
             free(index_filename);

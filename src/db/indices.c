@@ -79,70 +79,80 @@ enum IndexSearchResult indexUniqueSeek (
     // RESULT_ABOVE_MAX: value above maximum
     int search_status;
 
-    int index_rowid = indexSearch(
-        index_db,
-        predicate_value,
-        MODE_UNIQUE,
-        &search_status
-    );
-
-    if (predicate_op == OPERATOR_EQ && search_status) {
-        // We want an exact match but value is not in index
-        // Just bail out now
-        return RESULT_NO_ROWS;
-    }
-
+    // (inclusive)
     int lower_bound;
     // (exclusive)
     int upper_bound;
 
-    if (predicate_op == OPERATOR_ALWAYS) {
+    if (predicate_op == OPERATOR_ALWAYS)
+    {
         // Should be a SCAN not a SEEK but we can deal with it anyway
         lower_bound = 0;
         upper_bound = getRecordCount(index_db);
     }
-    else if (predicate_op == OPERATOR_EQ) {
-        lower_bound = index_rowid;
-        upper_bound = index_rowid + 1;
-    }
-    else if (predicate_op == OPERATOR_LT || predicate_op == OPERATOR_LE) {
-        lower_bound = 0;
-        upper_bound = index_rowid;
-
-        if (predicate_op == OPERATOR_LE && search_status == RESULT_FOUND) {
-            upper_bound++;
-        }
-    }
-    else if (predicate_op == OPERATOR_GT || predicate_op == OPERATOR_GE) {
-        lower_bound = index_rowid;
-        upper_bound = getRecordCount(index_db);
-
-        if (predicate_op == OPERATOR_GT && search_status == RESULT_FOUND) {
-            lower_bound++;
-        }
-    }
-    // Special treatment for NOT EQUAL; do the two halves separately
-    else if (predicate_op == OPERATOR_NE) {
-        int record_count = getRecordCount(index_db);
-
-        int a = indexWalk(index_db, rowid_column, 0, index_rowid, row_list);
-        int b = indexWalk(
+    else
+    {
+        int index_rowid = indexSearch(
             index_db,
-            rowid_column,
-            index_rowid + 1,
-            record_count,
-            row_list
-        );
+            predicate_value,
+            MODE_UNIQUE,
+            &search_status);
 
-        return a + b;
-    }
-    else {
-        fprintf(
-            stderr,
-            "Not Implemented: Unique Index range scan for operator: %d\n",
-            predicate_op
-        );
-        exit(-1);
+        if (predicate_op == OPERATOR_EQ && search_status)
+        {
+            // We want an exact match but value is not in index
+            // Just bail out now
+            return RESULT_NO_ROWS;
+        }
+
+        if (predicate_op == OPERATOR_EQ)
+        {
+            lower_bound = index_rowid;
+            upper_bound = index_rowid + 1;
+        }
+        else if (predicate_op == OPERATOR_LT || predicate_op == OPERATOR_LE)
+        {
+            lower_bound = 0;
+            upper_bound = index_rowid;
+
+            if (predicate_op == OPERATOR_LE && search_status == RESULT_FOUND)
+            {
+                upper_bound++;
+            }
+        }
+        else if (predicate_op == OPERATOR_GT || predicate_op == OPERATOR_GE)
+        {
+            lower_bound = index_rowid;
+            upper_bound = getRecordCount(index_db);
+
+            if (predicate_op == OPERATOR_GT && search_status == RESULT_FOUND)
+            {
+                lower_bound++;
+            }
+        }
+        // Special treatment for NOT EQUAL; do the two halves separately
+        else if (predicate_op == OPERATOR_NE)
+        {
+            int record_count = getRecordCount(index_db);
+
+            int a = indexWalk(index_db, rowid_column, 0, index_rowid, row_list);
+            int b = indexWalk(
+                index_db,
+                rowid_column,
+                index_rowid + 1,
+                record_count,
+                row_list);
+
+            return a + b;
+        }
+        else
+        {
+            fprintf(
+                stderr,
+                "Not Implemented: Unique Index range scan for operator: %d\n",
+                predicate_op);
+            exit(-1);
+        }
     }
 
     if (limit >= 0) {

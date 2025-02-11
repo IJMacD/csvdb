@@ -54,21 +54,42 @@ int executeSourceUnique (
     struct Node *p = &step->nodes[0];
     struct DB index_db;
 
+    struct Node *predicate_node;
+    enum Function op;
+    const char *predicate_value = NULL;
+
+    if (p->function == FUNC_UNITY)
+    {
+        // If we just have a single raw Node then it's a full index scan
+        op = OPERATOR_ALWAYS;
+        predicate_node = p;
+    }
+    else if ((p->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR)
+    {
+        // If we have an operator Node then it's a partial index scan
+        op = p->function;
+        predicate_node = &p->children[0];
+        predicate_value = p->children[1].field.text;
+    }
+    else
+    {
+        fprintf(stderr, "Indices on functions are not supported\n");
+        return -1;
+    }
+
     if (
         findIndex(
             &index_db,
             table->name,
-            &p->children[0],
+            predicate_node,
             INDEX_UNIQUE,
-            NULL
-        ) == 0
-    ) {
+            NULL) == 0)
+    {
         fprintf(
             stderr,
             "Unable to find unique index on column '%s' on table '%s'\n",
-            p->children[0].field.text,
-            table->name
-        );
+            predicate_node->field.text,
+            table->name);
         return -1;
     }
 
@@ -83,14 +104,15 @@ int executeSourceUnique (
     // Find which column in the index table contains the rowids of the primary
     // table
     int rowid_col = getFieldIndex(&index_db, "rowid");
+
+    // Fill in RowIDs from index
     indexUniqueSeek(
         &index_db,
         rowid_col,
-        p->function,
-        p->children[1].field.text,
+        op,
+        predicate_value,
         getRowList(row_list),
-        step->limit
-    );
+        step->limit);
 
     closeDB(&index_db);
 

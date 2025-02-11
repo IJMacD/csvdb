@@ -146,3 +146,9 @@ FROM(FROM test LIMIT 5) SELECT LISTAGG(*) AS agg_;
 -- Subqueries in SELECT
 SELECT (SELECT LISTAGG(name) FROM suits) AS n FROM ranks LIMIT 2;
 SELECT (SELECT SUM(value) FROM ranks) + 10 FROM suits;
+-- Efficient Index sorting
+FROM test ORDER BY name ASC, birth_date ASC LIMIT 5;
+FROM test ORDER BY name DESC, birth_date DESC LIMIT 5;
+FROM test ORDER BY name ASC, birth_date DESC LIMIT 5;
+FROM test ORDER BY birth_date ASC LIMIT 5;
+FROM test ORDER BY birth_date DESC LIMIT 5;
