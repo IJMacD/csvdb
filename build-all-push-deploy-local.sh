@@ -9,7 +9,7 @@ if [ -n "$(git status --porcelain)" ]; then
   exit 1
 fi
 
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+SCRIPT_DIR=$(cd -P -- "$(dirname -- "$0")" && printf '%s\n' "$(pwd -P)")
 source ${SCRIPT_DIR}/vars.sh
 
 export KUBECONFIG=$LOCAL_KUBECONFIG
