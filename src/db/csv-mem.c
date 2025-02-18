@@ -185,14 +185,13 @@ int csvMem_getRecordValue(
 
 static int prepareHeaders(struct DB *db)
 {
-    db->field_count = 1;
-
     db->fields = db->data;
 
     if (db->data[0] == '\0')
     {
-        fprintf(stderr, "Empty file\n");
-        return -1;
+        // Empty file
+        db->field_count = 0;
+        return 0;
     }
 
     char *read_ptr, *write_ptr;
@@ -209,6 +208,8 @@ static int prepareHeaders(struct DB *db)
     {
         read_ptr += 3;
     }
+
+    db->field_count = 1;
 
     // Overwrite fields buffer with itself skipping quotes and inserting nulls
     while (*read_ptr && *read_ptr != '\n')
