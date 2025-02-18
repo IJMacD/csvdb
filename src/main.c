@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "structs.h"
+#include "gitversion.h"
 #include "query/query.h"
 #include "query/output.h"
 #include "db/temp.h"
@@ -14,7 +15,6 @@
 static int read_file(FILE *file, char **output);
 static enum OutputOption get_format_flag (const char *format_val);
 
-extern char* gitversion;
 int debug_verbosity = 0;
 
 #ifdef DEBUG

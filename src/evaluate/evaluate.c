@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../structs.h"
+#include "../gitversion.h"
 #include "evaluate.h"
 #include "function.h"
 #include "predicates.h"
@@ -353,6 +354,11 @@ int evaluatePossibleNamedConstantField(char *output, struct Field *field)
     {
         output[0] = '\0';
         return 0;
+    }
+
+    if (strcmp(field->text, "CSVDB_VERSION") == 0)
+    {
+        return sprintf(output, "%s", gitversion);
     }
 
     return -1;
