@@ -313,8 +313,9 @@ int main (int argc, char * argv[]) {
     // If we're here it means we don't yet have a query.
     // If stdin is something more than a tty (i.e pipe or redirected file)
     // then we will assume the following query:
+    //  SELECT * FROM stdin
     if (!isatty(fileno(stdin))) {
-        return query("SELECT * FROM stdin", flags, output, NULL);
+        return query("", flags, output, NULL);
     }
 
     // If verbose option is set but we don't actually have a query, then we

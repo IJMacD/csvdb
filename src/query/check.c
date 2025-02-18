@@ -2,7 +2,7 @@
 #include "../structs.h"
 
 /**
- * Runs sanity checks on a plan to make sure e don't produce unbounded output
+ * Runs sanity checks on a plan to make sure we don't produce unbounded output
  */
 void checkPlan (struct Query *query, struct Plan *plan) {
     int table_id = 0;

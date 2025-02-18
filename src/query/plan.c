@@ -82,6 +82,12 @@ int makePlan(struct Query *q, struct Plan *plan)
         return plan->step_count;
     }
 
+    // If there're no columns then there's absolutely nothing to do
+    if (q->column_count == 0)
+    {
+        return 0;
+    }
+
     // If there's no table specified then it must be a
     // single-row-all-constant query
     if (q->table_count == 0)

@@ -214,6 +214,7 @@ int process_query(
     FILE *output)
 {
     int result;
+    int auto_stdin = 0;
 
     // Explain can be specified on the command line so copy that value in just
     // in case.
@@ -234,6 +235,7 @@ int process_query(
             q->table_count = 1;
             strcpy(q->tables[0].name, "stdin");
             strcpy(q->tables[0].alias, "stdin");
+            auto_stdin = 1;
         }
         // else we hope its a "dummy row" query - we'll find out later
     }
@@ -289,6 +291,15 @@ int process_query(
     {
         fprintf(stderr, "Unable to populate tables\n");
         return result;
+    }
+
+    // Now that tables have been populated we can check if stdin was empty or
+    // not. If it was empty then rollback to a tableless query.
+    if (auto_stdin && q->tables[0].db->field_count == 0)
+    {
+        closeDB(q->tables[0].db);
+        free(q->tables[0].db);
+        q->table_count = 0;
     }
 
 #ifdef DEBUG
