@@ -227,44 +227,15 @@ int process_query(
     // dummy row query.
     if (q->table_count == 0)
     {
-
-        int all_constant = 1;
-
-        if (q->column_count == 0)
+        if (!isatty(fileno(stdin)))
         {
-            all_constant = 0;
+            // If there's something on stdin then default to 'FROM stdin'
+            q->tables = calloc(1, sizeof(struct Table));
+            q->table_count = 1;
+            strcpy(q->tables[0].name, "stdin");
+            strcpy(q->tables[0].alias, "stdin");
         }
-        else
-            for (int i = 0; i < q->column_count; i++)
-            {
-                if (isConstantNode((struct Node *)&q->column_nodes[i]) == 0)
-                {
-                    all_constant = 0;
-                    break;
-                }
-            }
-
-        if (!all_constant)
-        {
-            // We *must* have a table
-
-            if (!isatty(fileno(stdin)))
-            {
-                // If there's something on stdin then default to 'FROM stdin'
-                q->tables = calloc(1, sizeof(struct Table));
-                q->table_count = 1;
-                strcpy(q->tables[0].name, "stdin");
-                strcpy(q->tables[0].alias, "stdin");
-            }
-            else
-            {
-                // Empty query
-                // e.g. crap in mysqldump file
-                // fprintf(stderr, "No tables specified\n");
-                // return -1;
-                return 0;
-            }
-        }
+        // else we hope its a "dummy row" query - we'll find out later
     }
     else if (strcmp(q->tables[0].name, "INFORMATION") == 0)
     {
@@ -357,7 +328,6 @@ int process_query(
         result = resolveNode(q, &q->column_nodes[i], NO_ALIASES);
         if (result < 0)
         {
-            fprintf(stderr, "Unable to resolve SELECT column %d\n", i);
             return result;
         }
 
@@ -1019,7 +989,7 @@ static int resolveNode(struct Query *query, struct Node *node, enum AliasSearchM
         return 0;
     }
 
-    // Deal with constants here
+    // Deal with constants here (strings/numbers)
     if (node->field.index == FIELD_CONSTANT)
     {
         evaluateConstantField(node->field.text, &node->field);
@@ -1031,6 +1001,13 @@ static int resolveNode(struct Query *query, struct Node *node, enum AliasSearchM
     if (node->field.index != FIELD_UNKNOWN || node->field.text[0] == '\0')
     {
         return 0;
+    }
+
+    int result = evaluatePossibleNamedConstantField(node->field.text, &node->field);
+    if (result >= 0)
+    {
+        node->field.index = FIELD_CONSTANT;
+        return result;
     }
 
     // Check for aliases first
@@ -1072,6 +1049,16 @@ static int resolveNode(struct Query *query, struct Node *node, enum AliasSearchM
                 return 0;
             }
         }
+    }
+
+    // We couldn't resolve the node/field. If there was no table specified, then
+    // that's probably why. Otherwise the field couldn't be found in any of the
+    // tables that we do have.
+
+    if (query->table_count == 0)
+    {
+        fprintf(stderr, "No tables specified\n");
+        return -1;
     }
 
     fprintf(stderr, "Unable to find column '%s'\n", node->field.text);

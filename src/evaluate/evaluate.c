@@ -331,27 +331,10 @@ static int evaluateField(
  *
  * @param output
  * @param field
- * @return int Number of chars written
+ * @return int Number of chars written, -1 if not a named constant
  */
-int evaluateConstantField(char *output, struct Field *field)
+int evaluatePossibleNamedConstantField(char *output, struct Field *field)
 {
-
-    if (field->index != FIELD_CONSTANT)
-    {
-        fprintf(
-            stderr,
-            "Tried to evaluate non-constant value as constant: %s\n",
-            field->text);
-        exit(-1);
-    }
-
-    if (
-        field->text[0] == '0' && field->text[1] == 'x')
-    {
-        long val = strtol(field->text, NULL, 16);
-        return sprintf(output, "%ld", val);
-    }
-
     if (strcmp(field->text, "CURRENT_DATE") == 0)
     {
         struct DateTime dt;
@@ -364,6 +347,30 @@ int evaluateConstantField(char *output, struct Field *field)
         struct DateTime dt;
         parseTime("CURRENT_TIME", &dt);
         return sprintf(output, "%02d:%02d:%02d", dt.hour, dt.minute, dt.second);
+    }
+
+    if (strcmp(field->text, "NULL") == 0)
+    {
+        output[0] = '\0';
+        return 0;
+    }
+
+    return -1;
+}
+/**
+ * @brief
+ *
+ * @param output
+ * @param field
+ * @return int Number of chars written
+ */
+int evaluateConstantField(char *output, struct Field *field)
+{
+    if (
+        field->text[0] == '0' && field->text[1] == 'x')
+    {
+        long val = strtol(field->text, NULL, 16);
+        return sprintf(output, "%ld", val);
     }
 
     // Alpine doesn't like sprintf'ing a buffer into itself

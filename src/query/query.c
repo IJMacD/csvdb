@@ -56,7 +56,7 @@ int runQueries(
             if (query_start != end_ptr)
             {
                 size_t query_len = end_ptr - query_start;
-                fprintf(stderr, "Error with query: \n");
+                fprintf(stderr, "Error with query: \n  ");
                 fwrite(query_start, 1, query_len, stderr);
                 fprintf(stderr, "\n");
             }

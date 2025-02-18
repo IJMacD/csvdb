@@ -215,9 +215,14 @@ enum FieldIndex {
     FIELD_CONSTANT =                    -6,
 };
 
+enum TableType
+{
+    TABLE_NONE = -1,
+};
+
 struct Field {
     char text[MAX_FIELD_LENGTH];
-    int table_id;
+    enum TableType table_id;
     enum FieldIndex index;
 };
 

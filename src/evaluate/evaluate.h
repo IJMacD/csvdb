@@ -26,6 +26,8 @@ int evaluateNodeList (
 
 int evaluateConstantField (char * output, struct Field *field);
 
+int evaluatePossibleNamedConstantField(char *output, struct Field *field);
+
 int isConstantNode (struct Node *node);
 
 void evaluateNodeTreePartial(

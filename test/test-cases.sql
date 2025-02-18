@@ -152,3 +152,5 @@ FROM test ORDER BY name DESC, birth_date DESC LIMIT 5;
 FROM test ORDER BY name ASC, birth_date DESC LIMIT 5;
 FROM test ORDER BY birth_date ASC LIMIT 5;
 FROM test ORDER BY birth_date DESC LIMIT 5;
+-- Constants
+SELECT 'CAT', 10, 'CURRENT_DATE', CURRENT_DATE = TODAY(), NULL;

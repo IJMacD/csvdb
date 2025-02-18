@@ -12,6 +12,10 @@ static struct Node *constructExpressionTree(
     struct Node *node,
     enum Function next_function);
 
+static int parseString(char *value, struct Node *node);
+
+static int parseFunction(const char *value, const char *query, size_t *index, struct Node *node, struct Query *q);
+
 static int parseFunctionParams(
     const char *query,
     size_t *index,
@@ -21,8 +25,6 @@ static int parseFunctionParams(
 static int parseOperator(const char *input);
 
 static int getPrecedence(enum Function fn);
-
-static int checkConstantField(struct Field *field);
 
 static enum Function parseSimpleOperators(const char *query, size_t *index);
 
@@ -43,7 +45,6 @@ int parseSimpleNode(
     struct Query *q)
 {
     char value[MAX_FIELD_LENGTH];
-    int flags = 0;
 
     clearNode(node);
 
@@ -56,7 +57,7 @@ int parseSimpleNode(
 
         (*index)++;
 
-        return flags;
+        return 0;
     }
 
     int quoted_flag = getQuotedToken(query, index, value, MAX_FIELD_LENGTH);
@@ -68,7 +69,7 @@ int parseSimpleNode(
 
         // Whether we found a simple operator or not, we're done here
 
-        return flags;
+        return 0;
     }
 
     if (strcmp(value, "ROW_NUMBER") == 0)
@@ -82,7 +83,7 @@ int parseSimpleNode(
 
         node->field.index = FIELD_ROW_NUMBER;
 
-        return flags;
+        return 0;
     }
 
     if (strcmp(value, "rowid") == 0)
@@ -92,12 +93,12 @@ int parseSimpleNode(
         // default to first table
         node->field.table_id = 0;
 
-        return flags;
+        return 0;
     }
 
     if (value[0] == '\0')
     {
-        fprintf(stderr, "Error in parsing: Found unexpected parenthesis\n");
+        fprintf(stderr, "Error in parsing: Unexpected end of query\n");
         return -1;
     }
 
@@ -106,366 +107,460 @@ int parseSimpleNode(
         (*index)++;
         // We have a function
 
-        if (strcmp(value, "EXTRACT") == 0)
-        {
-            char part[32];
-            getToken(query, index, part, sizeof part);
+        return parseFunction(value, query, index, node, q);
+    }
 
-            if (strcmp(part, "YEAR") == 0)
+    if (value[0] == '\'')
+    {
+        return parseString(value, node);
+    }
+
+    if (is_numeric(value))
+    {
+        // Detected numeric constant
+        strcpy(node->field.text, value);
+        node->field.index = FIELD_CONSTANT;
+        node->field.table_id = TABLE_NONE;
+        return 0;
+    }
+
+    if (value[0] == '0' && value[1] == 'x')
+    {
+        // Detected hex numeric constant
+        strcpy(node->field.text, value);
+        node->field.index = FIELD_CONSTANT;
+        node->field.table_id = TABLE_NONE;
+        return 0;
+    }
+
+    // Just a regular bare field or named constant
+    strcpy(node->field.text, value);
+
+    node->field.index = FIELD_UNKNOWN;
+    node->field.table_id = TABLE_NONE;
+
+    return 0;
+}
+
+/**
+ * Parses a function
+ * Returns -1 for error; flags otherwise
+ */
+static int parseString(char *value, struct Node *node)
+{
+    struct Field *field = (struct Field *)node;
+
+    // Detected string literal
+    field->index = FIELD_CONSTANT;
+    field->table_id = TABLE_NONE;
+
+    int len = strlen(value);
+
+    if (value[len - 1] != '\'')
+    {
+        fprintf(
+            stderr,
+            "expected apostrophe got '%c'\n",
+            value[len - 1]);
+        return -1;
+    }
+
+    // We need to strip the leading and trailing single quote and replace
+    // escaped characters.
+    char *ptr = field->text;
+
+    for (int i = 1; i < len - 1; i++)
+    {
+        char c = value[i];
+        char c2 = value[i + 1];
+
+        // Backslash escapes
+        if (c == '\\')
+        {
+            if (c2 == 't')
             {
-                node->function = FUNC_EXTRACT_YEAR;
+                *ptr++ = '\t';
+                i++;
             }
-            else if (strcmp(part, "MONTH") == 0)
+            // Will probably cause output issues
+            else if (c2 == 'n')
             {
-                node->function = FUNC_EXTRACT_MONTH;
+                *ptr++ = '\n';
+                i++;
             }
-            else if (strcmp(part, "DAY") == 0)
+            else if (c2 == '\'')
             {
-                node->function = FUNC_EXTRACT_DAY;
-            }
-            else if (strcmp(part, "WEEK") == 0)
-            {
-                node->function = FUNC_EXTRACT_WEEK;
-            }
-            else if (strcmp(part, "WEEKYEAR") == 0)
-            {
-                node->function = FUNC_EXTRACT_WEEKYEAR;
-            }
-            else if (strcmp(part, "WEEKDAY") == 0)
-            {
-                node->function = FUNC_EXTRACT_WEEKDAY;
-            }
-            else if (strcmp(part, "HEYEAR") == 0)
-            {
-                node->function = FUNC_EXTRACT_HEYEAR;
-            }
-            else if (strcmp(part, "YEARDAY") == 0)
-            {
-                node->function = FUNC_EXTRACT_YEARDAY;
-            }
-            else if (strcmp(part, "MILLENNIUM") == 0)
-            {
-                node->function = FUNC_EXTRACT_MILLENNIUM;
-            }
-            else if (strcmp(part, "CENTURY") == 0)
-            {
-                node->function = FUNC_EXTRACT_CENTURY;
-            }
-            else if (strcmp(part, "DECADE") == 0)
-            {
-                node->function = FUNC_EXTRACT_DECADE;
-            }
-            else if (strcmp(part, "QUARTER") == 0)
-            {
-                node->function = FUNC_EXTRACT_QUARTER;
-            }
-            else if (strcmp(part, "DATE") == 0)
-            {
-                node->function = FUNC_EXTRACT_DATE;
-            }
-            else if (strcmp(part, "DATETIME") == 0)
-            {
-                node->function = FUNC_EXTRACT_DATETIME;
-            }
-            else if (strcmp(part, "JULIAN") == 0)
-            {
-                node->function = FUNC_EXTRACT_JULIAN;
-            }
-            else if (strcmp(part, "MONTH_STRING") == 0)
-            {
-                node->function = FUNC_EXTRACT_MONTH_STRING;
-            }
-            else if (strcmp(part, "WEEK_STRING") == 0)
-            {
-                node->function = FUNC_EXTRACT_WEEK_STRING;
-            }
-            else if (strcmp(part, "YEARDAY_STRING") == 0)
-            {
-                node->function = FUNC_EXTRACT_YEARDAY_STRING;
+                *ptr++ = c2;
+                i++;
             }
             else
             {
-                fprintf(stderr, "expected valid extract part - got %s\n", part);
-                return -1;
+                *ptr++ = c;
             }
+        }
+        // Double single quote escape
+        else if (c == '\'' && c2 == c)
+        {
+            *ptr++ = c;
+            i++;
+        }
+        // Just a normal character
+        else
+        {
+            *ptr++ = c;
+        }
+    }
 
-            skipWhitespace(query, index);
+    field->text[len - 2] = '\0';
 
-            char keyword[10];
-            getToken(query, index, keyword, sizeof keyword);
+    return 0;
+}
 
-            if (strcmp(keyword, "FROM") != 0)
-            {
-                fprintf(stderr, "expected FROM\n");
-                return -1;
-            }
+/**
+ * Parses a function
+ * Returns -1 for error; flags otherwise
+ */
+static int parseFunction(const char *value, const char *query, size_t *index, struct Node *node, struct Query *q)
+{
+    if (strcmp(value, "EXTRACT") == 0)
+    {
+        char part[32];
+        getToken(query, index, part, sizeof part);
 
-            skipWhitespace(query, index);
-
-            struct Node *child = addChildNode(node);
-
-            parseNode(query, index, child, q);
-
-            skipWhitespace(query, index);
-
-            if (query[*index] != ')')
-            {
-                fprintf(stderr, "expected ')' got '%c'\n", query[*index]);
-                return -1;
-            }
-
-            (*index)++;
-
-            if (checkConstantField((struct Field *)node) < 0)
-            {
-                return -1;
-            }
-
-            return flags;
-        }
-
-        if (strcmp(value, "CAST") == 0)
+        if (strcmp(part, "YEAR") == 0)
         {
-            struct Node *child = addChildNode(node);
-
-            parseNode(query, index, child, q);
-
-            skipWhitespace(query, index);
-
-            char keyword[5];
-            getToken(query, index, keyword, sizeof keyword);
-
-            if (strcmp(keyword, "AS") != 0)
-            {
-                fprintf(stderr, "expected AS\n");
-                return -1;
-            }
-
-            skipWhitespace(query, index);
-
-            char type[32];
-            getToken(query, index, type, sizeof type);
-
-            if (strcmp(type, "INT") == 0 || strcmp(type, "INTERVAL") == 0)
-            {
-                node->function = FUNC_CAST_INT;
-            }
-            else if (strcmp(type, "DURATION") == 0)
-            {
-                node->function = FUNC_CAST_DURATION;
-            }
-            else
-            {
-                fprintf(stderr, "cannot cast to %s\n", type);
-                return -1;
-            }
-
-            if (query[*index] != ')')
-            {
-                fprintf(stderr, "expected ')' got '%c'\n", query[*index]);
-                return -1;
-            }
-
-            (*index)++;
-
-            if (checkConstantField((struct Field *)node) < 0)
-            {
-                return -1;
-            }
-
-            return flags;
+            node->function = FUNC_EXTRACT_YEAR;
         }
-
-        // Regular functions
-        if (strcmp(value, "PK") == 0)
+        else if (strcmp(part, "MONTH") == 0)
         {
-            node->function = FUNC_PK;
+            node->function = FUNC_EXTRACT_MONTH;
         }
-        else if (strcmp(value, "UNIQUE") == 0)
+        else if (strcmp(part, "DAY") == 0)
         {
-            node->function = FUNC_UNIQUE;
+            node->function = FUNC_EXTRACT_DAY;
         }
-        else if (strcmp(value, "INDEX") == 0)
+        else if (strcmp(part, "WEEK") == 0)
         {
-            node->function = FUNC_INDEX;
+            node->function = FUNC_EXTRACT_WEEK;
         }
-        else if (
-            strcmp(value, "CHR") == 0 ||
-            strcmp(value, "CHAR") == 0)
+        else if (strcmp(part, "WEEKYEAR") == 0)
         {
-            node->function = FUNC_CHR;
+            node->function = FUNC_EXTRACT_WEEKYEAR;
         }
-        // Get codepoint of first UTF-8 character in value
-        else if (strcmp(value, "CODEPOINT") == 0)
+        else if (strcmp(part, "WEEKDAY") == 0)
         {
-            node->function = FUNC_CODEPOINT;
+            node->function = FUNC_EXTRACT_WEEKDAY;
         }
-        // Convert mis-encoded string
-        else if (strcmp(value, "W1252") == 0)
+        else if (strcmp(part, "HEYEAR") == 0)
         {
-            node->function = FUNC_W1252;
+            node->function = FUNC_EXTRACT_HEYEAR;
         }
-        else if (strcmp(value, "RANDOM") == 0)
+        else if (strcmp(part, "YEARDAY") == 0)
         {
-            node->function = FUNC_RANDOM;
-            node->field.index = FIELD_CONSTANT;
-            node->field.table_id = -1;
+            node->function = FUNC_EXTRACT_YEARDAY;
         }
-        else if (strcmp(value, "ADD") == 0)
+        else if (strcmp(part, "MILLENNIUM") == 0)
         {
-            node->function = FUNC_ADD;
+            node->function = FUNC_EXTRACT_MILLENNIUM;
         }
-        else if (strcmp(value, "SUB") == 0)
+        else if (strcmp(part, "CENTURY") == 0)
         {
-            node->function = FUNC_SUB;
+            node->function = FUNC_EXTRACT_CENTURY;
         }
-        else if (strcmp(value, "MUL") == 0)
+        else if (strcmp(part, "DECADE") == 0)
         {
-            node->function = FUNC_MUL;
+            node->function = FUNC_EXTRACT_DECADE;
         }
-        else if (strcmp(value, "DIV") == 0)
+        else if (strcmp(part, "QUARTER") == 0)
         {
-            node->function = FUNC_DIV;
+            node->function = FUNC_EXTRACT_QUARTER;
         }
-        else if (strcmp(value, "MOD") == 0)
+        else if (strcmp(part, "DATE") == 0)
         {
-            node->function = FUNC_MOD;
+            node->function = FUNC_EXTRACT_DATE;
         }
-        else if (strcmp(value, "POW") == 0)
+        else if (strcmp(part, "DATETIME") == 0)
         {
-            node->function = FUNC_POW;
+            node->function = FUNC_EXTRACT_DATETIME;
         }
-        else if (strcmp(value, "TO_HEX") == 0)
+        else if (strcmp(part, "JULIAN") == 0)
         {
-            node->function = FUNC_TO_HEX;
+            node->function = FUNC_EXTRACT_JULIAN;
         }
-        else if (strcmp(value, "HEX") == 0)
+        else if (strcmp(part, "MONTH_STRING") == 0)
         {
-            node->function = FUNC_HEX;
+            node->function = FUNC_EXTRACT_MONTH_STRING;
         }
-        else if (strcmp(value, "LENGTH") == 0)
+        else if (strcmp(part, "WEEK_STRING") == 0)
         {
-            node->function = FUNC_LENGTH;
+            node->function = FUNC_EXTRACT_WEEK_STRING;
         }
-        else if (strcmp(value, "LEFT") == 0)
+        else if (strcmp(part, "YEARDAY_STRING") == 0)
         {
-            // LEFT(<field>, <count>)
-            node->function = FUNC_LEFT;
-        }
-        else if (strcmp(value, "RIGHT") == 0)
-        {
-            // RIGHT(<field>, <count>)
-            node->function = FUNC_RIGHT;
-        }
-        else if (strcmp(value, "DATE_ADD") == 0)
-        {
-            node->function = FUNC_DATE_ADD;
-        }
-        else if (strcmp(value, "DATE_SUB") == 0)
-        {
-            node->function = FUNC_DATE_SUB;
-        }
-        else if (strcmp(value, "DATE_DIFF") == 0)
-        {
-            node->function = FUNC_DATE_DIFF;
-        }
-        else if (strcmp(value, "TODAY") == 0)
-        {
-            node->function = FUNC_DATE_TODAY;
-            node->field.index = FIELD_CONSTANT;
-            node->field.table_id = -1;
-        }
-        else if (strcmp(value, "NOW") == 0)
-        {
-            node->function = FUNC_DATE_NOW;
-            node->field.index = FIELD_CONSTANT;
-            node->field.table_id = -1;
-        }
-        else if (strcmp(value, "DATE") == 0)
-        {
-            node->function = FUNC_DATE_DATE;
-            node->field.index = FIELD_CONSTANT;
-            node->field.table_id = -1;
-        }
-        else if (strcmp(value, "TIME") == 0)
-        {
-            node->function = FUNC_DATE_TIME;
-            node->field.index = FIELD_CONSTANT;
-            node->field.table_id = -1;
-        }
-        else if (strcmp(value, "CLOCK") == 0)
-        {
-            node->function = FUNC_DATE_CLOCK;
-            node->field.index = FIELD_CONSTANT;
-            node->field.table_id = -1;
-        }
-        else if (strcmp(value, "MAKE_DATE") == 0)
-        {
-            node->function = FUNC_MAKE_DATE;
-        }
-        else if (strcmp(value, "MAKE_TIME") == 0)
-        {
-            node->function = FUNC_MAKE_TIME;
-        }
-        else if (strcmp(value, "MAKE_DATETIME") == 0)
-        {
-            node->function = FUNC_MAKE_DATETIME;
-        }
-        else if (strcmp(value, "INTERVAL") == 0)
-        {
-            // Synonym for CAST(X AS INT)
-            node->function = FUNC_CAST_INT;
-        }
-        else if (strcmp(value, "COUNT") == 0)
-        {
-            node->function = FUNC_AGG_COUNT;
-            flags |= FLAG_GROUP;
-        }
-        else if (strcmp(value, "MAX") == 0)
-        {
-            node->function = FUNC_AGG_MAX;
-            flags |= FLAG_GROUP;
-        }
-        else if (strcmp(value, "MIN") == 0)
-        {
-            node->function = FUNC_AGG_MIN;
-            flags |= FLAG_GROUP;
-        }
-        else if (strcmp(value, "SUM") == 0)
-        {
-            node->function = FUNC_AGG_SUM;
-            flags |= FLAG_GROUP;
-        }
-        else if (strcmp(value, "AVG") == 0)
-        {
-            node->function = FUNC_AGG_AVG;
-            flags |= FLAG_GROUP;
-        }
-        else if (strcmp(value, "LISTAGG") == 0)
-        {
-            node->function = FUNC_AGG_LISTAGG;
-            flags |= FLAG_GROUP;
+            node->function = FUNC_EXTRACT_YEARDAY_STRING;
         }
         else
         {
-            fprintf(stderr, "Unknown function: %s\n", value);
+            fprintf(stderr, "expected valid extract part - got %s\n", part);
             return -1;
         }
 
-        parseFunctionParams(query, index, node, q);
+        skipWhitespace(query, index);
 
-        return flags;
+        char keyword[10];
+        getToken(query, index, keyword, sizeof keyword);
+
+        if (strcmp(keyword, "FROM") != 0)
+        {
+            fprintf(stderr, "expected FROM\n");
+            return -1;
+        }
+
+        skipWhitespace(query, index);
+
+        struct Node *child = addChildNode(node);
+
+        parseNode(query, index, child, q);
+
+        skipWhitespace(query, index);
+
+        if (query[*index] != ')')
+        {
+            fprintf(stderr, "expected ')' got '%c'\n", query[*index]);
+            return -1;
+        }
+
+        (*index)++;
+
+        return 0;
     }
 
-    // Just a regular bare field
-    strcpy(node->field.text, value);
-
-    // The bare field could be number literal, string literal or named
-    // constant.
-    if (checkConstantField((struct Field *)node) < 0)
+    if (strcmp(value, "CAST") == 0)
     {
+        struct Node *child = addChildNode(node);
+
+        parseNode(query, index, child, q);
+
+        skipWhitespace(query, index);
+
+        char keyword[5];
+        getToken(query, index, keyword, sizeof keyword);
+
+        if (strcmp(keyword, "AS") != 0)
+        {
+            fprintf(stderr, "expected AS\n");
+            return -1;
+        }
+
+        skipWhitespace(query, index);
+
+        char type[32];
+        getToken(query, index, type, sizeof type);
+
+        if (strcmp(type, "INT") == 0 || strcmp(type, "INTERVAL") == 0)
+        {
+            node->function = FUNC_CAST_INT;
+        }
+        else if (strcmp(type, "DURATION") == 0)
+        {
+            node->function = FUNC_CAST_DURATION;
+        }
+        else
+        {
+            fprintf(stderr, "cannot cast to %s\n", type);
+            return -1;
+        }
+
+        if (query[*index] != ')')
+        {
+            fprintf(stderr, "expected ')' got '%c'\n", query[*index]);
+            return -1;
+        }
+
+        (*index)++;
+
+        return 0;
+    }
+
+    int flags = 0;
+
+    // Regular functions
+    if (strcmp(value, "PK") == 0)
+    {
+        node->function = FUNC_PK;
+    }
+    else if (strcmp(value, "UNIQUE") == 0)
+    {
+        node->function = FUNC_UNIQUE;
+    }
+    else if (strcmp(value, "INDEX") == 0)
+    {
+        node->function = FUNC_INDEX;
+    }
+    else if (
+        strcmp(value, "CHR") == 0 ||
+        strcmp(value, "CHAR") == 0)
+    {
+        node->function = FUNC_CHR;
+    }
+    // Get codepoint of first UTF-8 character in value
+    else if (strcmp(value, "CODEPOINT") == 0)
+    {
+        node->function = FUNC_CODEPOINT;
+    }
+    // Convert mis-encoded string
+    else if (strcmp(value, "W1252") == 0)
+    {
+        node->function = FUNC_W1252;
+    }
+    else if (strcmp(value, "RANDOM") == 0)
+    {
+        node->function = FUNC_RANDOM;
+        node->field.index = FIELD_CONSTANT;
+        node->field.table_id = TABLE_NONE;
+    }
+    else if (strcmp(value, "ADD") == 0)
+    {
+        node->function = FUNC_ADD;
+    }
+    else if (strcmp(value, "SUB") == 0)
+    {
+        node->function = FUNC_SUB;
+    }
+    else if (strcmp(value, "MUL") == 0)
+    {
+        node->function = FUNC_MUL;
+    }
+    else if (strcmp(value, "DIV") == 0)
+    {
+        node->function = FUNC_DIV;
+    }
+    else if (strcmp(value, "MOD") == 0)
+    {
+        node->function = FUNC_MOD;
+    }
+    else if (strcmp(value, "POW") == 0)
+    {
+        node->function = FUNC_POW;
+    }
+    else if (strcmp(value, "TO_HEX") == 0)
+    {
+        node->function = FUNC_TO_HEX;
+    }
+    else if (strcmp(value, "HEX") == 0)
+    {
+        node->function = FUNC_HEX;
+    }
+    else if (strcmp(value, "LENGTH") == 0)
+    {
+        node->function = FUNC_LENGTH;
+    }
+    else if (strcmp(value, "LEFT") == 0)
+    {
+        // LEFT(<field>, <count>)
+        node->function = FUNC_LEFT;
+    }
+    else if (strcmp(value, "RIGHT") == 0)
+    {
+        // RIGHT(<field>, <count>)
+        node->function = FUNC_RIGHT;
+    }
+    else if (strcmp(value, "DATE_ADD") == 0)
+    {
+        node->function = FUNC_DATE_ADD;
+    }
+    else if (strcmp(value, "DATE_SUB") == 0)
+    {
+        node->function = FUNC_DATE_SUB;
+    }
+    else if (strcmp(value, "DATE_DIFF") == 0)
+    {
+        node->function = FUNC_DATE_DIFF;
+    }
+    else if (strcmp(value, "TODAY") == 0)
+    {
+        node->function = FUNC_DATE_TODAY;
+        node->field.index = FIELD_CONSTANT;
+        node->field.table_id = TABLE_NONE;
+    }
+    else if (strcmp(value, "NOW") == 0)
+    {
+        node->function = FUNC_DATE_NOW;
+        node->field.index = FIELD_CONSTANT;
+        node->field.table_id = TABLE_NONE;
+    }
+    else if (strcmp(value, "DATE") == 0)
+    {
+        node->function = FUNC_DATE_DATE;
+        node->field.index = FIELD_CONSTANT;
+        node->field.table_id = TABLE_NONE;
+    }
+    else if (strcmp(value, "TIME") == 0)
+    {
+        node->function = FUNC_DATE_TIME;
+        node->field.index = FIELD_CONSTANT;
+        node->field.table_id = TABLE_NONE;
+    }
+    else if (strcmp(value, "CLOCK") == 0)
+    {
+        node->function = FUNC_DATE_CLOCK;
+        node->field.index = FIELD_CONSTANT;
+        node->field.table_id = TABLE_NONE;
+    }
+    else if (strcmp(value, "MAKE_DATE") == 0)
+    {
+        node->function = FUNC_MAKE_DATE;
+    }
+    else if (strcmp(value, "MAKE_TIME") == 0)
+    {
+        node->function = FUNC_MAKE_TIME;
+    }
+    else if (strcmp(value, "MAKE_DATETIME") == 0)
+    {
+        node->function = FUNC_MAKE_DATETIME;
+    }
+    else if (strcmp(value, "INTERVAL") == 0)
+    {
+        // Synonym for CAST(X AS INT)
+        node->function = FUNC_CAST_INT;
+    }
+    else if (strcmp(value, "COUNT") == 0)
+    {
+        node->function = FUNC_AGG_COUNT;
+        flags |= FLAG_GROUP;
+    }
+    else if (strcmp(value, "MAX") == 0)
+    {
+        node->function = FUNC_AGG_MAX;
+        flags |= FLAG_GROUP;
+    }
+    else if (strcmp(value, "MIN") == 0)
+    {
+        node->function = FUNC_AGG_MIN;
+        flags |= FLAG_GROUP;
+    }
+    else if (strcmp(value, "SUM") == 0)
+    {
+        node->function = FUNC_AGG_SUM;
+        flags |= FLAG_GROUP;
+    }
+    else if (strcmp(value, "AVG") == 0)
+    {
+        node->function = FUNC_AGG_AVG;
+        flags |= FLAG_GROUP;
+    }
+    else if (strcmp(value, "LISTAGG") == 0)
+    {
+        node->function = FUNC_AGG_LISTAGG;
+        flags |= FLAG_GROUP;
+    }
+    else
+    {
+        fprintf(stderr, "Unknown function: %s\n", value);
         return -1;
     }
+
+    parseFunctionParams(query, index, node, q);
 
     return flags;
 }
@@ -645,128 +740,6 @@ static int parseFunctionParams(
     }
 
     (*index)++;
-
-    return 0;
-}
-
-/**
- * Detects whether the value in field->text is recognised as a constant or not.
- * If it detects a constant then it sets the field->index to FIELD_CONSTANT.
- * If it detects a 'string literal' it will remove the single quotes as well.
- * Returns:
- *   0 if ok (constant or not);
- *  -1 if an error occurred (e.g. unterminated string literal)
- */
-static int checkConstantField(struct Field *field)
-{
-
-    if (is_numeric(field->text))
-    {
-        // Detected numeric constant
-        field->index = FIELD_CONSTANT;
-        field->table_id = -1;
-    }
-    else if (field->text[0] == '0' && field->text[1] == 'x')
-    {
-        // Detected hex numeric constant
-        field->index = FIELD_CONSTANT;
-        field->table_id = -1;
-    }
-    else if (field->text[0] == '\'')
-    {
-        // Detected string literal
-        field->index = FIELD_CONSTANT;
-        field->table_id = -1;
-
-        int len = strlen(field->text);
-
-        if (field->text[len - 1] != '\'')
-        {
-            fprintf(
-                stderr,
-                "expected apostrophe got '%c'\n",
-                field->text[len - 1]);
-            return -1;
-        }
-
-        // We need to strip the leading and trailing single quote and replace
-        // escaped characters.
-        char value[MAX_FIELD_LENGTH];
-
-        char *ptr = value;
-
-        for (int i = 1; i < len - 1; i++)
-        {
-            char c = field->text[i];
-            char c2 = field->text[i + 1];
-
-            // Backslash escapes
-            if (c == '\\')
-            {
-                if (c2 == 't')
-                {
-                    *ptr++ = '\t';
-                    i++;
-                }
-                // Will probably cause output issues
-                else if (c2 == 'n')
-                {
-                    *ptr++ = '\n';
-                    i++;
-                }
-                else if (c2 == '\'')
-                {
-                    *ptr++ = c2;
-                    i++;
-                }
-                else
-                {
-                    *ptr++ = c;
-                }
-            }
-            // Double single quote escape
-            else if (c == '\'' && c2 == c)
-            {
-                *ptr++ = c;
-                i++;
-            }
-            // Just a normal character
-            else
-            {
-                *ptr++ = c;
-            }
-        }
-
-        strncpy(field->text, value, len - 2);
-
-        field->text[len - 2] = '\0';
-    }
-    else if (strcmp(field->text, "CURRENT_DATE") == 0)
-    {
-        field->index = FIELD_CONSTANT;
-        field->table_id = -1;
-
-        // Evaluated later
-    }
-    else if (strcmp(field->text, "CURRENT_TIME") == 0)
-    {
-        field->index = FIELD_CONSTANT;
-        field->table_id = -1;
-
-        // Evaluated later
-    }
-    else if (strcmp(field->text, "NULL") == 0)
-    {
-        field->index = FIELD_CONSTANT;
-        field->table_id = -1;
-
-        // Evaluated later
-    }
-    else
-    {
-        field->index = FIELD_UNKNOWN;
-        field->table_id = -1;
-    }
 
     return 0;
 }
