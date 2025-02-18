@@ -3,11 +3,12 @@ RUN apk add --update build-base
 WORKDIR /csvdb
 COPY makefile ./
 COPY src/ ./src/
-RUN make cgi
+ARG CSVDB_VERSION
+RUN make cgi CSVDB_VERSION=${CSVDB_VERSION}
 
 FROM sebp/lighttpd
 COPY ./lighttpd/startup.sh /startup.sh
 COPY ./lighttpd/lighttpd.conf /etc/lighttpd/
 COPY ./lighttpd/htdocs /var/www/html
-COPY --from=build /csvdb/release/csvdb.cgi /var/www/html/cgi-bin/csvdb
+COPY --from=build /csvdb/cgi/csvdb.cgi /var/www/html/cgi-bin/csvdb
 CMD ["/startup.sh"]

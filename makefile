@@ -38,10 +38,11 @@ RELCFLAGS = -O3 -DNDEBUG -DJSON_NULL -DJSON_BOOL -DCOMPILE_CALENDAR -DCOMPILE_SE
 #
 # CGI build settings
 #
-CGIDIR = release
+CGIDIR = cgi
 CGIEXE = $(CGIDIR)/$(EXE).cgi
 CGISRCS = $(filter-out main.c, $(SRCS)) main-cgi.c
 CGIOBJS = $(addprefix $(CGIDIR)/, $(CGISRCS:.c=.o))
+CGICFLAGS = $(CFLAGS) -DCSVDB_VERSION=$(CSVDB_VERSION)
 
 #
 # CGI Debug build settings
@@ -94,11 +95,11 @@ $(RELDIR)/%.o: $(SRCDIR)/%.c
 cgi: prep $(CGIEXE)
 
 $(CGIEXE): $(CGIOBJS)
-	$(CC) $(CFLAGS) -o $(CGIEXE) $^
+	$(CC) $(CGICFLAGS) -o $(CGIEXE) $^
 
 # Warning: overlaps with $(RELDIR)/%.o: $(SRCDIR)/%.c
 $(CGIDIR)/%.o: $(SRCDIR)/%.c
-	$(CC) -c $(CFLAGS) $(RELCFLAGS) -o $@ $<
+	$(CC) -c $(CGICFLAGS) $(RELCFLAGS) -o $@ $<
 
 #
 # CGI DEBUG rules
@@ -131,7 +132,7 @@ $(GENDIR)/%.o: $(SRCDIR)/%.c
 # Other rules
 #
 prep:
-	@mkdir -p $(DBGDIR) $(addprefix $(DBGDIR)/, $(SUBDIRS)) $(RELDIR) $(addprefix $(RELDIR)/, $(SUBDIRS)) $(GENDIR) $(addprefix $(GENDIR)/, $(SUBDIRS))
+	@mkdir -p $(DBGDIR) $(addprefix $(DBGDIR)/, $(SUBDIRS)) $(RELDIR) $(addprefix $(RELDIR)/, $(SUBDIRS)) $(GENDIR) $(addprefix $(GENDIR)/, $(SUBDIRS)) $(CGIDIR) $(addprefix $(CGIDIR)/, $(SUBDIRS))
 
 $(SRCDIR)/gitversion.c: .git/HEAD .git/index
 	echo "const char *gitversion = \"$(shell git describe --tags) $(shell git rev-parse HEAD)$(shell git diff-index --quiet HEAD && git show -s --format=' (%cd)' --date=iso-strict || (echo "-dirty built @" && date -Iseconds))\";" > $@

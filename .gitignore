@@ -1,6 +1,7 @@
 debug/
 release/
 gen
+cgi
 *.sql
 *.csv
 *.index.csv
