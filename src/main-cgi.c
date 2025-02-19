@@ -237,12 +237,13 @@ int main()
     // Double newline to end headers
     printf("\n");
 
-    if (query(query_buffer, flags, output, NULL))
+    int result = runQueries(query_buffer, flags, output);
+    if (result < 0)
     {
         // Write errors to stdout now
         printError(format, error_log);
         fclose(error_log);
-        return -1;
+        return result;
     }
 
     fclose(error_log);
