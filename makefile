@@ -42,6 +42,7 @@ CGIDIR = cgi
 CGIEXE = $(CGIDIR)/$(EXE).cgi
 CGISRCS = $(filter-out main.c, $(SRCS)) main-cgi.c
 CGIOBJS = $(addprefix $(CGIDIR)/, $(CGISRCS:.c=.o))
+CSVDB_VERSION := "debug"
 CGICFLAGS = $(CFLAGS) -DCSVDB_VERSION=$(CSVDB_VERSION)
 
 #
