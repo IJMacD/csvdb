@@ -3,6 +3,7 @@
 #
 CC     = gcc
 CFLAGS = -Wall -Werror -Wextra -fdata-sections -ffunction-sections
+LDFLAGS = -Wl,--gc-sections -static
 
 #
 # Project files
@@ -85,7 +86,7 @@ $(DBGDIR)/%.o: $(SRCDIR)/%.c
 release: prep $(RELEXE)
 
 $(RELEXE): $(RELOBJS)
-	$(CC) $(CFLAGS) $(RELCFLAGS) -o $(RELEXE) $^
+	$(CC) $(CFLAGS) $(RELCFLAGS) $(LDFLAGS) -o $(RELEXE) $^
 
 $(RELDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) -c $(CFLAGS) $(RELCFLAGS) -o $@ $<
