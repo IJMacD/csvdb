@@ -46,18 +46,41 @@ An esoteric toy command line app for processing CSV using a custom SQL dialect.
 
 ## Features
 
-* Multiple output formats
-* Efficient query planner
-* Supports indexes
-* Builtin calendar table
-* `SELECT` clause is optional (defaults to `SELECT *`)
-* `FROM` clause is optional (defaults to `FROM stdin`)
-* SQL is a declarative language. Clauses can be ordered arbitrarily.
-* Supports many standard SQL features such as: subqueries, views, `TABLE` clause, `VALUES` clause, CTEs
-* Basic table creation, insertion, and temp tables
-* Can process multiple queries separated by `;`
-* Includes basic REPL
-* Includes simple CGI server
+- Multiple output formats
+- Efficient query planner
+- Supports indexes
+- Builtin calendar table
+- `SELECT` clause is optional (defaults to `SELECT *`)
+- `FROM` clause is optional (defaults to `FROM stdin`)
+- SQL is a declarative language. Clauses can be ordered arbitrarily.
+- Supports many standard SQL features such as: subqueries, views, `TABLE` clause, `VALUES` clause, CTEs
+- Basic table creation, insertion, and temp tables
+- Can process multiple queries separated by `;`
+- Includes basic REPL
+- Includes simple CGI server
+
+## Input Formats
+
+The input format will be inferred from the filename extension. e.g.
+
+    SELECT name FROM suits.tsv
+
+- `csv` - Comma separated values (with or without Excel UTF-8 BOM)
+- `tsv` - Tab separated values
+- `sql` - Treated as a view
+- `col` - Fixed width (determined by first row)
+- `wsv` - Whitespace separated values (any amount of consecutive whitespace)
+
+To treat `stdin` as a particular format specify it as `FROM stdin.<format>` e.g.
+
+```shell
+systemctl list-units -t service | head -n -6 | csvdb "FROM stdin.col"
+(echo "perms      N  user grp  size date         name"; ls -al | tail -n +2) | csvdb "FROM stdin.col"
+```
+
+```shell
+ps | csvdb "FROM stdin.wsv"
+```
 
 ## Examples
 
