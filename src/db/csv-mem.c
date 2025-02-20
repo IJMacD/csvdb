@@ -353,11 +353,13 @@ const char *csvMem_fromValues(struct DB *db, const char *input, int length)
 
         strncpy(out_ptr, in_ptr + 1, line_length - 2);
 
-        // Swap quotes ' -> "
-        //  (SQL quotes -> CSV quotes)
+        // Swap quotes `'` -> `"`
+        //  (SQL quotes to CSV quotes)
         // TODO: Fix problems below
         // Warning: will break quotes in string (converts to space)
         // Warning: can't cope with escaped quotes in string
+        // Warning: Supports unquoted strings (e.g. VALUES (1, 'a', b) should reject b)
+        // Note: Expressions and constants aren't supported (e.g. VALUES(CURRENT_DATE, 1 + 1) )
         for (int i = 0; i < line_length - 2; i++)
         {
             if (*out_ptr == '\'')

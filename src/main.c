@@ -92,10 +92,11 @@ int main(int argc, char *argv[])
     const char *input_name = NULL;
     const char *output_name = NULL;
     char *buffer = NULL;
+    char *write_ptr = NULL;
 
     int argi = 1;
 
-    while (argi < argc && argv[argi][0] == '-')
+    while (argi < argc)
     {
         const char *arg = argv[argi];
 
@@ -243,11 +244,26 @@ int main(int argc, char *argv[])
             // Secret internal argument to force read-only mode
             flags |= FLAG_READ_ONLY;
         }
-        else
+        else if (arg[0] == '-')
         {
             fprintf(stderr, "Unknown option %s\n", arg);
             printUsage(argv[0], stderr);
             return -1;
+        }
+        else
+        {
+            // TODO: realloc if input is too long
+            if (buffer == NULL)
+            {
+                buffer = malloc(1024);
+                write_ptr = buffer;
+            }
+            else
+            {
+                *(write_ptr++) = ' ';
+            }
+
+            write_ptr += sprintf(write_ptr, "%s ", argv[argi]);
         }
 
         argi++;
@@ -316,28 +332,7 @@ int main(int argc, char *argv[])
         flags |= OUTPUT_FORMAT_COMMA;
     }
 
-    if (argc > argi)
-    {
-        char *write_ptr;
-
-        if (buffer == NULL)
-        {
-            buffer = malloc(1024);
-            write_ptr = buffer;
-        }
-        else
-        {
-            write_ptr = buffer + strlen(buffer);
-            *(write_ptr++) = ' ';
-        }
-
-        while (argi < argc)
-        {
-            write_ptr += sprintf(write_ptr, "%s ", argv[argi++]);
-        }
-    }
-
-#ifdef PERSISTANT_TEMP
+#ifdef PERSISTENT_TEMP
     temp_setMappingDB(temp_openMappingDB("/tmp/csvdb.session.0000.temp.csv"));
 #endif
 
@@ -346,7 +341,7 @@ int main(int argc, char *argv[])
         int result = runQueries(buffer, flags, output);
         free(buffer);
 
-#ifndef PERSISTANT_TEMP
+#ifndef PERSISTENT_TEMP
         temp_dropAll();
 #endif
 
@@ -372,7 +367,7 @@ int main(int argc, char *argv[])
 
     repl();
 
-#ifndef PERSISTANT_TEMP
+#ifndef PERSISTENT_TEMP
     temp_dropAll();
 #endif
 
