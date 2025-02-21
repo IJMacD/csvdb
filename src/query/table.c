@@ -25,8 +25,6 @@ int getTableFieldIndex(struct Table *table, const char *field)
 
             curr_field += strlen(curr_field) + 1;
         }
-
-        return -1;
     }
 
     return getFieldIndex(table->db, field);
