@@ -9,18 +9,6 @@
 #include "../db/db.h"
 #include "../functions/util.h"
 
-static void printAllColumnValues(
-    FILE *f,
-    struct DB *db,
-    const char *prefix,
-    int rowid,
-    enum OutputOption format);
-static void printAllHeaderNames(
-    FILE *f,
-    struct DB *db,
-    const char *prefix,
-    enum OutputOption format);
-
 static void printHeaderName(
     FILE *f,
     enum OutputOption format,
@@ -54,7 +42,7 @@ static void printColumnSeparator(FILE *f, enum OutputOption format);
 void printResultLine(
     FILE *f,
     struct Table *tables,
-    int table_count,
+    __attribute__((unused)) int table_count,
     struct Node columns[],
     int column_count,
     int result_index,
@@ -88,40 +76,11 @@ void printResultLine(
         if (node->function == FUNC_UNITY)
         {
 
-            // Note: optimiser has probably already expanded FIELD_STAR away
+            // Note: optimiser must have already expanded FIELD_STAR
             if (node->field.index == FIELD_STAR)
             {
-                if (node->field.table_id >= 0)
-                {
-                    // e.g. table.*
-                    struct DB *db = tables[node->field.table_id].db;
-                    int rowid = getRowID(
-                        row_list,
-                        node->field.table_id,
-                        rowlist_row_index);
-                    const char *prefix = table_count > 1
-                                             ? tables[node->field.table_id].alias
-                                             : NULL;
-                    printAllColumnValues(f, db, prefix, rowid, format);
-                }
-                else
-                {
-                    // e.g. *
-                    for (int m = 0; m < table_count; m++)
-                    {
-                        struct DB *db = tables[m].db;
-                        int rowid = getRowID(row_list, m, rowlist_row_index);
-                        const char *prefix = table_count > 1
-                                                 ? tables[m].alias
-                                                 : NULL;
-                        printAllColumnValues(f, db, prefix, rowid, format);
-
-                        if (m < table_count - 1)
-                        {
-                            printColumnSeparator(f, format);
-                        }
-                    }
-                }
+                fprintf(stderr, "Found FIELD_STAR at output step\n");
+                exit(-1);
             }
             else if (node->field.index == FIELD_ROW_NUMBER)
             {
@@ -313,30 +272,8 @@ void printHeaderLine(
 
         if (node->field.index == FIELD_STAR)
         {
-            if (node->field.table_id >= 0)
-            {
-                struct DB *db = tables[node->field.table_id].db;
-                const char *prefix = table_count > 1
-                                         ? tables[node->field.table_id].alias
-                                         : NULL;
-                printAllHeaderNames(f, db, prefix, format);
-            }
-            else
-            {
-                for (int m = 0; m < table_count; m++)
-                {
-                    struct DB *db = tables[m].db;
-                    const char *prefix = table_count > 1
-                                             ? tables[m].alias
-                                             : NULL;
-                    printAllHeaderNames(f, db, prefix, format);
-
-                    if (m < table_count - 1)
-                    {
-                        printHeaderSeparator(f, format);
-                    }
-                }
-            }
+            fprintf(stderr, "Found FIELD_STAR at output step\n");
+            exit(-1);
         }
         else if (node->alias[0] != '\0')
         {
@@ -619,56 +556,6 @@ void printPostamble(
         }
 
         fprintf(f, "┘\n");
-    }
-}
-
-static void printAllColumnValues(
-    FILE *f,
-    struct DB *db,
-    const char *prefix,
-    int rowid,
-    enum OutputOption format)
-{
-    for (int k = 0; k < db->field_count; k++)
-    {
-        // Value
-        char value[MAX_VALUE_LENGTH];
-        int length = getRecordValue(db, rowid, k, value, MAX_VALUE_LENGTH);
-
-        if (length <= 0)
-        {
-            value[0] = '\0';
-        }
-
-        char *field_name = NULL;
-        if (format == OUTPUT_FORMAT_JSON || format == OUTPUT_FORMAT_XML)
-        {
-            field_name = getFieldName(db, k);
-        }
-
-        printColumnValue(f, format, prefix, field_name, value);
-
-        if (k < db->field_count - 1)
-        {
-            printColumnSeparator(f, format);
-        }
-    }
-}
-
-static void printAllHeaderNames(
-    FILE *f,
-    struct DB *db,
-    const char *prefix,
-    enum OutputOption format)
-{
-    for (int k = 0; k < db->field_count; k++)
-    {
-        printHeaderName(f, format, prefix, getFieldName(db, k));
-
-        if (k < db->field_count - 1)
-        {
-            printHeaderSeparator(f, format);
-        }
     }
 }
 

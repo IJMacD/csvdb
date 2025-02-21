@@ -486,24 +486,55 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 
                     skipWhitespace(query, &index);
 
+                    // Check for column aliases
                     if (query[index] == '(')
                     {
-                        int start_index = index;
-
-                        while (
-                            query[index] != '\0' && query[index] != ';' && query[index] != ')')
-                        {
-                            index++;
-                        }
 
                         index++;
 
-                        char *c = strncpy(
-                            table->alias + strlen(table->alias) + 1,
-                            query + start_index,
-                            index - start_index);
+                        // Stored in table alias struct member.
+                        // [table_alias + 2] will be an opening parenthesis as a
+                        // sentinal value then column aliases will follow as
+                        // null separated values. e.g.:
+                        //
+                        //  table alias\0(col 1\0col 2\0
 
-                        c[index - start_index] = '\0';
+                        int alias_len = strlen(table->alias);
+
+                        char *d = table->alias + alias_len + 1;
+
+                        *(d++) = '(';
+
+                        char token[MAX_FIELD_LENGTH];
+
+                        while (query[index] != '\0' && query[index] != ';')
+                        {
+                            getQuotedToken(query, &index, token, MAX_FIELD_LENGTH);
+
+                            strcpy(d, token);
+
+                            d += strlen(token) + 1;
+
+                            skipWhitespace(query, &index);
+
+                            char c = query[index];
+
+                            if (query[index] == ')')
+                            {
+                                // We're done with the column aliases
+                                index++;
+                                break;
+                            }
+
+                            if (c != ',')
+                            {
+                                // We expect a comma in order to continue with
+                                // the loop, otherwise break.
+                                break;
+                            }
+
+                            index++;
+                        }
                     }
                 }
                 // Alias might already have been set e.g. if coming from a CTE

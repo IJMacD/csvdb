@@ -14,6 +14,7 @@
 #include "parse.h"
 #include "explain.h"
 #include "plan.h"
+#include "table.h"
 #include "optimise.h"
 #include "../db/db.h"
 #include "../db/csv-mem.h"
@@ -44,8 +45,6 @@ static int find_field(
     int *table_id,
     int *column_id,
     char *name);
-
-static void check_column_aliases(struct Table *table);
 
 static int process_subquery(
     struct Query *query,
@@ -824,8 +823,6 @@ static int populate_tables(struct Query *q)
             }
         }
 
-        check_column_aliases(table);
-
         int result;
 
         if (
@@ -887,9 +884,7 @@ static int find_field(
         }
         else
         {
-            struct DB *db = q->tables[*table_id].db;
-
-            *column_id = getFieldIndex(db, text + dot_index + 1);
+            *column_id = getTableFieldIndex(&q->tables[*table_id], text + dot_index + 1);
         }
 
         return 1;
@@ -919,9 +914,7 @@ static int find_field(
                 }
                 else
                 {
-                    struct DB *db = q->tables[i].db;
-
-                    *column_id = getFieldIndex(db, text + dot_index + 1);
+                    *column_id = getTableFieldIndex(&q->tables[i], text + dot_index + 1);
 
                     if (*column_id != -1 && name != NULL)
                     {
@@ -947,9 +940,7 @@ static int find_field(
 
         for (int i = 0; i < q->table_count; i++)
         {
-            struct DB *db = q->tables[i].db;
-
-            *column_id = getFieldIndex(db, text);
+            *column_id = getTableFieldIndex(&q->tables[i], text);
 
             if (*column_id != FIELD_UNKNOWN)
             {
@@ -1074,44 +1065,6 @@ static int resolveNode(struct Query *query, struct Node *node, enum AliasSearchM
 
     fprintf(stderr, "Unable to find column '%s'\n", node->field.text);
     return -1;
-}
-
-/**
- * @brief Support column aliasing in FROM clause
- * e.g. `FROM table (alias1, alias2)`
- *
- * @param table
- */
-static void check_column_aliases(struct Table *table)
-{
-    int alias_len = strlen(table->alias);
-
-    if (table->alias[alias_len + 1] == '(')
-    {
-        char *c = table->alias + alias_len + 2;
-        char *d = table->db->fields;
-        while (*c != '\0')
-        {
-            if (*c == ',')
-            {
-                *d++ = '\0';
-            }
-            else if (*c == ' ')
-            {
-                // No-op
-            }
-            else if (*c == ')')
-            {
-                break;
-            }
-            else
-            {
-                *d++ = *c;
-            }
-            c++;
-        }
-        *d = '\0';
-    }
 }
 
 /**
@@ -1373,7 +1326,7 @@ static void expandFieldStar(struct Query *query)
                         child_col->field.index = k;
 
                         // Avoid overflow
-                        const char *fieldName = getFieldName(table->db, k);
+                        const char *fieldName = getTableFieldName(table, k);
                         strncpy(child_col->field.text, fieldName, 31);
                         child_col->field.text[31] = '\0';
 
@@ -1393,7 +1346,7 @@ static void expandFieldStar(struct Query *query)
                         new_col->field.index = k;
 
                         // Avoid overflow
-                        const char *fieldName = getFieldName(table->db, k);
+                        const char *fieldName = getTableFieldName(table, k);
                         strncpy(new_col->field.text, fieldName, 31);
                         new_col->field.text[31] = '\0';
 

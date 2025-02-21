@@ -154,3 +154,5 @@ FROM test ORDER BY birth_date ASC LIMIT 5;
 FROM test ORDER BY birth_date DESC LIMIT 5;
 -- Constants
 SELECT 'CAT', 10, 'CURRENT_DATE', CURRENT_DATE = TODAY(), NULL;
+-- Universal column aliasing
+FROM SEQUENCE AS t(i), SEQUENCE AS s(j)  WHERE t.i < 5 AND s.j < 2;
