@@ -18,7 +18,7 @@
 #define COL_WEEK                6
 #define COL_WEEKDAY             7
 #define COL_YEARDAY             8
-#define COL_MILLENIUM           9
+#define COL_MILLENNIUM           9
 #define COL_CENTURY             10
 #define COL_DECADE              11
 #define COL_QUARTER             12
@@ -213,8 +213,8 @@ int calendar_getRecordValue (
         return snprintf(value, value_max_length, "%d", datetimeGetYearDay(&dt));
     }
 
-    // millenium
-    if (field_index == COL_MILLENIUM) {
+    // millennium
+    if (field_index == COL_MILLENNIUM) {
         return snprintf(value, value_max_length, "%d", dt.year / 1000);
     }
 
@@ -697,7 +697,7 @@ static void getSingleJulianRange (
         return;
     }
 
-    if (field_left->index == COL_MILLENIUM) {
+    if (field_left->index == COL_MILLENNIUM) {
         struct DateTime dt = {0};
 
         dt.year = atoi(field_right->text) * 1000;
