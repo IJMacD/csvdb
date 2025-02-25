@@ -56,16 +56,17 @@ void printUsage(const char *name, FILE *file)
         "\n"
         "Options:\n"
         "\t[-h|--help]\n"
-        "\t[-f (<filename.sql>|-)] Read SQL from file ('-' for stdin)\n"
+        "\t[-r (<filename.sql>|-)] Read SQL from file ('-' for stdin)\n"
         "\t[-E|--explain]\n"
         "\t[-H|--headers] (default)\n"
         "\t[-N|--no-headers]\n"
-        "\t[(-F |--format=)<format>] Set output formatting (TTY default: table)\n"
+        "\t[(-f |--format=)<format>] Set output formatting (TTY default: table)\n"
         "\t[(-i |--input=)<filename>] Read from file instead of stdin\n"
         "\t[(-o |--output=)<filename>] Write output to file instead of stdout\n"
-        "\t[-S <select-clause>] specify SELECT clause (implies --no-headers and --format=csv)\n"
-        "\t[-W <where-clause>] specify WHERE clause (implies --no-headers and --format=csv)\n"
-        "\t[-O <order-by-clause>] specify ORDER BY clause (implies --no-headers and --format=csv)\n"
+        "\t[-F <from-clause>] Shorthand specifying FROM clause (implies --no-headers and --format=csv)\n"
+        "\t[-S <select-clause>] Shorthand specifying SELECT clause (implies --no-headers and --format=csv)\n"
+        "\t[-W <where-clause>] Shorthand specifying WHERE clause (implies --no-headers and --format=csv)\n"
+        "\t[-O <order-by-clause>] Shorthand specifying ORDER BY clause (implies --no-headers and --format=csv)\n"
         "\t[--stats] Write timing data to 'stats.csv'\n"
 #ifdef DEBUG
         "\t[-v|-vv|-vvv|--verbose=n] Set DEBUG verbosity\n"
@@ -122,11 +123,11 @@ int main(int argc, char *argv[])
         {
             flags &= !OUTPUT_OPTION_HEADERS;
         }
-        else if (strcmp(arg, "-F") == 0)
+        else if (strcmp(arg, "-f") == 0)
         {
             if (argi + 1 >= argc)
             {
-                fprintf(stderr, "Expected format to be specified after -F\n");
+                fprintf(stderr, "Expected format to be specified after -f\n");
                 printUsage(argv[0], stderr);
                 exit(-1);
             }
@@ -205,11 +206,11 @@ int main(int argc, char *argv[])
         {
             flags |= OUTPUT_OPTION_STATS;
         }
-        else if (strcmp(arg, "-f") == 0)
+        else if (strcmp(arg, "-r") == 0)
         {
             if (argi + 1 >= argc)
             {
-                fprintf(stderr, "Expected file to be specified after -f\n");
+                fprintf(stderr, "Expected file to be specified after -r\n");
                 printUsage(argv[0], stderr);
                 exit(-1);
             }
@@ -242,6 +243,19 @@ int main(int argc, char *argv[])
                 fprintf(stderr, "File '%s' was empty\n", filename);
                 return -1;
             }
+        }
+        else if (strcmp(arg, "-F") == 0)
+        {
+            if (argi + 1 >= argc)
+            {
+                fprintf(stderr, "Expected FROM clause to be specified after -F\n");
+                printUsage(argv[0], stderr);
+                exit(-1);
+            }
+
+            char *ptr = shorthand_helper(&buffer, &flags, &format_val);
+
+            sprintf(ptr, " FROM %s", argv[++argi]);
         }
         else if (strcmp(arg, "-S") == 0)
         {
@@ -303,6 +317,11 @@ int main(int argc, char *argv[])
             }
             else
             {
+                if (write_ptr == NULL)
+                {
+                    write_ptr = buffer + strlen(buffer);
+                }
+
                 *(write_ptr++) = ' ';
             }
 

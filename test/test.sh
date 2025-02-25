@@ -40,7 +40,7 @@ fi
 tests=0
 errors=0
 
-echo "csvdb version:" `$CSVDB -v` 
+echo "csvdb version:" `$CSVDB -v`
 
 echo
 
@@ -62,12 +62,12 @@ for sql in "${lines[@]}"; do
 
     printf "\n$GREY -- Plan: --\n"
 
-    $CSVDB -E -F table "$sql"
+    $CSVDB -E -f table "$sql"
 
     printf "$NC"
 
     start=`$D`
-    $CSVDB -o $OUTFILE $stats -F table "$sql"
+    $CSVDB -o $OUTFILE $stats -f table "$sql"
     result=$?
     end=`$D`
 
@@ -87,7 +87,7 @@ for sql in "${lines[@]}"; do
             elif [[ -z $ci ]]; then
                 cp "$OUTFILE" "$SNAPSHOT_DIR/$tests"
                 printf "\n${ORANGE}(Wrote new snapshot)${NC}\n"
-            else 
+            else
                 printf "${RED}Test %d does not have a snapshot${NC}\n" $tests
                 exit 1
             fi
@@ -96,7 +96,7 @@ for sql in "${lines[@]}"; do
 
     if [[ $D == "date +%s%N" ]]; then
         runtime="$(((end-start)/1000000)) ms"
-    else 
+    else
         runtime="$((end-start)) s"
     fi
 

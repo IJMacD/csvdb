@@ -39,10 +39,14 @@ An esoteric toy command line app for processing CSV using a custom SQL dialect.
         [(-F |--format=)<format>] Set output formatting (TTY default: table)
         [(-i |--input=)<filename>] Read from file instead of stdin
         [(-o |--output=)<filename>] Write output to file instead of stdout
+        [-F <from-clause>] Shorthand specifying FROM clause (implies --no-headers and --format=csv)
+        [-S <select-clause>] Shorthand specifying SELECT clause (implies --no-headers and --format=csv)
+        [-W <where-clause>] Shorthand specifying WHERE clause (implies --no-headers and --format=csv)
+        [-O <order-by-clause>] Shorthand specifying ORDER BY clause (implies --no-headers and --format=csv)
         [--stats] Write timing data to 'stats.csv'
 
     Where <format> is one of:
-        (table|tsv|csv[:excel]|html|json[:(object|array)]|sql[:(insert|create|values)]|xml|record)
+        (table|box|tsv|csv[:excel]|html|json[:(object|array)]|sql[:(insert|create|values)]|xml|record)
 
 ## Features
 
