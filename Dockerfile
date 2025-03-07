@@ -7,6 +7,7 @@ ARG CSVDB_VERSION
 RUN make cgi CSVDB_VERSION=${CSVDB_VERSION}
 
 FROM sebp/lighttpd
+ENV CSVDB_DATA_DIR="/data"
 COPY ./lighttpd/startup.sh /startup.sh
 COPY ./lighttpd/lighttpd.conf /etc/lighttpd/
 COPY ./lighttpd/htdocs /var/www/html
