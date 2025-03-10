@@ -11,13 +11,14 @@ extern char *gitversion;
 static void printHelp ();
 
 void repl () {
-    enum OutputOption options = OUTPUT_OPTION_HEADERS | OUTPUT_FORMAT_TABLE;
+    enum OutputOption options = OUTPUT_OPTION_HEADERS | OUTPUT_FORMAT_BOX;
     printf("CSVDB REPL\nType \".help\" for help.\n\n");
 
     int explain = 0;
 
     while(1) {
         printf("> ");
+        fflush(stdout);
 
         size_t buffer_size = 1024;
         char *line_buffer = malloc(buffer_size);
@@ -75,6 +76,8 @@ void repl () {
                 options |= OUTPUT_FORMAT_SQL_INSERT;
             } else if (strcmp(token, "table") == 0) {
                 options |= OUTPUT_FORMAT_TABLE;
+            } else if (strcmp(token, "box") == 0) {
+                options |= OUTPUT_FORMAT_BOX;
             } else if (strcmp(token, "record") == 0) {
                 options |= OUTPUT_FORMAT_INFO_SEP;
             } else if (strcmp(token, "xml") == 0) {
@@ -82,7 +85,7 @@ void repl () {
             } else if (strcmp(token, "sql_values") == 0) {
                 options |= OUTPUT_FORMAT_SQL_VALUES;
             } else {
-                options |= OUTPUT_FORMAT_TABLE;
+                options |= OUTPUT_FORMAT_BOX;
             }
 
             continue;
@@ -110,7 +113,7 @@ static void printHelp () {
         "\t.help\n"
         "\t.version\n"
         "\t.exit\n"
-        "\t.format tsv|csv|html|json|json_array|sql|sql_values|xml|record\n"
+        "\t.format tsv|csv|html|table|box|json|json_array|sql|sql_values|xml|record\n"
         "\t.explain\n"
     );
 }
