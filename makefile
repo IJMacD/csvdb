@@ -31,9 +31,15 @@ DBGCFLAGS = -g -O0 -DDEBUG -DJSON_NULL -DJSON_BOOL -DCOMPILE_CALENDAR -DCOMPILE_
 #
 RELDIR = release
 RELEXE = $(RELDIR)/$(EXE)
-RELSRCS = $(SRCS) repl.c gitversion.c
-RELOBJS = $(addprefix $(RELDIR)/, $(RELSRCS:.c=.o))
+RELSRCS = $(SRCS) repl.c
 RELCFLAGS = -O3 -DNDEBUG -DJSON_NULL -DJSON_BOOL -DCOMPILE_CALENDAR -DCOMPILE_SEQUENCE -DCOMPILE_CSV_MMAP -DCOMPILE_TSV -DCOMPILE_COL -DCOMPILE_WSV
+ifdef CSVDB_VERSION
+RELSRCS := $(RELSRCS) version.c
+RELCFLAGS := $(RELCFLAGS) -DCSVDB_VERSION=$(CSVDB_VERSION)
+else
+RELSRCS := $(RELSRCS) gitversion.c
+endif
+RELOBJS = $(addprefix $(RELDIR)/, $(RELSRCS:.c=.o))
 
 #
 # CGI build settings
@@ -51,6 +57,10 @@ CGICFLAGS = $(CFLAGS) -DCSVDB_VERSION=$(CSVDB_VERSION)
 CGIDDIR = debug
 CGIDEXE = $(CGIDDIR)/$(EXE).cgi
 CGIDSRCS = $(filter-out main.c, $(SRCS)) debug.c main-cgi.c
+ifdef CSVDB_VERSION
+CGISRCS := $(CGISRCS) version.c
+CGICFLAGS := $(CGICFLAGS) -DCSVDB_VERSION=$(CSVDB_VERSION)
+endif
 CGIDOBJS = $(addprefix $(CGIDDIR)/, $(CGIDSRCS:.c=.o))
 
 #
@@ -141,7 +151,7 @@ $(SRCDIR)/gitversion.c: .git/HEAD .git/index
 remake: clean all
 
 clean:
-	rm -f $(RELEXE) $(RELOBJS) $(DBGEXE) $(DBGOBJS) $(CGIEXE) $(CGIDEXE) ${CGIOBJS} ${GENOBJS} ${GENEXE} $(SRCDIR)/gitversion.c
+	rm -f $(RELEXE) $(RELOBJS) $(DBGEXE) $(DBGOBJS) $(CGIEXE) $(CGIDEXE) ${CGIOBJS} ${GENOBJS} ${GENEXE} $(SRCDIR)/gitversion.c $(RELDIR)/gitversion.o $(RELDIR)/version.o
 
 install: release
 	cp $(RELEXE) $(INSTALL_DIR)
