@@ -11,6 +11,14 @@ web:
       capacity: 1Gi
   tls:
     enabled: false
+  ingress:
+    enabled: false
+  gateway:
+    enabled: true
+    parentRef:
+      name: gateway
+      namespace: default
+      sectionName: https
   local:
     enabled: false
   resources:

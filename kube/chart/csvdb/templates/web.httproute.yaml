@@ -1,0 +1,26 @@
+{{ if .Values.web.gateway.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: '{{ .Release.Name }}-web'
+spec:
+  hostnames:
+    - {{ .Values.hostname }}
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ .Values.web.gateway.parentRef.name }}
+      namespace: {{ .Values.web.gateway.parentRef.namespace }}
+      sectionName: {{ .Values.web.gateway.parentRef.sectionName }}
+  rules:
+    - backendRefs:
+        - group: ''
+          kind: Service
+          name: '{{ .Release.Name }}-web'
+          port: 80
+          weight: 1
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
+{{ end }}

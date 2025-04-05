@@ -8,5 +8,9 @@ web:
       enabled: false
   tls:
     enabled: true
+  ingress:
+    enabled: true
+  gateway:
+    enabled: false
   local:
     enabled: false
