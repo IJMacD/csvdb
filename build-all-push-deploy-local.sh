@@ -23,6 +23,7 @@ docker build ${SCRIPT_DIR}/ \
   -f ${SCRIPT_DIR}/Dockerfile \
   --build-arg CSVDB_VERSION=${GIT_TAG} \
   -t ${REGISTRY_NAME}/${REPO}/${APPNAME}:${GIT_TAG} \
+  -t ${REGISTRY_NAME}/${REPO}/${APPNAME}:latest \
   -t ${LOCAL_REGISTRY}/${REPO}/${APPNAME}:${GIT_TAG}
 docker push ${LOCAL_REGISTRY}/${REPO}/${APPNAME}:${GIT_TAG}
 

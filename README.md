@@ -44,6 +44,20 @@ An esoteric toy command line app for processing CSV using a custom SQL dialect.
     Where <format> is one of:
         (table|tsv|csv[:excel]|html|json[:(object|array)]|sql[:(insert|create|values)]|xml|record)
 
+## Docker
+
+With no command, the image starts the web server. Any other argument is passed to `csvdb`.
+
+```shell
+docker run --rm -it ijmacd/csvdb "SELECT NOW()"
+docker run --rm -it ijmacd/csvdb csvdb
+docker run --rm -it -v "$PWD":/data ijmacd/csvdb "SELECT * FROM file.csv"
+docker run --rm -it ijmacd/csvdb sh
+docker run -p 8001:80 -v csvdb-data:/data ijmacd/csvdb
+```
+
+The first command runs a query. `csvdb` with no query starts the REPL. Mount a directory on `/data` to query CSV files there. The last command serves the CGI on port 8001.
+
 ## Features
 
 - Multiple output formats

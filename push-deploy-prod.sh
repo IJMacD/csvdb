@@ -18,6 +18,7 @@ echo "Deploying version $GIT_TAG to cluster $CURRENT_CONTEXT"
 
 for project in "${PROJECTS}"; do
   docker push ${REGISTRY_NAME}/${REPO}/${project}:${GIT_TAG}
+  docker push ${REGISTRY_NAME}/${REPO}/${project}:latest
 done
 
 helm upgrade --install ${APPNAME} \
