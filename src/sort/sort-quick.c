@@ -95,7 +95,7 @@ static int compare (struct SortContext *context, int index_a, int index_b) {
         );
 
         if (is_numeric(value_a) && is_numeric(value_b)) {
-            result = atol(value_a) - atol(value_b);
+            result = compare_numeric(value_a, value_b);
         }
         else {
             result = strcmp(value_a, value_b);

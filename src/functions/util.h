@@ -2,6 +2,24 @@
 
 int is_numeric(const char *string);
 
+/**
+ * @brief Compact formatting for a double (integers stay without a fraction).
+ * @return Number of bytes written
+ */
+int sprint_number(char *output, double value);
+
+/**
+ * @brief Compare two numeric strings as doubles.
+ * @return <0 if a < b, 0 if equal, >0 if a > b
+ */
+int compare_numeric(const char *a, const char *b);
+
+/**
+ * @brief Write an order-preserving fixed-width key for a numeric string.
+ * @return Number of bytes written
+ */
+int format_sortable_number(char *output, const char *value);
+
 void reverse_array(int *array, int size);
 
 int str_find_index(const char *string, char chr);

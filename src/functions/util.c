@@ -3,6 +3,8 @@
 #include <string.h>
 #include <stdint.h>
 #include <ctype.h>
+#include <math.h>
+#include <limits.h>
 
 int is_numeric(const char *string)
 {
@@ -33,6 +35,79 @@ int is_numeric(const char *string)
         ptr++;
     }
     return 1;
+}
+
+int sprint_number(char *output, double value)
+{
+    if (isnan(value) || isinf(value))
+    {
+        output[0] = '\0';
+        return 0;
+    }
+
+    // Exact integers in long range stay looking like integers.
+    if (value >= (double)LONG_MIN && value <= (double)LONG_MAX)
+    {
+        long as_long = (long)value;
+        if ((double)as_long == value)
+        {
+            return sprintf(output, "%ld", as_long);
+        }
+    }
+
+    // Fixed form with enough decimals for typical SQL, then strip zeros.
+    char buf[64];
+    int n = snprintf(buf, sizeof(buf), "%.10f", value);
+    if (n < 0 || n >= (int)sizeof(buf))
+    {
+        output[0] = '\0';
+        return 0;
+    }
+
+    char *p = buf + n - 1;
+    while (p > buf && *p == '0')
+    {
+        p--;
+    }
+    if (p > buf && *p == '.')
+    {
+        p--;
+    }
+    p[1] = '\0';
+
+    return sprintf(output, "%s", buf);
+}
+
+int compare_numeric(const char *a, const char *b)
+{
+    double left = strtod(a, NULL);
+    double right = strtod(b, NULL);
+
+    if (left < right)
+        return -1;
+    if (left > right)
+        return 1;
+    return 0;
+}
+
+int format_sortable_number(char *output, const char *value)
+{
+    // Map IEEE-754 doubles to an unsigned bit pattern that sorts
+    // lexicographically in the same order as the numeric values.
+    union
+    {
+        double d;
+        uint64_t u;
+    } x;
+
+    x.d = strtod(value, NULL);
+
+    if (x.u & (1ULL << 63))
+        x.u = ~x.u;
+    else
+        x.u |= (1ULL << 63);
+
+    return sprintf(output, "%016llx", (unsigned long long)x.u);
 }
 
 void reverse_array(int *array, int size)

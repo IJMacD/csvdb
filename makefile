@@ -83,7 +83,7 @@ all: prep release
 debug: prep $(DBGEXE)
 
 $(DBGEXE): $(DBGOBJS)
-	$(CC) $(CFLAGS) $(DBGCFLAGS) -o $(DBGEXE) $^
+	$(CC) $(CFLAGS) $(DBGCFLAGS) -o $(DBGEXE) $^ -lm
 
 # Warning: overlaps with $(CGIDDIR)/%.o: $(SRCDIR)/%.c
 $(DBGDIR)/%.o: $(SRCDIR)/%.c
@@ -95,7 +95,7 @@ $(DBGDIR)/%.o: $(SRCDIR)/%.c
 release: prep $(RELEXE)
 
 $(RELEXE): $(RELOBJS)
-	$(CC) $(CFLAGS) $(RELCFLAGS) -o $(RELEXE) $^
+	$(CC) $(CFLAGS) $(RELCFLAGS) -o $(RELEXE) $^ -lm
 
 $(RELDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) -c $(CFLAGS) $(RELCFLAGS) -o $@ $<
@@ -106,7 +106,7 @@ $(RELDIR)/%.o: $(SRCDIR)/%.c
 cgi: prep $(CGIEXE)
 
 $(CGIEXE): $(CGIOBJS)
-	$(CC) $(CGICFLAGS) -o $(CGIEXE) $^
+	$(CC) $(CGICFLAGS) -o $(CGIEXE) $^ -lm
 
 # Warning: overlaps with $(RELDIR)/%.o: $(SRCDIR)/%.c
 $(CGIDIR)/%.o: $(SRCDIR)/%.c
@@ -118,7 +118,7 @@ $(CGIDIR)/%.o: $(SRCDIR)/%.c
 cgi-debug: prep $(CGIDEXE)
 
 $(CGIDEXE): $(CGIDOBJS)
-	$(CC) $(CFLAGS) $(DBGCFLAGS) -o $(CGIDEXE) $^
+	$(CC) $(CFLAGS) $(DBGCFLAGS) -o $(CGIDEXE) $^ -lm
 
 # Warnging: overlaps with $(DBGDIR)/%.o: $(SRCDIR)/%.c
 $(CGIDDIR)/%.o: $(SRCDIR)/%.c
@@ -134,7 +134,7 @@ test/test.csv: $(GENEXE)
 	${GENEXE} 1000000 $@
 
 $(GENEXE): $(GENOBJS)
-	$(CC) $(CFLAGS) $(GENCFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) $(GENCFLAGS) -o $@ $^ -lm
 
 $(GENDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) -c $(CFLAGS) $(GENCFLAGS) -o $@ $<

@@ -217,3 +217,8 @@ FROM test WHERE name IN ('Walter KELLY','Claude MILLS') SELECT name ORDER BY nam
 FROM lefty AS l JOIN righty AS r ON l.id = r.id WHERE l.id = 2 SELECT l.name, r.name;
 -- ORDER BY + EQ with tiny LIMIT may use index-ordered scan
 FROM test WHERE score = 42 ORDER BY name LIMIT 3;
+-- Float support
+SELECT 1.5 * 2, 5 / 2, 1.5 + 2.25, DIV(36, 5), MOD(5.5, 2), POW(2, 0.5);
+SELECT 10.5 > 10, 1.5 = 1.50, 3.2 < 3.7, 2.5 >= 2.5;
+FROM ranks SELECT AVG(value);
+FROM (VALUES (10.5), (2), (10), (2.25)) AS t(v) ORDER BY v;

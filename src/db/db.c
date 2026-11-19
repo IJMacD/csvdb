@@ -541,12 +541,6 @@ int indexSearch (
     int index_match = -1;
     int numeric_mode = is_numeric(search_value);
 
-    long search_as_number;
-
-    if (numeric_mode) {
-        search_as_number = atol(search_value);
-    }
-
     char record_value[MAX_VALUE_LENGTH] = {0};
 
     int res;
@@ -556,7 +550,7 @@ int indexSearch (
     // Check lower boundary (index_a = 0)
     getRecordValue(db, index_a, index_column, record_value, MAX_VALUE_LENGTH);
     if (numeric_mode) {
-        res = search_as_number - atol(record_value);
+        res = compare_numeric(search_value, record_value);
     } else {
         res = strcmp(search_value, record_value);
     }
@@ -582,7 +576,7 @@ int indexSearch (
         )
         ;
         if (numeric_mode) {
-            res = search_as_number - atol(record_value);
+            res = compare_numeric(search_value, record_value);
         } else {
             res = strcmp(search_value, record_value);
         }
@@ -610,7 +604,7 @@ int indexSearch (
             )
             ;
             if (numeric_mode) {
-                res = search_as_number - atol(record_value);
+                res = compare_numeric(search_value, record_value);
             } else {
                 res = strcmp(search_value, record_value);
             }

@@ -241,12 +241,12 @@ int evaluateNodeList(
             value,
             sizeof(value));
 
-        // Numeric values need to be fixed width for comparison.
-        // After testing it make no difference whether numeric values are
-        // compared or strings are compared. (There are other slower steps).
+        // Numeric values need an order-preserving fixed-width key so that
+        // lexicographic string comparison matches numeric ordering (including
+        // floats and negatives).
         if (is_numeric(value))
         {
-            count = sprintf(output, "%020ld", atol(value));
+            count = format_sortable_number(output, value);
         }
         else
         {
