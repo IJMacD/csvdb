@@ -161,3 +161,11 @@ SELECT VERSION FROM (VALUES ('column')) AS t (VERSION);
 SELECT VERSION() = VERSION FROM (VALUES ('column')) AS t (VERSION);
 SELECT CSVDB_VERSION = VERSION();
 SELECT LENGTH(VERSION()) > 0;
+-- Planner bugs: LIMIT must apply to groups, not rows fed into GROUP BY on an index
+FROM test GROUP BY name SELECT name, COUNT(*) LIMIT 5;
+-- Planner bugs: INDEX()/UNIQUE() source must still honour ORDER BY
+FROM test WHERE INDEX('test__name.index') = 'Claude MILLS' ORDER BY score SELECT name, score LIMIT 3;
+-- Planner bugs: OR (via IN) multi-source plan must fully sort before SELECT
+FROM suits WHERE name IN ('spades','diamonds','hearts') ORDER BY name SELECT name;
+-- Planner bugs: NEVER predicate/join must still emit aggregate row (COUNT=0)
+FROM suits JOIN ranks ON 1 = 0 SELECT COUNT(*);

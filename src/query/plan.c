@@ -74,9 +74,17 @@ int makePlan(struct Query *q, struct Plan *plan)
         }
     }
 
-    // If there's a single NEVER predicate then we have 0 rows
+    // If there's a NEVER predicate then we have 0 rows.
+    // Whole-set aggregates (COUNT/SUM/…) still need an empty input + GROUP so
+    // they emit one row (e.g. COUNT(*) = 0) rather than an empty result.
     if (predicates_any_never)
     {
+        if ((q->flags & FLAG_GROUP) && q->group_count == 0 && q->table_count > 0)
+        {
+            addStepWithLimit(plan, PLAN_TABLE_SCAN, 0);
+            addStep(plan, PLAN_GROUP);
+        }
+
         addStepWithNodes(plan, PLAN_SELECT, q->column_nodes, q->column_count);
 
         return plan->step_count;
@@ -204,15 +212,8 @@ int makePlan(struct Query *q, struct Plan *plan)
 
             addJoinStepsIfRequired(plan, q);
 
-            // In this case it's OK to apply limit optimisation to Join step
-            // even though we have an ORDER BY clause.
-            struct PlanStep *prev = &plan->steps[plan->step_count - 1];
-            if (q->limit_value >= 0)
-            {
-                // Usually this can't be done with ORDER BY but in this case we
-                // can since there are no predicates
-                prev->limit = q->offset_value + q->limit_value;
-            }
+            // Do not push LIMIT onto the scan/join: LIMIT applies to groups,
+            // and addGroupStepIfRequired will attach it to the GROUP step.
         }
         else
         {
@@ -277,6 +278,18 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
         enum PlanStepType step_type = predicate->function == OPERATOR_EQ ? (left->function == FUNC_UNIQUE ? PLAN_UNIQUE : PLAN_INDEX_RANGE) : (left->function == FUNC_UNIQUE ? PLAN_UNIQUE_RANGE : PLAN_INDEX_RANGE);
 
         addStepWithNode(plan, step_type, predicate);
+
+        // Remaining WHERE predicates still need to be applied
+        if (query->predicate_count > 1)
+        {
+            addStepWithNodes(
+                plan,
+                PLAN_TABLE_ACCESS_ROWID,
+                query->predicate_nodes + 1,
+                query->predicate_count - 1);
+        }
+
+        addOrderStepsIfRequired(plan, query);
 
         return;
     }
@@ -468,15 +481,8 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
                     query->predicate_count - predicatesOnFirstTable);
             }
 
-            // In this case it's OK to apply limit optimisation to Join
-            // step even though we have an ORDER BY clause.
-            struct PlanStep *prev = &plan->steps[plan->step_count - 1];
-            if (query->limit_value >= 0)
-            {
-                // Usually this can't be done with ORDER BY but in this
-                // case we can since there are no predicates.
-                prev->limit = query->offset_value + query->limit_value;
-            }
+            // Do not push LIMIT onto the scan/join/filter: LIMIT applies to
+            // groups via addGroupStepIfRequired.
         }
         else
         {
@@ -533,10 +539,13 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
     /* table_count == 1 */
     // Special case if the only predicate is an OR operator node
     // ONLY WORKS IF EACH 'OR' CHILD IS UNIQUE! <- Even then I'm not sure if strictly true
+    // Multiple SOURCE steps each push their own row list; SORT/REVERSE only
+    // operate on the top list, so ORDER BY would leave other branches unsorted.
     else if (
         query->predicate_count == 1 &&
         query->predicate_nodes[0].function == OPERATOR_OR &&
-        areChildrenUnique(&query->predicate_nodes[0]))
+        areChildrenUnique(&query->predicate_nodes[0]) &&
+        !have_order_by)
     {
         struct Node *or_children = query->predicate_nodes[0].children;
 
@@ -548,8 +557,6 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
                 PLAN_TABLE_ACCESS_FULL,
                 &or_children[i]);
         }
-
-        addOrderStepsIfRequired(plan, query);
     }
     /* table_count == 1 */
     else
@@ -847,12 +854,13 @@ static void addJoinStepsIfRequired(struct Plan *plan, struct Query *q)
         }
         else if (op == OPERATOR_NEVER)
         {
-            // Just like predicates any NEVER
-
-            // Wipe out plan
+            // Just like predicates any NEVER — no join rows.
+            // Leave an empty first-table scan so whole-set aggregates can still
+            // produce COUNT(*)=0 via PLAN_GROUP later in makePlan.
             plan->step_count = 0;
+            addStepWithLimit(plan, PLAN_TABLE_SCAN, 0);
 
-            // We're done
+            // We're done joining
             return;
         }
         else
@@ -1528,43 +1536,47 @@ static const char *getNodeFieldName(struct Node *node)
  * - UNIQUE('a') = 'x'
  *
  * Node:
- * - Must be first predicate
- * - Must be operator node
+ * - Must be an operator node with exactly two children
  * - Can be any operator
  * Index Function Node:
  * - Must be on left
  * - Must have single constant child (or self-child)
  *
- * @return -1 if not found; or predicate index of match (currently only 0)
+ * If found at a non-zero index, swaps it to predicate 0 so later steps can
+ * treat remaining predicates as contiguous from index 1.
+ *
+ * @return -1 if not found; or 0 after ensuring the match is at predicate 0
  */
 static int index_function_node(struct Query *query)
 {
-    if (query->predicate_count == 0)
+    for (int i = 0; i < query->predicate_count; i++)
     {
-        return -1;
-    }
+        struct Node *node = &query->predicate_nodes[i];
 
-    struct Node *node = &query->predicate_nodes[0];
-
-    if ((node->function & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR)
-    {
-        return -1;
-    }
-
-    if (node->child_count != 2)
-    {
-        // We're looking for an operator with exactly two children.
-        // Operators can have different numbers of children i.e. (OR/AND)
-        return -1;
-    }
-
-    struct Node *left = &node->children[0];
-
-    if (left->function == FUNC_INDEX || left->function == FUNC_UNIQUE)
-    {
-        if (left->child_count == -1 || left->child_count == 1)
+        if ((node->function & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR)
         {
-            return 0;
+            continue;
+        }
+
+        if (node->child_count != 2)
+        {
+            // We're looking for an operator with exactly two children.
+            // Operators can have different numbers of children i.e. (OR/AND)
+            continue;
+        }
+
+        struct Node *left = &node->children[0];
+
+        if (left->function == FUNC_INDEX || left->function == FUNC_UNIQUE)
+        {
+            if (left->child_count == -1 || left->child_count == 1)
+            {
+                if (i > 0)
+                {
+                    swapNodes(&query->predicate_nodes[0], &query->predicate_nodes[i]);
+                }
+                return 0;
+            }
         }
     }
 
