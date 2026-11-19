@@ -14,6 +14,15 @@
 
 static int read_file(FILE *file, char **output);
 static enum OutputOption get_format_flag(const char *format_val);
+static int is_long_option(const char *arg, const char *name);
+static int read_long_value(
+    int argc,
+    char *argv[],
+    int *argi,
+    const char *name,
+    const char **value,
+    int allow_dash);
+static void print_version(void);
 
 int debug_verbosity = 0;
 
@@ -22,6 +31,82 @@ const char *version_debug = "DEBUG";
 #else
 const char *version_debug = "";
 #endif
+
+/**
+ * True when `arg` is `name` or `name=...`.
+ */
+static int is_long_option(const char *arg, const char *name)
+{
+    size_t name_len = strlen(name);
+
+    if (strncmp(arg, name, name_len) != 0)
+    {
+        return 0;
+    }
+
+    return arg[name_len] == '\0' || arg[name_len] == '=';
+}
+
+/**
+ * Read the value of a long option already matched by is_long_option.
+ * Accepts `--name value` and `--name=value`.
+ * `allow_dash` permits a separate argument of `-` (stdin or stdout).
+ * Returns 0 on success, -1 if the value is missing.
+ */
+static int read_long_value(
+    int argc,
+    char *argv[],
+    int *argi,
+    const char *name,
+    const char **value,
+    int allow_dash)
+{
+    const char *arg = argv[*argi];
+    size_t name_len = strlen(name);
+
+    if (arg[name_len] == '=')
+    {
+        if (arg[name_len + 1] == '\0')
+        {
+            fprintf(stderr, "Expected a value after %s=\n", name);
+            return -1;
+        }
+
+        *value = arg + name_len + 1;
+        return 0;
+    }
+
+    if (*argi + 1 >= argc)
+    {
+        fprintf(stderr, "Expected a value after %s\n", name);
+        return -1;
+    }
+
+    const char *next = argv[*argi + 1];
+    int is_dash = next[0] == '-' && next[1] == '\0';
+    int is_flag = next[0] == '-' && next[1] != '\0';
+
+    if (is_flag || (is_dash && !allow_dash))
+    {
+        fprintf(stderr, "Expected a value after %s\n", name);
+        return -1;
+    }
+
+    *value = next;
+    (*argi)++;
+    return 0;
+}
+
+static void print_version(void)
+{
+    if (version_debug[0] == '\0')
+    {
+        printf("%s\n", gitversion);
+        return;
+    }
+
+    printf("%s %s\n", gitversion, version_debug);
+}
 
 void printUsage(const char *name, FILE *file)
 {
@@ -36,6 +121,7 @@ void printUsage(const char *name, FILE *file)
         "\t%1$s \"INSERT INTO <file> <query>\"\n"
         "\t%1$s \"CREATE VIEW <file> AS <query>\"\n"
         "\t%1$s -h|--help\n"
+        "\t%1$s --version\n"
         "\n"
         "Where <query> is one of:\n"
         "\tSELECT <fields, ...> FROM <file> [JOIN <file> [ON ...]] [WHERE]\n"
@@ -55,16 +141,21 @@ void printUsage(const char *name, FILE *file)
         "\n"
         "Options:\n"
         "\t[-h|--help]\n"
+        "\t[--version] Print version and exit\n"
+#ifndef DEBUG
+        "\t[-v] Print version when no query is given\n"
+#endif
         "\t[-f (<filename.sql>|-)] Read SQL from file ('-' for stdin)\n"
         "\t[-E|--explain]\n"
         "\t[-H|--headers] (default)\n"
         "\t[-N|--no-headers]\n"
-        "\t[(-F |--format=)<format>] Set output formatting (TTY default: table)\n"
-        "\t[(-i |--input=)<filename>] Read from file instead of stdin\n"
-        "\t[(-o |--output=)<filename>] Write output to file instead of stdout\n"
+        "\t[-F|--format <format>] Set output formatting (TTY default: box)\n"
+        "\t[-i|--input <filename>] Read from file instead of stdin\n"
+        "\t[-o|--output <filename>] Write output to file instead of stdout\n"
+        "\tValue options accept --option value and --option=value\n"
         "\t[--stats] Write timing data to 'stats.csv'\n"
 #ifdef DEBUG
-        "\t[-v|-vv|-vvv|--verbose=n] Set DEBUG verbosity\n"
+        "\t[-v|-vv|-vvv|--verbose <n>] Set DEBUG verbosity\n"
         "\t[-A] Output AST"
 #endif
         "\n"
@@ -106,6 +197,12 @@ int main(int argc, char *argv[])
             return 0;
         }
 
+        if (strcmp(arg, "--version") == 0)
+        {
+            print_version();
+            return 0;
+        }
+
         if (strcmp(arg, "-E") == 0 || strcmp(arg, "--explain") == 0)
         {
             flags |= FLAG_EXPLAIN;
@@ -116,58 +213,76 @@ int main(int argc, char *argv[])
         }
         else if (strcmp(arg, "-N") == 0 || strcmp(arg, "--no-headers") == 0)
         {
-            flags &= !OUTPUT_OPTION_HEADERS;
+            flags &= ~OUTPUT_OPTION_HEADERS;
         }
-        else if (strcmp(arg, "-F") == 0)
+        else if (strcmp(arg, "-F") == 0 || is_long_option(arg, "--format"))
         {
-            if (argi + 1 >= argc)
+            if (strcmp(arg, "-F") == 0)
             {
-                fprintf(stderr, "Expected format to be specified after -F\n");
-                printUsage(argv[0], stderr);
-                exit(-1);
-            }
+                if (argi + 1 >= argc)
+                {
+                    fprintf(stderr, "Expected format to be specified after -F\n");
+                    printUsage(argv[0], stderr);
+                    exit(-1);
+                }
 
-            format_val = argv[++argi];
-        }
-        else if (strncmp(arg, "--format=", 9) == 0)
-        {
-            format_val = arg + 9;
-        }
-        else if (strcmp(arg, "-i") == 0)
-        {
-            if (
-                argi + 1 >= argc ||
-                (argv[argi + 1][0] == '-' && argv[argi + 1][1] != '\0'))
+                format_val = argv[++argi];
+            }
+            else if (
+                read_long_value(
+                    argc, argv, &argi, "--format", &format_val, 0) < 0)
             {
-                fprintf(stderr,
-                        "Expected input name to be specified after -i\n");
                 printUsage(argv[0], stderr);
-                exit(-1);
+                return -1;
             }
-
-            input_name = argv[++argi];
         }
-        else if (strncmp(arg, "--input=", 8) == 0)
+        else if (strcmp(arg, "-i") == 0 || is_long_option(arg, "--input"))
         {
-            input_name = arg + 8;
-        }
-        else if (strcmp(arg, "-o") == 0)
-        {
-            if (
-                argi + 1 >= argc ||
-                (argv[argi + 1][0] == '-' && argv[argi + 1][1] != '\0'))
+            if (strcmp(arg, "-i") == 0)
             {
-                fprintf(stderr,
-                        "Expected output name to be specified after -o\n");
-                printUsage(argv[0], stderr);
-                exit(-1);
-            }
+                if (
+                    argi + 1 >= argc ||
+                    (argv[argi + 1][0] == '-' && argv[argi + 1][1] != '\0'))
+                {
+                    fprintf(stderr,
+                            "Expected input name to be specified after -i\n");
+                    printUsage(argv[0], stderr);
+                    exit(-1);
+                }
 
-            output_name = argv[++argi];
+                input_name = argv[++argi];
+            }
+            else if (
+                read_long_value(
+                    argc, argv, &argi, "--input", &input_name, 1) < 0)
+            {
+                printUsage(argv[0], stderr);
+                return -1;
+            }
         }
-        else if (strncmp(arg, "--output=", 9) == 0)
+        else if (strcmp(arg, "-o") == 0 || is_long_option(arg, "--output"))
         {
-            output_name = arg + 9;
+            if (strcmp(arg, "-o") == 0)
+            {
+                if (
+                    argi + 1 >= argc ||
+                    (argv[argi + 1][0] == '-' && argv[argi + 1][1] != '\0'))
+                {
+                    fprintf(stderr,
+                            "Expected output name to be specified after -o\n");
+                    printUsage(argv[0], stderr);
+                    exit(-1);
+                }
+
+                output_name = argv[++argi];
+            }
+            else if (
+                read_long_value(
+                    argc, argv, &argi, "--output", &output_name, 1) < 0)
+            {
+                printUsage(argv[0], stderr);
+                return -1;
+            }
         }
         else if (strcmp(arg, "-v") == 0)
         {
@@ -187,10 +302,20 @@ int main(int argc, char *argv[])
             flags |= OUTPUT_OPTION_VERBOSE;
             debug_verbosity = 3;
         }
-        else if (strncmp(arg, "--verbose=", 10) == 0)
+        else if (is_long_option(arg, "--verbose"))
         {
+            const char *verbose_val = NULL;
+
+            if (
+                read_long_value(
+                    argc, argv, &argi, "--verbose", &verbose_val, 0) < 0)
+            {
+                printUsage(argv[0], stderr);
+                return -1;
+            }
+
             flags |= OUTPUT_OPTION_VERBOSE;
-            debug_verbosity = atoi(arg + 10);
+            debug_verbosity = atoi(verbose_val);
         }
         else if (strcmp(arg, "-A") == 0)
         {
@@ -348,6 +473,16 @@ int main(int argc, char *argv[])
         return result;
     }
 
+#ifndef DEBUG
+    // No query was given. -v is the version flag, including when stdin is a
+    // pipe. --version already returned during argument parsing.
+    if (flags & OUTPUT_OPTION_VERBOSE)
+    {
+        print_version();
+        return 0;
+    }
+#endif
+
     // If we're here it means we don't yet have a query.
     // If stdin is something more than a tty (i.e pipe or redirected file)
     // then we will assume the following query:
@@ -357,13 +492,15 @@ int main(int argc, char *argv[])
         return query("", flags, output, NULL);
     }
 
+#ifdef DEBUG
     // If verbose option is set but we don't actually have a query, then we
     // treat it like a version flag.
     if (flags & OUTPUT_OPTION_VERBOSE)
     {
-        printf("%s %s\n", gitversion, version_debug);
+        print_version();
         return 0;
     }
+#endif
 
     repl();
 

@@ -13,6 +13,7 @@ An esoteric toy command line app for processing CSV using a custom SQL dialect.
         csvdb "INSERT INTO <file> <query>"
         csvdb "CREATE VIEW <file> AS <query>"
         csvdb -h|--help
+        csvdb --version
 
     Where <query> is one of:
         SELECT <fields, ...> FROM <file> [JOIN <file> [ON ...]] [WHERE]
@@ -32,17 +33,20 @@ An esoteric toy command line app for processing CSV using a custom SQL dialect.
 
     Options:
         [-h|--help]
+        [--version] Print version and exit
+        [-v] Print version when no query is given
         [-f (<filename.sql>|-)] Read SQL from file ('-' for stdin)
         [-E|--explain]
         [-H|--headers] (default)
         [-N|--no-headers]
-        [(-F |--format=)<format>] Set output formatting (TTY default: table)
-        [(-i |--input=)<filename>] Read from file instead of stdin
-        [(-o |--output=)<filename>] Write output to file instead of stdout
+        [-F|--format <format>] Set output formatting (TTY default: box)
+        [-i|--input <filename>] Read from file instead of stdin
+        [-o|--output <filename>] Write output to file instead of stdout
+        Value options accept --option value and --option=value
         [--stats] Write timing data to 'stats.csv'
 
     Where <format> is one of:
-        (table|tsv|csv[:excel]|html|json[:(object|array)]|sql[:(insert|create|values)]|xml|record)
+        (table|box|tsv|csv[:excel]|html|json[:(object|array)]|sql[:(insert|create|values)]|xml|record)
 
 ## Docker
 
