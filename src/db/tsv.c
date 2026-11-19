@@ -489,20 +489,8 @@ enum IndexSearchType tsv_findIndex(
         return INDEX_NONE;
     }
 
-    char table_filename[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12 - 13];
-
-    // If the table name ends in '.tsv' remove that before searching for a
-    // matching index
-    size_t t_len = strlen(table_name);
-    if (strcmp(table_name + t_len - 4, ".tsv") == 0)
-    {
-        t_len -= 4;
-    }
-    strncpy(table_filename, table_name, t_len);
-    table_filename[t_len] = '\0';
-
-    // Allocate working buffer
-    char index_filename[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12];
+    // "__" + ".unique.tsv" + NUL
+    char index_filename[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 14];
 
     FILE *f = NULL;
 
@@ -529,8 +517,25 @@ enum IndexSearchType tsv_findIndex(
     {
         // Start trying auto names
 
-        sprintf(
+        char table_filename[MAX_TABLE_LENGTH];
+
+        // If the table name ends in '.tsv' remove that before searching for a
+        // matching index
+        size_t t_len = strlen(table_name);
+        if (t_len >= 4 && strcmp(table_name + t_len - 4, ".tsv") == 0)
+        {
+            t_len -= 4;
+        }
+        if (t_len >= sizeof(table_filename))
+        {
+            t_len = sizeof(table_filename) - 1;
+        }
+        memcpy(table_filename, table_name, t_len);
+        table_filename[t_len] = '\0';
+
+        snprintf(
             index_filename,
+            sizeof(index_filename),
             "%s__%s.unique.tsv",
             table_filename,
             field_name);
@@ -543,8 +548,9 @@ enum IndexSearchType tsv_findIndex(
 
         if (!f && index_type_flags == INDEX_ANY)
         {
-            sprintf(
+            snprintf(
                 index_filename,
+                sizeof(index_filename),
                 "%s__%s.index.tsv",
                 table_filename,
                 field_name);
