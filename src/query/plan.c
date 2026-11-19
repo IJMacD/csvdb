@@ -1115,7 +1115,12 @@ static int optimiseNodes(
 
         struct Node *left = &predicates[i].children[0];
 
-        if (left->function == FUNC_PK && left->field.table_id == 0)
+        // Whole predicate must only reference table 0 (and constants). A join
+        // predicate like t0.a = t1.b must not be treated as first-table-only.
+        if (
+            left->function == FUNC_PK &&
+            left->field.table_id == 0 &&
+            getTableBitMap(&predicates[i]) == 1)
         {
             chosen_predicate_index = i;
             break;
@@ -1128,21 +1133,12 @@ static int optimiseNodes(
     {
         for (int i = 0; i < count; i++)
         {
-            struct Node *left = &predicates[i].children[0];
-
-            // Any predicate on the first table is fine
-            int bit_map = getTableBitMap(left);
-
-            if (bit_map == 1)
+            // Entire predicate must be on the first table only
+            if (getTableBitMap(&predicates[i]) == 1)
             {
-                // Must be exactly only on first table
                 chosen_predicate_index = i;
                 break;
             }
-
-            // Only checking left because predicates should have been
-            // normalised, right?
-            /// TODO: check they have actually been normalised
         }
     }
 
@@ -1339,8 +1335,13 @@ static int haveNonUniqueJoins(struct Plan *plan)
     for (int i = 0; i < plan->step_count; i++)
     {
         enum PlanStepType type = plan->steps[i].type;
+        // INDEX_JOIN can match multiple right-hand rows per left row, so it
+        // must count as non-unique for sort-elision decisions.
         if (
-            type == PLAN_LOOP_JOIN || type == PLAN_CONSTANT_JOIN || type == PLAN_CROSS_JOIN)
+            type == PLAN_LOOP_JOIN ||
+            type == PLAN_CONSTANT_JOIN ||
+            type == PLAN_CROSS_JOIN ||
+            type == PLAN_INDEX_JOIN)
         {
             non_unique_joins++;
         }
