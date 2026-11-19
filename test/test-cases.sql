@@ -181,6 +181,7 @@ CREATE INDEX ON dupes (key);
 FROM ranks JOIN dupes ON ranks.value = dupes.key ORDER BY ranks.value ASC, dupes.label DESC SELECT ranks.name, dupes.label LIMIT 4;
 -- Empty LIKE must not under-read the pattern
 FROM test WHERE name LIKE '' SELECT name LIMIT 1;
--- Covering index rewrite (CSV); calendar remains opted out via VFS flag
+-- Covering index: SELECT only indexed columns → COVERING INDEX SEEK on CSV
 FROM test WHERE name = 'Walter KELLY' SELECT name;
+-- Covering index opt-out: CALENDAR has no real index file (VFS flag off)
 FROM CALENDAR WHERE date = '2024-01-01' SELECT date;
