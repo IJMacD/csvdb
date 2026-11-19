@@ -169,3 +169,13 @@ FROM test WHERE INDEX('test__name.index') = 'Claude MILLS' ORDER BY score SELECT
 FROM suits WHERE name IN ('spades','diamonds','hearts') ORDER BY name SELECT name;
 -- Planner bugs: NEVER predicate/join must still emit aggregate row (COUNT=0)
 FROM suits JOIN ranks ON 1 = 0 SELECT COUNT(*);
+-- Medium-impact planner bugs
+-- optimiseNodes treats cross-table WHERE as first-table-only (crash / wrong plan)
+FROM lefty AS l, righty AS r WHERE l.id = r.id SELECT l.name, r.name ORDER BY l.id;
+-- GROUP BY + OFFSET offsets rows inside one group list instead of skipping groups
+FROM SEQUENCE WHERE value < 8 GROUP BY value SELECT value, COUNT(*) OFFSET 2 ROWS FETCH NEXT 3 ROWS ONLY;
+-- Indexes for UNIQUE_RANGE + INDEX_JOIN secondary-sort bug
+CREATE UNIQUE INDEX ON ranks (value);
+CREATE INDEX ON dupes (key);
+-- haveNonUniqueJoins ignores INDEX_JOIN so secondary ORDER BY is dropped
+FROM ranks JOIN dupes ON ranks.value = dupes.key ORDER BY ranks.value ASC, dupes.label DESC SELECT ranks.name, dupes.label LIMIT 4;

@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "../structs.h"
 #include "../query/result.h"
 #include "../evaluate/evaluate.h"
@@ -75,7 +77,38 @@ int executeOffset (
     struct PlanStep *step,
     struct ResultSet *result_set
 ) {
-    // Offset is taken care of in PLAN_SELECT
+    int offset = step->limit;
+
+    // After GROUP / GROUP SORTED each group is its own row list on the stack
+    // (oldest at index 0). Offset must skip group lists, not rows inside the
+    // newest list.
+    if (
+        result_set->count > 1 &&
+        getRowList(result_set->row_list_indices[result_set->count - 1])->group)
+    {
+        if (offset >= result_set->count)
+        {
+            while (result_set->count > 0)
+            {
+                destroyRowList(popRowList(result_set));
+            }
+            return 0;
+        }
+
+        for (int i = 0; i < offset; i++)
+        {
+            destroyRowList(result_set->row_list_indices[i]);
+        }
+
+        memmove(
+            result_set->row_list_indices,
+            result_set->row_list_indices + offset,
+            sizeof(*result_set->row_list_indices) * (result_set->count - offset)
+        );
+        result_set->count -= offset;
+
+        return 0;
+    }
 
     RowListIndex src_list = popRowList(result_set);
 
@@ -84,7 +117,7 @@ int executeOffset (
 
     RowListIndex dest_list = createRowList(join_count, row_count);
 
-    for (int i = step->limit; i < row_count; i++) {
+    for (int i = offset; i < row_count; i++) {
         copyResultRow(getRowList(dest_list), getRowList(src_list), i);
     }
 
