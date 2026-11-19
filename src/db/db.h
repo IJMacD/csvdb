@@ -62,3 +62,6 @@ int insertFromQuery (
     const char *query,
     const char **end_ptr
 );
+
+/** Non-zero if this DB's VFS allows covering-index plan rewrites. */
+int dbSupportsCoveringIndex (struct DB *db);

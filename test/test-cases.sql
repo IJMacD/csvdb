@@ -179,3 +179,8 @@ CREATE UNIQUE INDEX ON ranks (value);
 CREATE INDEX ON dupes (key);
 -- haveNonUniqueJoins ignores INDEX_JOIN so secondary ORDER BY is dropped
 FROM ranks JOIN dupes ON ranks.value = dupes.key ORDER BY ranks.value ASC, dupes.label DESC SELECT ranks.name, dupes.label LIMIT 4;
+-- Empty LIKE must not under-read the pattern
+FROM test WHERE name LIKE '' SELECT name LIMIT 1;
+-- Covering index rewrite (CSV); calendar remains opted out via VFS flag
+FROM test WHERE name = 'Walter KELLY' SELECT name;
+FROM CALENDAR WHERE date = '2024-01-01' SELECT date;

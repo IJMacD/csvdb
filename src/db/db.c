@@ -35,6 +35,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getFieldName = &csv_getFieldName,
         .getRecordCount = &csv_getRecordCount,
         .getRecordValue = &csv_getRecordValue,
+        .supports_covering_index = 1,
         .findIndex = &csv_findIndex,
         .insertRow = &csv_insertRow,
         .insertFromQuery = &csv_insertFromQuery,
@@ -101,6 +102,7 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getFieldName = &tsv_getFieldName,
         .getRecordCount = &tsv_getRecordCount,
         .getRecordValue = &tsv_getRecordValue,
+        .supports_covering_index = 1,
         .findIndex = &tsv_findIndex,
         .insertRow = &tsv_insertRow,
         .insertFromQuery = &tsv_insertFromQuery,
@@ -112,11 +114,12 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getFieldName = &tsvMem_getFieldName,
         .getRecordCount = &tsvMem_getRecordCount,
         .getRecordValue = &tsvMem_getRecordValue,
+        .supports_covering_index = 1,
         .findIndex = &tsvMem_findIndex,
         .insertRow = &tsvMem_insertRow,
     },
-    #endif
-    #ifdef COMPILE_WSV
+#endif
+#ifdef COMPILE_WSV
     [VFS_WSV_MEM] = {
         .openDB = &wsvMem_openDB,
         .closeDB = &wsvMem_closeDB,
@@ -124,11 +127,12 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getFieldName = &wsvMem_getFieldName,
         .getRecordCount = &wsvMem_getRecordCount,
         .getRecordValue = &wsvMem_getRecordValue,
+        .supports_covering_index = 1,
         .findIndex = &wsvMem_findIndex,
         .insertRow = &wsvMem_insertRow,
     },
-    #endif
-    #ifdef COMPILE_COL
+#endif
+#ifdef COMPILE_COL
     [VFS_COL_MEM] = {
         .openDB = &colMem_openDB,
         .closeDB = &colMem_closeDB,
@@ -136,9 +140,10 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getFieldName = &colMem_getFieldName,
         .getRecordCount = &colMem_getRecordCount,
         .getRecordValue = &colMem_getRecordValue,
+        .supports_covering_index = 1,
         .findIndex = &colMem_findIndex,
     },
-    #endif
+#endif
     #ifdef COMPILE_CSV_MMAP
     [VFS_CSV_MMAP] = {
         .openDB = &csvMmap_openDB,
@@ -147,12 +152,21 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getFieldName = &csvMmap_getFieldName,
         .getRecordCount = &csvMmap_getRecordCount,
         .getRecordValue = &csvMmap_getRecordValue,
+        // Indexes are still opened via csv_findIndex (real index files)
+        .supports_covering_index = 1,
     },
     #endif
     [VFS_TEMP] = {
         .openDB = &temp_openDB,
     },
 };
+
+int dbSupportsCoveringIndex (struct DB *db) {
+    if (db == NULL || db->vfs < 0 || db->vfs >= VFS_COUNT) {
+        return 0;
+    }
+    return VFS_Table[db->vfs].supports_covering_index;
+}
 
 /**
  * @brief Try to open a database by filename
