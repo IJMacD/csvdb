@@ -185,3 +185,11 @@ FROM test WHERE name LIKE '' SELECT name LIMIT 1;
 FROM test WHERE name = 'Walter KELLY' SELECT name;
 -- Covering index opt-out: CALENDAR has no real index file (VFS flag off)
 FROM CALENDAR WHERE date = '2024-01-01' SELECT date;
+-- GROUP BY + ORDER BY: LIMIT/OFFSET must apply after sort, not during materialise
+FROM ranks GROUP BY name SELECT name, COUNT(*) ORDER BY name OFFSET 2 ROWS FETCH NEXT 3 ROWS ONLY;
+-- Qualified WHERE must still use index without mutating the live predicate
+FROM test AS t WHERE t.name = 'Walter KELLY' SELECT t.name LIMIT 1;
+-- UNIQUE index ORDER BY + non-unique join must keep secondary sort (no UNIQUE_RANGE)
+FROM ranks, suits ORDER BY ranks.value ASC, suits.name DESC SELECT ranks.name, suits.name LIMIT 6;
+-- Plan nodes are deep-copied: covering index remaps must not break SELECT
+FROM test WHERE name = 'Walter KELLY' SELECT name ORDER BY name LIMIT 1;

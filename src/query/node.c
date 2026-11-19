@@ -79,6 +79,10 @@ void copyNodeTree (struct Node *dest, struct Node *src) {
 
     dest->function = src->function;
 
+    // Intentionally do not copy alias: resolveNode uses copyNodeTree to
+    // rewrite ORDER BY columns from SELECT aliases and must keep the
+    // sort direction already stored in dest->alias[0].
+
     dest->child_count = src->child_count;
 
     dest->children = NULL;
