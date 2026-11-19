@@ -260,70 +260,49 @@ void optimiseRowidAlgebra(struct Node *node)
 
         if (isMathsOperator && left_child->child_count == 2)
         {
-            if (left_child->function != FUNC_ADD &&
-                left_child->function != FUNC_SUB)
+            struct Node *left_grandchild = &left_child->children[0];
+            struct Node *right_grandchild = &left_child->children[1];
+
+            if (left_grandchild->field.index != FIELD_ROW_INDEX)
             {
-                // Can't optimise for integer division etc. yet
-                // need to return two nodes to specify a range
-                // e.g. rowid / 10 = 5
-                //   -> rowid >= 50 && rowid < 60
-                //   -> rowid IN (50, 51, 52, 53, 54, 55, 56, 57, 58, 59)
-                //
-                // Integer multiplication has inverse problem
-                // e.g. rowid * 10 = 21     (no matches)
-                //  ->  rowid = 21 / 10     (rowid=2 matches)
-                // e.g. rowid * A = B
-                //  ->  rowid = B / A && B % A = 0
                 return;
             }
 
-            struct Node *left_grandchild = &left_child->children[0];
-            // struct Node *right_grandchild = &left_child->children[1];
-
-            if (left_grandchild->field.index == FIELD_ROW_INDEX)
+            // Constant factor on the right of the maths op
+            if (right_grandchild->field.index != FIELD_CONSTANT)
             {
-                // We should optimise!
+                return;
+            }
 
-                if (debug_verbosity >= 2)
-                {
-                    fprintf(stderr, "[OPTIMISE] RowID algebra\n");
-                }
+            if (right_child->field.index != FIELD_CONSTANT)
+            {
+                return;
+            }
 
-                // e.g. tree before
-                //          =       |
-                //       /    \     |
-                //      +     10    |
-                //    /   \         |
-                // rowid   1        |
+            long factor = atol(right_grandchild->field.text);
+            long constant = atol(right_child->field.text);
 
-                // e.g. tree after
-                //          =           |
-                //        /   \         |
-                //    rowid     -       |
-                //            /   \     |
-                //           10    1    |
+            if (factor == 0)
+            {
+                return;
+            }
 
-                // e.g. tree before
-                //          =           |
-                //       /    \         |
-                //      A      D        |
-                //    /   \             |
-                //   B     C            |
+            if (debug_verbosity >= 2)
+            {
+                fprintf(stderr, "[OPTIMISE] RowID algebra\n");
+            }
 
-                // e.g. tree after
-                //          =           |
-                //        /   \         |
-                //       B     A'       |
-                //            /  \      |
-                //           D    C     |
-
+            // rowid + K = N  /  rowid - K = N
+            if (left_child->function == FUNC_ADD ||
+                left_child->function == FUNC_SUB)
+            {
                 struct Node tmp = *left_child;
 
                 if (left_child->function == FUNC_ADD)
                 {
                     tmp.function = FUNC_SUB;
                 }
-                else if (left_child->function == FUNC_SUB)
+                else
                 {
                     tmp.function = FUNC_ADD;
                 }
@@ -331,6 +310,76 @@ void optimiseRowidAlgebra(struct Node *node)
                 memcpy(&node->children[0], left_grandchild, sizeof tmp);
                 memcpy(&tmp.children[0], right_child, sizeof tmp);
                 memcpy(&node->children[1], &tmp, sizeof tmp);
+                return;
+            }
+
+            // rowid * K = N  →  rowid = N/K if divisible, else NEVER
+            if (left_child->function == FUNC_MUL)
+            {
+                if (node->function != OPERATOR_EQ)
+                {
+                    return;
+                }
+                if (constant % factor != 0)
+                {
+                    node->function = OPERATOR_NEVER;
+                    return;
+                }
+                char buf[32];
+                snprintf(buf, sizeof(buf), "%ld", constant / factor);
+                memcpy(&node->children[0], left_grandchild, sizeof(*left_grandchild));
+                strcpy(node->children[1].field.text, buf);
+                node->children[1].field.index = FIELD_CONSTANT;
+                node->children[1].function = FUNC_UNITY;
+                node->children[1].child_count = 0;
+                node->children[1].children = NULL;
+                return;
+            }
+
+            // rowid / K = N  →  rowid >= N*K AND rowid < (N+1)*K  (K > 0)
+            if (left_child->function == FUNC_DIV)
+            {
+                if (node->function != OPERATOR_EQ || factor <= 0 || constant < 0)
+                {
+                    return;
+                }
+
+                long lo = constant * factor;
+                long hi = (constant + 1) * factor;
+                char lo_buf[32], hi_buf[32];
+                snprintf(lo_buf, sizeof(lo_buf), "%ld", lo);
+                snprintf(hi_buf, sizeof(hi_buf), "%ld", hi);
+
+                // Rebuild node as AND of (rowid >= lo) AND (rowid < hi)
+                struct Node rowid = *left_grandchild;
+
+                freeNode(left_child);
+                freeNode(right_child);
+                free(node->children);
+
+                node->function = OPERATOR_AND;
+                node->child_count = 0;
+                node->children = NULL;
+
+                struct Node *ge = addChildNode(node);
+                struct Node *lt = addChildNode(node);
+
+                ge->function = OPERATOR_GE;
+                struct Node *ge_l = allocateNodeChildren(ge, 2);
+                struct Node *ge_r = ge_l + 1;
+                memcpy(ge_l, &rowid, sizeof(rowid));
+                clearNode(ge_r);
+                ge_r->field.index = FIELD_CONSTANT;
+                strcpy(ge_r->field.text, lo_buf);
+
+                lt->function = OPERATOR_LT;
+                struct Node *lt_l = allocateNodeChildren(lt, 2);
+                struct Node *lt_r = lt_l + 1;
+                memcpy(lt_l, &rowid, sizeof(rowid));
+                clearNode(lt_r);
+                lt_r->field.index = FIELD_CONSTANT;
+                strcpy(lt_r->field.text, hi_buf);
+                return;
             }
         }
     }
@@ -338,57 +387,59 @@ void optimiseRowidAlgebra(struct Node *node)
 
 void optimiseFlattenANDPredicates(struct Query *query)
 {
-    int have_AND_predicates = 0;
-
-    // Count up how many extra predicate spaces we'll need
-    for (int i = 0; i < query->predicate_count; i++)
+    // Expand nested ANDs: each pass lifts one level into the top-level list.
+    for (int pass = 0; pass < 32; pass++)
     {
-        struct Node *predicate = &query->predicate_nodes[i];
-        if (predicate->function == OPERATOR_AND)
+        int extra = 0;
+        for (int i = 0; i < query->predicate_count; i++)
         {
-            have_AND_predicates += predicate->child_count - 1;
-        }
-    }
-
-    if (have_AND_predicates == 0)
-    {
-        return;
-    }
-
-    if (debug_verbosity >= 2)
-    {
-        fprintf(stderr, "[OPTIMISE] Flatten AND predicates (%d)\n", have_AND_predicates);
-    }
-
-    int new_predicate_count = query->predicate_count + have_AND_predicates;
-
-    struct Node *new_predicates = malloc(
-        new_predicate_count * sizeof *new_predicates);
-
-    struct Node *curr_predicate = new_predicates;
-    for (int i = 0; i < query->predicate_count; i++)
-    {
-        struct Node *predicate = &query->predicate_nodes[i];
-
-        if (predicate->function == OPERATOR_AND)
-        {
-            for (int j = 0; j < predicate->child_count; j++)
+            if (query->predicate_nodes[i].function == OPERATOR_AND)
             {
-                memcpy(
-                    curr_predicate++,
-                    &predicate->children[j],
-                    sizeof *predicate);
+                extra += query->predicate_nodes[i].child_count - 1;
             }
         }
-        else
-        {
-            memcpy(curr_predicate++, predicate, sizeof *predicate);
-        }
-    }
 
-    free(query->predicate_nodes);
-    query->predicate_nodes = new_predicates;
-    query->predicate_count = new_predicate_count;
+        if (extra == 0)
+        {
+            return;
+        }
+
+        if (debug_verbosity >= 2)
+        {
+            fprintf(stderr, "[OPTIMISE] Flatten AND predicates (%d)\n", extra);
+        }
+
+        int new_predicate_count = query->predicate_count + extra;
+        struct Node *new_predicates = malloc(
+            new_predicate_count * sizeof *new_predicates);
+        struct Node *curr_predicate = new_predicates;
+
+        for (int i = 0; i < query->predicate_count; i++)
+        {
+            struct Node *predicate = &query->predicate_nodes[i];
+
+            if (predicate->function == OPERATOR_AND)
+            {
+                for (int j = 0; j < predicate->child_count; j++)
+                {
+                    memcpy(
+                        curr_predicate++,
+                        &predicate->children[j],
+                        sizeof *predicate);
+                }
+                // Children were moved by value; free only the array shell.
+                free(predicate->children);
+            }
+            else
+            {
+                memcpy(curr_predicate++, predicate, sizeof *predicate);
+            }
+        }
+
+        free(query->predicate_nodes);
+        query->predicate_nodes = new_predicates;
+        query->predicate_count = new_predicate_count;
+    }
 }
 
 void optimiseWhereToOn(struct Query *query)
@@ -565,6 +616,265 @@ void optimiseRemoveTrivialPredicates(struct Query *query)
     }
 
     query->predicate_count = write;
+}
+
+
+static int sameColumn(struct Node *a, struct Node *b)
+{
+    return a->function == b->function &&
+           a->field.table_id == b->field.table_id &&
+           a->field.index == b->field.index &&
+           a->field.index != FIELD_UNKNOWN;
+}
+
+static int isConstField(struct Node *n)
+{
+    return n->function == FUNC_UNITY && n->field.index == FIELD_CONSTANT;
+}
+
+/**
+ * Tighten or eliminate redundant same-column comparisons against constants.
+ */
+void optimiseFoldRedundantPredicates(struct Query *query)
+{
+    for (int i = 0; i < query->predicate_count; i++)
+    {
+        struct Node *a = &query->predicate_nodes[i];
+        if (a->function == OPERATOR_ALWAYS || a->function == OPERATOR_NEVER)
+            continue;
+        if (a->child_count < 2 || !isConstField(&a->children[1]))
+            continue;
+
+        for (int j = i + 1; j < query->predicate_count; j++)
+        {
+            struct Node *b = &query->predicate_nodes[j];
+            if (b->function == OPERATOR_ALWAYS || b->function == OPERATOR_NEVER)
+                continue;
+            if (b->child_count < 2 || !isConstField(&b->children[1]))
+                continue;
+            if (!sameColumn(&a->children[0], &b->children[0]))
+                continue;
+
+            long va = atol(a->children[1].field.text);
+            long vb = atol(b->children[1].field.text);
+
+            // Two equalities
+            if (a->function == OPERATOR_EQ && b->function == OPERATOR_EQ)
+            {
+                if (va != vb)
+                {
+                    a->function = OPERATOR_NEVER;
+                    b->function = OPERATOR_ALWAYS;
+                }
+                else
+                {
+                    b->function = OPERATOR_ALWAYS;
+                }
+                continue;
+            }
+
+            // EQ vs range: keep EQ if it satisfies, else NEVER
+            if (a->function == OPERATOR_EQ || b->function == OPERATOR_EQ)
+            {
+                struct Node *eq = a->function == OPERATOR_EQ ? a : b;
+                struct Node *rg = a->function == OPERATOR_EQ ? b : a;
+                long ve = atol(eq->children[1].field.text);
+                long vr = atol(rg->children[1].field.text);
+                int ok = 1;
+                if (rg->function == OPERATOR_LT) ok = ve < vr;
+                else if (rg->function == OPERATOR_LE) ok = ve <= vr;
+                else if (rg->function == OPERATOR_GT) ok = ve > vr;
+                else if (rg->function == OPERATOR_GE) ok = ve >= vr;
+                else ok = 1;
+                if (!ok)
+                {
+                    eq->function = OPERATOR_NEVER;
+                }
+                rg->function = OPERATOR_ALWAYS;
+                continue;
+            }
+
+            // Two lower bounds → keep tighter
+            if ((a->function == OPERATOR_GE || a->function == OPERATOR_GT) &&
+                (b->function == OPERATOR_GE || b->function == OPERATOR_GT))
+            {
+                // Compare effective thresholds (GT t ~= GE t+1 for ints)
+                long ea = (a->function == OPERATOR_GT) ? va + 1 : va;
+                long eb = (b->function == OPERATOR_GT) ? vb + 1 : vb;
+                if (ea >= eb)
+                    b->function = OPERATOR_ALWAYS;
+                else
+                    a->function = OPERATOR_ALWAYS;
+                continue;
+            }
+
+            // Two upper bounds → keep tighter
+            if ((a->function == OPERATOR_LE || a->function == OPERATOR_LT) &&
+                (b->function == OPERATOR_LE || b->function == OPERATOR_LT))
+            {
+                long ea = (a->function == OPERATOR_LT) ? va - 1 : va;
+                long eb = (b->function == OPERATOR_LT) ? vb - 1 : vb;
+                if (ea <= eb)
+                    b->function = OPERATOR_ALWAYS;
+                else
+                    a->function = OPERATOR_ALWAYS;
+                continue;
+            }
+        }
+    }
+
+    optimiseRemoveTrivialPredicates(query);
+}
+
+/**
+ * OR of same-column constant ranges → loosest single bound when possible.
+ * e.g. value < 3 OR value < 5  →  value < 5
+ */
+void optimiseMergeOrRanges(struct Node *node)
+{
+    if (node->function != OPERATOR_OR || node->child_count < 2)
+        return;
+
+    // Recurse first
+    for (int i = 0; i < node->child_count; i++)
+        optimiseMergeOrRanges(&node->children[i]);
+
+    struct Node *first = &node->children[0];
+    if (first->child_count < 2 || !isConstField(&first->children[1]))
+        return;
+
+    enum Function op = first->function;
+    if (op != OPERATOR_LT && op != OPERATOR_LE && op != OPERATOR_GT &&
+        op != OPERATOR_GE)
+        return;
+
+    for (int i = 1; i < node->child_count; i++)
+    {
+        struct Node *c = &node->children[i];
+        if (c->function != op || c->child_count < 2 || !isConstField(&c->children[1]))
+            return;
+        if (!sameColumn(&first->children[0], &c->children[0]))
+            return;
+    }
+
+    // All same op + column: pick loosest bound
+    int best = 0;
+    long best_v = atol(first->children[1].field.text);
+    for (int i = 1; i < node->child_count; i++)
+    {
+        long v = atol(node->children[i].children[1].field.text);
+        if (op == OPERATOR_LT || op == OPERATOR_LE)
+        {
+            if (v > best_v) { best_v = v; best = i; }
+        }
+        else
+        {
+            if (v < best_v) { best_v = v; best = i; }
+        }
+    }
+
+    if (debug_verbosity >= 2)
+        fprintf(stderr, "[OPTIMISE] Merge OR ranges → child %d\n", best);
+
+    // Move best to slot 0, drop the rest, promote.
+    if (best != 0)
+    {
+        swapNodes(&node->children[0], &node->children[best]);
+    }
+    while (node->child_count > 1)
+    {
+        removeChildAt(node, node->child_count - 1);
+    }
+    promoteSingleChild(node);
+}
+
+/**
+ * From a=b (columns) and a=const, infer b=const (and vice versa).
+ */
+void optimiseTransitivePredicates(struct Query *query)
+{
+    int original_count = query->predicate_count;
+
+    for (int i = 0; i < original_count; i++)
+    {
+        struct Node *join_eq = &query->predicate_nodes[i];
+        if (join_eq->function != OPERATOR_EQ || join_eq->child_count < 2)
+            continue;
+
+        struct Node *jl = &join_eq->children[0];
+        struct Node *jr = &join_eq->children[1];
+        if (isConstField(jl) || isConstField(jr))
+            continue;
+        if (jl->function != FUNC_UNITY || jr->function != FUNC_UNITY)
+            continue;
+        if (jl->field.table_id == jr->field.table_id)
+            continue;
+
+        for (int j = 0; j < original_count; j++)
+        {
+            if (i == j) continue;
+            struct Node *c = &query->predicate_nodes[j];
+            if (c->function != OPERATOR_EQ || c->child_count < 2)
+                continue;
+
+            struct Node *cl = &c->children[0];
+            struct Node *cr = &c->children[1];
+
+            struct Node *col = NULL;
+            struct Node *konst = NULL;
+            struct Node *other = NULL;
+
+            if (sameColumn(cl, jl) && isConstField(cr))
+            {
+                col = jl; konst = cr; other = jr;
+            }
+            else if (sameColumn(cl, jr) && isConstField(cr))
+            {
+                col = jr; konst = cr; other = jl;
+            }
+            else if (sameColumn(cr, jl) && isConstField(cl))
+            {
+                col = jl; konst = cl; other = jr;
+            }
+            else if (sameColumn(cr, jr) && isConstField(cl))
+            {
+                col = jr; konst = cl; other = jl;
+            }
+            else
+                continue;
+
+            (void)col;
+
+            // Already have other = konst?
+            int exists = 0;
+            for (int k = 0; k < query->predicate_count; k++)
+            {
+                struct Node *p = &query->predicate_nodes[k];
+                if (p->function == OPERATOR_EQ && p->child_count >= 2 &&
+                    sameColumn(&p->children[0], other) &&
+                    isConstField(&p->children[1]) &&
+                    strcmp(p->children[1].field.text, konst->field.text) == 0)
+                {
+                    exists = 1;
+                    break;
+                }
+            }
+            if (exists)
+                continue;
+
+            if (debug_verbosity >= 2)
+                fprintf(stderr, "[OPTIMISE] Transitive predicate\n");
+
+            struct Node *target = allocatePredicateNode(query);
+            target->function = OPERATOR_EQ;
+            struct Node *tl = allocateNodeChildren(target, 2);
+            struct Node *tr = tl + 1;
+            copyNodeTree(tl, other);
+            memcpy(tl->alias, other->alias, sizeof(tl->alias));
+            copyNodeTree(tr, konst);
+            memcpy(tr->alias, konst->alias, sizeof(tr->alias));
+        }
+    }
 }
 
 /**

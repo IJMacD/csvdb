@@ -7,6 +7,49 @@
 #include "../db/db.h"
 #include "../db/indices.h"
 
+/**
+ * If step carries two complementary range predicates on the same column,
+ * fill row_list via indexBoundedSeek. Returns 1 if handled, 0 otherwise.
+ */
+static int tryBoundedIndexSeek (
+    struct DB *index_db,
+    int rowid_column,
+    struct PlanStep *step,
+    struct RowList *row_list
+) {
+    if (step->node_count < 2)
+    {
+        return 0;
+    }
+
+    struct Node *a = &step->nodes[0];
+    struct Node *b = &step->nodes[1];
+    int a_lo = a->function == OPERATOR_GE || a->function == OPERATOR_GT;
+    int a_hi = a->function == OPERATOR_LE || a->function == OPERATOR_LT;
+    int b_lo = b->function == OPERATOR_GE || b->function == OPERATOR_GT;
+    int b_hi = b->function == OPERATOR_LE || b->function == OPERATOR_LT;
+
+    if (!((a_lo && b_hi) || (a_hi && b_lo)))
+    {
+        return 0;
+    }
+
+    struct Node *lo = a_lo ? a : b;
+    struct Node *hi = a_hi ? a : b;
+
+    indexBoundedSeek(
+        index_db,
+        rowid_column,
+        lo->function,
+        lo->children[1].field.text,
+        hi->function,
+        hi->children[1].field.text,
+        row_list,
+        step->limit);
+
+    return 1;
+}
+
 int executeSourceDummyRow (
     __attribute__((unused)) struct Table *tables,
     __attribute__((unused)) struct PlanStep *step,
@@ -33,13 +76,17 @@ int executeSourcePK (
     struct Table * table = tables;
     struct Node *p = &step->nodes[0];
 
-    indexPrimarySeek(
-        table->db,
-        p->function,
-        p->children[1].field.text,
-        getRowList(row_list),
-        step->limit
-    );
+    if (!tryBoundedIndexSeek(
+            table->db, FIELD_ROW_INDEX, step, getRowList(row_list)))
+    {
+        indexPrimarySeek(
+            table->db,
+            p->function,
+            p->children[1].field.text,
+            getRowList(row_list),
+            step->limit
+        );
+    }
 
     return 0;
 }
@@ -105,14 +152,18 @@ int executeSourceUnique (
     // table
     int rowid_col = getFieldIndex(&index_db, "rowid");
 
-    // Fill in RowIDs from index
-    indexUniqueSeek(
-        &index_db,
-        rowid_col,
-        op,
-        predicate_value,
-        getRowList(row_list),
-        step->limit);
+    // Fill in RowIDs from index (dual-bound BETWEEN when node_count == 2)
+    if (!tryBoundedIndexSeek(
+            &index_db, rowid_col, step, getRowList(row_list)))
+    {
+        indexUniqueSeek(
+            &index_db,
+            rowid_col,
+            op,
+            predicate_value,
+            getRowList(row_list),
+            step->limit);
+    }
 
     closeDB(&index_db);
 
@@ -158,14 +209,18 @@ int executeSourceIndexSeek (
     // Find which column in the index table contains the rowids of the primary
     // table
     int rowid_col = getFieldIndex(&index_db, "rowid");
-    indexSeek(
-        &index_db,
-        rowid_col,
-        p->function,
-        p->children[1].field.text,
-        getRowList(row_list),
-        step->limit
-    );
+    if (!tryBoundedIndexSeek(
+            &index_db, rowid_col, step, getRowList(row_list)))
+    {
+        indexSeek(
+            &index_db,
+            rowid_col,
+            p->function,
+            p->children[1].field.text,
+            getRowList(row_list),
+            step->limit
+        );
+    }
 
     closeDB(&index_db);
 

@@ -384,9 +384,19 @@ int process_query(
         optimiseCollapseConstantNode(predicate);
 
         optimiseUniqueOr(predicate);
+
+        optimiseMergeOrRanges(predicate);
     }
 
-    // Drop tautologies left as top-level ALWAYS after collapse/flatten.
+    // Rowid / K may have introduced AND nodes — flatten again.
+    optimiseFlattenANDPredicates(q);
+
+    // Drop tautologies and tighten redundant same-column comparisons.
+    optimiseRemoveTrivialPredicates(q);
+    optimiseFoldRedundantPredicates(q);
+
+    // Infer b=const from a=b AND a=const (helps indexed joins).
+    optimiseTransitivePredicates(q);
     optimiseRemoveTrivialPredicates(q);
 
     optimiseWhereToOn(q);

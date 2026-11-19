@@ -18,4 +18,10 @@ void optimiseUniqueOr(struct Node *node);
 
 void optimiseRemoveTrivialPredicates(struct Query *query);
 
+void optimiseFoldRedundantPredicates(struct Query *query);
+
+void optimiseMergeOrRanges(struct Node *node);
+
+void optimiseTransitivePredicates(struct Query *query);
+
 int areChildrenUnique(struct Node *node);
