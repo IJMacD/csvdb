@@ -544,6 +544,71 @@ int evaluateFunction(
 
         return sprint_number(output, pow(val1, val2));
     }
+    else if (function == FUNC_ABS)
+    {
+        return sprint_number(output, fabs(strtod(values[0], NULL)));
+    }
+    else if (function == FUNC_SQRT)
+    {
+        double val = strtod(values[0], NULL);
+
+        if (val < 0)
+        {
+            output[0] = '\0';
+            return 0;
+        }
+
+        return sprint_number(output, sqrt(val));
+    }
+    else if (function == FUNC_FLOOR)
+    {
+        return sprint_number(output, floor(strtod(values[0], NULL)));
+    }
+    else if (function == FUNC_CEIL)
+    {
+        return sprint_number(output, ceil(strtod(values[0], NULL)));
+    }
+    else if (function == FUNC_ROUND)
+    {
+        double val = strtod(values[0], NULL);
+
+        if (value_count >= 2)
+        {
+            double digits = strtod(values[1], NULL);
+            double scale = pow(10.0, digits);
+            return sprint_number(output, round(val * scale) / scale);
+        }
+
+        return sprint_number(output, round(val));
+    }
+    else if (function == FUNC_EXP)
+    {
+        return sprint_number(output, exp(strtod(values[0], NULL)));
+    }
+    else if (function == FUNC_LN)
+    {
+        double val = strtod(values[0], NULL);
+
+        if (val <= 0)
+        {
+            output[0] = '\0';
+            return 0;
+        }
+
+        return sprint_number(output, log(val));
+    }
+    else if (function == FUNC_LOG10)
+    {
+        double val = strtod(values[0], NULL);
+
+        if (val <= 0)
+        {
+            output[0] = '\0';
+            return 0;
+        }
+
+        return sprint_number(output, log10(val));
+    }
     else if (function == FUNC_PARENS)
     {
         return sprintf(output, "%s", values[0]);

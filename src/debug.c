@@ -15,8 +15,8 @@ const char *FUNC_NAMES[] = {
     "","CHAR","TO_HEX","CODEPOINT","W1252","","","",
     "","","RANDOM","VERSION","","","","",
     // 0x10
-    "","ADD","SUB","MUL","DIV","MOD","POW","",
-    "","","","","","","","",
+    "LOG10","ADD","SUB","MUL","DIV","MOD","POW","ABS",
+    "SQRT","FLOOR","CEIL","ROUND","EXP","LN","","",
     // 0x20
     "","LENGTH","LEFT","RIGHT","CONCAT","","","",
     "","","","","","","","",
