@@ -590,9 +590,9 @@ static enum PlanStepType findIndexSource(struct Query *query)
         return PLAN_TABLE_SCAN;
     }
 
-    // LIKE can only use index if '%' is at the end
-    if (
-        op == OPERATOR_LIKE && field_right->text[len - 1] != '%')
+    // LIKE can only use index if '%' is at the end.
+    // Guard empty pattern: text[len - 1] would under-read when len == 0.
+    if (op == OPERATOR_LIKE && (len == 0 || field_right->text[len - 1] != '%'))
     {
         // Unable to use index
         return 0;
@@ -694,6 +694,12 @@ void destroyPlan(struct Plan *plan)
 
 static struct PlanStep *addStep(struct Plan *plan, int type)
 {
+    if (plan->step_count >= MAX_PLAN_STEPS)
+    {
+        fprintf(stderr, "Cannot have more than %d steps\n", MAX_PLAN_STEPS);
+        exit(-1);
+    }
+
     int i = plan->step_count;
 
     plan->steps[i].node_count = 0;
@@ -702,12 +708,6 @@ static struct PlanStep *addStep(struct Plan *plan, int type)
     plan->steps[i].limit = -1;
 
     plan->step_count++;
-
-    if (plan->step_count > MAX_PLAN_STEPS)
-    {
-        fprintf(stderr, "Cannot have more than %d steps\n", MAX_PLAN_STEPS);
-        exit(-1);
-    }
 
     return &plan->steps[i];
 }
@@ -743,6 +743,12 @@ static struct PlanStep *addStepWithNodes(
     struct Node *nodes,
     int node_count)
 {
+    if (plan->step_count >= MAX_PLAN_STEPS)
+    {
+        fprintf(stderr, "Cannot have more than %d steps\n", MAX_PLAN_STEPS);
+        exit(-1);
+    }
+
     struct Node *ps = malloc(sizeof(*ps) * node_count);
     memcpy(ps, nodes, sizeof(*ps) * node_count);
 
@@ -755,17 +761,17 @@ static struct PlanStep *addStepWithNodes(
 
     plan->step_count++;
 
-    if (plan->step_count > MAX_PLAN_STEPS)
-    {
-        fprintf(stderr, "Cannot have more than %d steps\n", MAX_PLAN_STEPS);
-        exit(-1);
-    }
-
     return &plan->steps[i];
 }
 
 static struct PlanStep *addStepWithLimit(struct Plan *plan, int type, int limit)
 {
+    if (plan->step_count >= MAX_PLAN_STEPS)
+    {
+        fprintf(stderr, "Cannot have more than %d steps\n", MAX_PLAN_STEPS);
+        exit(-1);
+    }
+
     int i = plan->step_count;
 
     plan->steps[i].node_count = 0;
@@ -774,12 +780,6 @@ static struct PlanStep *addStepWithLimit(struct Plan *plan, int type, int limit)
     plan->steps[i].limit = limit;
 
     plan->step_count++;
-
-    if (plan->step_count > MAX_PLAN_STEPS)
-    {
-        fprintf(stderr, "Cannot have more than %d steps\n", MAX_PLAN_STEPS);
-        exit(-1);
-    }
 
     return &plan->steps[i];
 }
@@ -1349,17 +1349,32 @@ static int haveNonUniqueJoins(struct Plan *plan)
     return non_unique_joins;
 }
 
+/**
+ * If the first step is an index seek/scan and every column we need already
+ * lives in that index file, rewrite the plan to read from the index alone
+ * (PLAN_COVERING_INDEX_SEEK, or TABLE SCAN of the index for INDEX SCAN).
+ *
+ * VFSes that only fake indexes (CALENDAR, SEQUENCE, …) set
+ * supports_covering_index = 0 so this path is skipped for them.
+ */
 static void checkCoveringIndex(
     struct Query *q,
     struct Plan *plan)
 {
-    // TODO
-    // BUG: FROM CALENDAR WHERE date = CURRENT_DATE SELECT date
-    return;
-    // Don't bother with covering index until bug is fixed
-
-    // Don't bother with joins yet
+    // Covering rewrite is single-table only for now
     if (q->table_count > 1)
+    {
+        return;
+    }
+
+    if (plan->step_count == 0)
+    {
+        return;
+    }
+
+    struct Table *firstTable = &q->tables[0];
+
+    if (firstTable->db == NULL || !dbSupportsCoveringIndex(firstTable->db))
     {
         return;
     }
@@ -1373,8 +1388,7 @@ static void checkCoveringIndex(
         return;
     }
 
-    // If we need to access the table anyway then there's no point in using a
-    // covering index
+    // Later table access means we still need the base table — not covering
     for (int i = 1; i < plan->step_count; i++)
     {
         if (plan->steps[i].type == PLAN_TABLE_ACCESS_ROWID)
@@ -1383,14 +1397,24 @@ static void checkCoveringIndex(
         }
     }
 
-    const char *col_name = getNodeFieldName(&firstStep->nodes[0]);
+    if (firstStep->node_count <= 0)
+    {
+        return;
+    }
 
-    struct Table *firstTable = &q->tables[0];
+    // findIndex expects a field/UNITY node; index range steps store a predicate
+    struct Node *index_node = &firstStep->nodes[0];
+    if ((index_node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR)
+    {
+        index_node = &index_node->children[0];
+    }
+
+    const char *col_name = getNodeFieldName(index_node);
 
     struct DB *db = malloc(sizeof(*db));
 
     if (
-        findIndex(db, firstTable->name, &firstStep->nodes[0], INDEX_ANY, NULL) == INDEX_NONE)
+        findIndex(db, firstTable->name, index_node, INDEX_ANY, NULL) == INDEX_NONE)
     {
         fprintf(
             stderr,
@@ -1456,8 +1480,14 @@ static void checkCoveringIndex(
         firstStep->node_count = 0;
 
         // This is mainly for EXPLAIN
-        char table_name[MAX_TABLE_LENGTH];
-        sprintf(table_name, "%s__%s", q->tables[0].name, col_name);
+        char table_name[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 3];
+        snprintf(
+            table_name,
+            sizeof(table_name),
+            "%s__%s",
+            q->tables[0].name,
+            col_name != NULL ? col_name : "");
+        table_name[MAX_TABLE_LENGTH - 1] = '\0';
         strcpy(q->tables[0].name, table_name);
         strcpy(q->tables[0].alias, table_name);
     }

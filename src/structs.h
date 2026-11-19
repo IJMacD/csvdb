@@ -449,6 +449,12 @@ struct VFS {
         char *value,
         size_t value_max_length
     );
+    /**
+     * When non-zero, the planner may rewrite index seeks into covering-index
+     * access (reading selected columns from the index file). Virtual VFSes
+     * such as CALENDAR/SEQUENCE leave this at 0.
+     */
+    int supports_covering_index;
     enum IndexSearchType (* findIndex)(
         struct DB *db,
         const char *table_name,

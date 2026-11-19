@@ -7,7 +7,7 @@
 #include "../db/db.h"
 #include "../functions/util.h"
 
-#define COVERING_INDEX_SUPPORT 0
+#define COVERING_INDEX_SUPPORT 1
 
 static long log_10 (long value);
 
@@ -201,16 +201,26 @@ int explain_select_query (
         else if (s.type == PLAN_UNIQUE) {
             operation = "INDEX UNIQUE";
 
-            char *index_filename;
+            char *index_filename = NULL;
+            struct Node *index_node = &s.nodes[0];
+            if (
+                s.node_count > 0 &&
+                (index_node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR)
+            {
+                index_node = &index_node->children[0];
+            }
+
             findIndex(
                 NULL,
                 tables[join_count].name,
-                &s.nodes[0],
+                index_node,
                 INDEX_ANY,
                 &index_filename);
 
-            strcpy(table, basename(index_filename));
-            free(index_filename);
+            if (index_filename != NULL) {
+                strcpy(table, basename(index_filename));
+                free(index_filename);
+            }
 
             rows = 1;
             cost = log_rows;
@@ -218,16 +228,26 @@ int explain_select_query (
         else if (s.type == PLAN_UNIQUE_RANGE) {
             operation = "INDEX UNIQUE RANGE";
 
-            char *index_filename;
+            char *index_filename = NULL;
+            struct Node *index_node = &s.nodes[0];
+            if (
+                s.node_count > 0 &&
+                (index_node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR)
+            {
+                index_node = &index_node->children[0];
+            }
+
             findIndex(
                 NULL,
                 tables[join_count].name,
-                &s.nodes[0],
+                index_node,
                 INDEX_ANY,
                 &index_filename);
 
-            strcpy(table, basename(index_filename));
-            free(index_filename);
+            if (index_filename != NULL) {
+                strcpy(table, basename(index_filename));
+                free(index_filename);
+            }
 
             int row_estimate = getRecordCount(tables[join_count].db);
             if (s.node_count > 0) {
@@ -308,17 +328,27 @@ int explain_select_query (
         else if (s.type == PLAN_COVERING_INDEX_SEEK) {
             operation = "COVERING INDEX SEEK";
 
-            char *index_filename;
+            char *index_filename = NULL;
+            struct Node *index_node = &s.nodes[0];
+            if (
+                s.node_count > 0 &&
+                (index_node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR)
+            {
+                index_node = &index_node->children[0];
+            }
+
             findIndex(
                 NULL,
                 tables[join_count].name,
-                &s.nodes[0],
+                index_node,
                 INDEX_ANY,
                 &index_filename
             );
 
-            strcpy(table, basename(index_filename));
-            free(index_filename);
+            if (index_filename != NULL) {
+                strcpy(table, basename(index_filename));
+                free(index_filename);
+            }
         }
         else if (s.type == PLAN_SORT) {
             operation = "SORT";
