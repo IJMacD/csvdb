@@ -16,4 +16,6 @@ void optimiseOnToWhere (
 
 void optimiseUniqueOr(struct Node *node);
 
+void optimiseRemoveTrivialPredicates(struct Query *query);
+
 int areChildrenUnique(struct Node *node);

@@ -9,6 +9,36 @@
 #include "../functions/util.h"
 #include "../debug.h"
 
+/**
+ * Free child at index and compact the children array.
+ */
+static void removeChildAt(struct Node *node, int index)
+{
+    freeNode(&node->children[index]);
+
+    if (index < node->child_count - 1)
+    {
+        memmove(
+            &node->children[index],
+            &node->children[index + 1],
+            sizeof(node->children[0]) * (node->child_count - index - 1));
+    }
+
+    node->child_count--;
+    // Last slot is a duplicate after memmove; drop without freeing.
+    clearNode(&node->children[node->child_count]);
+}
+
+/**
+ * Replace an AND/OR node that has exactly one child with that child.
+ */
+static void promoteSingleChild(struct Node *node)
+{
+    struct Node child = node->children[0];
+    free(node->children);
+    *node = child;
+}
+
 void optimiseCollapseConstantNode(struct Node *node)
 {
     if (node->function == FUNC_UNITY)
@@ -49,11 +79,9 @@ void optimiseCollapseConstantNode(struct Node *node)
 
     if (node->function == OPERATOR_AND)
     {
-        int all_always = 1;
-
+        // NEVER annihilates AND
         for (int i = 0; i < node->child_count; i++)
         {
-            // If we have any NEVER children then the whole node is NEVER
             if (node->children[i].function == OPERATOR_NEVER)
             {
                 if (debug_verbosity >= 2)
@@ -63,30 +91,47 @@ void optimiseCollapseConstantNode(struct Node *node)
                 node->function = OPERATOR_NEVER;
                 return;
             }
-            // If we have all ALWAYS children then the whole node is ALWAYS
-            else if (node->children[i].function != OPERATOR_ALWAYS)
-            {
-                all_always = 0;
-            }
         }
 
-        if (all_always)
+        // Drop tautology children (ALWAYS)
+        for (int i = 0; i < node->child_count;)
+        {
+            if (node->children[i].function == OPERATOR_ALWAYS)
+            {
+                if (debug_verbosity >= 2)
+                {
+                    fprintf(stderr, "[OPTIMISE] Constant Collapse (AND drop ALWAYS)\n");
+                }
+                removeChildAt(node, i);
+                continue;
+            }
+            i++;
+        }
+
+        if (node->child_count == 0)
         {
             if (debug_verbosity >= 2)
             {
                 fprintf(stderr, "[OPTIMISE] Constant Collapse (AND)\n");
             }
             node->function = OPERATOR_ALWAYS;
+            return;
+        }
+
+        if (node->child_count == 1)
+        {
+            promoteSingleChild(node);
+            // Re-collapse the promoted node (may itself be constant)
+            optimiseCollapseConstantNode(node);
+            return;
         }
     }
 
     if (node->function == OPERATOR_OR)
     {
-        int all_never = 1;
-
+        // ALWAYS annihilates OR
         for (int i = 0; i < node->child_count; i++)
         {
-            // If we have any ALWAYS children then the whole node is ALWAYS
             if (node->children[i].function == OPERATOR_ALWAYS)
             {
                 if (debug_verbosity >= 2)
@@ -96,20 +141,38 @@ void optimiseCollapseConstantNode(struct Node *node)
                 node->function = OPERATOR_ALWAYS;
                 return;
             }
-            // If we have all NEVER children the whole node is NEVER
-            else if (node->children[i].function != OPERATOR_NEVER)
-            {
-                all_never = 0;
-            }
         }
 
-        if (all_never)
+        // Drop contradiction children (NEVER)
+        for (int i = 0; i < node->child_count;)
+        {
+            if (node->children[i].function == OPERATOR_NEVER)
+            {
+                if (debug_verbosity >= 2)
+                {
+                    fprintf(stderr, "[OPTIMISE] Constant Collapse (OR drop NEVER)\n");
+                }
+                removeChildAt(node, i);
+                continue;
+            }
+            i++;
+        }
+
+        if (node->child_count == 0)
         {
             if (debug_verbosity >= 2)
             {
-                fprintf(stderr, "[OPTIMISE] Constant Collapse (AND)\n");
+                fprintf(stderr, "[OPTIMISE] Constant Collapse (OR)\n");
             }
             node->function = OPERATOR_NEVER;
+            return;
+        }
+
+        if (node->child_count == 1)
+        {
+            promoteSingleChild(node);
+            optimiseCollapseConstantNode(node);
+            return;
         }
     }
 
@@ -443,19 +506,65 @@ void optimiseUniqueOr(struct Node *node)
     {
         for (int j = 0; j < i; j++)
         {
-            int are_equal = areNodesEqual(&node->children[i], &node->children[j]);
-
-            if (are_equal)
+            if (areNodesEqual(&node->children[i], &node->children[j]))
             {
                 if (debug_verbosity >= 2)
                 {
-                    fprintf(stderr, "[OPTIMISE] Unique OR: Found two identical nodes (%d vs. %d)\n", i, j);
+                    fprintf(
+                        stderr,
+                        "[OPTIMISE] Unique OR: remove duplicate child %d (matches %d)\n",
+                        i,
+                        j);
                 }
 
-                // TODO: implement
+                removeChildAt(node, i);
+                i--;
+                break;
             }
         }
     }
+
+    if (node->child_count == 0)
+    {
+        node->function = OPERATOR_NEVER;
+        return;
+    }
+
+    if (node->child_count == 1)
+    {
+        promoteSingleChild(node);
+    }
+}
+
+void optimiseRemoveTrivialPredicates(struct Query *query)
+{
+    int write = 0;
+
+    for (int i = 0; i < query->predicate_count; i++)
+    {
+        if (query->predicate_nodes[i].function == OPERATOR_ALWAYS)
+        {
+            if (debug_verbosity >= 2)
+            {
+                fprintf(stderr, "[OPTIMISE] Remove trivial ALWAYS predicate #%d\n", i);
+            }
+            freeNode(&query->predicate_nodes[i]);
+            continue;
+        }
+
+        if (write != i)
+        {
+            query->predicate_nodes[write] = query->predicate_nodes[i];
+        }
+        write++;
+    }
+
+    for (int i = write; i < query->predicate_count; i++)
+    {
+        clearNode(&query->predicate_nodes[i]);
+    }
+
+    query->predicate_count = write;
 }
 
 /**

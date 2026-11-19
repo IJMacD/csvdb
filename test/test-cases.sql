@@ -193,3 +193,13 @@ FROM test AS t WHERE t.name = 'Walter KELLY' SELECT t.name LIMIT 1;
 FROM ranks, suits ORDER BY ranks.value ASC, suits.name DESC SELECT ranks.name, suits.name LIMIT 6;
 -- Plan nodes are deep-copied: covering index remaps must not break SELECT
 FROM test WHERE name = 'Walter KELLY' SELECT name ORDER BY name LIMIT 1;
+-- Index-aware predicate reorder: unindexed range before indexed EQ still seeks
+FROM test WHERE score > 90 AND name = 'Walter KELLY' SELECT name, score LIMIT 3;
+-- Unique OR: duplicate IN values collapse (two sources, not three)
+FROM suits WHERE name IN ('spades','spades','hearts') SELECT name;
+-- Unique OR: all-duplicate IN promotes to a single equality predicate
+FROM suits WHERE name IN ('spades','spades') SELECT name;
+-- Drop tautology predicates: AND 1=1 must not leave ACCESS BY ROWID filters
+FROM test WHERE name = 'Walter KELLY' AND 1 = 1 SELECT name LIMIT 1;
+-- Indexed EQ preferred over unindexed EQ when both are first-table
+FROM ranks WHERE name = 'Ace' AND value = 1 SELECT name, value;

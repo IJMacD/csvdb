@@ -1107,8 +1107,124 @@ static void addLimitStepIfRequired(struct Plan *plan, struct Query *query)
 }
 
 /**
+ * @brief Score how useful a first-table predicate is as an index source.
+ * Higher is better. Returns -1 if the predicate is not first-table-only.
+ *
+ * Preference: PK/rowid EQ > unique/primary EQ > regular index EQ >
+ * indexed LIKE/range > unindexed EQ > other.
+ */
+static int predicateIndexScore(struct Query *q, struct Node *predicate)
+{
+    // Whole predicate must only reference table 0 (and constants).
+    if (getTableBitMap(predicate) != 1)
+    {
+        return -1;
+    }
+
+    if (
+        predicate->function == OPERATOR_ALWAYS ||
+        predicate->function == OPERATOR_NEVER)
+    {
+        return 0;
+    }
+
+    // OR/AND bags are not usable as a single index seek
+    if (
+        predicate->function == OPERATOR_OR ||
+        predicate->function == OPERATOR_AND)
+    {
+        return 5;
+    }
+
+    if (predicate->child_count < 1)
+    {
+        return 0;
+    }
+
+    struct Node *left = &predicate->children[0];
+
+    // PRIMARY KEY / rowid
+    if (
+        left->function == FUNC_PK ||
+        left->field.index == FIELD_ROW_INDEX)
+    {
+        if (predicate->function == OPERATOR_EQ)
+        {
+            return 100;
+        }
+        return 65;
+    }
+
+    // Indexes only on bare columns for now
+    if (left->function != FUNC_UNITY)
+    {
+        return 10;
+    }
+
+    struct Node index_node = *left;
+    int dot_index = str_find_index(left->field.text, '.');
+    if (dot_index >= 0)
+    {
+        strcpy(index_node.field.text, left->field.text + dot_index + 1);
+    }
+
+    enum IndexSearchType index_type = findIndex(
+        NULL,
+        q->tables[0].name,
+        &index_node,
+        INDEX_ANY,
+        NULL);
+
+    if (index_type == INDEX_NONE)
+    {
+        return predicate->function == OPERATOR_EQ ? 20 : 10;
+    }
+
+    int base = 70;
+    if (index_type == INDEX_PRIMARY)
+    {
+        base = 90;
+    }
+    else if (index_type == INDEX_UNIQUE)
+    {
+        base = 80;
+    }
+
+    if (predicate->function == OPERATOR_EQ)
+    {
+        return base;
+    }
+
+    if (predicate->function == OPERATOR_LIKE)
+    {
+        // Prefix LIKE can use an index; others cannot
+        if (predicate->child_count >= 2)
+        {
+            const char *pat = predicate->children[1].field.text;
+            size_t len = strlen(pat);
+            if (len > 0 && pat[len - 1] == '%' && strchr(pat, '%') == pat + len - 1)
+            {
+                return base - 25;
+            }
+        }
+        return 15;
+    }
+
+    if (
+        predicate->function == OPERATOR_LT ||
+        predicate->function == OPERATOR_LE ||
+        predicate->function == OPERATOR_GT ||
+        predicate->function == OPERATOR_GE)
+    {
+        return base - 35;
+    }
+
+    return base - 50;
+}
+
+/**
  * @brief Re-order predicates so first N predicates only include first table and
- * constants.
+ * constants, with the best indexable predicate first.
  *
  * @param q
  * @param predicates
@@ -1116,66 +1232,88 @@ static void addLimitStepIfRequired(struct Plan *plan, struct Query *query)
  * @return int N, number of predicates on first table
  */
 static int optimiseNodes(
-    __attribute__((unused)) struct Query *q,
+    struct Query *q,
     struct Node *predicates,
     int count)
 {
-    int chosen_predicate_index = -1;
+    if (count == 0)
+    {
+        return 0;
+    }
 
-    // First Step: We really want a PRIMARY KEY
+    // Normalise binary comparison operands (constant on right, PK on left).
+    // Do not normalise AND/OR bags — flipPredicate would swap their children.
     for (int i = 0; i < count; i++)
     {
-        // Swap left and right if necessary
-        normalisePredicate(predicates + i);
-
-        struct Node *left = &predicates[i].children[0];
-
-        // Whole predicate must only reference table 0 (and constants). A join
-        // predicate like t0.a = t1.b must not be treated as first-table-only.
+        enum Function fn = predicates[i].function;
         if (
-            left->function == FUNC_PK &&
-            left->field.table_id == 0 &&
-            getTableBitMap(&predicates[i]) == 1)
+            (fn == OPERATOR_EQ || fn == OPERATOR_NE ||
+             fn == OPERATOR_LT || fn == OPERATOR_LE ||
+             fn == OPERATOR_GT || fn == OPERATOR_GE ||
+             fn == OPERATOR_LIKE) &&
+            predicates[i].child_count >= 2)
         {
-            chosen_predicate_index = i;
-            break;
+            normalisePredicate(predicates + i);
         }
     }
 
-    // If we didn't find a primary key, then move on to the next optimisation
-    // step.
+    // Pick the highest-scoring first-table predicate as the index source.
+    int chosen_predicate_index = -1;
+    int best_score = -1;
+
+    for (int i = 0; i < count; i++)
+    {
+        int score = predicateIndexScore(q, &predicates[i]);
+        if (score > best_score)
+        {
+            best_score = score;
+            chosen_predicate_index = i;
+        }
+    }
+
     if (chosen_predicate_index < 0)
     {
-        for (int i = 0; i < count; i++)
-        {
-            // Entire predicate must be on the first table only
-            if (getTableBitMap(&predicates[i]) == 1)
-            {
-                chosen_predicate_index = i;
-                break;
-            }
-        }
+        return 0;
     }
 
-    // Swap predicates so first predicate is on first table
     if (chosen_predicate_index > 0)
     {
         swapNodes(&predicates[0], &predicates[chosen_predicate_index]);
     }
 
-    // We found at least one predicate on the first table now just count how
-    // many are already in place
-    if (chosen_predicate_index >= 0)
+    // Gather remaining first-table predicates into a contiguous prefix, and
+    // keep them ordered by index score (best first) so later filters are the
+    // cheaper residual ones.
+    int first_table_count = 1;
+    for (int i = 1; i < count; i++)
     {
-        int i = 1;
-        while (i < count && getTableBitMap(&predicates[i]) == 1)
+        if (getTableBitMap(&predicates[i]) == 1)
         {
-            i++;
+            if (i != first_table_count)
+            {
+                swapNodes(&predicates[first_table_count], &predicates[i]);
+            }
+            first_table_count++;
         }
-        return i;
     }
 
-    return 0;
+    // Insertion-sort the first-table group [1, first_table_count) by score desc
+    // (slot 0 is already the overall best).
+    for (int i = 2; i < first_table_count; i++)
+    {
+        for (int j = i; j > 1; j--)
+        {
+            int score_j = predicateIndexScore(q, &predicates[j]);
+            int score_prev = predicateIndexScore(q, &predicates[j - 1]);
+            if (score_j <= score_prev)
+            {
+                break;
+            }
+            swapNodes(&predicates[j], &predicates[j - 1]);
+        }
+    }
+
+    return first_table_count;
 }
 
 /**
