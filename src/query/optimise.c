@@ -336,49 +336,26 @@ void optimiseRowidAlgebra(struct Node *node)
                 return;
             }
 
-            // rowid / K = N  →  rowid >= N*K AND rowid < (N+1)*K  (K > 0)
+            // rowid / K = N  →  rowid = N*K
+            // (Float division: only the exact multiple satisfies equality.
+            //  Integer-range expansion [N*K, (N+1)*K) would be wrong now.)
             if (left_child->function == FUNC_DIV)
             {
-                if (node->function != OPERATOR_EQ || factor <= 0 || constant < 0)
+                if (node->function != OPERATOR_EQ || factor == 0)
                 {
                     return;
                 }
-
-                long lo = constant * factor;
-                long hi = (constant + 1) * factor;
-                char lo_buf[32], hi_buf[32];
-                snprintf(lo_buf, sizeof(lo_buf), "%ld", lo);
-                snprintf(hi_buf, sizeof(hi_buf), "%ld", hi);
-
-                // Rebuild node as AND of (rowid >= lo) AND (rowid < hi)
-                struct Node rowid = *left_grandchild;
-
-                freeNode(left_child);
-                freeNode(right_child);
-                free(node->children);
-
-                node->function = OPERATOR_AND;
-                node->child_count = 0;
-                node->children = NULL;
-
-                struct Node *ge = addChildNode(node);
-                struct Node *lt = addChildNode(node);
-
-                ge->function = OPERATOR_GE;
-                struct Node *ge_l = allocateNodeChildren(ge, 2);
-                struct Node *ge_r = ge_l + 1;
-                memcpy(ge_l, &rowid, sizeof(rowid));
-                clearNode(ge_r);
-                ge_r->field.index = FIELD_CONSTANT;
-                strcpy(ge_r->field.text, lo_buf);
-
-                lt->function = OPERATOR_LT;
-                struct Node *lt_l = allocateNodeChildren(lt, 2);
-                struct Node *lt_r = lt_l + 1;
-                memcpy(lt_l, &rowid, sizeof(rowid));
-                clearNode(lt_r);
-                lt_r->field.index = FIELD_CONSTANT;
-                strcpy(lt_r->field.text, hi_buf);
+                char buf[32];
+                snprintf(buf, sizeof(buf), "%ld", constant * factor);
+                memcpy(
+                    &node->children[0],
+                    left_grandchild,
+                    sizeof(*left_grandchild));
+                strcpy(node->children[1].field.text, buf);
+                node->children[1].field.index = FIELD_CONSTANT;
+                node->children[1].function = FUNC_UNITY;
+                node->children[1].child_count = 0;
+                node->children[1].children = NULL;
                 return;
             }
         }

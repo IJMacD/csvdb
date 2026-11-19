@@ -207,7 +207,7 @@ FROM ranks WHERE name = 'Ace' AND value = 1 SELECT name, value;
 FROM ranks WHERE value BETWEEN 2 AND 4 SELECT name, value;
 -- Redundant lower bounds fold to the tighter one
 FROM ranks WHERE value >= 2 AND value >= 4 SELECT value ORDER BY value;
--- Rowid division algebra: value/10 = 5 → [50,60)
+-- Rowid division algebra: value/10 = 5 → value = 50 (float division)
 FROM SEQUENCE WHERE value < 100 AND value / 10 = 5 SELECT value;
 -- Rowid multiplication algebra: value*10 = 50 → value = 5
 FROM SEQUENCE WHERE value < 20 AND value * 10 = 50 SELECT value;
@@ -217,3 +217,12 @@ FROM test WHERE name IN ('Walter KELLY','Claude MILLS') SELECT name ORDER BY nam
 FROM lefty AS l JOIN righty AS r ON l.id = r.id WHERE l.id = 2 SELECT l.name, r.name;
 -- ORDER BY + EQ with tiny LIMIT may use index-ordered scan
 FROM test WHERE score = 42 ORDER BY name LIMIT 3;
+-- Float support
+SELECT 1.5 * 2, 5 / 2, 1.5 + 2.25, DIV(36, 5), MOD(5.5, 2), POW(2, 0.5);
+SELECT 10.5 > 10, 1.5 = 1.50, 3.2 < 3.7, 2.5 >= 2.5;
+FROM ranks SELECT AVG(value);
+FROM (VALUES (10.5), (2), (10), (2.25)) AS t(v) ORDER BY v;
+-- Math functions
+SELECT ABS(-3.5), SQRT(9), SQRT(2), FLOOR(3.7), FLOOR(-3.7), CEIL(3.2), CEILING(-3.2);
+SELECT ROUND(3.5), ROUND(3.14159, 2), ROUND(1234.56, -2);
+SELECT EXP(0), EXP(1), LN(2.718281828459), LOG10(1000);

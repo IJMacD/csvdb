@@ -90,12 +90,21 @@ enum Function {
 
     // Maths functions
 
+    FUNC_LOG10 =                    0x10,
+
     FUNC_ADD =                      0x11,
     FUNC_SUB =                      0x12,
     FUNC_MUL =                      0x13,
     FUNC_DIV =                      0x14,
     FUNC_MOD =                      0x15,
     FUNC_POW =                      0x16,
+    FUNC_ABS =                      0x17,
+    FUNC_SQRT =                     0x18,
+    FUNC_FLOOR =                    0x19,
+    FUNC_CEIL =                     0x1A,
+    FUNC_ROUND =                    0x1B,
+    FUNC_EXP =                      0x1C,
+    FUNC_LN =                       0x1D,
 
     FUNC_SUBQUERY =                 0x1E,
     FUNC_PARENS =                   0x1F,

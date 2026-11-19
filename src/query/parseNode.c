@@ -1,4 +1,5 @@
 #include <string.h>
+#include <ctype.h>
 
 #include "../structs.h"
 #include "token.h"
@@ -449,6 +450,39 @@ static int parseFunction(const char *value, const char *query, size_t *index, st
     {
         node->function = FUNC_POW;
     }
+    else if (strcmp(value, "ABS") == 0)
+    {
+        node->function = FUNC_ABS;
+    }
+    else if (strcmp(value, "SQRT") == 0)
+    {
+        node->function = FUNC_SQRT;
+    }
+    else if (strcmp(value, "FLOOR") == 0)
+    {
+        node->function = FUNC_FLOOR;
+    }
+    else if (strcmp(value, "CEIL") == 0 || strcmp(value, "CEILING") == 0)
+    {
+        node->function = FUNC_CEIL;
+    }
+    else if (strcmp(value, "ROUND") == 0)
+    {
+        // ROUND(<x>) or ROUND(<x>, <digits>)
+        node->function = FUNC_ROUND;
+    }
+    else if (strcmp(value, "EXP") == 0)
+    {
+        node->function = FUNC_EXP;
+    }
+    else if (strcmp(value, "LN") == 0)
+    {
+        node->function = FUNC_LN;
+    }
+    else if (strcmp(value, "LOG10") == 0)
+    {
+        node->function = FUNC_LOG10;
+    }
     else if (strcmp(value, "TO_HEX") == 0)
     {
         node->function = FUNC_TO_HEX;
@@ -652,6 +686,39 @@ int parseNode(
             }
 
             (*index)++;
+        }
+    }
+    else if (
+        query[*index] == '-' &&
+        (isdigit((unsigned char)query[*index + 1]) || query[*index + 1] == '.'))
+    {
+        // Unary minus before a numeric literal (e.g. ABS(-3.5), ROUND(x, -2))
+        (*index)++;
+        flags |= parseSimpleNode(query, index, node, q);
+
+        if (flags < 0)
+        {
+            return flags;
+        }
+
+        if (node->function == FUNC_UNITY &&
+            node->field.index == FIELD_CONSTANT &&
+            is_numeric(node->field.text))
+        {
+            size_t len = strlen(node->field.text);
+            if (len + 1 < MAX_FIELD_LENGTH)
+            {
+                memmove(
+                    node->field.text + 1,
+                    node->field.text,
+                    len + 1);
+                node->field.text[0] = '-';
+            }
+        }
+        else
+        {
+            fprintf(stderr, "Unsupported unary minus expression\n");
+            return -1;
         }
     }
     else

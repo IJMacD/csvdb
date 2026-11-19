@@ -191,15 +191,14 @@ int evaluateExpression (enum Function op, const char *left, const char *right) {
     }
 
     if (is_numeric(left)) {
-        long left_num = strtol(left, NULL, 10);
-        long right_num = strtol(right, NULL, 10);
+        int cmp = compare_numeric(left, right);
 
-        if (op == OPERATOR_EQ) return left_num == right_num;
-        if (op == OPERATOR_NE) return left_num != right_num;
-        if (op == OPERATOR_LT) return left_num < right_num;
-        if (op == OPERATOR_LE) return left_num <= right_num;
-        if (op == OPERATOR_GT) return left_num > right_num;
-        if (op == OPERATOR_GE) return left_num >= right_num;
+        if (op == OPERATOR_EQ) return cmp == 0;
+        if (op == OPERATOR_NE) return cmp != 0;
+        if (op == OPERATOR_LT) return cmp < 0;
+        if (op == OPERATOR_LE) return cmp <= 0;
+        if (op == OPERATOR_GT) return cmp > 0;
+        if (op == OPERATOR_GE) return cmp >= 0;
     }
 
     if (op == OPERATOR_EQ) return strcmp(left, right) == 0;

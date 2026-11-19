@@ -2,6 +2,8 @@
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
+#include <math.h>
+#include <float.h>
 
 #include "../structs.h"
 #include "../gitversion.h"
@@ -230,7 +232,7 @@ int evaluateFunction(
     else if (function == FUNC_ADD)
     {
         // We can add:
-        // * int + int
+        // * number + number
         // * dateTime + int (seconds)
         // * int + dateTime (seconds)
         // * date + int (days)
@@ -240,6 +242,7 @@ int evaluateFunction(
         // * time + time
 
         long val = 0;
+        double dval = 0;
         struct DateTime dt = {0};
 
         enum OperandType result_type = OPERAND_INT;
@@ -251,7 +254,7 @@ int evaluateFunction(
                 if (result_type == OPERAND_INT)
                 {
                     result_type = OPERAND_DATE_TIME;
-                    val += datetimeGetUnix(&dt);
+                    val = (long)dval + datetimeGetUnix(&dt);
                 }
                 else
                 {
@@ -265,7 +268,7 @@ int evaluateFunction(
                 if (result_type == OPERAND_INT)
                 {
                     result_type = OPERAND_DATE;
-                    val += datetimeGetJulian(&dt);
+                    val = (long)dval + datetimeGetJulian(&dt);
                 }
                 else
                 {
@@ -278,6 +281,10 @@ int evaluateFunction(
             {
                 if (result_type == OPERAND_INT || result_type == OPERAND_TIME)
                 {
+                    if (result_type == OPERAND_INT)
+                    {
+                        val = (long)dval;
+                    }
                     result_type = OPERAND_TIME;
                     val += timeInSeconds(&dt);
                 }
@@ -287,6 +294,10 @@ int evaluateFunction(
                     output[0] = 0;
                     return 0;
                 }
+            }
+            else if (result_type == OPERAND_INT)
+            {
+                dval += strtod(values[i], NULL);
             }
             else
             {
@@ -306,13 +317,13 @@ int evaluateFunction(
             timeFromSeconds(&dt, val);
             return sprintTime(output, &dt);
         default:
-            return sprintf(output, "%ld", val);
+            return sprint_number(output, dval);
         }
     }
     else if (function == FUNC_SUB)
     {
         // We can subtract:
-        // * int - int
+        // * number - number
         // * dateTime - int (seconds)
         // * dateTime - dateTime
         // * date - int     (days)
@@ -321,6 +332,7 @@ int evaluateFunction(
         // * time - time    (seconds)
 
         long val = 0;
+        double dval = 0;
         struct DateTime dt = {0};
 
         enum OperandType result_type = OPERAND_UNKNOWN;
@@ -338,6 +350,7 @@ int evaluateFunction(
                 else if (result_type == OPERAND_DATE_TIME)
                 {
                     val -= datetimeGetUnix(&dt);
+                    dval = (double)val;
                     result_type = OPERAND_INT;
                 }
                 else
@@ -357,6 +370,7 @@ int evaluateFunction(
                 else if (result_type == OPERAND_DATE)
                 {
                     val -= datetimeGetJulian(&dt);
+                    dval = (double)val;
                     result_type = OPERAND_INT;
                 }
                 else
@@ -376,6 +390,7 @@ int evaluateFunction(
                 else if (result_type == OPERAND_TIME)
                 {
                     val -= timeInSeconds(&dt);
+                    dval = (double)val;
                     result_type = OPERAND_INT;
                 }
                 else
@@ -389,8 +404,12 @@ int evaluateFunction(
             {
                 if (result_type == OPERAND_UNKNOWN)
                 {
-                    val = atol(values[i]);
+                    dval = strtod(values[i], NULL);
                     result_type = OPERAND_INT;
+                }
+                else if (result_type == OPERAND_INT)
+                {
+                    dval -= strtod(values[i], NULL);
                 }
                 else
                 {
@@ -411,16 +430,17 @@ int evaluateFunction(
             timeFromSeconds(&dt, val);
             return sprintTime(output, &dt);
         default:
-            return sprintf(output, "%ld", val);
+            return sprint_number(output, dval);
         }
     }
     else if (function == FUNC_MUL)
     {
         // We can do:
-        //  int * int
+        //  number * number
         //  time * int
 
         long val = 1;
+        double dval = 1;
         struct DateTime dt = {0};
         int is_time = 0;
 
@@ -440,9 +460,13 @@ int evaluateFunction(
                     return 0;
                 }
             }
-            else
+            else if (is_time)
             {
                 val *= atol(values[i]);
+            }
+            else
+            {
+                dval *= strtod(values[i], NULL);
             }
         }
 
@@ -452,27 +476,42 @@ int evaluateFunction(
             return sprintTime(output, &dt);
         }
 
-        return sprintf(output, "%ld", val);
+        return sprint_number(output, dval);
     }
     else if (function == FUNC_DIV)
     {
         // We can do:
-        //  int / int
+        //  number / number
         //  time / int
 
-        long val = atol(values[0]);
         struct DateTime dt = {0};
-        int is_time = 0;
 
         if (parseTime(values[0], &dt))
         {
-            val = timeInSeconds(&dt);
-            is_time = 1;
+            long val = timeInSeconds(&dt);
+
+            for (int i = 1; i < value_count; i++)
+            {
+                long val2 = atol(values[i]);
+
+                if (val2 == 0)
+                {
+                    output[0] = '\0';
+                    return 0;
+                }
+
+                val /= val2;
+            }
+
+            timeFromSeconds(&dt, val);
+            return sprintTime(output, &dt);
         }
+
+        double dval = strtod(values[0], NULL);
 
         for (int i = 1; i < value_count; i++)
         {
-            long val2 = atol(values[i]);
+            double val2 = strtod(values[i], NULL);
 
             if (val2 == 0)
             {
@@ -480,21 +519,15 @@ int evaluateFunction(
                 return 0;
             }
 
-            val /= val2;
+            dval /= val2;
         }
 
-        if (is_time)
-        {
-            timeFromSeconds(&dt, val);
-            return sprintTime(output, &dt);
-        }
-
-        return sprintf(output, "%ld", val);
+        return sprint_number(output, dval);
     }
     else if (function == FUNC_MOD)
     {
-        long val1 = atol(values[0]);
-        long val2 = atol(values[1]);
+        double val1 = strtod(values[0], NULL);
+        double val2 = strtod(values[1], NULL);
 
         if (val2 == 0)
         {
@@ -502,26 +535,79 @@ int evaluateFunction(
             return 0;
         }
 
-        return sprintf(output, "%ld", val1 % val2);
+        return sprint_number(output, fmod(val1, val2));
     }
     else if (function == FUNC_POW)
     {
-        long val1 = atol(values[0]);
-        long val2 = atol(values[1]);
+        double val1 = strtod(values[0], NULL);
+        double val2 = strtod(values[1], NULL);
 
-        if (val2 < 0)
+        return sprint_number(output, pow(val1, val2));
+    }
+    else if (function == FUNC_ABS)
+    {
+        return sprint_number(output, fabs(strtod(values[0], NULL)));
+    }
+    else if (function == FUNC_SQRT)
+    {
+        double val = strtod(values[0], NULL);
+
+        if (val < 0)
         {
-            return sprintf(output, "0");
+            output[0] = '\0';
+            return 0;
         }
 
-        long prod = 1;
+        return sprint_number(output, sqrt(val));
+    }
+    else if (function == FUNC_FLOOR)
+    {
+        return sprint_number(output, floor(strtod(values[0], NULL)));
+    }
+    else if (function == FUNC_CEIL)
+    {
+        return sprint_number(output, ceil(strtod(values[0], NULL)));
+    }
+    else if (function == FUNC_ROUND)
+    {
+        double val = strtod(values[0], NULL);
 
-        for (int i = 0; i < val2; i++)
+        if (value_count >= 2)
         {
-            prod *= val1;
+            double digits = strtod(values[1], NULL);
+            double scale = pow(10.0, digits);
+            return sprint_number(output, round(val * scale) / scale);
         }
 
-        return sprintf(output, "%ld", prod);
+        return sprint_number(output, round(val));
+    }
+    else if (function == FUNC_EXP)
+    {
+        return sprint_number(output, exp(strtod(values[0], NULL)));
+    }
+    else if (function == FUNC_LN)
+    {
+        double val = strtod(values[0], NULL);
+
+        if (val <= 0)
+        {
+            output[0] = '\0';
+            return 0;
+        }
+
+        return sprint_number(output, log(val));
+    }
+    else if (function == FUNC_LOG10)
+    {
+        double val = strtod(values[0], NULL);
+
+        if (val <= 0)
+        {
+            output[0] = '\0';
+            return 0;
+        }
+
+        return sprint_number(output, log10(val));
     }
     else if (function == FUNC_PARENS)
     {
@@ -1023,49 +1109,53 @@ int evaluateAggregateFunction(
     }
     else if (node->function == FUNC_AGG_MIN)
     {
-        int min = INT_MAX;
-
-        for (int i = 0; i < row_count; i++)
-        {
-            // Only consider the non-NULL values
-            if (IS_NOT_NULL(values[0]))
-            {
-                int v = atoi(values[i]);
-
-                if (v < min)
-                    min = v;
-            }
-        }
-
-        if (min < INT_MAX)
-        {
-            bytesWritten = sprintf(output, "%d", min);
-        }
-    }
-    else if (node->function == FUNC_AGG_MAX)
-    {
-        int max = INT_MIN;
+        double min = DBL_MAX;
+        int found = 0;
 
         for (int i = 0; i < row_count; i++)
         {
             // Only consider the non-NULL values
             if (IS_NOT_NULL(values[i]))
             {
-                int v = atoi(values[i]);
+                double v = strtod(values[i], NULL);
 
-                if (v > max)
-                    max = v;
+                if (!found || v < min)
+                    min = v;
+                found = 1;
             }
         }
 
-        if (max > INT_MIN)
+        if (found)
         {
-            bytesWritten = sprintf(output, "%d", max);
+            bytesWritten = sprint_number(output, min);
+        }
+    }
+    else if (node->function == FUNC_AGG_MAX)
+    {
+        double max = -DBL_MAX;
+        int found = 0;
+
+        for (int i = 0; i < row_count; i++)
+        {
+            // Only consider the non-NULL values
+            if (IS_NOT_NULL(values[i]))
+            {
+                double v = strtod(values[i], NULL);
+
+                if (!found || v > max)
+                    max = v;
+                found = 1;
+            }
+        }
+
+        if (found)
+        {
+            bytesWritten = sprint_number(output, max);
         }
     }
     else if (node->function == FUNC_AGG_SUM)
     {
-        int sum = 0;
+        double sum = 0;
         int non_null = 0;
 
         for (int i = 0; i < row_count; i++)
@@ -1074,20 +1164,20 @@ int evaluateAggregateFunction(
             if (IS_NOT_NULL(values[i]))
             {
                 non_null = 1;
-                sum += atoi(values[i]);
+                sum += strtod(values[i], NULL);
             }
         }
 
         // If *all* rows are NULL then the result is NULL
         if (non_null)
         {
-            bytesWritten = sprintf(output, "%d", sum);
+            bytesWritten = sprint_number(output, sum);
         }
     }
     else if (node->function == FUNC_AGG_AVG)
     {
         int count = 0;
-        int sum = 0;
+        double sum = 0;
 
         for (int i = 0; i < row_count; i++)
         {
@@ -1096,13 +1186,13 @@ int evaluateAggregateFunction(
             {
                 count++;
 
-                sum += atoi(values[i]);
+                sum += strtod(values[i], NULL);
             }
         }
 
         if (count > 0)
         {
-            bytesWritten = sprintf(output, "%d", sum / count);
+            bytesWritten = sprint_number(output, sum / count);
         }
     }
     else if (node->function == FUNC_AGG_LISTAGG)

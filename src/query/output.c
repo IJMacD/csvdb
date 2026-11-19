@@ -832,7 +832,8 @@ static void printColumnValue(
         }
 
         string_fmt = "\"%s\"";
-        num_fmt = "%ld";
+        // Print the numeric string as-is so fractional values are preserved.
+        num_fmt = "%s";
     }
     else if (
         format == OUTPUT_FORMAT_SQL_INSERT ||
@@ -859,7 +860,8 @@ static void printColumnValue(
         }
 
         string_fmt = "'%s'";
-        num_fmt = "%ld";
+        // Print the numeric string as-is so fractional values are preserved.
+        num_fmt = "%s";
     }
     else if (format == OUTPUT_FORMAT_TABLE || format == OUTPUT_FORMAT_BOX)
     {
@@ -924,7 +926,9 @@ static void printColumnValue(
         }
 
         string_fmt = "%-19s";
-        num_fmt = "%18ld ";
+        // Right-align numeric strings (including floats), then a trailing space
+        // to match the previous "%18ld " layout.
+        num_fmt = "%18s ";
     }
     else if (format == OUTPUT_FORMAT_HTML)
     {
@@ -966,7 +970,7 @@ static void printColumnValue(
 
         if (num_fmt != string_fmt && value_is_numeric)
     {
-        fprintf(f, num_fmt, atol(value));
+        fprintf(f, num_fmt, value);
     }
     else
     {

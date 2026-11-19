@@ -68,12 +68,13 @@ void sortResultRows (
             numeric_mode = is_numeric(treenode->value);
         }
 
-        // Numeric values need to be fixed width for comparison.
-        // After testing it make no difference whether numeric values are
-        // compared or strings are compared. (There are other slower steps).
+        // Numeric values need an order-preserving fixed-width key so that
+        // lexicographic string comparison matches numeric ordering (including
+        // floats and negatives).
         if (numeric_mode) {
-            long number = atol(treenode->value);
-            sprintf(treenode->value, "%020ld", number);
+            char sortable[MAX_VALUE_LENGTH];
+            format_sortable_number(sortable, treenode->value);
+            strcpy(treenode->value, sortable);
         }
 
         // For first (root) node we do a dummy insert to make sure struct
