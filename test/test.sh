@@ -137,6 +137,7 @@ for sql in "${lines[@]}"; do
     printf "\n$GREY -- Plan: --\n"
 
     $CSVDB -E -F table "$sql"
+    explain_result=$?
 
     printf "$NC"
 
@@ -144,6 +145,13 @@ for sql in "${lines[@]}"; do
     $CSVDB -o $OUTFILE $stats -F table "$sql"
     result=$?
     end=`$D`
+
+    # Exit 129-254 means killed by a signal (e.g. SIGABRT from fortify).
+    # CREATE and similar statements return 255 from EXPLAIN; ignore those.
+    if [[ $explain_result -ge 129 && $explain_result -le 254 ]]; then
+        printf "\n${RED}EXPLAIN crashed (exit %d)${NC}\n" "$explain_result"
+        result=1
+    fi
 
     if [[ $result == 0 && ! -z $ENABLE_SNAPSHOT ]]; then
         if [[ ! -f "$SNAPSHOT_DIR/$tests.no_snapshot" ]]; then
