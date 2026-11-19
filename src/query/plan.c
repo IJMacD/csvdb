@@ -805,29 +805,28 @@ static void addOrderStepsIfRequired(struct Plan *plan, struct Query *q)
     }
 
     // We might just need a REVERSE
-    if (sorts_added == -1)
+    if (sorts_added < 0)
     {
         addStep(plan, PLAN_REVERSE);
+        return;
     }
-    else
+
+    struct Node *tmp_node_list = malloc(
+        sizeof(*tmp_node_list) * (size_t)sorts_added);
+
+    for (int i = 0; i < sorts_added; i++)
     {
-        struct Node *tmp_node_list = malloc(
-            sizeof(*tmp_node_list) * sorts_added);
+        int idx = sorts_needed[i];
 
-        for (int i = 0; i < sorts_added; i++)
-        {
-            int idx = sorts_needed[i];
-
-            memcpy(
-                &tmp_node_list[i],
-                &q->order_nodes[idx],
-                sizeof(*tmp_node_list));
-        }
-
-        addStepWithNodes(plan, PLAN_SORT, tmp_node_list, sorts_added);
-
-        free(tmp_node_list);
+        memcpy(
+            &tmp_node_list[i],
+            &q->order_nodes[idx],
+            sizeof(*tmp_node_list));
     }
+
+    addStepWithNodes(plan, PLAN_SORT, tmp_node_list, sorts_added);
+
+    free(tmp_node_list);
 }
 
 static void addJoinStepsIfRequired(struct Plan *plan, struct Query *q)
