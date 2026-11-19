@@ -46,11 +46,20 @@ int explain_select_query (
         else if (s.type != PLAN_SELECT) {
             char *ptr = predicate;
             for (int i = 0; i < s.node_count; i++) {
-                size_t remaining = MAX_FIELD_LENGTH - (ptr - predicate);
+                size_t remaining = MAX_FIELD_LENGTH - (size_t)(ptr - predicate);
+
+                if (remaining == 0) {
+                    break;
+                }
 
                 if (i > 0) {
+                    // Need room for "; " plus a NUL for any following snprintf.
+                    if (remaining < 3) {
+                        break;
+                    }
                     *(ptr++) = ';';
                     *(ptr++) = ' ';
+                    remaining -= 2;
                 }
 
                 char *name = "";
@@ -74,8 +83,10 @@ int explain_select_query (
                             name = "rowid";
                         }
 
+                        int written = 0;
+
                         if (node->function == FUNC_UNITY) {
-                            ptr += snprintf(
+                            written = snprintf(
                                 ptr,
                                 remaining,
                                 "%s",
@@ -83,12 +94,26 @@ int explain_select_query (
                             );
                         }
                         else if (node->function != OPERATOR_ALWAYS) {
-                            ptr += snprintf(
+                            written = snprintf(
                                 ptr,
                                 remaining,
                                 "F(%s)",
                                 name
                             );
+                        }
+
+                        // snprintf returns the untruncated length; do not
+                        // advance ptr past the buffer on truncation.
+                        if (written < 0) {
+                            break;
+                        }
+                        if ((size_t)written >= remaining) {
+                            ptr += remaining - 1;
+                            remaining = 1;
+                        }
+                        else {
+                            ptr += written;
+                            remaining -= (size_t)written;
                         }
                     }
                 }
@@ -430,7 +455,11 @@ int explain_select_query (
 
                 // We might have been too hasty copying predicate name
                 if (s.nodes[0].children[0].field.table_id != join_count) {
-                    strcpy(predicate, s.nodes[0].children[1].field.text);
+                    snprintf(
+                        predicate,
+                        sizeof(predicate),
+                        "%s",
+                        s.nodes[0].children[1].field.text);
                 }
             } else {
                 rows += record_count;
@@ -460,7 +489,11 @@ int explain_select_query (
 
                 // We might have been too hasty copying predicate name
                 if (s.nodes[0].children[0].field.table_id != join_count) {
-                    strcpy(predicate, s.nodes[0].children[1].field.text);
+                    snprintf(
+                        predicate,
+                        sizeof(predicate),
+                        "%s",
+                        s.nodes[0].children[1].field.text);
                 }
             } else {
                 rows *= record_count;

@@ -208,6 +208,7 @@ FROM ranks WHERE value BETWEEN 2 AND 4 SELECT name, value;
 -- Redundant lower bounds fold to the tighter one
 FROM ranks WHERE value >= 2 AND value >= 4 SELECT value ORDER BY value;
 -- Rowid division algebra: value/10 = 5 → value = 50 (float division)
+-- Also exercises EXPLAIN with multiple predicates on one plan step
 FROM SEQUENCE WHERE value < 100 AND value / 10 = 5 SELECT value;
 -- Rowid multiplication algebra: value*10 = 50 → value = 5
 FROM SEQUENCE WHERE value < 20 AND value * 10 = 50 SELECT value;
