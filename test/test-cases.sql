@@ -156,3 +156,8 @@ FROM test ORDER BY birth_date DESC LIMIT 5;
 SELECT 'CAT', 10, 'CURRENT_DATE', CURRENT_DATE = TODAY(), NULL;
 -- Universal column aliasing
 FROM SEQUENCE AS t(i), SEQUENCE AS s(j)  WHERE t.i < 5 AND s.j < 2;
+-- VERSION() does not shadow a column named VERSION
+SELECT VERSION FROM (VALUES ('column')) AS t (VERSION);
+SELECT VERSION() = VERSION FROM (VALUES ('column')) AS t (VERSION);
+SELECT CSVDB_VERSION = VERSION();
+SELECT LENGTH(VERSION()) > 0;

@@ -84,6 +84,9 @@ enum Function {
 
     // Produces random integer between 0 and MAX_INT
     FUNC_RANDOM =                   0x0A,
+    // Returns the csvdb version string. The parentheses keep it distinct
+    // from a column named VERSION.
+    FUNC_VERSION =                  0x0B,
 
     // Maths functions
 

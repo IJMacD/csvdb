@@ -419,6 +419,12 @@ static int parseFunction(const char *value, const char *query, size_t *index, st
         node->field.index = FIELD_CONSTANT;
         node->field.table_id = TABLE_NONE;
     }
+    else if (strcmp(value, "VERSION") == 0)
+    {
+        node->function = FUNC_VERSION;
+        node->field.index = FIELD_CONSTANT;
+        node->field.table_id = TABLE_NONE;
+    }
     else if (strcmp(value, "ADD") == 0)
     {
         node->function = FUNC_ADD;
