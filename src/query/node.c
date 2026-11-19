@@ -208,12 +208,23 @@ int areNodesEqual(struct Node *nodeA, struct Node *nodeB)
 {
     if (
         nodeA->function != nodeB->function ||
-        nodeA->field.table_id != nodeB->field.table_id ||
-        nodeA->field.index != nodeB->field.index ||
-        strcmp(nodeA->field.text, nodeB->field.text) != 0 ||
         nodeA->child_count != nodeB->child_count)
     {
         return 0;
+    }
+
+    // Operator/function nodes with children: meaning is in the children.
+    // Parent field.text can be stale (e.g. IN expands the first EQ from a
+    // column-named node), so ignore field when child_count > 0.
+    if (nodeA->child_count <= 0)
+    {
+        if (
+            nodeA->field.table_id != nodeB->field.table_id ||
+            nodeA->field.index != nodeB->field.index ||
+            strcmp(nodeA->field.text, nodeB->field.text) != 0)
+        {
+            return 0;
+        }
     }
 
     for (int i = 0; i < nodeA->child_count; i++)

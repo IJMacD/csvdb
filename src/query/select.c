@@ -386,6 +386,9 @@ int process_query(
         optimiseUniqueOr(predicate);
     }
 
+    // Drop tautologies left as top-level ALWAYS after collapse/flatten.
+    optimiseRemoveTrivialPredicates(q);
+
     optimiseWhereToOn(q);
 
 #ifdef DEBUG
