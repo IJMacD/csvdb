@@ -51,6 +51,8 @@ static void checkCoveringIndex(
 
 static int haveNonUniqueJoins(struct Plan *plan);
 
+static int queryHasNonUniqueJoins(struct Query *q);
+
 static void addPredicateSource(struct Plan *plan, struct Query *query);
 
 static enum PlanStepType findIndexSource(struct Query *query);
@@ -139,9 +141,10 @@ int makePlan(struct Query *q, struct Plan *plan)
             NULL);
 
         // If the first ORDER BY node is a unique index then we can make use of
-        // it here if we're sure that there each row on the first table can only
+        // it here if we're sure that each row on the first table can only
         // result in exactly one row in the output.
-        if (index_type == INDEX_UNIQUE && haveNonUniqueJoins(plan) == 0)
+        // Joins are not in the plan yet — inspect the query, not the empty plan.
+        if (index_type == INDEX_UNIQUE && queryHasNonUniqueJoins(q) == 0)
         {
             addStepWithNode(plan, PLAN_UNIQUE_RANGE, &q->order_nodes[0]);
         }
@@ -620,26 +623,26 @@ static enum PlanStepType findIndexSource(struct Query *query)
         return 0;
     }
 
-    // Remove qualified name so indexes can be searched etc.
-    int dot_index = str_find_index(field_left->text, '.');
-    if (dot_index >= 0)
-    {
-        char value[MAX_FIELD_LENGTH];
-        strcpy(value, field_left->text);
-        strcpy(field_left->text, value + dot_index + 1);
-    }
-
     /*******************
      * INDEX SCAN
      *******************/
     // First table
     struct Table *table = &query->tables[0];
 
+    // findIndex matches on field text; strip a table qualifier for the lookup
+    // only — never mutate the live predicate (breaks later qualified uses).
+    struct Node index_node = *left;
+    int dot_index = str_find_index(field_left->text, '.');
+    if (dot_index >= 0)
+    {
+        strcpy(index_node.field.text, field_left->text + dot_index + 1);
+    }
+
     // Try to find any index
     enum IndexSearchType find_result = findIndex(
         NULL,
         table->name,
-        left,
+        &index_node,
         INDEX_ANY,
         NULL);
 
@@ -686,6 +689,10 @@ void destroyPlan(struct Plan *plan)
     {
         if (plan->steps[i].nodes != NULL)
         {
+            for (int j = 0; j < plan->steps[i].node_count; j++)
+            {
+                freeNode(&plan->steps[i].nodes[j]);
+            }
             free(plan->steps[i].nodes);
             plan->steps[i].nodes = NULL;
         }
@@ -733,7 +740,8 @@ static struct PlanStep *addStepWithNode(
  *
  * @param plan
  * @param type
- * @param nodes addStep() will malloc a copy of these nodes
+ * @param nodes deep-copied into the step so later flipPredicate / text
+ *              mutations on the query AST cannot affect planned steps
  * @param node_count
  * @return struct PlanStep*
  */
@@ -750,7 +758,14 @@ static struct PlanStep *addStepWithNodes(
     }
 
     struct Node *ps = malloc(sizeof(*ps) * node_count);
-    memcpy(ps, nodes, sizeof(*ps) * node_count);
+    for (int n = 0; n < node_count; n++)
+    {
+        // copyNodeTree skips alias (see node.c); plan steps need it for
+        // ORDER BY direction and SELECT display names.
+        clearNode(&ps[n]);
+        copyNodeTree(&ps[n], &nodes[n]);
+        memcpy(ps[n].alias, nodes[n].alias, sizeof(ps[n].alias));
+    }
 
     int i = plan->step_count;
 
@@ -1350,6 +1365,63 @@ static int haveNonUniqueJoins(struct Plan *plan)
 }
 
 /**
+ * @brief Will later joins be able to multiply rows from the first table?
+ * Used before joins are planned (plan may still be empty).
+ */
+static int queryHasNonUniqueJoins(struct Query *q)
+{
+    for (int i = 1; i < q->table_count; i++)
+    {
+        struct Table *table = &q->tables[i];
+        struct Node *join = &table->join;
+        enum Function op = join->function;
+
+        if (op == OPERATOR_ALWAYS)
+        {
+            return 1;
+        }
+
+        if (op == OPERATOR_NEVER)
+        {
+            continue;
+        }
+
+        // Same uniqueness test as addJoinStepsIfRequired: EQ on a UNIQUE /
+        // PRIMARY index is 1:1; anything else can multiply rows.
+        enum IndexSearchType index_result = INDEX_NONE;
+
+        if (join->child_count >= 2)
+        {
+            index_result = findIndex(
+                NULL,
+                table->name,
+                &join->children[0],
+                INDEX_ANY,
+                NULL);
+
+            if (index_result == INDEX_NONE)
+            {
+                index_result = findIndex(
+                    NULL,
+                    table->name,
+                    &join->children[1],
+                    INDEX_ANY,
+                    NULL);
+            }
+        }
+
+        if (!(
+                op == OPERATOR_EQ &&
+                (index_result == INDEX_UNIQUE || index_result == INDEX_PRIMARY)))
+        {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+/**
  * If the first step is an index seek/scan and every column we need already
  * lives in that index file, rewrite the plan to read from the index alone
  * (PLAN_COVERING_INDEX_SEEK, or TABLE SCAN of the index for INDEX SCAN).
@@ -1476,6 +1548,15 @@ static void checkCoveringIndex(
     // TABLE SCAN
     if (firstStep->type == PLAN_INDEX_SCAN)
     {
+        if (firstStep->nodes != NULL)
+        {
+            for (int j = 0; j < firstStep->node_count; j++)
+            {
+                freeNode(&firstStep->nodes[j]);
+            }
+            free(firstStep->nodes);
+            firstStep->nodes = NULL;
+        }
         firstStep->type = PLAN_TABLE_SCAN;
         firstStep->node_count = 0;
 

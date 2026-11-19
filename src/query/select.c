@@ -150,6 +150,10 @@ int select_query(
         q2a->id = id;
 #endif
         q2a->order_count = 0;
+        // LIMIT/OFFSET apply to the sorted grouped result, not the
+        // materialised GROUP BY subquery (which must emit every group).
+        q2a->offset_value = 0;
+        q2a->limit_value = -1;
 
         struct Table table = {0};
 
@@ -170,7 +174,8 @@ int select_query(
         q2b->tables = &table;
         q2b->table_count = 1;
 
-        q2b->limit_value = -1;
+        q2b->offset_value = q->offset_value;
+        q2b->limit_value = q->limit_value;
 
         memcpy(
             q2b->order_nodes,
