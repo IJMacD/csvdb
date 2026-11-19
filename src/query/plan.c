@@ -354,17 +354,49 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
     // If plan_type is set, that means we have an index
     if (step_type)
     {
-        addStepWithNode(plan, step_type, &query->predicate_nodes[0]);
+        int consumed = 1;
+
+        // BETWEEN / range pair: GE/GT + LE/LT on the same column → dual-bound
+        // seek so the upper bound is not left as a residual filter.
+        if (
+            query->predicate_count >= 2 &&
+            (step_type == PLAN_INDEX_RANGE ||
+             step_type == PLAN_UNIQUE_RANGE ||
+             step_type == PLAN_PK_RANGE))
+        {
+            struct Node *a = &query->predicate_nodes[0];
+            struct Node *b = &query->predicate_nodes[1];
+            int a_lo = a->function == OPERATOR_GE || a->function == OPERATOR_GT;
+            int a_hi = a->function == OPERATOR_LE || a->function == OPERATOR_LT;
+            int b_lo = b->function == OPERATOR_GE || b->function == OPERATOR_GT;
+            int b_hi = b->function == OPERATOR_LE || b->function == OPERATOR_LT;
+
+            if (
+                a->child_count >= 2 && b->child_count >= 2 &&
+                a->children[0].function == b->children[0].function &&
+                a->children[0].field.table_id == b->children[0].field.table_id &&
+                a->children[0].field.index == b->children[0].field.index &&
+                ((a_lo && b_hi) || (a_hi && b_lo)))
+            {
+                addStepWithNodes(plan, step_type, query->predicate_nodes, 2);
+                consumed = 2;
+            }
+        }
+
+        if (consumed == 1)
+        {
+            addStepWithNode(plan, step_type, &query->predicate_nodes[0]);
+        }
 
         addJoinStepsIfRequired(plan, query);
 
-        if (query->predicate_count > 1)
+        if (query->predicate_count > consumed)
         {
             addStepWithNodes(
                 plan,
                 PLAN_TABLE_ACCESS_ROWID,
-                query->predicate_nodes + 1,
-                query->predicate_count - 1);
+                query->predicate_nodes + consumed,
+                query->predicate_count - consumed);
         }
 
         if (step_type == PLAN_PK || step_type == PLAN_UNIQUE)
@@ -414,7 +446,13 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
         // example times:
         //  Index, then filter:     real    0m3.012s
         //  Filter, then sort:      real    0m1.637s
-        && (op != OPERATOR_EQ) && query->order_nodes[0].function == FUNC_UNITY && findIndex(NULL, table->name, &query->order_nodes[0], INDEX_ANY, NULL))
+        // Prefer filter-then-sort for selective EQ without a small LIMIT
+        // (full index scan then filter is usually worse). With a tiny LIMIT,
+        // an ordered index scan can win if matches are dense in index order.
+        && (op != OPERATOR_EQ ||
+            (query->limit_value >= 0 && query->limit_value <= 5)) &&
+        query->order_nodes[0].function == FUNC_UNITY &&
+        findIndex(NULL, table->name, &query->order_nodes[0], INDEX_ANY, NULL))
     {
         // Add step for Sorted index access
         addStepWithNode(plan, PLAN_INDEX_SCAN, &query->order_nodes[0]);
@@ -548,17 +586,57 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
         query->predicate_count == 1 &&
         query->predicate_nodes[0].function == OPERATOR_OR &&
         areChildrenUnique(&query->predicate_nodes[0]) &&
-        !have_order_by)
+        !have_order_by &&
+        // Multiple sources each apply LIMIT locally; skip when a global
+        // LIMIT/OFFSET is present so a single OR filter + SLICE is used.
+        query->limit_value < 0 &&
+        query->offset_value <= 0)
     {
         struct Node *or_children = query->predicate_nodes[0].children;
+        struct Table *table0 = &query->tables[0];
 
         for (int i = 0; i < query->predicate_nodes[0].child_count; i++)
         {
-            // Add one *source* yes SOURCE step per OR child
-            addStepWithNode(
-                plan,
-                PLAN_TABLE_ACCESS_FULL,
-                &or_children[i]);
+            struct Node *child = &or_children[i];
+            enum PlanStepType child_step = PLAN_TABLE_ACCESS_FULL;
+
+            // Same-column EQ on an indexed column → index seek per OR arm
+            if (
+                child->function == OPERATOR_EQ &&
+                child->child_count >= 2 &&
+                child->children[0].function == FUNC_UNITY)
+            {
+                struct Node index_node = child->children[0];
+                int dot = str_find_index(index_node.field.text, '.');
+                if (dot >= 0)
+                {
+                    strcpy(
+                        index_node.field.text,
+                        child->children[0].field.text + dot + 1);
+                }
+
+                enum IndexSearchType idx = findIndex(
+                    NULL,
+                    table0->name,
+                    &index_node,
+                    INDEX_ANY,
+                    NULL);
+
+                if (idx == INDEX_PRIMARY)
+                {
+                    child_step = PLAN_PK;
+                }
+                else if (idx == INDEX_UNIQUE)
+                {
+                    child_step = PLAN_UNIQUE;
+                }
+                else if (idx == INDEX_REGULAR)
+                {
+                    child_step = PLAN_INDEX_RANGE;
+                }
+            }
+
+            addStepWithNode(plan, child_step, child);
         }
     }
     /* table_count == 1 */
@@ -608,13 +686,14 @@ static enum PlanStepType findIndexSource(struct Query *query)
             return PLAN_PK;
         }
 
-        // Can't use PK index for LIKE yet
-        if (op != OPERATOR_LIKE)
+        // Prefix LIKE on PK: regular indexes handle this via INDEX_RANGE;
+        // CALENDAR/SEQUENCE primary indexes don't implement LIKE ranges.
+        if (op == OPERATOR_LIKE)
         {
-            return PLAN_PK_RANGE;
+            return 0;
         }
 
-        return 0;
+        return PLAN_PK_RANGE;
     }
 
     // Can only do indexes on bare columns for now
@@ -658,13 +737,12 @@ static enum PlanStepType findIndexSource(struct Query *query)
             return PLAN_PK;
         }
 
-        // Can't use PK index for LIKE yet
-        if (op != OPERATOR_LIKE)
+        if (op == OPERATOR_LIKE)
         {
-            return PLAN_PK_RANGE;
+            return 0;
         }
 
-        return 0;
+        return PLAN_PK_RANGE;
     }
 
     // LIKE makes any INDEX automatically non-unique
@@ -1598,16 +1676,34 @@ static void checkCoveringIndex(
         return;
     }
 
-    // Later table access means we still need the base table — not covering
+    // Later table access means we still need the base table — not covering.
+    // Multiple index sources (OR multi-seek) also share the base table slot.
     for (int i = 1; i < plan->step_count; i++)
     {
-        if (plan->steps[i].type == PLAN_TABLE_ACCESS_ROWID)
+        enum PlanStepType t = plan->steps[i].type;
+        if (
+            t == PLAN_TABLE_ACCESS_ROWID ||
+            t == PLAN_INDEX_RANGE ||
+            t == PLAN_INDEX_SCAN ||
+            t == PLAN_UNIQUE ||
+            t == PLAN_UNIQUE_RANGE ||
+            t == PLAN_PK ||
+            t == PLAN_PK_RANGE ||
+            t == PLAN_TABLE_ACCESS_FULL ||
+            t == PLAN_TABLE_SCAN)
         {
             return;
         }
     }
 
     if (firstStep->node_count <= 0)
+    {
+        return;
+    }
+
+    // Dual-bound BETWEEN seeks need both predicates on the index step;
+    // covering rewrite only understands a single seek key today.
+    if (firstStep->node_count >= 2)
     {
         return;
     }

@@ -203,3 +203,17 @@ FROM suits WHERE name IN ('spades','spades') SELECT name;
 FROM test WHERE name = 'Walter KELLY' AND 1 = 1 SELECT name LIMIT 1;
 -- Indexed EQ preferred over unindexed EQ when both are first-table
 FROM ranks WHERE name = 'Ace' AND value = 1 SELECT name, value;
+-- BETWEEN dual-bound index seek (no residual value filter)
+FROM ranks WHERE value BETWEEN 2 AND 4 SELECT name, value;
+-- Redundant lower bounds fold to the tighter one
+FROM ranks WHERE value >= 2 AND value >= 4 SELECT value ORDER BY value;
+-- Rowid division algebra: value/10 = 5 → [50,60)
+FROM SEQUENCE WHERE value < 100 AND value / 10 = 5 SELECT value;
+-- Rowid multiplication algebra: value*10 = 50 → value = 5
+FROM SEQUENCE WHERE value < 20 AND value * 10 = 50 SELECT value;
+-- Same-column IN without LIMIT → per-arm index seeks
+FROM test WHERE name IN ('Walter KELLY','Claude MILLS') SELECT name ORDER BY name, score LIMIT 5;
+-- Transitive join predicate: l.id = r.id AND l.id = 2 → filter/join on 2
+FROM lefty AS l JOIN righty AS r ON l.id = r.id WHERE l.id = 2 SELECT l.name, r.name;
+-- ORDER BY + EQ with tiny LIMIT may use index-ordered scan
+FROM test WHERE score = 42 ORDER BY name LIMIT 3;

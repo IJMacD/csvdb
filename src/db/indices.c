@@ -69,9 +69,15 @@ enum IndexSearchResult indexUniqueSeek (
     struct RowList * row_list,
     int limit
 ) {
-    // We can't handle LIKE with this index (yet)
+    // Prefix LIKE is a range; reuse the non-unique seek path.
     if (predicate_op == OPERATOR_LIKE) {
-        return RESULT_NO_INDEX;
+        return indexSeek(
+            index_db,
+            rowid_column,
+            predicate_op,
+            predicate_value,
+            row_list,
+            limit);
     }
 
     // Output Flag: 0: value found; RESULT_BETWEEN: value not found but just
@@ -375,6 +381,94 @@ enum IndexSearchResult indexSeek (
  *
  * @return Number of rows added
  */
+
+/**
+ * Seek with both a lower and upper bound on the same index column.
+ * Bound math mirrors indexSeek() for GE/GT/LE/LT.
+ */
+enum IndexSearchResult indexBoundedSeek (
+    struct DB *index_db,
+    int rowid_column,
+    enum Function lower_op,
+    const char *lower_value,
+    enum Function upper_op,
+    const char *upper_value,
+    struct RowList * row_list,
+    int limit
+) {
+    int status_lo_lower = 0;
+    int status_lo_upper = 0;
+    int status_hi_lower = 0;
+    int status_hi_upper = 0;
+
+    int lo_lower = indexSearch(
+        index_db, lower_value, MODE_LOWER_BOUND, &status_lo_lower);
+    int lo_upper = indexSearch(
+        index_db, lower_value, MODE_UPPER_BOUND, &status_lo_upper);
+    int hi_lower = indexSearch(
+        index_db, upper_value, MODE_LOWER_BOUND, &status_hi_lower);
+    int hi_upper = indexSearch(
+        index_db, upper_value, MODE_UPPER_BOUND, &status_hi_upper);
+
+    int lower_bound = 0;
+    int upper_bound = getRecordCount(index_db);
+
+    if (lower_op == OPERATOR_GE)
+    {
+        lower_bound = lo_lower;
+    }
+    else if (lower_op == OPERATOR_GT)
+    {
+        lower_bound = lo_upper;
+        if (status_lo_lower == RESULT_FOUND)
+        {
+            lower_bound++;
+        }
+    }
+
+    if (upper_op == OPERATOR_LT)
+    {
+        upper_bound = hi_lower;
+    }
+    else if (upper_op == OPERATOR_LE)
+    {
+        upper_bound = hi_upper;
+        if (status_hi_upper == RESULT_FOUND)
+        {
+            upper_bound++;
+        }
+    }
+
+    if (lower_bound < 0)
+    {
+        lower_bound = 0;
+    }
+    if (upper_bound < 0)
+    {
+        upper_bound = 0;
+    }
+    if (upper_bound > getRecordCount(index_db))
+    {
+        upper_bound = getRecordCount(index_db);
+    }
+    if (lower_bound >= upper_bound)
+    {
+        return RESULT_NO_ROWS;
+    }
+
+    if (limit >= 0)
+    {
+        upper_bound = MIN(upper_bound, lower_bound + limit);
+    }
+
+    return indexWalk(
+        index_db,
+        rowid_column,
+        lower_bound,
+        upper_bound,
+        row_list);
+}
+
 static int indexWalk(
     struct DB *db,
     int rowid_column,
