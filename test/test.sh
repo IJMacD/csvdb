@@ -40,7 +40,81 @@ fi
 tests=0
 errors=0
 
-echo "csvdb version:" `$CSVDB -v` 
+cli_die() {
+    printf "${RED}CLI check failed:${NC} %s\n" "$1" >&2
+    exit 1
+}
+
+ver_flag=$("$CSVDB" -v </dev/null)
+ver_long=$("$CSVDB" --version </dev/null)
+if [[ -z "$ver_flag" || "$ver_flag" != "$ver_long" ]]; then
+    cli_die "-v and --version disagree: [$ver_flag] [$ver_long]"
+fi
+
+piped=$(printf 'n\n1\n' | "$CSVDB" -v)
+if [[ "$piped" != "$ver_flag" ]]; then
+    cli_die "standalone -v read stdin instead of printing the version"
+fi
+
+with_query=$("$CSVDB" -v --format csv --no-headers "SELECT 1" 2>/dev/null)
+if [[ "$with_query" != "1" ]]; then
+    cli_die "-v with a query did not run it: [$with_query]"
+fi
+
+ignored=$(printf 'n\n1\n' | "$CSVDB" --version "SELECT 1")
+if [[ "$ignored" != "$ver_long" ]]; then
+    cli_die "--version ran a query"
+fi
+
+space=$("$CSVDB" --format csv --no-headers "SELECT 1")
+equals=$("$CSVDB" --format=csv -N "SELECT 1")
+plain=$("$CSVDB" -N -F csv "SELECT 1")
+if [[ "$space" != "1" || "$space" != "$equals" || "$space" != "$plain" ]]; then
+    cli_die "format spellings disagree: [$space] [$equals] [$plain]"
+fi
+
+headed=$("$CSVDB" -N -H --format=csv "SELECT 1")
+bare=$("$CSVDB" -H -N --format csv "SELECT 1")
+if [[ "$headed" == "$bare" || "$bare" != "$plain" ]]; then
+    cli_die "-H/-N did not follow flag order: [$headed] [$bare]"
+fi
+
+plan_en=$("$CSVDB" -E -N -F csv "SELECT 1")
+plan_ne=$("$CSVDB" -N -E --format csv "SELECT 1")
+if [[ "$plan_en" != "$plan_ne" || "$plan_en" == "$plain" ]]; then
+    cli_die "-N cleared --explain"
+fi
+
+if "$CSVDB" --format >/dev/null 2>&1; then
+    cli_die "--format without a value succeeded"
+fi
+if "$CSVDB" --input >/dev/null 2>&1; then
+    cli_die "--input without a value succeeded"
+fi
+if "$CSVDB" --output >/dev/null 2>&1; then
+    cli_die "--output without a value succeeded"
+fi
+if "$CSVDB" --format --no-headers "SELECT 1" >/dev/null 2>&1; then
+    cli_die "--format consumed the following flag"
+fi
+
+cli_in=$(mktemp)
+cli_out_space=$(mktemp)
+cli_out_equals=$(mktemp)
+printf 'n\n7\n' > "$cli_in"
+in_space=$("$CSVDB" --input "$cli_in" --format csv --no-headers "SELECT n FROM stdin")
+in_equals=$("$CSVDB" --input="$cli_in" --format=csv -N "SELECT n FROM stdin")
+"$CSVDB" --output "$cli_out_space" --format csv -N "SELECT 1"
+"$CSVDB" --output="$cli_out_equals" --format=csv --no-headers "SELECT 1"
+if [[ "$in_space" != "7" || "$in_space" != "$in_equals" ]]; then
+    cli_die "--input spellings disagree: [$in_space] [$in_equals]"
+fi
+if ! cmp -s "$cli_out_space" "$cli_out_equals"; then
+    cli_die "--output spellings disagree"
+fi
+rm -f "$cli_in" "$cli_out_space" "$cli_out_equals"
+
+echo "csvdb version:" "$ver_flag" 
 
 echo
 

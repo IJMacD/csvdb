@@ -81,8 +81,9 @@ int select_query(
         return -1;
     }
 
-    // Verbose mode prints out current query
-    if (output_flags & OUTPUT_OPTION_VERBOSE)
+    // Verbose mode prints out current query. end_ptr is NULL for the
+    // implicit `SELECT * FROM stdin` invoked when stdin is not a terminal.
+    if (output_flags & OUTPUT_OPTION_VERBOSE && end_ptr != NULL)
     {
         size_t query_len = *end_ptr - query;
         fwrite(query, 1, query_len, stderr);
