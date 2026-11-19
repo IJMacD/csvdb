@@ -4,6 +4,7 @@
 #include <limits.h>
 
 #include "../structs.h"
+#include "../gitversion.h"
 #include "../functions/util.h"
 #include "../functions/date.h"
 #include "../evaluate/evaluate.h"
@@ -32,6 +33,12 @@ int evaluateFunction(
     if (function == FUNC_RANDOM)
     {
         return sprintf(output, "%d", rand());
+    }
+
+    // VERSION takes 0 parameters
+    if (function == FUNC_VERSION)
+    {
+        return sprintf(output, "%s", gitversion);
     }
 
     // TODAY takes 0 parameters
