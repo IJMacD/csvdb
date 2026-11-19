@@ -1349,11 +1349,19 @@ static int haveNonUniqueJoins(struct Plan *plan)
     return non_unique_joins;
 }
 
+/**
+ * If the first step is an index seek/scan and every column we need already
+ * lives in that index file, rewrite the plan to read from the index alone
+ * (PLAN_COVERING_INDEX_SEEK, or TABLE SCAN of the index for INDEX SCAN).
+ *
+ * VFSes that only fake indexes (CALENDAR, SEQUENCE, …) set
+ * supports_covering_index = 0 so this path is skipped for them.
+ */
 static void checkCoveringIndex(
     struct Query *q,
     struct Plan *plan)
 {
-    // Don't bother with joins yet
+    // Covering rewrite is single-table only for now
     if (q->table_count > 1)
     {
         return;
@@ -1366,8 +1374,6 @@ static void checkCoveringIndex(
 
     struct Table *firstTable = &q->tables[0];
 
-    // Virtual VFSes (e.g. CALENDAR) advertise indexes that are not real
-    // covering index files — opt out via VFS capability flag.
     if (firstTable->db == NULL || !dbSupportsCoveringIndex(firstTable->db))
     {
         return;
@@ -1382,8 +1388,7 @@ static void checkCoveringIndex(
         return;
     }
 
-    // If we need to access the table anyway then there's no point in using a
-    // covering index
+    // Later table access means we still need the base table — not covering
     for (int i = 1; i < plan->step_count; i++)
     {
         if (plan->steps[i].type == PLAN_TABLE_ACCESS_ROWID)
