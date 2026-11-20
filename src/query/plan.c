@@ -586,14 +586,17 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
         addOrderStepsIfRequired(plan, query);
     }
     /* table_count == 1 */
-    // Special case if the only predicate is an OR operator node
-    // ONLY WORKS IF EACH 'OR' CHILD IS UNIQUE! <- Even then I'm not sure if strictly true
-    // Multiple SOURCE steps each push their own row list; SORT/REVERSE only
-    // operate on the top list, so ORDER BY would leave other branches unsorted.
+    // Special case if the only predicate is an OR of unique same-column EQ
+    // arms (as produced by IN (...)). Multiple SOURCE steps each push their
+    // own row list; SORT/REVERSE only operate on the top list, so ORDER BY
+    // would leave other branches unsorted. Cross-column or non-EQ OR must
+    // use a single filter — multi-source would duplicate rows that match
+    // more than one arm.
     else if (
         query->predicate_count == 1 &&
         query->predicate_nodes[0].function == OPERATOR_OR &&
         areChildrenUnique(&query->predicate_nodes[0]) &&
+        isSameColumnEqOr(&query->predicate_nodes[0]) &&
         !have_order_by &&
         // Multiple sources each apply LIMIT locally; skip when a global
         // LIMIT/OFFSET is present so a single OR filter + SLICE is used.

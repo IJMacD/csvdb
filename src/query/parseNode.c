@@ -1172,10 +1172,39 @@ int parseComplexNode(
 }
 
 /**
- * Parses list of complex nodes with AND between
- * Does *not* return a list. Returns single AND node with children as list
- * Parses:
- *      <complex node> AND <complex node> AND ...
+ * True if query at *index starts with keyword followed by a non-identifier
+ * character (space, end, punctuation). Advances *index past the keyword.
+ */
+static int matchKeyword(const char *query, size_t *index, const char *keyword)
+{
+    size_t len = strlen(keyword);
+
+    if (strncmp(query + *index, keyword, len) != 0)
+    {
+        return 0;
+    }
+
+    char next = query[*index + len];
+    if (
+        next != '\0' &&
+        !isspace((unsigned char)next) &&
+        next != '(' &&
+        next != ')' &&
+        next != ',' &&
+        next != ';')
+    {
+        return 0;
+    }
+
+    *index += len;
+    return 1;
+}
+
+/**
+ * Parses complex nodes joined by AND / OR.
+ * Does *not* return a flat list. Builds a tree with SQL precedence
+ * (AND binds tighter than OR):
+ *      <complex> AND <complex> OR <complex> AND ...
  */
 int parseNodeList(const char *query, size_t *index, struct Node *node, struct Query *q)
 {
@@ -1187,23 +1216,59 @@ int parseNodeList(const char *query, size_t *index, struct Node *node, struct Qu
 
     while (query[*index] != '\0' && query[*index] != ';')
     {
-
         skipWhitespace(query, index);
 
-        if (strncmp(&query[*index], "AND ", 4) != 0)
+        enum Function combiner = FUNC_UNKNOWN;
+
+        if (matchKeyword(query, index, "AND"))
+        {
+            combiner = OPERATOR_AND;
+        }
+        else if (matchKeyword(query, index, "OR"))
+        {
+            combiner = OPERATOR_OR;
+        }
+        else
         {
             break;
         }
 
-        *index += 4;
+        skipWhitespace(query, index);
 
-        if (node->function != OPERATOR_AND)
+        struct Node *target;
+
+        if (combiner == OPERATOR_AND && node->function == OPERATOR_OR)
         {
-            cloneNodeIntoChild(node);
-            node->function = OPERATOR_AND;
+            // AND binds tighter: attach to the rightmost OR arm
+            target = &node->children[node->child_count - 1];
+
+            if (target->function != OPERATOR_AND)
+            {
+                cloneNodeIntoChild(target);
+                target->function = OPERATOR_AND;
+            }
+        }
+        else if (combiner == OPERATOR_OR)
+        {
+            if (node->function != OPERATOR_OR)
+            {
+                cloneNodeIntoChild(node);
+                node->function = OPERATOR_OR;
+            }
+            target = node;
+        }
+        else
+        {
+            // AND into AND bag, or first combiner on a leaf comparison
+            if (node->function != OPERATOR_AND)
+            {
+                cloneNodeIntoChild(node);
+                node->function = OPERATOR_AND;
+            }
+            target = node;
         }
 
-        struct Node *next_child = addChildNode(node);
+        struct Node *next_child = addChildNode(target);
 
         int result = parseComplexNode(query, index, next_child, q);
         if (result < 0)

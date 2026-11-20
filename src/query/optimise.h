@@ -25,3 +25,9 @@ void optimiseMergeOrRanges(struct Node *node);
 void optimiseTransitivePredicates(struct Query *query);
 
 int areChildrenUnique(struct Node *node);
+
+/**
+ * True if node is OR of EQ comparisons on the same column (IN-style).
+ * Safe for multi-source plans that concatenate without dedup.
+ */
+int isSameColumnEqOr(struct Node *node);

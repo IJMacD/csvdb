@@ -241,3 +241,11 @@ FROM suits SELECT DISTINCT name ORDER BY name DESC;
 -- DISTINCT ON
 FROM dupes SELECT DISTINCT ON (key) key, label ORDER BY key ASC, label ASC;
 FROM dupes SELECT DISTINCT ON (key) key, label ORDER BY key ASC, label DESC;
+-- WHERE OR
+FROM suits WHERE name = 'spades' OR name = 'hearts' ORDER BY name SELECT name;
+FROM ranks WHERE value = 1 OR name = 'King' ORDER BY value SELECT value, name;
+FROM ranks WHERE value = 1 OR value = 13 AND name = 'Nope' SELECT value, name;
+FROM ranks WHERE value = 1 AND name = 'Ace' OR value = 13 ORDER BY value SELECT value, name;
+FROM ranks WHERE value = 1 OR name = 'Ace' SELECT value, name;
+FROM ranks SELECT COUNT(*) FILTER (WHERE value = 1 OR value = 13);
+FROM ranks GROUP BY name HAVING name = 'Ace' OR name = 'King' ORDER BY name SELECT name;
