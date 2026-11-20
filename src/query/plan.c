@@ -6,6 +6,7 @@
 #include "./optimise.h"
 #include "../functions/util.h"
 #include "../db/db.h"
+#include "../db/indices.h"
 #include "../evaluate/predicates.h"
 #include "../evaluate/evaluate.h"
 
@@ -386,26 +387,94 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
                 a->children[0].field.index == b->children[0].field.index &&
                 ((a_lo && b_hi) || (a_hi && b_lo)))
             {
-                addStepWithNodes(plan, step_type, query->predicate_nodes, 2);
                 consumed = 2;
             }
         }
 
-        if (consumed == 1)
+        // Residuals whose columns live in the index file can be applied during
+        // the index walk (avoids ACCESS BY ROWID against the base table).
+        int can_index_filter =
+            step_type == PLAN_INDEX_RANGE ||
+            step_type == PLAN_UNIQUE ||
+            step_type == PLAN_UNIQUE_RANGE;
+
+        struct DB index_db = {0};
+        int have_index_db = 0;
+
+        if (can_index_filter)
         {
-            addStepWithNode(plan, step_type, &query->predicate_nodes[0]);
+            struct Node index_node = query->predicate_nodes[0].children[0];
+            int dot_index = str_find_index(index_node.field.text, '.');
+            if (dot_index >= 0)
+            {
+                strcpy(
+                    index_node.field.text,
+                    index_node.field.text + dot_index + 1);
+            }
+
+            if (
+                findIndex(
+                    &index_db,
+                    table->name,
+                    &index_node,
+                    INDEX_ANY,
+                    NULL) != INDEX_NONE)
+            {
+                have_index_db = 1;
+            }
+        }
+
+        int index_node_count = consumed;
+        int table_filter_count = 0;
+        // Combined seek + index-filter nodes for the index step
+        struct Node *index_step_nodes = malloc(
+            sizeof(*index_step_nodes) * query->predicate_count);
+        struct Node *table_filter_nodes = malloc(
+            sizeof(*table_filter_nodes) * query->predicate_count);
+
+        for (int i = 0; i < consumed; i++)
+        {
+            index_step_nodes[i] = query->predicate_nodes[i];
+        }
+
+        for (int i = consumed; i < query->predicate_count; i++)
+        {
+            if (
+                have_index_db &&
+                predicateSatisfiableFromIndex(
+                    &index_db, &query->predicate_nodes[i]))
+            {
+                index_step_nodes[index_node_count++] =
+                    query->predicate_nodes[i];
+            }
+            else
+            {
+                table_filter_nodes[table_filter_count++] =
+                    query->predicate_nodes[i];
+            }
+        }
+
+        addStepWithNodes(plan, step_type, index_step_nodes, index_node_count);
+
+        free(index_step_nodes);
+
+        if (have_index_db)
+        {
+            closeDB(&index_db);
         }
 
         addJoinStepsIfRequired(plan, query);
 
-        if (query->predicate_count > consumed)
+        if (table_filter_count > 0)
         {
             addStepWithNodes(
                 plan,
                 PLAN_TABLE_ACCESS_ROWID,
-                query->predicate_nodes + consumed,
-                query->predicate_count - consumed);
+                table_filter_nodes,
+                table_filter_count);
         }
+
+        free(table_filter_nodes);
 
         if (step_type == PLAN_PK || step_type == PLAN_UNIQUE)
         {
@@ -1626,20 +1695,20 @@ static int applySortLogic(
                 return sorts_added;
             }
 
+            // UNIQUE EQ returns at most one row — never needs a sort.
+            if (first_step->type == PLAN_UNIQUE)
+            {
+                return 0;
+            }
+
             if (
-                (first_step->type == PLAN_UNIQUE || first_step->type == PLAN_UNIQUE_RANGE) &&
+                first_step->type == PLAN_UNIQUE_RANGE &&
                 left->field.table_id == primary_sort_col->field.table_id &&
                 left->field.index == primary_sort_col->field.index)
             {
-                // Rows were returned in INDEX order.
-                // The first order column is the index column,
-                // and since it is a UNIQUE index there can never be more
-                // than one row returned for the first sort column so,
-                // we never need to sort.
-
+                // Rows were returned in UNIQUE index order on this column.
                 if (primary_sort_dir == ORDER_DESC)
                 {
-                    // Just need to reverse
                     return -1;
                 }
 
@@ -1652,29 +1721,101 @@ static int applySortLogic(
                 left->field.table_id == primary_sort_col->field.table_id &&
                 left->field.index == primary_sort_col->field.index)
             {
-                // To use the index, all ORDER BY nodes need to be the same direction
-                for (int i = 1; i < first_step->node_count; i++)
+                // Seek/scan column matches primary sort. Trailing ORDER BY
+                // columns on this INDEX SCAN step must share direction.
+                int check_count = first_step->type == PLAN_INDEX_SCAN
+                    ? first_step->node_count
+                    : 1;
+
+                for (int i = 1; i < check_count && i < sorts_added; i++)
                 {
                     int sort_idx = sorts_needed[i];
                     struct Node *sort_col = &q->order_nodes[sort_idx];
                     enum Order sort_dir = sort_col->alias[0];
                     if (sort_dir != primary_sort_dir)
                     {
-                        // We can't use the index
-
                         return sorts_added;
                     }
                 }
 
-                // If we've got to here then we can use the index
-
                 if (primary_sort_dir == ORDER_DESC)
                 {
-                    // Just need to reverse
                     return -1;
                 }
 
                 return 0;
+            }
+
+            // EQ seek on leading index key: remaining sorts on the next
+            // contiguous index columns are already satisfied (composite
+            // index order). E.g. WHERE name = ? ORDER BY birth_date with
+            // INDEX (name, birth_date).
+            if (
+                first_step->type == PLAN_INDEX_RANGE &&
+                left->function == FUNC_UNITY &&
+                ((predicate->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR) &&
+                predicate->function == OPERATOR_EQ)
+            {
+                struct DB index_db = {0};
+                struct Node index_node = *left;
+                int dot_index = str_find_index(index_node.field.text, '.');
+                if (dot_index >= 0)
+                {
+                    strcpy(
+                        index_node.field.text,
+                        index_node.field.text + dot_index + 1);
+                }
+
+                if (
+                    findIndex(
+                        &index_db,
+                        q->tables[0].name,
+                        &index_node,
+                        INDEX_ANY,
+                        NULL) != INDEX_NONE)
+                {
+                    int seek_col = getFieldIndex(
+                        &index_db, nodeGetFieldName(&index_node));
+                    int ok = (seek_col >= 0);
+
+                    for (int i = 0; ok && i < sorts_added; i++)
+                    {
+                        int sort_idx = sorts_needed[i];
+                        struct Node *sort_col = &q->order_nodes[sort_idx];
+                        if (sort_col->function != FUNC_UNITY)
+                        {
+                            ok = 0;
+                            break;
+                        }
+
+                        int idx = getFieldIndex(
+                            &index_db, nodeGetFieldName(sort_col));
+                        if (idx != seek_col + 1 + i)
+                        {
+                            ok = 0;
+                            break;
+                        }
+
+                        enum Order sort_dir = sort_col->alias[0];
+                        if (sort_dir != primary_sort_dir)
+                        {
+                            ok = 0;
+                            break;
+                        }
+                    }
+
+                    closeDB(&index_db);
+
+                    if (ok)
+                    {
+                        if (primary_sort_dir == ORDER_DESC)
+                        {
+                            return -1;
+                        }
+
+                        return 0;
+                    }
+                }
             }
         }
     }
@@ -1829,9 +1970,11 @@ static void checkCoveringIndex(
         return;
     }
 
-    // Dual-bound BETWEEN seeks need both predicates on the index step;
-    // covering rewrite only understands a single seek key today.
-    if (firstStep->node_count >= 2)
+    // Leading nodes are seek bounds (1, or 2 for BETWEEN); any further nodes
+    // are residual filters already known to reference index columns.
+    int seek_count = indexStepSeekNodeCount(
+        firstStep->nodes, firstStep->node_count);
+    if (seek_count < 1)
     {
         return;
     }
@@ -1855,6 +1998,18 @@ static void checkCoveringIndex(
             "We were told there's an index but we can't find it now.\n");
         free(db);
         return;
+    }
+
+    // Residual filter columns must exist in the index (planner should have
+    // ensured this; re-check so covering never evaluates against missing cols).
+    for (int i = seek_count; i < firstStep->node_count; i++)
+    {
+        const char *filter_col = getNodeFieldName(&firstStep->nodes[i]);
+        if (getFieldIndex(db, filter_col) < 0)
+        {
+            free(db);
+            return;
+        }
     }
 
     int *mapped_cols = malloc(sizeof(*mapped_cols) * q->column_count);
@@ -1945,6 +2100,24 @@ static void checkCoveringIndex(
     for (int i = 0; i < q->column_count; i++)
     {
         q->column_nodes[i].field.index = mapped_cols[i];
+    }
+
+    // Remap residual filter predicates on the covering index step so their
+    // left-side field indexes point into the index file.
+    for (int j = seek_count; j < firstStep->node_count; j++)
+    {
+        struct Node *filter = &firstStep->nodes[j];
+        if (
+            (filter->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR &&
+            filter->child_count >= 1)
+        {
+            const char *field_name = getNodeFieldName(filter);
+            int field_index = getFieldIndex(db, field_name);
+            if (field_index >= 0)
+            {
+                filter->children[0].field.index = field_index;
+            }
+        }
     }
 
     // Replace the ORDER BY nodes with references to the index
