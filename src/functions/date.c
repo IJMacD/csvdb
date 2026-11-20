@@ -1,12 +1,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdio.h>
 #include <time.h>
+#include <limits.h>
 
 #include "../structs.h"
 #include "date.h"
 
 int checkFormat(const char *input, const char *format);
+
+static time_t timegmCompat(struct tm *tm);
 
 const int month_index[] = {
 //   31   28   31
@@ -19,31 +23,71 @@ const int month_index[] = {
     273, 304, 334
 };
 
+static const int month_day_counts[] = {
+    31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
+};
+
 /**
  * Parses a single dateTime into a DateTime struct
  *
  * Supports the following formats:
- *  - 2013-01-01T10:10:00
+ *  - 2013-01-01T10:10:00          (local / unknown zone)
+ *  - 2013-01-01T10:10:00Z         (UTC)
+ *  - 2013-01-01T10:10:00+09:00    (converted to UTC)
+ *  - 2013-01-01T10:10:00-05:30    (converted to UTC)
  *
  * Returns 1 on success; 0 on failure
  */
 int parseDateTime(const char *input, struct DateTime *output)
 {
-
-    if (checkFormat(input, "nnnn-nn-nnTnn:nn:nn"))
+    if (!checkFormat(input, "nnnn-nn-nnTnn:nn:nn"))
     {
-        output->year = atoi(input);
-        output->month = atoi(input + 5);
-        output->day = atoi(input + 8);
+        return 0;
+    }
 
-        output->hour = atoi(input + 11);
-        output->minute = atoi(input + 14);
-        output->second = atoi(input + 17);
+    output->year = atoi(input);
+    output->month = atoi(input + 5);
+    output->day = atoi(input + 8);
+    output->hour = atoi(input + 11);
+    output->minute = atoi(input + 14);
+    output->second = atoi(input + 17);
 
+    const char *rest = input + 19;
+
+    if (*rest == '\0')
+    {
+        output->tz_offset_minutes = TZ_LOCAL;
         return 1;
     }
 
-    return 0;
+    short offset = 0;
+    if (!parseTzOffset(rest, &offset))
+    {
+        return 0;
+    }
+
+    if (offset == 0)
+    {
+        output->tz_offset_minutes = 0;
+        return 1;
+    }
+
+    // Convert wall clock in `offset` to UTC for storage
+    output->tz_offset_minutes = offset;
+    if (!datetimeAtTimeZone(output, 0))
+    {
+        return 0;
+    }
+    return 1;
+}
+
+int parseDateOrDateTime(const char *input, struct DateTime *output)
+{
+    if (parseDateTime(input, output))
+    {
+        return 1;
+    }
+    return parseDate(input, output);
 }
 
 /**
@@ -72,6 +116,9 @@ int parseDateTime(const char *input, struct DateTime *output)
  */
 int parseDate(const char *input, struct DateTime *output)
 {
+    // Only set TZ_LOCAL after a successful match — callers may try parseDate
+    // after parseDateTime on the same struct (e.g. FUNC_ADD).
+
     if (strcmp(input, "CURRENT_DATE") == 0) {
         time_t t = time(NULL);
         struct tm *local = localtime(&t);
@@ -79,11 +126,13 @@ int parseDate(const char *input, struct DateTime *output)
         output->year = local->tm_year + 1900;
         output->month = local->tm_mon + 1;
         output->day = local->tm_mday;
+        output->tz_offset_minutes = TZ_LOCAL;
 
         return 1;
     }
 
-    if (checkFormat(input, "nnnn-nn-nn")) {
+    // Require end of string so datetimes (…T…) are not accepted as dates
+    if (checkFormat(input, "nnnn-nn-nn") && input[10] == '\0') {
         output->year = atoi(input);
         output->month = atoi(input + 5);
         output->day = atoi(input + 8);
@@ -92,6 +141,7 @@ int parseDate(const char *input, struct DateTime *output)
         output->minute = 0;
         output->second = 0;
 
+        output->tz_offset_minutes = TZ_LOCAL;
         return 1;
     }
 
@@ -104,6 +154,7 @@ int parseDate(const char *input, struct DateTime *output)
         output->minute = 0;
         output->second = 0;
 
+        output->tz_offset_minutes = TZ_LOCAL;
         return 1;
     }
 
@@ -158,6 +209,7 @@ int parseDate(const char *input, struct DateTime *output)
         output->minute = 0;
         output->second = 0;
 
+        output->tz_offset_minutes = TZ_LOCAL;
         return 1;
     }
 
@@ -170,6 +222,7 @@ int parseDate(const char *input, struct DateTime *output)
         output->minute = 0;
         output->second = 0;
 
+        output->tz_offset_minutes = TZ_LOCAL;
         return 1;
     }
 
@@ -182,6 +235,7 @@ int parseDate(const char *input, struct DateTime *output)
         output->minute = 0;
         output->second = 0;
 
+        output->tz_offset_minutes = TZ_LOCAL;
         return 1;
     }
 
@@ -196,6 +250,7 @@ int parseDate(const char *input, struct DateTime *output)
         output->minute = 0;
         output->second = 0;
 
+        output->tz_offset_minutes = TZ_LOCAL;
         return 1;
     }
 
@@ -208,6 +263,7 @@ int parseDate(const char *input, struct DateTime *output)
         output->minute = 0;
         output->second = 0;
 
+        output->tz_offset_minutes = TZ_LOCAL;
         return 1;
     }
 
@@ -220,6 +276,7 @@ int parseDate(const char *input, struct DateTime *output)
         output->minute = 0;
         output->second = 0;
 
+        output->tz_offset_minutes = TZ_LOCAL;
         return 1;
     }
 
@@ -257,6 +314,7 @@ int parseDate(const char *input, struct DateTime *output)
         output->minute = 0;
         output->second = 0;
 
+        output->tz_offset_minutes = TZ_LOCAL;
         return 1;
     }
 
@@ -303,6 +361,7 @@ int parseDate(const char *input, struct DateTime *output)
 
         datetimeFromJulian(output, julian);
 
+        output->tz_offset_minutes = TZ_LOCAL;
         return 1;
     }
 
@@ -315,6 +374,8 @@ int parseDate(const char *input, struct DateTime *output)
  */
 int parseTime(const char *input, struct DateTime *output)
 {
+    // Only set TZ_LOCAL after a successful match (see parseDate).
+
     if (strcmp(input, "CURRENT_TIME") == 0)
     {
         time_t t = time(NULL);
@@ -323,6 +384,7 @@ int parseTime(const char *input, struct DateTime *output)
         output->hour = local->tm_hour;
         output->minute = local->tm_min;
         output->second = local->tm_sec;
+        output->tz_offset_minutes = TZ_LOCAL;
 
         return 1;
     }
@@ -337,6 +399,7 @@ int parseTime(const char *input, struct DateTime *output)
         output->minute = atoi(input + 3);
         output->second = atoi(input + 6);
 
+        output->tz_offset_minutes = TZ_LOCAL;
         return 1;
     }
 
@@ -351,6 +414,7 @@ int parseTime(const char *input, struct DateTime *output)
         output->minute = atoi(input + 4);
         output->second = atoi(input + 7);
 
+        output->tz_offset_minutes = TZ_LOCAL;
         return 1;
     }
 
@@ -365,6 +429,7 @@ int parseTime(const char *input, struct DateTime *output)
         output->minute = atoi(input + 5);
         output->second = atoi(input + 8);
 
+        output->tz_offset_minutes = TZ_LOCAL;
         return 1;
     }
 
@@ -372,11 +437,36 @@ int parseTime(const char *input, struct DateTime *output)
 }
 
 /**
- * `output` must be at least 19 chars long
+ * `output` must be at least 25 chars long (YYYY-MM-DDTHH:MM:SS+HH:MM)
  */
 int sprintDateTime(char *output, struct DateTime *dt)
 {
-    return sprintf(output, "%04d-%02d-%02dT%02d:%02d:%02d", dt->year, dt->month, dt->day, dt->hour, dt->minute, dt->second);
+    int n = sprintf(
+        output,
+        "%04d-%02d-%02dT%02d:%02d:%02d",
+        dt->year, dt->month, dt->day,
+        dt->hour, dt->minute, dt->second);
+
+    if (dt->tz_offset_minutes == TZ_LOCAL)
+    {
+        return n;
+    }
+
+    if (dt->tz_offset_minutes == 0)
+    {
+        output[n++] = 'Z';
+        output[n] = '\0';
+        return n;
+    }
+
+    int off = dt->tz_offset_minutes;
+    char sign = '+';
+    if (off < 0)
+    {
+        sign = '-';
+        off = -off;
+    }
+    return n + sprintf(output + n, "%c%02d:%02d", sign, off / 60, off % 60);
 }
 
 /**
@@ -422,6 +512,16 @@ int checkFormat(const char *input, const char *format) {
 
 int isLeapYear(int year) {
     return (year % 4 == 0 && (year % 400 == 0 || year % 100 != 0));
+}
+
+int daysInMonth(int year, int month) {
+    if (month < 1 || month > 12) {
+        return 0;
+    }
+    if (month == 2 && isLeapYear(year)) {
+        return 29;
+    }
+    return month_day_counts[month - 1];
 }
 
 int datetimeGetYearDay(struct DateTime *dt) {
@@ -588,6 +688,7 @@ void datetimeFromJulian (struct DateTime *dt, int julian) {
         dt->month -= 12;
     }
     dt->year = dt->month <= 2 ? C-4715 : C-4716;
+    dt->tz_offset_minutes = TZ_LOCAL;
 }
 
 int timeInSeconds(struct DateTime *dt)
@@ -604,6 +705,20 @@ void timeFromSeconds(struct DateTime *dt, int seconds)
     dt->hour = seconds / 3600;
     dt->minute = (seconds / 60) % 60;
     dt->second = seconds % 60;
+    dt->tz_offset_minutes = TZ_LOCAL;
+}
+
+static time_t timegmCompat(struct tm *tm)
+{
+#if defined(__USE_MISC) || defined(_DEFAULT_SOURCE) || defined(_BSD_SOURCE) || defined(__APPLE__)
+    return timegm(tm);
+#else
+    /* Fallback: force UTC via environment-free algorithm using timegm if
+     * declared, otherwise approximate with mktime after setting tm_isdst=0.
+     * Prefer the GNU/BSD timegm when available at link time. */
+    extern time_t timegm(struct tm *);
+    return timegm(tm);
+#endif
 }
 
 long datetimeGetUnix(struct DateTime *dt)
@@ -615,18 +730,357 @@ long datetimeGetUnix(struct DateTime *dt)
     tp.tm_hour = dt->hour;
     tp.tm_min = dt->minute;
     tp.tm_sec = dt->second;
+    tp.tm_isdst = -1;
 
-    return mktime(&tp);
+    if (dt->tz_offset_minutes == TZ_LOCAL)
+    {
+        return mktime(&tp);
+    }
+
+    tp.tm_isdst = 0;
+    return timegmCompat(&tp) - (long)dt->tz_offset_minutes * 60L;
 }
 
 void datetimeFromUnix(struct DateTime *dt, time_t time)
 {
-    struct tm *tp = localtime(&time);
+    if (dt->tz_offset_minutes == TZ_LOCAL)
+    {
+        struct tm *tp = localtime(&time);
+        dt->year = tp->tm_year + 1900;
+        dt->month = tp->tm_mon + 1;
+        dt->day = tp->tm_mday;
+        dt->hour = tp->tm_hour;
+        dt->minute = tp->tm_min;
+        dt->second = tp->tm_sec;
+        return;
+    }
 
+    time_t wall = time + (long)dt->tz_offset_minutes * 60L;
+    struct tm *tp = gmtime(&wall);
     dt->year = tp->tm_year + 1900;
     dt->month = tp->tm_mon + 1;
     dt->day = tp->tm_mday;
     dt->hour = tp->tm_hour;
     dt->minute = tp->tm_min;
     dt->second = tp->tm_sec;
+}
+
+enum DateUnit parseDateUnit(const char *unit)
+{
+    if (unit == NULL || unit[0] == '\0')
+    {
+        return DATE_UNIT_INVALID;
+    }
+
+    if (strcmp(unit, "YEAR") == 0 || strcmp(unit, "YEARS") == 0)
+        return DATE_UNIT_YEAR;
+    if (strcmp(unit, "QUARTER") == 0 || strcmp(unit, "QUARTERS") == 0)
+        return DATE_UNIT_QUARTER;
+    if (strcmp(unit, "MONTH") == 0 || strcmp(unit, "MONTHS") == 0)
+        return DATE_UNIT_MONTH;
+    if (strcmp(unit, "WEEK") == 0 || strcmp(unit, "WEEKS") == 0)
+        return DATE_UNIT_WEEK;
+    if (strcmp(unit, "DAY") == 0 || strcmp(unit, "DAYS") == 0)
+        return DATE_UNIT_DAY;
+    if (strcmp(unit, "HOUR") == 0 || strcmp(unit, "HOURS") == 0)
+        return DATE_UNIT_HOUR;
+    if (strcmp(unit, "MINUTE") == 0 || strcmp(unit, "MINUTES") == 0)
+        return DATE_UNIT_MINUTE;
+    if (strcmp(unit, "SECOND") == 0 || strcmp(unit, "SECONDS") == 0)
+        return DATE_UNIT_SECOND;
+
+    return DATE_UNIT_INVALID;
+}
+
+int intervalToInt(int count, enum DateUnit unit, long *out)
+{
+    switch (unit)
+    {
+    case DATE_UNIT_SECOND:
+        *out = (long)count;
+        return 0;
+    case DATE_UNIT_MINUTE:
+        *out = (long)count * 60L;
+        return 0;
+    case DATE_UNIT_HOUR:
+        *out = (long)count * 3600L;
+        return 0;
+    case DATE_UNIT_DAY:
+        *out = (long)count;
+        return 0;
+    case DATE_UNIT_WEEK:
+        *out = (long)count * 7L;
+        return 0;
+    default:
+        return -1;
+    }
+}
+
+int parseTzOffset(const char *input, short *offset_minutes)
+{
+    if (input == NULL || offset_minutes == NULL)
+    {
+        return 0;
+    }
+
+    if (strcmp(input, "Z") == 0 || strcmp(input, "UTC") == 0)
+    {
+        *offset_minutes = 0;
+        return 1;
+    }
+
+    if ((input[0] != '+' && input[0] != '-') || !isdigit((unsigned char)input[1]))
+    {
+        return 0;
+    }
+
+    int sign = (input[0] == '-') ? -1 : 1;
+    int hours = 0;
+    int mins = 0;
+
+    if (checkFormat(input + 1, "nn:nn") && input[6] == '\0')
+    {
+        hours = atoi(input + 1);
+        mins = atoi(input + 4);
+    }
+    else if (checkFormat(input + 1, "nnnn") && input[5] == '\0')
+    {
+        hours = atoi(input + 1) / 100;
+        mins = atoi(input + 1) % 100;
+    }
+    else if (checkFormat(input + 1, "nn") && input[3] == '\0')
+    {
+        hours = atoi(input + 1);
+        mins = 0;
+    }
+    else
+    {
+        return 0;
+    }
+
+    if (hours > 23 || mins > 59)
+    {
+        return 0;
+    }
+
+    int total = sign * (hours * 60 + mins);
+    if (total < SHRT_MIN + 1 || total > SHRT_MAX)
+    {
+        return 0;
+    }
+
+    *offset_minutes = (short)total;
+    return 1;
+}
+
+int getLocalTzOffsetMinutes(short *offset_minutes)
+{
+    time_t t = time(NULL);
+    struct tm local;
+
+#if defined(_POSIX_VERSION) || defined(__APPLE__) || defined(__linux__)
+    if (localtime_r(&t, &local) == NULL)
+    {
+        return 0;
+    }
+#else
+    struct tm *lp = localtime(&t);
+    if (lp == NULL)
+    {
+        return 0;
+    }
+    local = *lp;
+#endif
+
+#if defined(__tm_gmtoff) || defined(__USE_MISC) || defined(_DEFAULT_SOURCE) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__linux__)
+    /* tm_gmtoff is seconds east of UTC (glibc / BSD). */
+    long off = local.tm_gmtoff;
+    if (off / 60 < SHRT_MIN + 1 || off / 60 > SHRT_MAX)
+    {
+        return 0;
+    }
+    *offset_minutes = (short)(off / 60);
+    return 1;
+#else
+    struct tm utc;
+#if defined(_POSIX_VERSION) || defined(__APPLE__) || defined(__linux__)
+    if (gmtime_r(&t, &utc) == NULL)
+    {
+        return 0;
+    }
+#else
+    struct tm *gp = gmtime(&t);
+    if (gp == NULL)
+    {
+        return 0;
+    }
+    utc = *gp;
+#endif
+    local.tm_isdst = -1;
+    utc.tm_isdst = 0;
+    time_t local_as = mktime(&local);
+    time_t utc_as = timegmCompat(&utc);
+    if (local_as == (time_t)-1 || utc_as == (time_t)-1)
+    {
+        return 0;
+    }
+    long off = (long)(local_as - utc_as);
+    if (off / 60 < SHRT_MIN + 1 || off / 60 > SHRT_MAX)
+    {
+        return 0;
+    }
+    *offset_minutes = (short)(off / 60);
+    return 1;
+#endif
+}
+
+void dateAddUnit(struct DateTime *dt, int count, enum DateUnit unit)
+{
+    if (count == 0 || unit == DATE_UNIT_INVALID)
+    {
+        return;
+    }
+
+    switch (unit)
+    {
+    case DATE_UNIT_YEAR:
+        dt->year += count;
+        {
+            int max_day = daysInMonth(dt->year, dt->month);
+            if (dt->day > max_day)
+            {
+                dt->day = max_day;
+            }
+        }
+        break;
+
+    case DATE_UNIT_QUARTER:
+        dateAddUnit(dt, count * 3, DATE_UNIT_MONTH);
+        break;
+
+    case DATE_UNIT_MONTH:
+    {
+        int month0 = (int)dt->month - 1 + count;
+        int year_delta = month0 / 12;
+        month0 %= 12;
+        if (month0 < 0)
+        {
+            month0 += 12;
+            year_delta--;
+        }
+        dt->year += year_delta;
+        dt->month = month0 + 1;
+        {
+            int max_day = daysInMonth(dt->year, dt->month);
+            if (dt->day > max_day)
+            {
+                dt->day = max_day;
+            }
+        }
+        break;
+    }
+
+    case DATE_UNIT_WEEK:
+        dateAddUnit(dt, count * 7, DATE_UNIT_DAY);
+        break;
+
+    case DATE_UNIT_DAY:
+    {
+        int julian = datetimeGetJulian(dt);
+        short tz = dt->tz_offset_minutes;
+        unsigned char hour = dt->hour;
+        unsigned char minute = dt->minute;
+        unsigned char second = dt->second;
+        datetimeFromJulian(dt, julian + count);
+        dt->hour = hour;
+        dt->minute = minute;
+        dt->second = second;
+        dt->tz_offset_minutes = tz;
+        break;
+    }
+
+    case DATE_UNIT_HOUR:
+    case DATE_UNIT_MINUTE:
+    case DATE_UNIT_SECOND:
+    {
+        long seconds = 0;
+        if (unit == DATE_UNIT_HOUR)
+            seconds = (long)count * 3600L;
+        else if (unit == DATE_UNIT_MINUTE)
+            seconds = (long)count * 60L;
+        else
+            seconds = (long)count;
+
+        long epoch = datetimeGetUnix(dt);
+        datetimeFromUnix(dt, (time_t)(epoch + seconds));
+        break;
+    }
+
+    default:
+        break;
+    }
+}
+
+void dateTrunc(struct DateTime *dt, enum DateUnit unit)
+{
+    switch (unit)
+    {
+    case DATE_UNIT_YEAR:
+        dt->month = 1;
+        dt->day = 1;
+        dt->hour = 0;
+        dt->minute = 0;
+        dt->second = 0;
+        break;
+    case DATE_UNIT_QUARTER:
+        dt->month = ((dt->month - 1) / 3) * 3 + 1;
+        dt->day = 1;
+        dt->hour = 0;
+        dt->minute = 0;
+        dt->second = 0;
+        break;
+    case DATE_UNIT_MONTH:
+        dt->day = 1;
+        dt->hour = 0;
+        dt->minute = 0;
+        dt->second = 0;
+        break;
+    case DATE_UNIT_WEEK:
+    {
+        int weekday = datetimeGetWeekDay(dt); /* Mon=1 … Sun=7 */
+        dateAddUnit(dt, -(weekday - 1), DATE_UNIT_DAY);
+        dt->hour = 0;
+        dt->minute = 0;
+        dt->second = 0;
+        break;
+    }
+    case DATE_UNIT_DAY:
+        dt->hour = 0;
+        dt->minute = 0;
+        dt->second = 0;
+        break;
+    case DATE_UNIT_HOUR:
+        dt->minute = 0;
+        dt->second = 0;
+        break;
+    case DATE_UNIT_MINUTE:
+        dt->second = 0;
+        break;
+    case DATE_UNIT_SECOND:
+    default:
+        break;
+    }
+}
+
+int datetimeAtTimeZone(struct DateTime *dt, short target_offset_minutes)
+{
+    if (dt->tz_offset_minutes == TZ_LOCAL)
+    {
+        return 0;
+    }
+
+    long epoch = datetimeGetUnix(dt);
+    dt->tz_offset_minutes = target_offset_minutes;
+    datetimeFromUnix(dt, (time_t)epoch);
+    return 1;
 }

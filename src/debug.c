@@ -30,7 +30,7 @@ const char *FUNC_NAMES[] = {
     "EXTRACT<MONTH_STRING>","EXTRACT<WEEK_STRING>","EXTRACT<YEARDAY_STRING>","","","","","",
     "","","","","EXTRACT<JULIAN>","EXTRACT<DATE>","EXTRACT<TIME>","EXTRACT<DATETIME>",
     // 0x60
-    "","DATE_ADD","DATE_SUB","DATE_DIFF","","","","",
+    "","DATE_ADD","DATE_SUB","DATE_DIFF","DATE_TRUNC","AT_TIME_ZONE","","",
     "","","","","","","","",
     // 0x70
     "TODAY","NOW","DATE","TIME","CLOCK","MAKE_DATE","MAKE_TIME","MAKE_DATETIME",

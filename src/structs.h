@@ -155,6 +155,8 @@ enum Function {
     FUNC_DATE_ADD =                 0x61,
     FUNC_DATE_SUB =                 0x62,
     FUNC_DATE_DIFF =                0x63,
+    FUNC_DATE_TRUNC =               0x64,
+    FUNC_AT_TIME_ZONE =             0x65,
 
     FUNC_DATE_TODAY =               0x70,
     FUNC_DATE_NOW =                 0x71,
@@ -439,6 +441,12 @@ struct ResultSet {
     int *row_list_indices;
 };
 
+/**
+ * Sentinel tz_offset_minutes value: wall-clock local time with no known
+ * UTC offset. Timezone conversion (e.g. AT_TIME_ZONE) is not supported.
+ */
+#define TZ_LOCAL ((short)0x8000)
+
 struct DateTime
 {
     /** Year, range approx -32768 to 32767 */
@@ -453,6 +461,11 @@ struct DateTime
     unsigned char minute;
     /** Second */
     unsigned char second;
+    /**
+     * Minutes east of UTC for the wall-clock fields above.
+     * 0 = UTC (formatters append Z). TZ_LOCAL = unknown/local (no conversion).
+     */
+    short tz_offset_minutes;
 };
 
 struct VFS {

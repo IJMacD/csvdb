@@ -94,10 +94,10 @@ int evaluateNode(
     }
 
     char *values = malloc(value_count * MAX_VALUE_LENGTH);
-    char **values_ptrs = malloc(value_count * sizeof(values));
+    char **values_ptrs = malloc(value_count * sizeof(*values_ptrs));
     for (int i = 0; i < value_count; i++)
     {
-        values_ptrs[i] = values + MAX_FIELD_LENGTH * i;
+        values_ptrs[i] = values + MAX_VALUE_LENGTH * i;
     }
 
     if (values == NULL)
@@ -161,10 +161,10 @@ int evaluateConstantNode(
     }
 
     char *values = malloc(value_count * MAX_VALUE_LENGTH);
-    char **values_ptrs = malloc(value_count * sizeof(values));
+    char **values_ptrs = malloc(value_count * sizeof(*values_ptrs));
     for (int i = 0; i < value_count; i++)
     {
-        values_ptrs[i] = values + MAX_FIELD_LENGTH * i;
+        values_ptrs[i] = values + MAX_VALUE_LENGTH * i;
     }
 
     if (values == NULL)
