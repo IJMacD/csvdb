@@ -412,6 +412,26 @@ int explain_select_query (
                 rows = 1;
             }
         }
+        else if (s.type == PLAN_HAVING) {
+            operation = "HAVING";
+
+            if (rows > 1) {
+                rows = rows * 8 / 10;
+                if (rows < 1) {
+                    rows = 1;
+                }
+            }
+        }
+        else if (s.type == PLAN_DISTINCT) {
+            operation = "DISTINCT";
+
+            if (rows > 1) {
+                rows = rows * 8 / 10;
+                if (rows < 1) {
+                    rows = 1;
+                }
+            }
+        }
         else if (s.type == PLAN_OFFSET) {
             operation = "OFFSET";
 

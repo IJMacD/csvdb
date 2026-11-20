@@ -144,6 +144,11 @@ VALUES ('a',1),('b',2),('c',3);
 WITH r1 AS (FROM ranks WHERE value < 8 SELECT name, symbol) FROM r1 ORDER BY name;
 -- FILTER clause
 FROM test SELECT COUNT(*) AS all, COUNT(*) FILTER (WHERE id % 2 = 0) AS even, COUNT(*) FILTER(WHERE id % 2 = 1) AS odd
+-- HAVING
+FROM test WHERE name LIKE 'Adam WE%' GROUP BY name HAVING COUNT(*) > 1 ORDER BY name SELECT name, COUNT(*);
+-- DISTINCT / DISTINCT ON
+FROM suits SELECT DISTINCT name ORDER BY name;
+FROM dupes SELECT DISTINCT ON (key) key, label ORDER BY key, label;
 -- Esoteric Syntax (Apply functions to every column)
 FROM test LIMIT 5 SELECT LEFT(*, 2) AS left_
 ```

@@ -33,6 +33,10 @@ static void addJoinStepsIfRequired(struct Plan *plan, struct Query *q);
 
 static void addGroupStepIfRequired(struct Plan *plan, struct Query *query);
 
+static void addHavingStepIfRequired(struct Plan *plan, struct Query *query);
+
+static void addDistinctStepsIfRequired(struct Plan *plan, struct Query *query);
+
 static void addLimitStepIfRequired(struct Plan *plan, struct Query *query);
 
 static int optimiseNodes(
@@ -235,6 +239,10 @@ int makePlan(struct Query *q, struct Plan *plan)
     }
 
     addGroupStepIfRequired(plan, q);
+
+    addHavingStepIfRequired(plan, q);
+
+    addDistinctStepsIfRequired(plan, q);
 
     addLimitStepIfRequired(plan, q);
 
@@ -894,6 +902,13 @@ static void addOrderStepsIfRequired(struct Plan *plan, struct Query *q)
         return;
     }
 
+    // DISTINCT / DISTINCT ON manage their own sort order (see
+    // addDistinctStepsIfRequired). Early ORDER BY would fight uniqueness.
+    if (q->flags & FLAG_DISTINCT)
+    {
+        return;
+    }
+
     // indices of sort columns required
     int sorts_needed[10] = {0};
 
@@ -1056,12 +1071,18 @@ static void addGroupStepIfRequired(struct Plan *plan, struct Query *q)
      * Grouping
      *******************/
 
+    // HAVING / DISTINCT can remove groups, so LIMIT must not be pushed onto
+    // the GROUP step when either is present.
+    int push_limit = q->limit_value >= 0 &&
+                     q->having_count == 0 &&
+                     !(q->flags & FLAG_DISTINCT);
+
     // Aggregate function on all rows, single row output
     if (q->flags & FLAG_GROUP && q->group_count == 0)
     {
         struct PlanStep *prev = addStep(plan, PLAN_GROUP);
 
-        if (q->limit_value >= 0)
+        if (push_limit)
         {
             prev->limit = q->offset_value + q->limit_value;
         }
@@ -1087,7 +1108,7 @@ static void addGroupStepIfRequired(struct Plan *plan, struct Query *q)
                     PLAN_GROUP_SORTED,
                     group_node);
 
-                if (q->limit_value > -1)
+                if (push_limit)
                 {
                     prev->limit = q->offset_value + q->limit_value;
                 }
@@ -1098,10 +1119,82 @@ static void addGroupStepIfRequired(struct Plan *plan, struct Query *q)
 
         struct PlanStep *prev = addStepWithNode(plan, PLAN_GROUP, group_node);
 
-        if (q->limit_value >= 0)
+        if (push_limit)
         {
             prev->limit = q->offset_value + q->limit_value;
         }
+    }
+}
+
+static void addHavingStepIfRequired(struct Plan *plan, struct Query *q)
+{
+    if (q->having_count <= 0)
+    {
+        return;
+    }
+
+    addStepWithNodes(plan, PLAN_HAVING, q->having_nodes, q->having_count);
+}
+
+/**
+ * DISTINCT: sort by all SELECT columns, collapse equals, then optional ORDER BY.
+ * DISTINCT ON: sort by ORDER BY (or ON keys), keep first row per ON peer group.
+ */
+static void addDistinctStepsIfRequired(struct Plan *plan, struct Query *q)
+{
+    if (!(q->flags & FLAG_DISTINCT))
+    {
+        return;
+    }
+
+    if (q->flags & FLAG_GROUP)
+    {
+        fprintf(
+            stderr,
+            "DISTINCT is not supported together with GROUP BY / aggregates\n");
+        exit(-1);
+    }
+
+    if (q->flags & FLAG_DISTINCT_ON)
+    {
+        // Prefer ORDER BY for the sort (Postgres: must start with ON keys).
+        // Fall back to the ON expressions alone.
+        if (q->order_count > 0)
+        {
+            addStepWithNodes(plan, PLAN_SORT, q->order_nodes, q->order_count);
+        }
+        else
+        {
+            addStepWithNodes(
+                plan,
+                PLAN_SORT,
+                q->distinct_nodes,
+                q->distinct_count);
+        }
+
+        addStepWithNodes(
+            plan,
+            PLAN_DISTINCT,
+            q->distinct_nodes,
+            q->distinct_count);
+        return;
+    }
+
+    // SELECT DISTINCT: uniqueness on the full projection
+    if (q->column_count > 0)
+    {
+        addStepWithNodes(plan, PLAN_SORT, q->column_nodes, q->column_count);
+        addStepWithNodes(plan, PLAN_DISTINCT, q->column_nodes, q->column_count);
+    }
+
+    // Presentation ORDER BY after unique (may differ from uniqueness keys)
+    if (q->order_count > 0)
+    {
+        // Temporarily clear FLAG_DISTINCT so addOrderStepsIfRequired runs
+        enum QueryFlag saved = q->flags;
+        q->flags = (enum QueryFlag)(q->flags & ~FLAG_DISTINCT);
+        addOrderStepsIfRequired(plan, q);
+        q->flags = saved;
     }
 }
 
@@ -1117,7 +1210,10 @@ static void addLimitStepIfRequired(struct Plan *plan, struct Query *query)
             // maybe they don't matter here. They might have been taken care of
             // in joins etc.
             query->predicate_count == 0 &&
-            query->order_count == 0 && !(query->flags & FLAG_GROUP))
+            query->order_count == 0 &&
+            !(query->flags & FLAG_GROUP) &&
+            !(query->flags & FLAG_DISTINCT) &&
+            query->having_count == 0)
         {
 
             // First thing to check is if we have all LEFT joins.

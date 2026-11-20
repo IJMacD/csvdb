@@ -17,3 +17,15 @@ int executeOffset (
     struct PlanStep *step,
     struct ResultSet *result_set
 );
+
+int executeHaving (
+    struct Table *tables,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+);
+
+int executeDistinct (
+    struct Table *tables,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+);

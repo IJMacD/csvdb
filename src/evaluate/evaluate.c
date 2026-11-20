@@ -60,6 +60,12 @@ int evaluateNode(
         return 1;
     }
 
+    // Aggregates evaluate over the whole RowList (used by HAVING and SELECT)
+    if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_AGG)
+    {
+        return evaluateAggregateFunction(output, tables, node, row_list);
+    }
+
     if (node->child_count == -1)
     {
         // Optimisation where node is its own child

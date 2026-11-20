@@ -26,3 +26,5 @@ struct Table *allocateTable(struct Query *q);
 struct Node *allocateColumnNode(struct Query *q);
 
 struct Node *allocatePredicateNode(struct Query *q);
+
+struct Node *allocateHavingNode(struct Query *q);

@@ -30,9 +30,14 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 
     q->predicate_count = 0;
 
+    q->having_count = 0;
+    q->having_nodes = NULL;
+
     q->order_count = 0;
 
     q->group_count = 0;
+
+    q->distinct_count = 0;
 
     q->flags = 0;
     q->offset_value = 0;
@@ -233,6 +238,87 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
         }
         else if (strcmp(keyword, "SELECT") == 0)
         {
+            skipWhitespace(query, &index);
+
+            // SELECT DISTINCT [ON (...)] ...
+            if (strncmp(query + index, "DISTINCT", 8) == 0 &&
+                (isspace((unsigned char)query[index + 8]) ||
+                 query[index + 8] == '(' ||
+                 query[index + 8] == '\0'))
+            {
+                index += 8;
+                q->flags |= FLAG_DISTINCT;
+
+                skipWhitespace(query, &index);
+
+                if (strncmp(query + index, "ON", 2) == 0 &&
+                    (isspace((unsigned char)query[index + 2]) ||
+                     query[index + 2] == '('))
+                {
+                    index += 2;
+                    q->flags |= FLAG_DISTINCT_ON;
+
+                    skipWhitespace(query, &index);
+
+                    if (query[index] != '(')
+                    {
+                        fprintf(stderr, "Expected '(' after DISTINCT ON\n");
+                        return -1;
+                    }
+
+                    index++;
+
+                    while (query[index] != '\0' && query[index] != ';')
+                    {
+                        int i = q->distinct_count++;
+
+                        if (i >= MAX_FIELD_COUNT)
+                        {
+                            fprintf(stderr, "Too many DISTINCT ON columns\n");
+                            return -1;
+                        }
+
+                        skipWhitespace(query, &index);
+
+                        int result = parseNode(
+                            query,
+                            &index,
+                            &q->distinct_nodes[i],
+                            q);
+                        if (result < 0)
+                        {
+                            return result;
+                        }
+
+                        skipWhitespace(query, &index);
+
+                        if (query[index] == ',')
+                        {
+                            index++;
+                            continue;
+                        }
+
+                        break;
+                    }
+
+                    skipWhitespace(query, &index);
+
+                    if (query[index] != ')')
+                    {
+                        fprintf(stderr, "Expected ')' after DISTINCT ON\n");
+                        return -1;
+                    }
+
+                    index++;
+                    skipWhitespace(query, &index);
+
+                    if (q->distinct_count == 0)
+                    {
+                        fprintf(stderr, "DISTINCT ON requires at least one expression\n");
+                        return -1;
+                    }
+                }
+            }
 
             int curr_index = 0;
             while (query[index] != '\0' && query[index] != ';')
@@ -677,6 +763,39 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                 }
             }
         }
+        else if (strcmp(keyword, "HAVING") == 0)
+        {
+            // HAVING implies an aggregation context even without GROUP BY
+            q->flags |= FLAG_GROUP;
+
+            while (query[index] != '\0' && query[index] != ';')
+            {
+                struct Node *p = allocateHavingNode(q);
+
+                int result = parseComplexNode(query, &index, p, q);
+                if (result < 0)
+                {
+                    return result;
+                }
+
+                if ((p->function & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR)
+                {
+                    fprintf(stderr, "HAVING node: expected =|<|<=|>|>=\n");
+                    return -1;
+                }
+
+                skipWhitespace(query, &index);
+
+                if (strncmp(query + index, "AND", 3) == 0)
+                {
+                    index += 4;
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
         else if (strcmp(keyword, "OFFSET") == 0)
         {
             q->offset_value = getNumericToken(query, &index);
@@ -848,8 +967,8 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
         {
             fprintf(
                 stderr,
-                "expected WITH|SELECT|FROM|WHERE|OFFSET|FETCH FIRST|LIMIT|ORDER"
-                "|GROUP\n");
+                "expected WITH|SELECT|FROM|WHERE|HAVING|OFFSET|FETCH FIRST|"
+                "LIMIT|ORDER|GROUP\n");
             fprintf(stderr, "Found '%s'\n", keyword);
             return -1;
         }
