@@ -4,6 +4,9 @@
 #include "../structs.h"
 #include "db.h"
 #include "../query/result.h"
+#include "../evaluate/evaluate.h"
+#include "../evaluate/predicates.h"
+#include "../functions/util.h"
 #include "indices.h"
 
 static int indexWalk(
@@ -11,11 +14,91 @@ static int indexWalk(
     int rowid_column,
     int lower_index,
     int upper_index,
+    struct Node *filters,
+    int filter_count,
+    int limit,
     struct RowList * row_list
+);
+
+static int indexRowMatchesFilters(
+    struct DB *db,
+    int index_row,
+    struct Node *filters,
+    int filter_count
 );
 
 int indexRowidColumn (struct DB *index_db) {
     return index_db->field_count - 1;
+}
+
+int indexStepSeekNodeCount (struct Node *nodes, int node_count) {
+    if (node_count < 2) {
+        return node_count < 0 ? 0 : node_count;
+    }
+
+    struct Node *a = &nodes[0];
+    struct Node *b = &nodes[1];
+    int a_lo = a->function == OPERATOR_GE || a->function == OPERATOR_GT;
+    int a_hi = a->function == OPERATOR_LE || a->function == OPERATOR_LT;
+    int b_lo = b->function == OPERATOR_GE || b->function == OPERATOR_GT;
+    int b_hi = b->function == OPERATOR_LE || b->function == OPERATOR_LT;
+
+    if (
+        a->child_count >= 2 && b->child_count >= 2 &&
+        a->children[0].function == b->children[0].function &&
+        a->children[0].field.table_id == b->children[0].field.table_id &&
+        a->children[0].field.index == b->children[0].field.index &&
+        ((a_lo && b_hi) || (a_hi && b_lo)))
+    {
+        return 2;
+    }
+
+    return 1;
+}
+
+int predicateSatisfiableFromIndex (
+    struct DB *index_db,
+    struct Node *predicate
+) {
+    if (index_db == NULL || predicate == NULL) {
+        return 0;
+    }
+
+    if ((predicate->function & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR) {
+        return 0;
+    }
+
+    if (
+        predicate->function == OPERATOR_AND ||
+        predicate->function == OPERATOR_OR ||
+        predicate->function == OPERATOR_ALWAYS ||
+        predicate->function == OPERATOR_NEVER)
+    {
+        return 0;
+    }
+
+    if (predicate->child_count < 2) {
+        return 0;
+    }
+
+    struct Node *left = &predicate->children[0];
+    struct Node *right = &predicate->children[1];
+
+    if (left->function != FUNC_UNITY) {
+        return 0;
+    }
+
+    if (!isConstantNode(right)) {
+        return 0;
+    }
+
+    const char *name = left->field.text;
+    int dot = str_find_index(name, '.');
+    if (dot >= 0) {
+        name = name + dot + 1;
+    }
+
+    return getFieldIndex(index_db, name) >= 0;
 }
 
 /**
@@ -34,7 +117,9 @@ enum IndexSearchResult indexPrimarySeek (
         predicate_op,
         predicate_value,
         row_list,
-        limit
+        limit,
+        NULL,
+        0
     );
 }
 
@@ -48,7 +133,9 @@ enum IndexSearchResult indexCoveringSeek (
     enum Function predicate_op,
     const char *predicate_value,
     struct RowList * row_list,
-    int limit
+    int limit,
+    struct Node *filters,
+    int filter_count
 ) {
     return indexSeek(
         db,
@@ -56,7 +143,9 @@ enum IndexSearchResult indexCoveringSeek (
         predicate_op,
         predicate_value,
         row_list,
-        limit
+        limit,
+        filters,
+        filter_count
     );
 }
 
@@ -71,7 +160,9 @@ enum IndexSearchResult indexUniqueSeek (
     enum Function predicate_op,
     const char *predicate_value,
     struct RowList * row_list,
-    int limit
+    int limit,
+    struct Node *filters,
+    int filter_count
 ) {
     // Prefix LIKE is a range; reuse the non-unique seek path.
     if (predicate_op == OPERATOR_LIKE) {
@@ -81,7 +172,9 @@ enum IndexSearchResult indexUniqueSeek (
             predicate_op,
             predicate_value,
             row_list,
-            limit);
+            limit,
+            filters,
+            filter_count);
     }
 
     // Output Flag: 0: value found; RESULT_BETWEEN: value not found but just
@@ -145,12 +238,27 @@ enum IndexSearchResult indexUniqueSeek (
         {
             int record_count = getRecordCount(index_db);
 
-            int a = indexWalk(index_db, rowid_column, 0, index_rowid, row_list);
+            int a = indexWalk(
+                index_db,
+                rowid_column,
+                0,
+                index_rowid,
+                filters,
+                filter_count,
+                limit,
+                row_list);
+            int remaining = (limit >= 0) ? (limit - a) : -1;
+            if (limit >= 0 && remaining <= 0) {
+                return a;
+            }
             int b = indexWalk(
                 index_db,
                 rowid_column,
                 index_rowid + 1,
                 record_count,
+                filters,
+                filter_count,
+                remaining,
                 row_list);
 
             return a + b;
@@ -165,15 +273,14 @@ enum IndexSearchResult indexUniqueSeek (
         }
     }
 
-    if (limit >= 0) {
-        upper_bound = MIN(upper_bound, lower_bound + limit);
-    }
-
     return indexWalk(
         index_db,
         rowid_column,
         lower_bound,
         upper_bound,
+        filters,
+        filter_count,
+        limit,
         row_list
     );
 }
@@ -194,22 +301,18 @@ enum IndexSearchResult indexScan (
     struct DB *index_db,
     int rowid_column,
     struct RowList * row_list,
-    int limit
+    int limit,
+    struct Node *filters,
+    int filter_count
 ) {
-    // (inclusive)
-    int lower_bound = 0;
-    // (exclusive)
-    int upper_bound = getRecordCount(index_db);
-
-    if (limit >= 0) {
-        upper_bound = MIN(upper_bound, lower_bound + limit);
-    }
-
     return indexWalk(
         index_db,
         rowid_column,
-        lower_bound,
-        upper_bound,
+        0,
+        getRecordCount(index_db),
+        filters,
+        filter_count,
+        limit,
         row_list
     );
 }
@@ -235,7 +338,9 @@ enum IndexSearchResult indexSeek (
     enum Function predicate_op,
     const char *predicate_value,
     struct RowList * row_list,
-    int limit
+    int limit,
+    struct Node *filters,
+    int filter_count
 ) {
     // (inclusive)
     int lower_bound;
@@ -342,13 +447,23 @@ enum IndexSearchResult indexSeek (
             rowid_column,
             0,
             lower_index_rowid,
+            filters,
+            filter_count,
+            limit,
             row_list
         );
+        int remaining = (limit >= 0) ? (limit - a) : -1;
+        if (limit >= 0 && remaining <= 0) {
+            return a;
+        }
         int b = indexWalk(
             index_db,
             rowid_column,
             upper_index_rowid,
             record_count,
+            filters,
+            filter_count,
+            remaining,
             row_list
         );
 
@@ -363,23 +478,19 @@ enum IndexSearchResult indexSeek (
         exit(-1);
     }
 
-    if (limit >= 0) {
-        upper_bound = MIN(upper_bound, lower_bound + limit);
-    }
-
     return indexWalk(
         index_db,
         rowid_column,
         lower_bound,
         upper_bound,
+        filters,
+        filter_count,
+        limit,
         row_list
     );
 }
 
 /**
- * @brief Walk from lower to upper (exclusive) bounds adding rowids to a RowList
- *
- * @param db
  * Seek with both a lower and upper bound on the same index column.
  * Bound math mirrors indexSeek() for GE/GT/LE/LT.
  *
@@ -394,7 +505,9 @@ enum IndexSearchResult indexBoundedSeek (
     enum Function upper_op,
     const char *upper_value,
     struct RowList * row_list,
-    int limit
+    int limit,
+    struct Node *filters,
+    int filter_count
 ) {
     int status_lo_lower = 0;
     int status_lo_upper = 0;
@@ -456,17 +569,67 @@ enum IndexSearchResult indexBoundedSeek (
         return RESULT_NO_ROWS;
     }
 
-    if (limit >= 0)
-    {
-        upper_bound = MIN(upper_bound, lower_bound + limit);
-    }
-
     return indexWalk(
         index_db,
         rowid_column,
         lower_bound,
         upper_bound,
+        filters,
+        filter_count,
+        limit,
         row_list);
+}
+
+static int indexRowMatchesFilters(
+    struct DB *db,
+    int index_row,
+    struct Node *filters,
+    int filter_count
+) {
+    char left_value[MAX_VALUE_LENGTH];
+    char right_value[MAX_VALUE_LENGTH];
+
+    for (int f = 0; f < filter_count; f++) {
+        struct Node *pred = &filters[f];
+
+        if ((pred->function & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR) {
+            continue;
+        }
+
+        if (pred->child_count < 2) {
+            continue;
+        }
+
+        const char *name = pred->children[0].field.text;
+        int dot = str_find_index(name, '.');
+        if (dot >= 0) {
+            name = name + dot + 1;
+        }
+
+        int col = getFieldIndex(db, name);
+        if (col < 0) {
+            return 0;
+        }
+
+        if (getRecordValue(
+                db, index_row, col, left_value, MAX_VALUE_LENGTH) < 0)
+        {
+            return 0;
+        }
+
+        // Right side is a constant (planner guarantees this)
+        strncpy(
+            right_value,
+            pred->children[1].field.text,
+            MAX_VALUE_LENGTH - 1);
+        right_value[MAX_VALUE_LENGTH - 1] = '\0';
+
+        if (!evaluateExpression(pred->function, left_value, right_value)) {
+            return 0;
+        }
+    }
+
+    return 1;
 }
 
 static int indexWalk(
@@ -474,12 +637,23 @@ static int indexWalk(
     int rowid_column,
     int lower_index,
     int upper_index,
+    struct Node *filters,
+    int filter_count,
+    int limit,
     struct RowList * row_list
 ) {
     char value[MAX_VALUE_LENGTH];
+    int matched = 0;
 
     // Always ascending
     for (int i = lower_index; i < upper_index; i++) {
+        if (
+            filter_count > 0 &&
+            !indexRowMatchesFilters(db, i, filters, filter_count))
+        {
+            continue;
+        }
+
         if (rowid_column == FIELD_ROW_INDEX) {
             appendRowID(row_list, i);
         } else {
@@ -498,7 +672,12 @@ static int indexWalk(
 
             appendRowID(row_list, atoi(value));
         }
+
+        matched++;
+        if (limit >= 0 && matched >= limit) {
+            break;
+        }
     }
 
-    return upper_index - lower_index;
+    return matched;
 }

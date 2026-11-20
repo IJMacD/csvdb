@@ -516,7 +516,9 @@ int executeIndexJoin (
             p->function,
             value,
             getRowList(tmp_list),
-            -1
+            -1,
+            NULL,
+            0
         );
 
         if (sub_row_count > 0) {
