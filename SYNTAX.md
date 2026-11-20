@@ -43,9 +43,9 @@ SELECT [DISTINCT [ON (<expr> [, …])]]
 FROM <source> [[AS] alias [(col_alias, …)]]
     [, <source> …]
     | [INNER|LEFT] JOIN <source> [ON <predicate> | USING <expr>]
-WHERE <predicate> [AND <predicate> …]
+WHERE <predicate> [{AND|OR} <predicate> …]
 GROUP BY <expr> [, …]
-HAVING <predicate> [AND <predicate> …]
+HAVING <predicate> [{AND|OR} <predicate> …]
 ORDER BY <expr> [ASC|DESC] [, …]
 OFFSET <n> ROW[S]
 FETCH {FIRST|NEXT} [<m>] ROW[S] ONLY
@@ -91,7 +91,7 @@ FROM (VALUES ('a',1),('b',2)) AS t (first, second);
 
 - Comma joins are cross joins (predicates go in `WHERE` / `ON`).
 - Supported join keywords: `JOIN`, `INNER JOIN`, `LEFT JOIN`.
-- Join conditions: `ON <predicate>` or `USING <expr>` (equality of that expression across the joined tables).
+- Join conditions: `ON <predicate>` (`AND`/`OR`, same precedence as `WHERE`) or `USING <expr>` (equality on that expression across the joined tables).
 
 ### `WHERE`
 
@@ -104,9 +104,14 @@ WHERE name IN ('spades','hearts')
 WHERE name IS NULL
 WHERE name IS NOT NULL
 WHERE a = 1 AND b > 2
+WHERE name = 'spades' OR name = 'hearts'
+WHERE value = 1 OR value = 13 AND name = 'Nope'   -- AND before OR → value = 1
+WHERE value = 1 AND name = 'Ace' OR value = 13    -- (1 AND Ace) OR 13
 ```
 
-Multiple predicates are combined with `AND`. For a set of alternative values, use `IN (…)`. There is no `OR` keyword in `WHERE` (e.g. `WHERE a = 1 OR b = 2` is not accepted).
+Predicates may be joined with `AND` and `OR`. **`AND` binds tighter than `OR`** (standard SQL). Boolean parentheses are not supported for regrouping; write the clauses in an order that matches the desired grouping, or use `IN (…)` for simple alternatives.
+
+The same `AND` / `OR` rules apply in `JOIN … ON`, `HAVING`, and `FILTER (WHERE …)`.
 
 ### `GROUP BY` / `HAVING`
 
@@ -117,9 +122,10 @@ HAVING COUNT(*) > 1
 SELECT name, COUNT(*);
 
 SELECT COUNT(*) FROM suits HAVING COUNT(*) = 4;   -- HAVING alone implies one group
+FROM ranks GROUP BY name HAVING name = 'Ace' OR name = 'King' SELECT name;
 ```
 
-`HAVING` filters groups after aggregation. Predicates are combined with `AND`, same shapes as `WHERE`.
+`HAVING` filters groups after aggregation. Predicates use the same shapes and `AND`/`OR` precedence as `WHERE`.
 
 ### `ORDER BY` / limits
 
@@ -257,7 +263,7 @@ FROM test WHERE PK(id) = 1000;
 | `+` `-` `*` `/` `%` | Arithmetic (also date/time arithmetic; see below) |
 | `\|\|` | String concatenation |
 
-**Comparison** (in `WHERE` / `ON` / `HAVING` / `FILTER`)
+**Comparison / boolean** (in `WHERE` / `ON` / `HAVING` / `FILTER`)
 
 | Op | Meaning |
 |----|---------|
@@ -268,9 +274,28 @@ FROM test WHERE PK(id) = 1000;
 | `BETWEEN a AND b` | Inclusive both ends: `>= a AND <= b` |
 | `BETWEEN a ANDX b` | Exclusive upper bound: `>= a AND < b` |
 | `IN (…)` | Membership (`x` equals any listed value) |
-| `AND` | Conjunction |
+| `AND` | Conjunction (binds tighter than `OR`) |
+| `OR` | Disjunction |
 
-Parentheses group expressions: `(5 + 3) * 3`.
+### Operator precedence
+
+From tightest to loosest:
+
+1. Function calls, parentheses around **scalar** expressions
+2. `*` `/` `%`
+3. `+` `-`
+4. `||`
+5. Comparisons (`=` `!=` `<` `<=` `>` `>=` `LIKE` `BETWEEN` `IN` `IS`)
+6. `AND`
+7. `OR`
+
+Examples:
+
+```sql
+SELECT 5 + 3 * 3;                          -- 14
+SELECT (5 + 3) * 3;                        -- 24  (parens only for scalars)
+WHERE value = 1 OR value = 13 AND name = 'Nope';  -- value = 1 OR (value = 13 AND …)
+```
 
 ### Date / time arithmetic with `+` / `-`
 
@@ -490,7 +515,7 @@ SELECT julian, date, ordinalDate, weekDate;
 
 1. **Declarative clause order** — write clauses in whatever order is readable.
 2. **Optional `SELECT` / `FROM`** — `FROM test LIMIT 5` and `SELECT 1 + 1` are both fine.
-3. **Not supported** — `UNION` / `INTERSECT` / `EXCEPT`, `RIGHT JOIN` / `FULL JOIN`, free-standing `OR` in `WHERE`/`HAVING` (use `IN` for alternatives).
+3. **Not supported** — `UNION` / `INTERSECT` / `EXCEPT`, `RIGHT JOIN` / `FULL JOIN`, parentheses for regrouping `AND`/`OR` predicates.
 
 ---
 
