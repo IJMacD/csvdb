@@ -10,6 +10,7 @@
 /**
  * If step carries two complementary range predicates on the same column,
  * fill row_list via indexBoundedSeek. Returns 1 if handled, 0 otherwise.
+ * Any nodes after the seek bound(s) are residual index filters.
  */
 static int tryBoundedIndexSeek (
     struct DB *index_db,
@@ -17,7 +18,8 @@ static int tryBoundedIndexSeek (
     struct PlanStep *step,
     struct RowList *row_list
 ) {
-    if (step->node_count < 2)
+    int seek_count = indexStepSeekNodeCount(step->nodes, step->node_count);
+    if (seek_count < 2)
     {
         return 0;
     }
@@ -26,16 +28,13 @@ static int tryBoundedIndexSeek (
     struct Node *b = &step->nodes[1];
     int a_lo = a->function == OPERATOR_GE || a->function == OPERATOR_GT;
     int a_hi = a->function == OPERATOR_LE || a->function == OPERATOR_LT;
-    int b_lo = b->function == OPERATOR_GE || b->function == OPERATOR_GT;
-    int b_hi = b->function == OPERATOR_LE || b->function == OPERATOR_LT;
-
-    if (!((a_lo && b_hi) || (a_hi && b_lo)))
-    {
-        return 0;
-    }
 
     struct Node *lo = a_lo ? a : b;
     struct Node *hi = a_hi ? a : b;
+
+    struct Node *filters =
+        (step->node_count > seek_count) ? &step->nodes[seek_count] : NULL;
+    int filter_count = step->node_count - seek_count;
 
     indexBoundedSeek(
         index_db,
@@ -45,9 +44,26 @@ static int tryBoundedIndexSeek (
         hi->function,
         hi->children[1].field.text,
         row_list,
-        step->limit);
+        step->limit,
+        filters,
+        filter_count);
 
     return 1;
+}
+
+static void indexStepFilters (
+    struct PlanStep *step,
+    int seek_count,
+    struct Node **filters_out,
+    int *filter_count_out
+) {
+    if (step->node_count > seek_count) {
+        *filters_out = &step->nodes[seek_count];
+        *filter_count_out = step->node_count - seek_count;
+    } else {
+        *filters_out = NULL;
+        *filter_count_out = 0;
+    }
 }
 
 int executeSourceDummyRow (
@@ -79,12 +95,19 @@ int executeSourcePK (
     if (!tryBoundedIndexSeek(
             table->db, FIELD_ROW_INDEX, step, getRowList(row_list)))
     {
-        indexPrimarySeek(
+        struct Node *filters = NULL;
+        int filter_count = 0;
+        indexStepFilters(step, 1, &filters, &filter_count);
+
+        indexUniqueSeek(
             table->db,
+            FIELD_ROW_INDEX,
             p->function,
             p->children[1].field.text,
             getRowList(row_list),
-            step->limit
+            step->limit,
+            filters,
+            filter_count
         );
     }
 
@@ -148,21 +171,30 @@ int executeSourceUnique (
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);
 
-    // Find which column in the index table contains the rowids of the primary
-    // table
-    int rowid_col = getFieldIndex(&index_db, "rowid");
+    // Trailing column is the base-table rowid (name irrelevant)
+    int rowid_col = indexRowidColumn(&index_db);
 
-    // Fill in RowIDs from index (dual-bound BETWEEN when node_count == 2)
+    // Fill in RowIDs from index (dual-bound BETWEEN when seek_count == 2)
     if (!tryBoundedIndexSeek(
             &index_db, rowid_col, step, getRowList(row_list)))
     {
+        int seek_count = indexStepSeekNodeCount(step->nodes, step->node_count);
+        if (seek_count < 1) {
+            seek_count = 1;
+        }
+        struct Node *filters = NULL;
+        int filter_count = 0;
+        indexStepFilters(step, seek_count, &filters, &filter_count);
+
         indexUniqueSeek(
             &index_db,
             rowid_col,
             op,
             predicate_value,
             getRowList(row_list),
-            step->limit);
+            step->limit,
+            filters,
+            filter_count);
     }
 
     closeDB(&index_db);
@@ -206,19 +238,28 @@ int executeSourceIndexSeek (
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);
 
-    // Find which column in the index table contains the rowids of the primary
-    // table
-    int rowid_col = getFieldIndex(&index_db, "rowid");
+    // Trailing column is the base-table rowid (name irrelevant)
+    int rowid_col = indexRowidColumn(&index_db);
     if (!tryBoundedIndexSeek(
             &index_db, rowid_col, step, getRowList(row_list)))
     {
+        int seek_count = indexStepSeekNodeCount(step->nodes, step->node_count);
+        if (seek_count < 1) {
+            seek_count = 1;
+        }
+        struct Node *filters = NULL;
+        int filter_count = 0;
+        indexStepFilters(step, seek_count, &filters, &filter_count);
+
         indexSeek(
             &index_db,
             rowid_col,
             p->function,
             p->children[1].field.text,
             getRowList(row_list),
-            step->limit
+            step->limit,
+            filters,
+            filter_count
         );
     }
 
@@ -243,13 +284,27 @@ int executeSourceCoveringIndexSeek (
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);
 
-    indexCoveringSeek(
-        index_db,
-        p->function,
-        p->children[1].field.text,
-        getRowList(row_list),
-        step->limit
-    );
+    if (!tryBoundedIndexSeek(
+            index_db, FIELD_ROW_INDEX, step, getRowList(row_list)))
+    {
+        int seek_count = indexStepSeekNodeCount(step->nodes, step->node_count);
+        if (seek_count < 1) {
+            seek_count = 1;
+        }
+        struct Node *filters = NULL;
+        int filter_count = 0;
+        indexStepFilters(step, seek_count, &filters, &filter_count);
+
+        indexCoveringSeek(
+            index_db,
+            p->function,
+            p->children[1].field.text,
+            getRowList(row_list),
+            step->limit,
+            filters,
+            filter_count
+        );
+    }
 
     return 0;
 }
@@ -288,10 +343,11 @@ int executeSourceIndexScan (
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);
 
-    // Find which column in the index table contains the rowids of the primary
-    // table
-    int rowid_col = getFieldIndex(&index_db, "rowid");
-    indexScan(&index_db, rowid_col, getRowList(row_list), step->limit);
+    // Trailing column is the base-table rowid (name irrelevant)
+    int rowid_col = indexRowidColumn(&index_db);
+    // INDEX SCAN nodes are order columns (UNITY), not filters
+    indexScan(
+        &index_db, rowid_col, getRowList(row_list), step->limit, NULL, 0);
 
     closeDB(&index_db);
 

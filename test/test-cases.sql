@@ -262,3 +262,12 @@ FROM ranks WHERE ((value = 1 OR value = 2) AND value < 10) OR value = 13 ORDER B
 FROM ranks WHERE (value = 1) SELECT value, name;
 FROM lefty AS l JOIN righty AS r ON (l.id = r.id OR l.name = r.name) SELECT l.id ORDER BY l.id;
 FROM ranks SELECT COUNT(*) FILTER (WHERE (value = 1 OR value = 13) AND name != 'x');
+-- Index rowid is the last column by position (header need not be named "rowid")
+FROM suits WHERE UNIQUE('suits_by_name.unique') = 'hearts' SELECT name, symbol;
+FROM suits WHERE UNIQUE('suits_by_name.unique') >= 'diamonds' ORDER BY name SELECT name;
+-- Composite index: EQ on leading key + ORDER BY trailing key → no SORT
+FROM test WHERE name = 'Walter KELLY' ORDER BY birth_date SELECT name, birth_date LIMIT 3;
+-- Composite index: residual on trailing key filtered during index walk (covering)
+FROM test WHERE name = 'Walter KELLY' AND birth_date > '0500-01-01' SELECT name, birth_date LIMIT 5;
+-- Composite index: residual on non-index column still uses ACCESS BY ROWID
+FROM test WHERE name = 'Walter KELLY' AND score > 50 SELECT name, score LIMIT 5;

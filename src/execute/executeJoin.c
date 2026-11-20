@@ -362,7 +362,8 @@ int executeUniqueJoin (
         return -1;
     }
 
-    int rowid_field = getFieldIndex(&index_db, "rowid");
+    // Trailing column is the base-table rowid (name irrelevant)
+    int rowid_field = indexRowidColumn(&index_db);
 
     for (unsigned int i = 0; i < getRowList(list_id)->row_count; i++) {
         char value[MAX_VALUE_LENGTH];
@@ -492,9 +493,8 @@ int executeIndexJoin (
         return -1;
     }
 
-    // Find which column in the index table contains the rowids of the primary
-    // table
-    int rowid_col = getFieldIndex(&index_db, "rowid");
+    // Trailing column is the base-table rowid (name irrelevant)
+    int rowid_col = indexRowidColumn(&index_db);
 
     for (unsigned int i = 0; i < getRowList(list_id)->row_count; i++) {
         char value[MAX_VALUE_LENGTH];
@@ -516,7 +516,9 @@ int executeIndexJoin (
             p->function,
             value,
             getRowList(tmp_list),
-            -1
+            -1,
+            NULL,
+            0
         );
 
         if (sub_row_count > 0) {
