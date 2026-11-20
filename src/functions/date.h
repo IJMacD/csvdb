@@ -1,11 +1,28 @@
 #include "time.h"
 #include "../structs.h"
 
+enum DateUnit {
+    DATE_UNIT_INVALID = -1,
+    DATE_UNIT_YEAR = 0,
+    DATE_UNIT_QUARTER,
+    DATE_UNIT_MONTH,
+    DATE_UNIT_WEEK,
+    DATE_UNIT_DAY,
+    DATE_UNIT_HOUR,
+    DATE_UNIT_MINUTE,
+    DATE_UNIT_SECOND
+};
+
 int parseDateTime(const char *input, struct DateTime *output);
 
 int parseDate(const char *input, struct DateTime *output);
 
 int parseTime(const char *input, struct DateTime *output);
+
+/**
+ * Parse date or datetime (datetime first). Returns 1 on success.
+ */
+int parseDateOrDateTime(const char *input, struct DateTime *output);
 
 int sprintDateTime(char *output, struct DateTime *dt);
 
@@ -14,6 +31,8 @@ int sprintDate(char *output, struct DateTime *dt);
 int sprintTime(char *output, struct DateTime *dt);
 
 int isLeapYear(int year);
+
+int daysInMonth(int year, int month);
 
 int datetimeGetYearDay(struct DateTime *dt);
 
@@ -48,8 +67,47 @@ void datetimeFromJulian(struct DateTime *dt, int julian);
 
 long datetimeGetUnix(struct DateTime *dt);
 
+/**
+ * Fill calendar fields from unix time using dt->tz_offset_minutes as the
+ * target zone (TZ_LOCAL → localtime; otherwise wall clock in that offset).
+ */
 void datetimeFromUnix(struct DateTime *dt, time_t time);
 
 int timeInSeconds(struct DateTime *dt);
 
 void timeFromSeconds(struct DateTime *dt, int seconds);
+
+/**
+ * Parse a date unit name (YEAR/YEARS, MONTH, HOUR, …).
+ * Returns DATE_UNIT_INVALID if not recognised.
+ */
+enum DateUnit parseDateUnit(const char *unit);
+
+/**
+ * Convert INTERVAL n UNIT into an integer for use with +/−.
+ * DAY/WEEK → day count; HOUR/MINUTE/SECOND → seconds.
+ * Returns 0 on success; -1 if unit cannot be a fixed integer (MONTH/YEAR/…).
+ */
+int intervalToInt(int count, enum DateUnit unit, long *out);
+
+/**
+ * Parse timezone target: Z, UTC, +HH:MM, -HH:MM.
+ * Writes minutes east of UTC to *offset_minutes.
+ * Returns 1 on success; 0 on failure.
+ */
+int parseTzOffset(const char *input, short *offset_minutes);
+
+/**
+ * True if local UTC offset can be determined; writes minutes east of UTC.
+ */
+int getLocalTzOffsetMinutes(short *offset_minutes);
+
+void dateAddUnit(struct DateTime *dt, int count, enum DateUnit unit);
+
+void dateTrunc(struct DateTime *dt, enum DateUnit unit);
+
+/**
+ * Convert dt (not TZ_LOCAL) to wall clock in target_offset_minutes.
+ * Returns 1 on success; 0 if dt is TZ_LOCAL.
+ */
+int datetimeAtTimeZone(struct DateTime *dt, short target_offset_minutes);

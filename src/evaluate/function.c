@@ -4,6 +4,8 @@
 #include <limits.h>
 #include <math.h>
 #include <float.h>
+#include <time.h>
+#include <ctype.h>
 
 #include "../structs.h"
 #include "../gitversion.h"
@@ -13,6 +15,113 @@
 #include "../query/result.h"
 #include "./predicates.h"
 #include "../db/db.h"
+
+/**
+ * Parse DATE_ADD/DATE_SUB amount: either a plain integer (days), an
+ * "N UNIT" interval string, or (amount, unit) via values[1]/values[2].
+ * Returns 0 on success.
+ */
+static int parseDateAddAmount(
+    char **values,
+    int value_count,
+    int *count,
+    enum DateUnit *unit)
+{
+    *unit = DATE_UNIT_DAY;
+    *count = 0;
+
+    if (value_count >= 3)
+    {
+        *count = atoi(values[1]);
+        *unit = parseDateUnit(values[2]);
+        if (*unit == DATE_UNIT_INVALID)
+        {
+            return -1;
+        }
+        return 0;
+    }
+
+    if (value_count < 2)
+    {
+        return -1;
+    }
+
+    // Plain integer → days (historic DATE_ADD(date, n))
+    const char *p = values[1];
+    char *end = NULL;
+    long amount = strtol(p, &end, 10);
+    if (end != p && *end == '\0')
+    {
+        *count = (int)amount;
+        *unit = DATE_UNIT_DAY;
+        return 0;
+    }
+
+    // "N UNIT" (from INTERVAL n UNIT calendar forms, or path B)
+    while (*p == ' ')
+        p++;
+    amount = strtol(p, &end, 10);
+    if (end == p)
+    {
+        return -1;
+    }
+    while (*end == ' ')
+        end++;
+    *unit = parseDateUnit(end);
+    if (*unit == DATE_UNIT_INVALID)
+    {
+        return -1;
+    }
+    *count = (int)amount;
+    return 0;
+}
+
+static int evaluateDateAddSub(
+    char *output,
+    char **values,
+    int value_count,
+    int sign)
+{
+    struct DateTime dt = {0};
+    int is_datetime = 0;
+
+    if (parseDateTime(values[0], &dt))
+    {
+        is_datetime = 1;
+    }
+    else if (!parseDate(values[0], &dt))
+    {
+        return 0;
+    }
+
+    int count = 0;
+    enum DateUnit unit = DATE_UNIT_DAY;
+    if (parseDateAddAmount(values, value_count, &count, &unit) != 0)
+    {
+        return 0;
+    }
+
+    dateAddUnit(&dt, sign * count, unit);
+
+    // Time units or datetime inputs → datetime string; else date
+    if (is_datetime || unit == DATE_UNIT_HOUR || unit == DATE_UNIT_MINUTE ||
+        unit == DATE_UNIT_SECOND)
+    {
+        if (!is_datetime)
+        {
+            dt.hour = 0;
+            dt.minute = 0;
+            dt.second = 0;
+            if (dt.tz_offset_minutes == TZ_LOCAL)
+            {
+                /* leave local */
+            }
+        }
+        return sprintDateTime(output, &dt);
+    }
+
+    return sprintDate(output, &dt);
+}
 
 #define IS_NOT_NULL(x) (x[0])
 
@@ -51,17 +160,54 @@ int evaluateFunction(
         return sprintf(output, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
     }
 
-    // NOW takes 0 parameters
+    // NOW() / NOW(UTC) / NOW(LOCAL) — optional bare keyword (or quoted synonym)
     if (function == FUNC_DATE_NOW)
     {
         struct DateTime dt = {0};
-        parseDate("CURRENT_DATE", &dt);
-        parseTime("CURRENT_TIME", &dt);
-        return sprintf(
-            output,
-            "%04d-%02d-%02dT%02d:%02d:%02d",
-            dt.year, dt.month, dt.day,
-            dt.hour, dt.minute, dt.second);
+        time_t t = time(NULL);
+        short off = 0;
+        int want_local = 0;
+
+        if (value_count >= 1 && values[0] != NULL && values[0][0] != '\0')
+        {
+            if (strcmp(values[0], "LOCAL") == 0)
+            {
+                want_local = 1;
+            }
+            else if (
+                strcmp(values[0], "UTC") == 0 ||
+                strcmp(values[0], "Z") == 0)
+            {
+                want_local = 0;
+            }
+            else
+            {
+                fprintf(
+                    stderr,
+                    "NOW() expects LOCAL, UTC, or Z; got %s\n",
+                    values[0]);
+                return 0;
+            }
+        }
+
+        if (!getLocalTzOffsetMinutes(&off))
+        {
+            // Offset unknown: always emit untagged local wall time
+            dt.tz_offset_minutes = TZ_LOCAL;
+            dt.tz_format = TZ_FMT_Z;
+        }
+        else if (want_local)
+        {
+            dt.tz_offset_minutes = off;
+            dt.tz_format = TZ_FMT_OFFSET; // LOCAL at UTC still shows +00:00
+        }
+        else
+        {
+            dt.tz_offset_minutes = 0;
+            dt.tz_format = TZ_FMT_Z;
+        }
+        datetimeFromUnix(&dt, t);
+        return sprintDateTime(output, &dt);
     }
 
     // CLOCK takes 0 parameters
@@ -704,9 +850,9 @@ int evaluateFunction(
     }
     else if ((function & MASK_FUNC_FAMILY) == FUNC_FAM_EXTRACT)
     {
-        struct DateTime dt;
+        struct DateTime dt = {0};
 
-        if (!parseDate(values[0], &dt))
+        if (!parseDateOrDateTime(values[0], &dt))
         {
             return 0;
         }
@@ -722,6 +868,22 @@ int evaluateFunction(
         else if (function == FUNC_EXTRACT_DAY)
         {
             return sprintf(output, "%d", dt.day);
+        }
+        else if (function == FUNC_EXTRACT_HOUR)
+        {
+            return sprintf(output, "%d", dt.hour);
+        }
+        else if (function == FUNC_EXTRACT_MINUTE)
+        {
+            return sprintf(output, "%d", dt.minute);
+        }
+        else if (function == FUNC_EXTRACT_SECOND)
+        {
+            return sprintf(output, "%d", dt.second);
+        }
+        else if (function == FUNC_EXTRACT_TIME)
+        {
+            return sprintTime(output, &dt);
         }
         else if (function == FUNC_EXTRACT_WEEK)
         {
@@ -802,41 +964,11 @@ int evaluateFunction(
     }
     else if (function == FUNC_DATE_ADD)
     {
-        struct DateTime dt1;
-        struct DateTime dt2;
-
-        if (!parseDate(values[0], &dt1))
-        {
-            return 0;
-        }
-
-        int diff = atoi(values[1]);
-
-        int julian1 = datetimeGetJulian(&dt1);
-        int julian2 = julian1 + diff;
-
-        datetimeFromJulian(&dt2, julian2);
-
-        return sprintDate(output, &dt2);
+        return evaluateDateAddSub(output, values, value_count, 1);
     }
     else if (function == FUNC_DATE_SUB)
     {
-        struct DateTime dt1;
-        struct DateTime dt2;
-
-        if (!parseDate(values[0], &dt1))
-        {
-            return 0;
-        }
-
-        int diff = atoi(values[1]);
-
-        int julian1 = datetimeGetJulian(&dt1);
-        int julian2 = julian1 - diff;
-
-        datetimeFromJulian(&dt2, julian2);
-
-        return sprintDate(output, &dt2);
+        return evaluateDateAddSub(output, values, value_count, -1);
     }
     else if (function == FUNC_DATE_DIFF)
     {
@@ -857,6 +989,93 @@ int evaluateFunction(
         int julian2 = datetimeGetJulian(&dt2);
 
         return sprintf(output, "%d", julian1 - julian2);
+    }
+    else if (function == FUNC_DATE_TRUNC)
+    {
+        if (value_count < 2)
+        {
+            return 0;
+        }
+
+        enum DateUnit unit = parseDateUnit(values[0]);
+        if (unit == DATE_UNIT_INVALID)
+        {
+            return 0;
+        }
+
+        struct DateTime dt = {0};
+        int is_datetime = 0;
+        if (parseDateTime(values[1], &dt))
+        {
+            is_datetime = 1;
+        }
+        else if (!parseDate(values[1], &dt))
+        {
+            return 0;
+        }
+
+        dateTrunc(&dt, unit);
+
+        if (is_datetime)
+        {
+            return sprintDateTime(output, &dt);
+        }
+        return sprintDate(output, &dt);
+    }
+    else if (function == FUNC_AT_TIME_ZONE)
+    {
+        if (value_count < 2)
+        {
+            return 0;
+        }
+
+        struct DateTime dt = {0};
+        if (!parseDateTime(values[0], &dt))
+        {
+            return 0;
+        }
+
+        if (dt.tz_offset_minutes == TZ_LOCAL)
+        {
+            // Cannot convert an untagged local datetime
+            output[0] = '\0';
+            return 0;
+        }
+
+        short target = 0;
+        int as_local = 0;
+        if (strcmp(values[1], "LOCAL") == 0)
+        {
+            if (!getLocalTzOffsetMinutes(&target))
+            {
+                output[0] = '\0';
+                return 0;
+            }
+            as_local = 1;
+        }
+        else if (!parseTzOffset(values[1], &target))
+        {
+            return 0;
+        }
+
+        if (!datetimeAtTimeZone(&dt, target))
+        {
+            output[0] = '\0';
+            return 0;
+        }
+
+        // LOCAL / explicit ±offsets use ±HH:MM; UTC/Z keep trailing Z
+        if (as_local ||
+            (values[1][0] == '+' || values[1][0] == '-'))
+        {
+            dt.tz_format = TZ_FMT_OFFSET;
+        }
+        else
+        {
+            dt.tz_format = TZ_FMT_Z;
+        }
+
+        return sprintDateTime(output, &dt);
     }
     else if (function == FUNC_DATE_DATE)
     {
@@ -890,6 +1109,11 @@ int evaluateFunction(
         dt.month = 1;
         // Default to 1
         dt.day = 1;
+        dt.hour = 0;
+        dt.minute = 0;
+        dt.second = 0;
+        dt.tz_offset_minutes = TZ_LOCAL;
+        dt.tz_format = TZ_FMT_Z;
 
         if (value_count > 0)
         {
@@ -945,6 +1169,8 @@ int evaluateFunction(
         dt.hour = 0;
         dt.minute = 0;
         dt.second = 0;
+        dt.tz_offset_minutes = TZ_LOCAL;
+        dt.tz_format = TZ_FMT_Z;
 
         if (value_count > 0)
         {

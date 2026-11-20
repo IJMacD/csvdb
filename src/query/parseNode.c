@@ -1,12 +1,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdio.h>
 
 #include "../structs.h"
 #include "token.h"
 #include "node.h"
 #include "select.h"
 #include "../functions/util.h"
+#include "../functions/date.h"
 
 #include "parseNode.h"
 
@@ -135,6 +137,52 @@ int parseSimpleNode(
         return 0;
     }
 
+    // INTERVAL n UNIT → integer constant (DAY/WEEK/HOUR/…) or "n UNIT" for
+    // calendar units (MONTH/YEAR) consumed by DATE_ADD / DATE_SUB.
+    // INTERVAL(...) with parentheses is handled as a function above.
+    if (strcmp(value, "INTERVAL") == 0)
+    {
+        skipWhitespace(query, index);
+
+        char count_tok[32];
+        char unit_tok[32];
+        getToken(query, index, count_tok, sizeof count_tok);
+        skipWhitespace(query, index);
+        getToken(query, index, unit_tok, sizeof unit_tok);
+
+        if (!is_numeric(count_tok))
+        {
+            fprintf(stderr, "expected number after INTERVAL, got %s\n", count_tok);
+            return -1;
+        }
+
+        enum DateUnit unit = parseDateUnit(unit_tok);
+        if (unit == DATE_UNIT_INVALID)
+        {
+            fprintf(stderr, "expected date unit after INTERVAL, got %s\n", unit_tok);
+            return -1;
+        }
+
+        long as_int = 0;
+        if (intervalToInt(atoi(count_tok), unit, &as_int) == 0)
+        {
+            sprintf(node->field.text, "%ld", as_int);
+        }
+        else
+        {
+            // e.g. "1 MONTH" for DATE_ADD path B
+            snprintf(
+                node->field.text,
+                MAX_FIELD_LENGTH,
+                "%s %s",
+                count_tok,
+                unit_tok);
+        }
+        node->field.index = FIELD_CONSTANT;
+        node->field.table_id = TABLE_NONE;
+        return 0;
+    }
+
     // Just a regular bare field or named constant
     strcpy(node->field.text, value);
 
@@ -224,6 +272,51 @@ static int parseString(char *value, struct Node *node)
  */
 static int parseFunction(const char *value, const char *query, size_t *index, struct Node *node, struct Query *q)
 {
+    // DATE_TRUNC(UNIT, expr) — UNIT is a bare keyword constant
+    if (strcmp(value, "DATE_TRUNC") == 0)
+    {
+        node->function = FUNC_DATE_TRUNC;
+
+        char part[32];
+        getToken(query, index, part, sizeof part);
+
+        if (parseDateUnit(part) == DATE_UNIT_INVALID)
+        {
+            fprintf(stderr, "expected date unit for DATE_TRUNC - got %s\n", part);
+            return -1;
+        }
+
+        struct Node *unit_node = addChildNode(node);
+        strcpy(unit_node->field.text, part);
+        unit_node->field.index = FIELD_CONSTANT;
+        unit_node->field.table_id = TABLE_NONE;
+
+        skipWhitespace(query, index);
+        if (query[*index] != ',')
+        {
+            fprintf(stderr, "expected ',' after DATE_TRUNC unit\n");
+            return -1;
+        }
+        (*index)++;
+
+        struct Node *expr_node = addChildNode(node);
+        int flags = parseNode(query, index, expr_node, q);
+        if (flags < 0)
+        {
+            return flags;
+        }
+
+        skipWhitespace(query, index);
+        if (query[*index] != ')')
+        {
+            fprintf(stderr, "expected ')' after DATE_TRUNC\n");
+            return -1;
+        }
+        (*index)++;
+
+        return flags;
+    }
+
     if (strcmp(value, "EXTRACT") == 0)
     {
         char part[32];
@@ -300,6 +393,22 @@ static int parseFunction(const char *value, const char *query, size_t *index, st
         else if (strcmp(part, "YEARDAY_STRING") == 0)
         {
             node->function = FUNC_EXTRACT_YEARDAY_STRING;
+        }
+        else if (strcmp(part, "HOUR") == 0)
+        {
+            node->function = FUNC_EXTRACT_HOUR;
+        }
+        else if (strcmp(part, "MINUTE") == 0)
+        {
+            node->function = FUNC_EXTRACT_MINUTE;
+        }
+        else if (strcmp(part, "SECOND") == 0)
+        {
+            node->function = FUNC_EXTRACT_SECOND;
+        }
+        else if (strcmp(part, "TIME") == 0)
+        {
+            node->function = FUNC_EXTRACT_TIME;
         }
         else
         {
@@ -526,6 +635,10 @@ static int parseFunction(const char *value, const char *query, size_t *index, st
     {
         node->function = FUNC_DATE_DIFF;
     }
+    else if (strcmp(value, "AT_TIME_ZONE") == 0)
+    {
+        node->function = FUNC_AT_TIME_ZONE;
+    }
     else if (strcmp(value, "TODAY") == 0)
     {
         node->function = FUNC_DATE_TODAY;
@@ -613,6 +726,52 @@ static int parseFunction(const char *value, const char *query, size_t *index, st
     if (result < 0)
     {
         return result;
+    }
+
+    // DATE_ADD/DATE_SUB path A: DATE_ADD(date, n, MONTH) — promote bare unit
+    // identifiers to constants so they are not resolved as column names.
+    if ((node->function == FUNC_DATE_ADD || node->function == FUNC_DATE_SUB) &&
+        node->child_count == 3)
+    {
+        struct Node *unit_node = &node->children[2];
+        if (unit_node->function == FUNC_UNITY &&
+            (unit_node->field.index == FIELD_UNKNOWN ||
+             unit_node->field.index == FIELD_CONSTANT) &&
+            parseDateUnit(unit_node->field.text) != DATE_UNIT_INVALID)
+        {
+            unit_node->field.index = FIELD_CONSTANT;
+            unit_node->field.table_id = TABLE_NONE;
+        }
+    }
+
+    // NOW(LOCAL|UTC|Z) and AT_TIME_ZONE(ts, LOCAL|UTC|Z) — bare keywords
+    if (node->function == FUNC_DATE_NOW && node->child_count == 1)
+    {
+        struct Node *zone = &node->children[0];
+        if (zone->function == FUNC_UNITY &&
+            (zone->field.index == FIELD_UNKNOWN ||
+             zone->field.index == FIELD_CONSTANT) &&
+            (strcmp(zone->field.text, "LOCAL") == 0 ||
+             strcmp(zone->field.text, "UTC") == 0 ||
+             strcmp(zone->field.text, "Z") == 0))
+        {
+            zone->field.index = FIELD_CONSTANT;
+            zone->field.table_id = TABLE_NONE;
+        }
+    }
+    if (node->function == FUNC_AT_TIME_ZONE && node->child_count == 2)
+    {
+        struct Node *zone = &node->children[1];
+        if (zone->function == FUNC_UNITY &&
+            (zone->field.index == FIELD_UNKNOWN ||
+             zone->field.index == FIELD_CONSTANT) &&
+            (strcmp(zone->field.text, "LOCAL") == 0 ||
+             strcmp(zone->field.text, "UTC") == 0 ||
+             strcmp(zone->field.text, "Z") == 0))
+        {
+            zone->field.index = FIELD_CONSTANT;
+            zone->field.table_id = TABLE_NONE;
+        }
     }
 
     return flags;
