@@ -441,6 +441,33 @@ int process_query(
         }
     }
 
+    // Populate HAVING predicates (aliases from SELECT allowed)
+    for (int i = 0; i < q->having_count; i++)
+    {
+        struct Node *predicate = &q->having_nodes[i];
+
+        for (int j = 0; j < predicate->child_count; j++)
+        {
+            result = resolveNode(q, &predicate->children[j], ALIASES_FIRST);
+            if (result < 0)
+            {
+                fprintf(stderr, "Unable to resolve HAVING node %i\n", i);
+                return result;
+            }
+        }
+    }
+
+    // Populate DISTINCT ON columns
+    for (int i = 0; i < q->distinct_count; i++)
+    {
+        result = resolveNode(q, &q->distinct_nodes[i], ALIASES_FIRST);
+        if (result < 0)
+        {
+            fprintf(stderr, "Unable to resolve DISTINCT ON node %i\n", i);
+            return result;
+        }
+    }
+
 #ifdef DEBUG
     // Post-optimised
     if (debug_verbosity >= 2)
@@ -694,6 +721,16 @@ static void destroy_query(struct Query *query)
         query->predicate_nodes = NULL;
     }
 
+    if (query->having_nodes != NULL)
+    {
+        for (int i = 0; i < query->having_count; i++)
+        {
+            freeNode(&query->having_nodes[i]);
+        }
+        free(query->having_nodes);
+        query->having_nodes = NULL;
+    }
+
     if (query->tables != NULL)
     {
         for (int i = 0; i < query->table_count; i++)
@@ -740,6 +777,11 @@ static void destroy_query(struct Query *query)
     for (int i = 0; i < query->group_count; i++)
     {
         freeNode(&query->group_nodes[i]);
+    }
+
+    for (int i = 0; i < query->distinct_count; i++)
+    {
+        freeNode(&query->distinct_nodes[i]);
     }
 }
 
@@ -1235,6 +1277,36 @@ struct Node *allocatePredicateNode(struct Query *q)
     q->predicate_nodes = mem;
 
     struct Node *p = &(q->predicate_nodes[q->predicate_count++]);
+
+    clearNode(p);
+
+    return p;
+}
+
+struct Node *allocateHavingNode(struct Query *q)
+{
+    void *mem;
+
+    if (q->having_count == 0)
+    {
+        mem = malloc(sizeof(*q->having_nodes));
+    }
+    else
+    {
+        mem = realloc(
+            q->having_nodes,
+            sizeof(*q->having_nodes) * (q->having_count + 1));
+    }
+
+    if (mem == NULL)
+    {
+        fprintf(stderr, "Out of memory\n");
+        exit(-1);
+    }
+
+    q->having_nodes = mem;
+
+    struct Node *p = &(q->having_nodes[q->having_count++]);
 
     clearNode(p);
 

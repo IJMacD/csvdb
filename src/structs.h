@@ -316,10 +316,13 @@ enum PlanStepType {
     PLAN_REVERSE =              0x31,
     PLAN_SLICE =                0x32,
     PLAN_OFFSET =               0x33,
+    PLAN_DISTINCT =             0x34,
 
     // POP = 1, PUSH = N
     PLAN_GROUP_SORTED =         0x40,
     PLAN_GROUP =                0x41,
+    // POP = N, PUSH = M (M <= N); filter group lists
+    PLAN_HAVING =               0x42,
 
     // POP = 2, PUSH = 1
     PLAN_UNION =                0x50,
@@ -375,6 +378,8 @@ enum OutputOption {
 enum QueryFlag {
     FLAG_HAVE_PREDICATE =       (1<<0),
     FLAG_GROUP =                (1<<1),
+    FLAG_DISTINCT =             (1<<2),
+    FLAG_DISTINCT_ON =          (1<<3),
     FLAG_EXPLAIN =              (1<<12),
     FLAG_READ_ONLY =            (1<<13),
 };
@@ -404,10 +409,15 @@ struct Query {
     int column_count;
     struct Node *predicate_nodes;
     int predicate_count;
+    struct Node *having_nodes;
+    int having_count;
     struct Node order_nodes[MAX_FIELD_COUNT];
     int order_count;
     struct Node group_nodes[MAX_FIELD_COUNT];
     int group_count;
+    /** DISTINCT ON (...) expressions; unused when FLAG_DISTINCT without ON */
+    struct Node distinct_nodes[MAX_FIELD_COUNT];
+    int distinct_count;
     int offset_value;
     int limit_value;
 };

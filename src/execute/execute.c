@@ -289,6 +289,26 @@ int executeQueryPlan (
                 break;
             }
 
+            case PLAN_HAVING: {
+                #ifdef DEBUG
+                debugLog(query, "PLAN_HAVING");
+                #endif
+
+                result = executeHaving(tables, s, result_set);
+
+                break;
+            }
+
+            case PLAN_DISTINCT: {
+                #ifdef DEBUG
+                debugLog(query, "PLAN_DISTINCT");
+                #endif
+
+                result = executeDistinct(tables, s, result_set);
+
+                break;
+            }
+
             case PLAN_SELECT: {
                 #ifdef DEBUG
                 debugLog(query, "PLAN_SELECT");
