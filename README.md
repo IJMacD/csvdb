@@ -100,6 +100,10 @@ systemctl list-units -t service | head -n -6 | csvdb "FROM stdin.col"
 ps | csvdb "FROM stdin.wsv"
 ```
 
+## Syntax
+
+Full dialect reference (statements, operators, and function listing): [SYNTAX.md](SYNTAX.md).
+
 ## Examples
 
 See more examples of the SQL dialect in the `test/test-cases.sql` file
