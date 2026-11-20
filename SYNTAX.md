@@ -208,8 +208,8 @@ CREATE INDEX my_idx ON test (name);        -- writes my_idx.index.csv
 
 - Auto-named indexes use `<table>__<first_column>.{index|unique}.csv` (`.csv` extension on the table name is stripped).
 - Unique indexes may only cover a single column.
-- Multi-column indexes are sorted by all listed columns; seeks always match on the **first** column of the index.
-- Every index file ends with a **`rowid` column**: the zero-based row index in the source table for that keyed value. Seeks match on the first column, then follow `rowid` to fetch (or cover) the source rows. Example shape: `name,birth_date,rowid`.
+- Multi-column indexes are sorted by all listed columns; seeks always match on the **first** column of the index. Trailing key columns can still satisfy `ORDER BY` and residual filters without a separate sort.
+- Every index file ends with a **trailing base-table pointer column**: the zero-based row index in the source table. Seeks match on the first column, then read that **last** column to fetch (or cover) source rows. `CREATE INDEX` names it `rowid` by convention, but the engine identifies it by **position** (last column), not by name. Example shapes: `name,birth_date,rowid` or `name,ptr`.
 
 ### Automatic use
 
@@ -225,11 +225,12 @@ If found, equality can become an index unique/seek plan; ranges and trailing-`%`
 ```sql
 FROM test WHERE INDEX('test__name.index') = 'Claude MILLS';
 FROM test WHERE UNIQUE('test__birth_date.unique') >= '0990-03-26' LIMIT 2;
+FROM suits WHERE UNIQUE('suits_by_name.unique') = 'hearts';  -- last col need not be named rowid
 FROM test WHERE PK(id) = 1000;
 ```
 
-- `INDEX('file')` / `UNIQUE('file')` — open that index file (`.csv` optional). Matching uses the **first column** of the index. The file **must** include a column named `rowid` whose values are the corresponding row indices in the source table; after a seek, those `rowid`s are what get read from the table. Hand-built index CSVs need the same layout (`key…,rowid`, sorted on the first column).
-- `PK(column)` — treat the table itself as a primary-key index on `column`. The column values must be **unique** and the **source file must already be sorted ascending** on that column (binary search on the table file; no sidecar index is required). Here the table row position *is* the rowid — there is no separate `rowid` column.
+- `INDEX('file')` / `UNIQUE('file')` — open that index file (`.csv` optional). Matching uses the **first column** of the index. The file **must** end with a column whose values are the corresponding row indices in the source table; after a seek, those last-column values are what get read from the table. The header name of that column does not matter. Hand-built index CSVs need the same layout (`key…,<ptr>`, sorted on the first column).
+- `PK(column)` — treat the table itself as a primary-key index on `column`. The column values must be **unique** and the **source file must already be sorted ascending** on that column (binary search on the table file; no sidecar index is required). Here the table row position *is* the rowid — there is no separate pointer column.
 
 ---
 
