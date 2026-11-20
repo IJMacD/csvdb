@@ -148,9 +148,8 @@ int executeSourceUnique (
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);
 
-    // Find which column in the index table contains the rowids of the primary
-    // table
-    int rowid_col = getFieldIndex(&index_db, "rowid");
+    // Trailing column is the base-table rowid (name irrelevant)
+    int rowid_col = indexRowidColumn(&index_db);
 
     // Fill in RowIDs from index (dual-bound BETWEEN when node_count == 2)
     if (!tryBoundedIndexSeek(
@@ -206,9 +205,8 @@ int executeSourceIndexSeek (
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);
 
-    // Find which column in the index table contains the rowids of the primary
-    // table
-    int rowid_col = getFieldIndex(&index_db, "rowid");
+    // Trailing column is the base-table rowid (name irrelevant)
+    int rowid_col = indexRowidColumn(&index_db);
     if (!tryBoundedIndexSeek(
             &index_db, rowid_col, step, getRowList(row_list)))
     {
@@ -288,9 +286,8 @@ int executeSourceIndexScan (
     RowListIndex row_list = createRowList(1, record_count);
     pushRowList(result_set, row_list);
 
-    // Find which column in the index table contains the rowids of the primary
-    // table
-    int rowid_col = getFieldIndex(&index_db, "rowid");
+    // Trailing column is the base-table rowid (name irrelevant)
+    int rowid_col = indexRowidColumn(&index_db);
     indexScan(&index_db, rowid_col, getRowList(row_list), step->limit);
 
     closeDB(&index_db);

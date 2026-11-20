@@ -1,5 +1,12 @@
 #include "../structs.h"
 
+/**
+ * Index files are sorted key column(s) followed by a trailing base-table
+ * rowid column. The header name is irrelevant; the last column is always
+ * the pointer (CREATE INDEX writes it as "rowid").
+ */
+int indexRowidColumn (struct DB *index_db);
+
 enum IndexSearchResult indexPrimarySeek (
     struct DB *db,
     enum Function predicate_op,
