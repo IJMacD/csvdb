@@ -744,6 +744,36 @@ static int parseFunction(const char *value, const char *query, size_t *index, st
         }
     }
 
+    // NOW(LOCAL|UTC|Z) and AT_TIME_ZONE(ts, LOCAL|UTC|Z) — bare keywords
+    if (node->function == FUNC_DATE_NOW && node->child_count == 1)
+    {
+        struct Node *zone = &node->children[0];
+        if (zone->function == FUNC_UNITY &&
+            (zone->field.index == FIELD_UNKNOWN ||
+             zone->field.index == FIELD_CONSTANT) &&
+            (strcmp(zone->field.text, "LOCAL") == 0 ||
+             strcmp(zone->field.text, "UTC") == 0 ||
+             strcmp(zone->field.text, "Z") == 0))
+        {
+            zone->field.index = FIELD_CONSTANT;
+            zone->field.table_id = TABLE_NONE;
+        }
+    }
+    if (node->function == FUNC_AT_TIME_ZONE && node->child_count == 2)
+    {
+        struct Node *zone = &node->children[1];
+        if (zone->function == FUNC_UNITY &&
+            (zone->field.index == FIELD_UNKNOWN ||
+             zone->field.index == FIELD_CONSTANT) &&
+            (strcmp(zone->field.text, "LOCAL") == 0 ||
+             strcmp(zone->field.text, "UTC") == 0 ||
+             strcmp(zone->field.text, "Z") == 0))
+        {
+            zone->field.index = FIELD_CONSTANT;
+            zone->field.table_id = TABLE_NONE;
+        }
+    }
+
     return flags;
 }
 

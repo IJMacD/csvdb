@@ -452,7 +452,7 @@ int sprintDateTime(char *output, struct DateTime *dt)
         return n;
     }
 
-    if (dt->tz_offset_minutes == 0)
+    if (dt->tz_offset_minutes == 0 && dt->tz_format != TZ_FMT_OFFSET)
     {
         output[n++] = 'Z';
         output[n] = '\0';

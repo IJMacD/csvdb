@@ -160,22 +160,51 @@ int evaluateFunction(
         return sprintf(output, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
     }
 
-    // NOW takes 0 parameters
+    // NOW() / NOW(UTC) / NOW(LOCAL) — optional bare keyword (or quoted synonym)
     if (function == FUNC_DATE_NOW)
     {
         struct DateTime dt = {0};
         time_t t = time(NULL);
         short off = 0;
+        int want_local = 0;
 
-        // If we can determine the local UTC offset, emit UTC (with Z).
-        // Otherwise emit an untagged local wall time (TZ_LOCAL).
-        if (getLocalTzOffsetMinutes(&off))
+        if (value_count >= 1 && values[0] != NULL && values[0][0] != '\0')
         {
-            dt.tz_offset_minutes = 0;
+            if (strcmp(values[0], "LOCAL") == 0)
+            {
+                want_local = 1;
+            }
+            else if (
+                strcmp(values[0], "UTC") == 0 ||
+                strcmp(values[0], "Z") == 0)
+            {
+                want_local = 0;
+            }
+            else
+            {
+                fprintf(
+                    stderr,
+                    "NOW() expects LOCAL, UTC, or Z; got %s\n",
+                    values[0]);
+                return 0;
+            }
+        }
+
+        if (!getLocalTzOffsetMinutes(&off))
+        {
+            // Offset unknown: always emit untagged local wall time
+            dt.tz_offset_minutes = TZ_LOCAL;
+            dt.tz_format = TZ_FMT_Z;
+        }
+        else if (want_local)
+        {
+            dt.tz_offset_minutes = off;
+            dt.tz_format = TZ_FMT_OFFSET; // LOCAL at UTC still shows +00:00
         }
         else
         {
-            dt.tz_offset_minutes = TZ_LOCAL;
+            dt.tz_offset_minutes = 0;
+            dt.tz_format = TZ_FMT_Z;
         }
         datetimeFromUnix(&dt, t);
         return sprintDateTime(output, &dt);
@@ -1014,6 +1043,7 @@ int evaluateFunction(
         }
 
         short target = 0;
+        int as_local = 0;
         if (strcmp(values[1], "LOCAL") == 0)
         {
             if (!getLocalTzOffsetMinutes(&target))
@@ -1021,6 +1051,7 @@ int evaluateFunction(
                 output[0] = '\0';
                 return 0;
             }
+            as_local = 1;
         }
         else if (!parseTzOffset(values[1], &target))
         {
@@ -1031,6 +1062,17 @@ int evaluateFunction(
         {
             output[0] = '\0';
             return 0;
+        }
+
+        // LOCAL / explicit ±offsets use ±HH:MM; UTC/Z keep trailing Z
+        if (as_local ||
+            (values[1][0] == '+' || values[1][0] == '-'))
+        {
+            dt.tz_format = TZ_FMT_OFFSET;
+        }
+        else
+        {
+            dt.tz_format = TZ_FMT_Z;
         }
 
         return sprintDateTime(output, &dt);

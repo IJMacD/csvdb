@@ -447,6 +447,11 @@ struct ResultSet {
  */
 #define TZ_LOCAL ((short)0x8000)
 
+/** Format offset 0 as Z (canonical UTC). */
+#define TZ_FMT_Z 0
+/** Always format as ±HH:MM (even when offset is 0 → +00:00). */
+#define TZ_FMT_OFFSET 1
+
 struct DateTime
 {
     /** Year, range approx -32768 to 32767 */
@@ -463,9 +468,14 @@ struct DateTime
     unsigned char second;
     /**
      * Minutes east of UTC for the wall-clock fields above.
-     * 0 = UTC (formatters append Z). TZ_LOCAL = unknown/local (no conversion).
+     * 0 = UTC. TZ_LOCAL = unknown/local (no conversion).
      */
     short tz_offset_minutes;
+    /**
+     * How to render a zero offset: TZ_FMT_Z → trailing Z; TZ_FMT_OFFSET → +00:00.
+     * Ignored when tz_offset_minutes is TZ_LOCAL or non-zero.
+     */
+    unsigned char tz_format;
 };
 
 struct VFS {
