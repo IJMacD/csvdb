@@ -246,6 +246,7 @@ FROM test WHERE PK(id) = 1000;
 | `CURRENT_DATE` | Today’s date (`YYYY-MM-DD`) |
 | `CURRENT_TIME` | Current time (`HH:MM:SS`) |
 | `CSVDB_VERSION` | Version string (also `VERSION()`) |
+| `INTERVAL n UNIT` | Fixed-length interval as an integer (see [Intervals](#intervals)) |
 
 ### Special fields
 
@@ -313,7 +314,31 @@ WHERE (value = 1 OR value = 13) AND name != 'Nope';  -- both values, then AND
 | `time + n` / `time - n` | Time ± seconds |
 | `time + time` / `time - time` | Time sum / difference |
 
-Common formats: date `YYYY-MM-DD`, datetime `YYYY-MM-DDTHH:MM:SS`, time/duration `HH:MM:SS` (hours may have 2–4 digits).
+`n` may be a plain integer or an `INTERVAL` constant (e.g. `CURRENT_DATE + INTERVAL 1 WEEK`). Day-scale intervals (`DAY`, `WEEK`) produce day counts; second-scale intervals (`HOUR`, `MINUTE`, `SECOND`) produce seconds — matching the `+`/`-` rules above. Calendar units (`MONTH`, `YEAR`, …) are not valid as bare `+`/`-` integers; use `DATE_ADD` / `DATE_SUB`.
+
+### Date / time formats
+
+| Kind | Examples |
+|------|----------|
+| Date | `YYYY-MM-DD` (also ordinal, week-date, and several alternate spellings; see parser) |
+| Datetime (local / unzoned) | `YYYY-MM-DDTHH:MM:SS` |
+| Datetime (UTC) | `YYYY-MM-DDTHH:MM:SSZ` |
+| Datetime (offset) | `YYYY-MM-DDTHH:MM:SS+09:00`, `…-05:30` — parsed, converted to UTC for storage |
+| Time / duration | `HH:MM:SS` (hours may have 2–4 digits) |
+
+UTC results format with a trailing `Z`. Local-offset results (e.g. `NOW(LOCAL)`, `AT_TIME_ZONE(…, LOCAL)`) format as `±HH:MM` (including `+00:00` when the offset is zero). Untagged datetimes are “local” (no zone); `AT_TIME_ZONE` cannot convert them.
+
+### Intervals
+
+```sql
+INTERVAL 1 WEEK          -- → 7   (days; for date + n)
+INTERVAL 1 HOUR          -- → 3600 (seconds; for datetime/time + n)
+INTERVAL 15 MINUTE       -- → 900
+INTERVAL 1 MONTH         -- → kept as "1 MONTH" for DATE_ADD / DATE_SUB
+INTERVAL('00:15:00')     -- function form: synonym for CAST(… AS INT) → seconds
+```
+
+Units (singular or plural): `YEAR`, `QUARTER`, `MONTH`, `WEEK`, `DAY`, `HOUR`, `MINUTE`, `SECOND`.
 
 ### Subqueries in expressions
 
@@ -355,14 +380,15 @@ FROM SEQUENCE SELECT DATE_ADD('2023-10-31', *) LIMIT 5;
 
 Unless noted, a `NULL` (empty) first argument makes the whole call `NULL`.
 
-### Scalar — no arguments
+### Scalar — no / optional arguments
 
 | Function | Returns |
 |----------|---------|
 | `RANDOM()` | Random integer in `0 … RAND_MAX` |
 | `VERSION()` | csvdb version string |
 | `TODAY()` | Current date (`YYYY-MM-DD`) |
-| `NOW()` | Current datetime (`YYYY-MM-DDTHH:MM:SS`) |
+| `NOW()` / `NOW(UTC)` / `NOW(Z)` | Current instant as UTC (`…Z`) when the local UTC offset is known; otherwise untagged local wall time |
+| `NOW(LOCAL)` | Current local wall time with numeric offset (`…+HH:MM`); untagged if the offset cannot be determined. Quoted `'LOCAL'` is also accepted |
 | `CLOCK()` | Current time (`HH:MM:SS`) |
 
 ### Scalar — string / encoding
@@ -405,13 +431,29 @@ Concatenation is via `||` (there is no `CONCAT()` call form).
 |----------|-----------|-------------|
 | `DATE` | `(datetime)` | Date part of a datetime |
 | `TIME` | `(datetime)` | Time part of a datetime |
+| `DATE_TRUNC` | `(unit, date\|datetime)` | Truncate to `YEAR` / `QUARTER` / `MONTH` / `WEEK` / `DAY` / `HOUR` / `MINUTE` / `SECOND` (bare unit keyword) |
 | `DATE_ADD` | `(date, days)` | Add days to a date |
-| `DATE_SUB` | `(date, days)` | Subtract days from a date |
+| `DATE_ADD` | `(date\|datetime, n, unit)` | Add *n* of `unit` (path A). Month/year overflow clamps to last valid day |
+| `DATE_ADD` | `(date\|datetime, INTERVAL n unit)` | Same with an interval operand (path B) |
+| `DATE_SUB` | *(same shapes as `DATE_ADD`)* | Subtract |
 | `DATE_DIFF` | `(date1, date2)` | `date1 − date2` in days |
+| `AT_TIME_ZONE` | `(datetime, zone)` | Convert a zoned datetime. `zone` is bare `LOCAL` / `UTC` / `Z`, or a quoted offset `'+09:00'` / `'-05:30'` / `'LOCAL'`. Fails on untagged (local) inputs |
 | `MAKE_DATE` | `([y [, m [, d]]])` | Build date (defaults: year 0, month/day 1) |
 | `MAKE_TIME` | `([h [, m [, s]]])` | Build time (all parts default to 0) |
 | `MAKE_DATETIME` | `([y [, m [, d [, h [, mi [, s]]]]]])` | Build datetime (year defaults 0; month/day default 1; time parts default 0) |
-| `INTERVAL` | `(x)` | Synonym for `CAST(x AS INT)` |
+| `INTERVAL` | `(x)` | Synonym for `CAST(x AS INT)` (see also bare `INTERVAL n UNIT` literals) |
+
+Examples:
+
+```sql
+SELECT DATE_TRUNC(MONTH, '2023-10-31');                 -- 2023-10-01
+SELECT DATE_ADD('2023-01-31', 1, MONTH);                -- 2023-02-28
+SELECT DATE_ADD('2023-01-31', INTERVAL 1 MONTH);        -- 2023-02-28
+SELECT DATE_ADD('2023-10-31T12:00:00', 2, HOUR);        -- 2023-10-31T14:00:00
+SELECT AT_TIME_ZONE('2023-10-31T03:00:00Z', '+09:00');  -- 2023-10-31T12:00:00+09:00
+SELECT AT_TIME_ZONE('2023-10-31T03:00:00Z', LOCAL);
+SELECT NOW(), NOW(LOCAL);
+```
 
 ### `EXTRACT`
 
@@ -433,6 +475,10 @@ EXTRACT(<part> FROM <date-or-datetime>)
 | `CENTURY` | `⌊year / 100⌋` |
 | `DECADE` | `⌊year / 10⌋` |
 | `QUARTER` | Quarter 1–4 |
+| `HOUR` | Hour |
+| `MINUTE` | Minute |
+| `SECOND` | Second |
+| `TIME` | Time string `HH:MM:SS` |
 | `JULIAN` | Julian day number |
 | `DATE` | Date string |
 | `DATETIME` | Datetime string |

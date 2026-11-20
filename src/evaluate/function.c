@@ -1113,6 +1113,7 @@ int evaluateFunction(
         dt.minute = 0;
         dt.second = 0;
         dt.tz_offset_minutes = TZ_LOCAL;
+        dt.tz_format = TZ_FMT_Z;
 
         if (value_count > 0)
         {
