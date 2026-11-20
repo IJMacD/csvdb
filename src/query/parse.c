@@ -401,7 +401,7 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                     node->filter = calloc(1, sizeof *node->filter);
 
                     int filter_result =
-                        parseComplexNode(query, &index, node->filter, q);
+                        parseNodeList(query, &index, node->filter, q);
                     if (filter_result < 0)
                     {
                         return filter_result;
@@ -735,32 +735,18 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
         {
             q->flags |= FLAG_HAVE_PREDICATE;
 
-            while (query[index] != '\0' && query[index] != ';')
+            struct Node *p = allocatePredicateNode(q);
+
+            int result = parseNodeList(query, &index, p, q);
+            if (result < 0)
             {
-                struct Node *p = allocatePredicateNode(q);
+                return result;
+            }
 
-                int result = parseComplexNode(query, &index, p, q);
-                if (result < 0)
-                {
-                    return result;
-                }
-
-                if ((p->function & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR)
-                {
-                    fprintf(stderr, "WHERE node: expected =|<|<=|>|>=\n");
-                    return -1;
-                }
-
-                skipWhitespace(query, &index);
-
-                if (strncmp(query + index, "AND", 3) == 0)
-                {
-                    index += 4;
-                }
-                else
-                {
-                    break;
-                }
+            if ((p->function & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR)
+            {
+                fprintf(stderr, "WHERE node: expected =|<|<=|>|>=\n");
+                return -1;
             }
         }
         else if (strcmp(keyword, "HAVING") == 0)
@@ -768,32 +754,18 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
             // HAVING implies an aggregation context even without GROUP BY
             q->flags |= FLAG_GROUP;
 
-            while (query[index] != '\0' && query[index] != ';')
+            struct Node *p = allocateHavingNode(q);
+
+            int result = parseNodeList(query, &index, p, q);
+            if (result < 0)
             {
-                struct Node *p = allocateHavingNode(q);
+                return result;
+            }
 
-                int result = parseComplexNode(query, &index, p, q);
-                if (result < 0)
-                {
-                    return result;
-                }
-
-                if ((p->function & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR)
-                {
-                    fprintf(stderr, "HAVING node: expected =|<|<=|>|>=\n");
-                    return -1;
-                }
-
-                skipWhitespace(query, &index);
-
-                if (strncmp(query + index, "AND", 3) == 0)
-                {
-                    index += 4;
-                }
-                else
-                {
-                    break;
-                }
+            if ((p->function & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR)
+            {
+                fprintf(stderr, "HAVING node: expected =|<|<=|>|>=\n");
+                return -1;
             }
         }
         else if (strcmp(keyword, "OFFSET") == 0)
