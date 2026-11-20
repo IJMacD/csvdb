@@ -586,14 +586,17 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
         addOrderStepsIfRequired(plan, query);
     }
     /* table_count == 1 */
-    // Special case if the only predicate is an OR operator node
-    // ONLY WORKS IF EACH 'OR' CHILD IS UNIQUE! <- Even then I'm not sure if strictly true
-    // Multiple SOURCE steps each push their own row list; SORT/REVERSE only
-    // operate on the top list, so ORDER BY would leave other branches unsorted.
+    // Special case if the only predicate is an OR of unique same-column EQ
+    // arms (as produced by IN (...)). Multiple SOURCE steps each push their
+    // own row list; SORT/REVERSE only operate on the top list, so ORDER BY
+    // would leave other branches unsorted. Cross-column or non-EQ OR must
+    // use a single filter — multi-source would duplicate rows that match
+    // more than one arm.
     else if (
         query->predicate_count == 1 &&
         query->predicate_nodes[0].function == OPERATOR_OR &&
         areChildrenUnique(&query->predicate_nodes[0]) &&
+        isSameColumnEqOr(&query->predicate_nodes[0]) &&
         !have_order_by &&
         // Multiple sources each apply LIMIT locally; skip when a global
         // LIMIT/OFFSET is present so a single OR filter + SLICE is used.
@@ -976,7 +979,36 @@ static void addJoinStepsIfRequired(struct Plan *plan, struct Query *q)
             int tableMap = getTableBitMap(join);
             int tableBit = 1 << i;
 
-            if (tableMap == tableBit)
+            // AND/OR bags are not binary comparisons — do not seek indexes or
+            // flipPredicate on their children. LOOP/CONSTANT join evaluate the
+            // whole tree (including nested OR from parseNodeList).
+            if (op == OPERATOR_OR || op == OPERATOR_AND)
+            {
+                if (tableMap == tableBit)
+                {
+                    addStepWithNode(plan, PLAN_CONSTANT_JOIN, join);
+                }
+                else if (tableMap & tableBit)
+                {
+                    addStepWithNode(plan, PLAN_LOOP_JOIN, join);
+                }
+                else if (tableMap < tableBit)
+                {
+                    addStepWithNode(plan, PLAN_TABLE_ACCESS_ROWID, join);
+                    addStep(plan, PLAN_CROSS_JOIN);
+                }
+                else
+                {
+                    fprintf(
+                        stderr,
+                        "Cannot join on a table we haven't got to yet. Table: "
+                        "%d TableBitMap: %X\n",
+                        i,
+                        tableMap);
+                    exit(-1);
+                }
+            }
+            else if (tableMap == tableBit)
             {
                 // the join predicate depends ONLY on this table
                 addStepWithNode(plan, PLAN_CONSTANT_JOIN, join);

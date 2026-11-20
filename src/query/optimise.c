@@ -437,6 +437,19 @@ void optimiseWhereToOn(struct Query *query)
             continue;
         }
 
+        // AND/OR bags are not binary comparisons; leave them in WHERE.
+        if (
+            predicate->function == OPERATOR_OR ||
+            predicate->function == OPERATOR_AND)
+        {
+            continue;
+        }
+
+        if (predicate->child_count < 2)
+        {
+            continue;
+        }
+
         struct Node *left_node = &predicate->children[0];
         struct Node *right_node = &predicate->children[1];
 
@@ -871,6 +884,44 @@ int areChildrenUnique(struct Node *node)
             {
                 return 0;
             }
+        }
+    }
+
+    return 1;
+}
+
+int isSameColumnEqOr(struct Node *node)
+{
+    if (node->function != OPERATOR_OR || node->child_count < 1)
+    {
+        return 0;
+    }
+
+    struct Node *first = &node->children[0];
+
+    if (
+        first->function != OPERATOR_EQ ||
+        first->child_count < 2)
+    {
+        return 0;
+    }
+
+    struct Node *first_left = &first->children[0];
+
+    for (int i = 1; i < node->child_count; i++)
+    {
+        struct Node *child = &node->children[i];
+
+        if (
+            child->function != OPERATOR_EQ ||
+            child->child_count < 2)
+        {
+            return 0;
+        }
+
+        if (!sameColumn(first_left, &child->children[0]))
+        {
+            return 0;
         }
     }
 
