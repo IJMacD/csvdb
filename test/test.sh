@@ -114,6 +114,19 @@ if ! cmp -s "$cli_out_space" "$cli_out_equals"; then
 fi
 rm -f "$cli_in" "$cli_out_space" "$cli_out_equals"
 
+# Unclosed function args must abort — not print an error and still run.
+bad_count_out=$(mktemp)
+if "$CSVDB" -N -F csv "FROM CALENDAR SELECT COUNT(* WHERE date BETWEEN '2026-11-01' ANDX '2027-01-01'" \
+        >"$bad_count_out" 2>/dev/null; then
+    rm -f "$bad_count_out"
+    cli_die "unclosed COUNT(* still succeeded"
+fi
+if [[ -s "$bad_count_out" ]]; then
+    rm -f "$bad_count_out"
+    cli_die "unclosed COUNT(* still produced output"
+fi
+rm -f "$bad_count_out"
+
 echo "csvdb version:" "$ver_flag" 
 
 echo

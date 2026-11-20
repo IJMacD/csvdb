@@ -321,7 +321,11 @@ static int parseFunction(const char *value, const char *query, size_t *index, st
 
         struct Node *child = addChildNode(node);
 
-        parseNode(query, index, child, q);
+        int result = parseNode(query, index, child, q);
+        if (result < 0)
+        {
+            return result;
+        }
 
         skipWhitespace(query, index);
 
@@ -340,7 +344,11 @@ static int parseFunction(const char *value, const char *query, size_t *index, st
     {
         struct Node *child = addChildNode(node);
 
-        parseNode(query, index, child, q);
+        int result = parseNode(query, index, child, q);
+        if (result < 0)
+        {
+            return result;
+        }
 
         skipWhitespace(query, index);
 
@@ -600,7 +608,11 @@ static int parseFunction(const char *value, const char *query, size_t *index, st
         return -1;
     }
 
-    parseFunctionParams(query, index, node, q);
+    int result = parseFunctionParams(query, index, node, q);
+    if (result < 0)
+    {
+        return result;
+    }
 
     return flags;
 }
@@ -725,6 +737,11 @@ int parseNode(
     {
         // Parse first simple node
         flags |= parseSimpleNode(query, index, node, q);
+
+        if (flags < 0)
+        {
+            return flags;
+        }
     }
 
     while (query[*index] != '\0' && query[*index] != ';')
@@ -748,6 +765,11 @@ int parseNode(
 
             flags |= parseNode(query, index, next_child, q);
 
+            if (flags < 0)
+            {
+                return flags;
+            }
+
             if (query[*index] != ')')
             {
                 fprintf(stderr, "Expecting ')' after expression\n");
@@ -759,6 +781,11 @@ int parseNode(
         else
         {
             flags |= parseSimpleNode(query, index, next_child, q);
+
+            if (flags < 0)
+            {
+                return flags;
+            }
         }
     }
 
@@ -793,7 +820,11 @@ static int parseFunctionParams(
         }
         else
         {
-            parseNode(query, index, child_node, q);
+            int result = parseNode(query, index, child_node, q);
+            if (result < 0)
+            {
+                return result;
+            }
         }
 
         skipWhitespace(query, index);
