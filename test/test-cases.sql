@@ -254,3 +254,11 @@ FROM lefty AS l JOIN righty AS r ON l.id = r.id OR l.name = r.name SELECT l.id, 
 FROM lefty AS l JOIN righty AS r ON l.id = r.id OR l.id = 99 SELECT l.id, r.id ORDER BY l.id, r.id;
 FROM lefty AS l JOIN righty AS r ON l.id = 1 OR l.id = r.id SELECT l.id, r.id ORDER BY l.id, r.id;
 FROM lefty AS l JOIN righty AS r ON l.id = r.id AND l.name != 'x' SELECT l.id ORDER BY l.id;
+-- Boolean parentheses
+FROM ranks WHERE (value = 1 OR value = 13) AND name != 'Nope' ORDER BY value SELECT value, name;
+FROM ranks WHERE value = 1 OR (value = 13 AND name = 'Nope') SELECT value, name;
+FROM ranks WHERE (value = 1 OR value = 13) AND name = 'Nope' SELECT value, name;
+FROM ranks WHERE ((value = 1 OR value = 2) AND value < 10) OR value = 13 ORDER BY value SELECT value, name;
+FROM ranks WHERE (value = 1) SELECT value, name;
+FROM lefty AS l JOIN righty AS r ON (l.id = r.id OR l.name = r.name) SELECT l.id ORDER BY l.id;
+FROM ranks SELECT COUNT(*) FILTER (WHERE (value = 1 OR value = 13) AND name != 'x');

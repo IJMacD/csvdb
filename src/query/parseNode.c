@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 
@@ -1201,14 +1202,186 @@ static int matchKeyword(const char *query, size_t *index, const char *keyword)
 }
 
 /**
- * Parses complex nodes joined by AND / OR.
- * Does *not* return a flat list. Builds a tree with SQL precedence
+ * Keyword at i with a non-identifier on both sides (lookahead; no advance).
+ */
+static int hasKeywordAt(const char *query, size_t i, const char *keyword)
+{
+    size_t len = strlen(keyword);
+
+    if (strncmp(query + i, keyword, len) != 0)
+    {
+        return 0;
+    }
+
+    if (i > 0)
+    {
+        unsigned char prev = (unsigned char)query[i - 1];
+        if (isalnum(prev) || prev == '_')
+        {
+            return 0;
+        }
+    }
+
+    unsigned char next = (unsigned char)query[i + len];
+    if (next != '\0' && (isalnum(next) || next == '_'))
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+/**
+ * True if '(' at index groups a boolean/comparison expression rather than a
+ * math expression like (5 + 3). Looks for comparison ops or AND/OR inside
+ * the matching paren pair (depth 1), skipping strings and nested parens.
+ */
+static int isBooleanGroupingParen(const char *query, size_t index)
+{
+    if (query[index] != '(')
+    {
+        return 0;
+    }
+
+    int depth = 0;
+    int in_string = 0;
+    int saw_predicate = 0;
+
+    for (size_t i = index; query[i] != '\0'; i++)
+    {
+        char c = query[i];
+
+        if (in_string)
+        {
+            if (c == '\\' && query[i + 1] != '\0')
+            {
+                i++;
+                continue;
+            }
+            if (c == '\'')
+            {
+                in_string = 0;
+            }
+            continue;
+        }
+
+        if (c == '\'')
+        {
+            in_string = 1;
+            continue;
+        }
+
+        if (c == '(')
+        {
+            depth++;
+            continue;
+        }
+
+        if (c == ')')
+        {
+            depth--;
+            if (depth == 0)
+            {
+                return saw_predicate;
+            }
+            continue;
+        }
+
+        if (depth != 1)
+        {
+            continue;
+        }
+
+        // Comparison / predicate operators at the boolean-group level
+        if (
+            c == '=' ||
+            c == '!' ||
+            c == '<' ||
+            c == '>' ||
+            hasKeywordAt(query, i, "LIKE") ||
+            hasKeywordAt(query, i, "BETWEEN") ||
+            hasKeywordAt(query, i, "IN") ||
+            hasKeywordAt(query, i, "IS") ||
+            hasKeywordAt(query, i, "AND") ||
+            hasKeywordAt(query, i, "OR"))
+        {
+            saw_predicate = 1;
+        }
+    }
+
+    return 0;
+}
+
+/**
+ * One boolean primary: either a parenthesized boolean expr or a comparison.
+ */
+static int parseBooleanPrimary(
+    const char *query,
+    size_t *index,
+    struct Node *node,
+    struct Query *q)
+{
+    skipWhitespace(query, index);
+
+    if (query[*index] == '(' && isBooleanGroupingParen(query, *index))
+    {
+        // Wrap in FUNC_PARENS so outer AND/OR precedence cannot dig into the
+        // group (e.g. (a OR b) AND c must stay AND(OR(a,b), c)).
+        node->function = FUNC_PARENS;
+        struct Node *inner = addChildNode(node);
+
+        (*index)++;
+        skipWhitespace(query, index);
+
+        int flags = parseNodeList(query, index, inner, q);
+        if (flags < 0)
+        {
+            return flags;
+        }
+
+        skipWhitespace(query, index);
+
+        if (query[*index] != ')')
+        {
+            fprintf(stderr, "Expecting ')' after boolean expression\n");
+            return -1;
+        }
+
+        (*index)++;
+        return flags;
+    }
+
+    return parseComplexNode(query, index, node, q);
+}
+
+/**
+ * Promote FUNC_PARENS boolean wrappers so the final tree is plain AND/OR/EQ.
+ * Grouping only matters while AND/OR are still being combined.
+ */
+static void stripBooleanParens(struct Node *node)
+{
+    while (node->function == FUNC_PARENS && node->child_count == 1)
+    {
+        struct Node child = node->children[0];
+        free(node->children);
+        *node = child;
+    }
+
+    for (int i = 0; i < node->child_count; i++)
+    {
+        stripBooleanParens(&node->children[i]);
+    }
+}
+
+/**
+ * Parses complex nodes joined by AND / OR, with optional parentheses for
+ * grouping. Does *not* return a flat list. Builds a tree with SQL precedence
  * (AND binds tighter than OR):
- *      <complex> AND <complex> OR <complex> AND ...
+ *      <complex> AND <complex> OR (<complex> OR <complex>) AND ...
  */
 int parseNodeList(const char *query, size_t *index, struct Node *node, struct Query *q)
 {
-    int flags = parseComplexNode(query, index, node, q);
+    int flags = parseBooleanPrimary(query, index, node, q);
     if (flags < 0)
     {
         return flags;
@@ -1270,13 +1443,15 @@ int parseNodeList(const char *query, size_t *index, struct Node *node, struct Qu
 
         struct Node *next_child = addChildNode(target);
 
-        int result = parseComplexNode(query, index, next_child, q);
+        int result = parseBooleanPrimary(query, index, next_child, q);
         if (result < 0)
         {
             return result;
         }
         flags |= result;
     }
+
+    stripBooleanParens(node);
 
     return flags;
 }
