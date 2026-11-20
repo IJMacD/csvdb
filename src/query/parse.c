@@ -314,7 +314,12 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 
                     node->filter = calloc(1, sizeof *node->filter);
 
-                    parseComplexNode(query, &index, node->filter, q);
+                    int filter_result =
+                        parseComplexNode(query, &index, node->filter, q);
+                    if (filter_result < 0)
+                    {
+                        return filter_result;
+                    }
 
                     if (query[index] != ')')
                     {
@@ -553,7 +558,11 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 
                     struct Node *p = &table->join;
 
-                    parseNodeList(query, &index, p, q);
+                    int join_result = parseNodeList(query, &index, p, q);
+                    if (join_result < 0)
+                    {
+                        return join_result;
+                    }
 
                     skipWhitespace(query, &index);
                 }
