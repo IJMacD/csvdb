@@ -75,9 +75,10 @@ int evaluateFunction(
             dt.hour, dt.minute, dt.second);
     }
 
-    // All other functions take at least 1 parameter. If the field is NULL then
-    // the whole function evaluates to NULL.
-    if (values[0][0] == 0)
+    // Most functions take at least 1 parameter. If the first field is NULL then
+    // the whole function evaluates to NULL. Zero-arg builders (MAKE_DATE /
+    // MAKE_TIME / MAKE_DATETIME) are allowed through with defaults.
+    if (value_count > 0 && values[0][0] == 0)
     {
         output[0] = '\0';
         return 0;
@@ -933,37 +934,41 @@ int evaluateFunction(
     }
     else if (function == FUNC_MAKE_DATETIME)
     {
-        int y = 0;
-        int m = 0;
-        int d = 0;
-        int h = 0;
-        int i = 0;
-        int s = 0;
-
+        struct DateTime dt;
         // Default to 0
+        dt.year = 0;
+        // Default to 1 (same as MAKE_DATE)
+        dt.month = 1;
+        // Default to 1 (same as MAKE_DATE)
+        dt.day = 1;
+        // Default to 0
+        dt.hour = 0;
+        dt.minute = 0;
+        dt.second = 0;
+
         if (value_count > 0)
         {
-            y = atoi(values[0]);
+            dt.year = atoi(values[0]);
 
             if (value_count > 1)
             {
-                m = atoi(values[1]);
+                dt.month = atoi(values[1]);
 
                 if (value_count > 2)
                 {
-                    d = atoi(values[2]);
+                    dt.day = atoi(values[2]);
 
                     if (value_count > 3)
                     {
-                        h = atoi(values[3]);
+                        dt.hour = atoi(values[3]);
 
                         if (value_count > 4)
                         {
-                            i = atoi(values[4]);
+                            dt.minute = atoi(values[4]);
 
                             if (value_count > 5)
                             {
-                                s = atoi(values[5]);
+                                dt.second = atoi(values[5]);
                             }
                         }
                     }
@@ -971,10 +976,7 @@ int evaluateFunction(
             }
         }
 
-        return sprintf(
-            output,
-            "%04d-%02d-%02dT%02d:%02d:%02d",
-            y, m, d, h, i, s);
+        return sprintDateTime(output, &dt);
     }
 
     fprintf(stderr, "Unable to evaluate function %d\n", function);
