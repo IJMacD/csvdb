@@ -107,11 +107,10 @@ WHERE a = 1 AND b > 2
 WHERE name = 'spades' OR name = 'hearts'
 WHERE value = 1 OR value = 13 AND name = 'Nope'   -- AND before OR → value = 1
 WHERE value = 1 AND name = 'Ace' OR value = 13    -- (1 AND Ace) OR 13
+WHERE (value = 1 OR value = 13) AND name != 'Nope'  -- parens override precedence
 ```
 
-Predicates may be joined with `AND` and `OR`. **`AND` binds tighter than `OR`** (standard SQL). Boolean parentheses are not supported for regrouping; write the clauses in an order that matches the desired grouping, or use `IN (…)` for simple alternatives.
-
-The same `AND` / `OR` rules apply in `JOIN … ON`, `HAVING`, and `FILTER (WHERE …)`.
+Predicates may be joined with `AND` and `OR`. **`AND` binds tighter than `OR`** (standard SQL). Parentheses may regroup boolean expressions, including nested groups, in `WHERE`, `JOIN … ON`, `HAVING`, and `FILTER (WHERE …)`.
 
 ### `GROUP BY` / `HAVING`
 
@@ -282,20 +281,22 @@ FROM test WHERE PK(id) = 1000;
 
 From tightest to loosest:
 
-1. Function calls, parentheses around **scalar** expressions
-2. `*` `/` `%`
-3. `+` `-`
-4. `||`
-5. Comparisons (`=` `!=` `<` `<=` `>` `>=` `LIKE` `BETWEEN` `IN` `IS`)
-6. `AND`
-7. `OR`
+1. Parentheses — scalar expressions and boolean groups
+2. Function calls
+3. `*` `/` `%`
+4. `+` `-`
+5. `||`
+6. Comparisons (`=` `!=` `<` `<=` `>` `>=` `LIKE` `BETWEEN` `IN` `IS`)
+7. `AND`
+8. `OR`
 
 Examples:
 
 ```sql
 SELECT 5 + 3 * 3;                          -- 14
-SELECT (5 + 3) * 3;                        -- 24  (parens only for scalars)
-WHERE value = 1 OR value = 13 AND name = 'Nope';  -- value = 1 OR (value = 13 AND …)
+SELECT (5 + 3) * 3;                        -- 24
+WHERE value = 1 OR value = 13 AND name = 'Nope';     -- value = 1 OR (value = 13 AND …)
+WHERE (value = 1 OR value = 13) AND name != 'Nope';  -- both values, then AND
 ```
 
 ### Date / time arithmetic with `+` / `-`
@@ -516,7 +517,7 @@ SELECT julian, date, ordinalDate, weekDate;
 
 1. **Declarative clause order** — write clauses in whatever order is readable.
 2. **Optional `SELECT` / `FROM`** — `FROM test LIMIT 5` and `SELECT 1 + 1` are both fine.
-3. **Not supported** — `UNION` / `INTERSECT` / `EXCEPT`, `RIGHT JOIN` / `FULL JOIN`, parentheses for regrouping `AND`/`OR` predicates.
+3. **Not supported** — `UNION` / `INTERSECT` / `EXCEPT`, `RIGHT JOIN` / `FULL JOIN`.
 
 ---
 
