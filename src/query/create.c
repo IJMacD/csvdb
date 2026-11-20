@@ -239,6 +239,9 @@ static int create_index(
         columns[i].children = NULL;
     }
 
+    // Always append the base-table rowid as the last column. Seek/scan
+    // paths use that position (indexRowidColumn); the "rowid" name is
+    // conventional only.
     columns[field_count].function = FUNC_UNITY;
     strcpy(columns[field_count].alias, "rowid");
     columns[field_count].field.table_id = 0;

@@ -14,6 +14,10 @@ static int indexWalk(
     struct RowList * row_list
 );
 
+int indexRowidColumn (struct DB *index_db) {
+    return index_db->field_count - 1;
+}
+
 /**
  * Just a unique seek but we know that [index rowid] == [table rowid]
  */
@@ -178,8 +182,9 @@ enum IndexSearchResult indexUniqueSeek (
  * @brief Scan the entire index writing each rowid to specified row_list
  *
  * @param index_db
- * @param rowid_column column containing the rowid in the index (usually 1);
- * -1 means return index rowid (e.g. Primary Key)
+ * @param rowid_column column containing the base-table rowid (last column;
+ * use indexRowidColumn()); FIELD_ROW_INDEX means return the index's own
+ * row number (e.g. Primary Key / covering)
  * @param row_list
  * @param limit
  *
@@ -214,8 +219,9 @@ enum IndexSearchResult indexScan (
  * range in the order of the index
  *
  * @param index_db
- * @param rowid_column column containing the rowid in the index (usually 1);
- * -1 means return index rowid (e.g. Primary Key)
+ * @param rowid_column column containing the base-table rowid (last column;
+ * use indexRowidColumn()); FIELD_ROW_INDEX means return the index's own
+ * row number (e.g. Primary Key / covering)
  * @param predicate_op comparison operator;
  * @param predicate_value
  * @param row_list
@@ -374,17 +380,11 @@ enum IndexSearchResult indexSeek (
  * @brief Walk from lower to upper (exclusive) bounds adding rowids to a RowList
  *
  * @param db
- * @param rowid_column Column index containing rowid, or -1 for index rowid
- * @param lower_index inclusive
- * @param upper_index exclusive
- * @param row_list output RowList
- *
- * @return Number of rows added
- */
-
-/**
  * Seek with both a lower and upper bound on the same index column.
  * Bound math mirrors indexSeek() for GE/GT/LE/LT.
+ *
+ * @param rowid_column last index column (indexRowidColumn()), or
+ * FIELD_ROW_INDEX for the index's own row number
  */
 enum IndexSearchResult indexBoundedSeek (
     struct DB *index_db,

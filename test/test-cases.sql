@@ -262,3 +262,6 @@ FROM ranks WHERE ((value = 1 OR value = 2) AND value < 10) OR value = 13 ORDER B
 FROM ranks WHERE (value = 1) SELECT value, name;
 FROM lefty AS l JOIN righty AS r ON (l.id = r.id OR l.name = r.name) SELECT l.id ORDER BY l.id;
 FROM ranks SELECT COUNT(*) FILTER (WHERE (value = 1 OR value = 13) AND name != 'x');
+-- Index rowid is the last column by position (header need not be named "rowid")
+FROM suits WHERE UNIQUE('suits_by_name.unique') = 'hearts' SELECT name, symbol;
+FROM suits WHERE UNIQUE('suits_by_name.unique') >= 'diamonds' ORDER BY name SELECT name;
