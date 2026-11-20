@@ -482,6 +482,9 @@ Virtual table of integers.
 ```sql
 FROM SEQUENCE WHERE value < 10;
 FROM SEQUENCE OFFSET 5 ROWS LIMIT 10;
+
+-- Arithmetic progression via MOD / % (here 3n+2: 2, 5, 8, …)
+FROM SEQUENCE WHERE value % 3 = 2 AND value < 20;
 ```
 
 ### `CALENDAR`
