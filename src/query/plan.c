@@ -979,7 +979,36 @@ static void addJoinStepsIfRequired(struct Plan *plan, struct Query *q)
             int tableMap = getTableBitMap(join);
             int tableBit = 1 << i;
 
-            if (tableMap == tableBit)
+            // AND/OR bags are not binary comparisons — do not seek indexes or
+            // flipPredicate on their children. LOOP/CONSTANT join evaluate the
+            // whole tree (including nested OR from parseNodeList).
+            if (op == OPERATOR_OR || op == OPERATOR_AND)
+            {
+                if (tableMap == tableBit)
+                {
+                    addStepWithNode(plan, PLAN_CONSTANT_JOIN, join);
+                }
+                else if (tableMap & tableBit)
+                {
+                    addStepWithNode(plan, PLAN_LOOP_JOIN, join);
+                }
+                else if (tableMap < tableBit)
+                {
+                    addStepWithNode(plan, PLAN_TABLE_ACCESS_ROWID, join);
+                    addStep(plan, PLAN_CROSS_JOIN);
+                }
+                else
+                {
+                    fprintf(
+                        stderr,
+                        "Cannot join on a table we haven't got to yet. Table: "
+                        "%d TableBitMap: %X\n",
+                        i,
+                        tableMap);
+                    exit(-1);
+                }
+            }
+            else if (tableMap == tableBit)
             {
                 // the join predicate depends ONLY on this table
                 addStepWithNode(plan, PLAN_CONSTANT_JOIN, join);

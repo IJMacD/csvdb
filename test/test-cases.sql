@@ -249,3 +249,8 @@ FROM ranks WHERE value = 1 AND name = 'Ace' OR value = 13 ORDER BY value SELECT 
 FROM ranks WHERE value = 1 OR name = 'Ace' SELECT value, name;
 FROM ranks SELECT COUNT(*) FILTER (WHERE value = 1 OR value = 13);
 FROM ranks GROUP BY name HAVING name = 'Ace' OR name = 'King' ORDER BY name SELECT name;
+-- JOIN ON OR (same parseNodeList plumbing)
+FROM lefty AS l JOIN righty AS r ON l.id = r.id OR l.name = r.name SELECT l.id, l.name, r.id, r.name ORDER BY l.id;
+FROM lefty AS l JOIN righty AS r ON l.id = r.id OR l.id = 99 SELECT l.id, r.id ORDER BY l.id, r.id;
+FROM lefty AS l JOIN righty AS r ON l.id = 1 OR l.id = r.id SELECT l.id, r.id ORDER BY l.id, r.id;
+FROM lefty AS l JOIN righty AS r ON l.id = r.id AND l.name != 'x' SELECT l.id ORDER BY l.id;

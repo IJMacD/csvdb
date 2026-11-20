@@ -437,6 +437,24 @@ void evaluateNodeTreePartial(
 
     if (getTableBitMap(node) < bit_map_limit)
     {
+        // Fully known from outer tables. Collapse operators to ALWAYS/NEVER
+        // so AND/OR bags stay valid for evaluateOperatorNode*; other nodes
+        // become constant UNITY values. Drop children so leftover field refs
+        // do not pollute getTableBitMap.
+        if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR)
+        {
+            int result = evaluateOperatorNode(
+                tables,
+                list_id,
+                result_index,
+                node);
+
+            freeNode(node);
+            clearNode(node);
+            node->function = result ? OPERATOR_ALWAYS : OPERATOR_NEVER;
+            return;
+        }
+
         evaluateNode(
             tables,
             list_id,
