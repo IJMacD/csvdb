@@ -353,7 +353,7 @@ INTERVAL 1 MONTH         -- → kept as "1 MONTH" for DATE_ADD / DATE_SUB
 INTERVAL('00:15:00')     -- function form: synonym for CAST(… AS INT) → seconds
 ```
 
-Units (singular or plural): `YEAR`, `QUARTER`, `MONTH`, `WEEK`, `DAY`, `HOUR`, `MINUTE`, `SECOND`.
+Units (singular or plural): `MILLENNIUM` / `MILLENNIA`, `CENTURY` / `CENTURIES`, `DECADE` / `DECADES`, `YEAR`, `QUARTER`, `MONTH`, `WEEK`, `DAY`, `HOUR`, `MINUTE`, `SECOND`. Calendar units (`MILLENNIUM` … `MONTH`) are for `DATE_ADD` / `DATE_SUB` / `DATE_TRUNC`; only `WEEK`/`DAY`/`HOUR`/`MINUTE`/`SECOND` fold to integers for `+`/`-`.
 
 ### Subqueries in expressions
 
@@ -446,7 +446,7 @@ Concatenation is via `||` (there is no `CONCAT()` call form).
 |----------|-----------|-------------|
 | `DATE` | `(datetime)` | Date part of a datetime |
 | `TIME` | `(datetime)` | Time part of a datetime |
-| `DATE_TRUNC` | `(unit, date\|datetime)` | Truncate to `YEAR` / `QUARTER` / `MONTH` / `WEEK` / `DAY` / `HOUR` / `MINUTE` / `SECOND` (bare unit keyword) |
+| `DATE_TRUNC` | `(unit, date\|datetime)` | Truncate to `MILLENNIUM` / `CENTURY` / `DECADE` / `YEAR` / `QUARTER` / `MONTH` / `WEEK` / `DAY` / `HOUR` / `MINUTE` / `SECOND` (bare unit keyword). Coarser year units use the same floor division as `EXTRACT` (e.g. decade of 2023 → `2020-01-01`) |
 | `DATE_ADD` | `(date, days)` | Add days to a date |
 | `DATE_ADD` | `(date\|datetime, n, unit)` | Add *n* of `unit` (path A). Month/year overflow clamps to last valid day |
 | `DATE_ADD` | `(date\|datetime, INTERVAL n unit)` | Same with an interval operand (path B) |
@@ -462,6 +462,9 @@ Examples:
 
 ```sql
 SELECT DATE_TRUNC(MONTH, '2023-10-31');                 -- 2023-10-01
+SELECT DATE_TRUNC(DECADE, '2023-10-31');                -- 2020-01-01
+SELECT DATE_TRUNC(CENTURY, '2023-10-31');               -- 2000-01-01
+SELECT DATE_TRUNC(MILLENNIUM, '2023-10-31');            -- 2000-01-01
 SELECT DATE_ADD('2023-01-31', 1, MONTH);                -- 2023-02-28
 SELECT DATE_ADD('2023-01-31', INTERVAL 1 MONTH);        -- 2023-02-28
 SELECT DATE_ADD('2023-10-31T12:00:00', 2, HOUR);        -- 2023-10-31T14:00:00

@@ -772,6 +772,13 @@ enum DateUnit parseDateUnit(const char *unit)
         return DATE_UNIT_INVALID;
     }
 
+    if (strcmp(unit, "MILLENNIUM") == 0 || strcmp(unit, "MILLENNIUMS") == 0 ||
+        strcmp(unit, "MILLENNIA") == 0)
+        return DATE_UNIT_MILLENNIUM;
+    if (strcmp(unit, "CENTURY") == 0 || strcmp(unit, "CENTURIES") == 0)
+        return DATE_UNIT_CENTURY;
+    if (strcmp(unit, "DECADE") == 0 || strcmp(unit, "DECADES") == 0)
+        return DATE_UNIT_DECADE;
     if (strcmp(unit, "YEAR") == 0 || strcmp(unit, "YEARS") == 0)
         return DATE_UNIT_YEAR;
     if (strcmp(unit, "QUARTER") == 0 || strcmp(unit, "QUARTERS") == 0)
@@ -943,6 +950,18 @@ void dateAddUnit(struct DateTime *dt, int count, enum DateUnit unit)
 
     switch (unit)
     {
+    case DATE_UNIT_MILLENNIUM:
+        dateAddUnit(dt, count * 1000, DATE_UNIT_YEAR);
+        break;
+
+    case DATE_UNIT_CENTURY:
+        dateAddUnit(dt, count * 100, DATE_UNIT_YEAR);
+        break;
+
+    case DATE_UNIT_DECADE:
+        dateAddUnit(dt, count * 10, DATE_UNIT_YEAR);
+        break;
+
     case DATE_UNIT_YEAR:
         dt->year += count;
         {
@@ -1025,6 +1044,31 @@ void dateTrunc(struct DateTime *dt, enum DateUnit unit)
 {
     switch (unit)
     {
+    case DATE_UNIT_MILLENNIUM:
+        // Same floor division as EXTRACT(MILLENNIUM …): year / 1000
+        dt->year = (dt->year / 1000) * 1000;
+        dt->month = 1;
+        dt->day = 1;
+        dt->hour = 0;
+        dt->minute = 0;
+        dt->second = 0;
+        break;
+    case DATE_UNIT_CENTURY:
+        dt->year = (dt->year / 100) * 100;
+        dt->month = 1;
+        dt->day = 1;
+        dt->hour = 0;
+        dt->minute = 0;
+        dt->second = 0;
+        break;
+    case DATE_UNIT_DECADE:
+        dt->year = (dt->year / 10) * 10;
+        dt->month = 1;
+        dt->day = 1;
+        dt->hour = 0;
+        dt->minute = 0;
+        dt->second = 0;
+        break;
     case DATE_UNIT_YEAR:
         dt->month = 1;
         dt->day = 1;
