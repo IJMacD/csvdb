@@ -87,9 +87,9 @@ int sequence_fullTableAccess (
 ) {
     // We might get a single AND node rather than a list
     if (predicate_count == 1 && predicates[0].function == OPERATOR_AND) {
-        // Replace node list with our child list
-        predicates = predicates[0].children;
+        // Replace node list with our child list (count before reassignment)
         predicate_count = predicates[0].child_count;
+        predicates = predicates[0].children;
     }
 
     // Inclusive
@@ -109,6 +109,7 @@ int sequence_fullTableAccess (
 
         // Must be an operator
         if ((predicate->function & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR) {
+            have_unprocessed_predicates = 1;
             continue;
         }
 
@@ -126,6 +127,7 @@ int sequence_fullTableAccess (
 
         // We're only looking for constants (which are direct node constants)
         if (node_right->function != FUNC_UNITY) {
+            have_unprocessed_predicates = 1;
             continue;
         }
 
@@ -133,6 +135,7 @@ int sequence_fullTableAccess (
 
             // This shouldn't be anything else but check just in case
             if (field_left->index != 0) {
+                have_unprocessed_predicates = 1;
                 continue;
             }
 
@@ -154,13 +157,26 @@ int sequence_fullTableAccess (
             else if (op == OPERATOR_GE) {
                 start = MAX(start, value);
             }
+            else {
+                // NE, LIKE, etc. — fall back to row evaluation
+                have_unprocessed_predicates = 1;
+            }
         }
         else if (node_left->function == FUNC_MOD) {
             struct Node *node_left_left = &node_left->children[0];
             struct Node *node_left_right = &node_left->children[1];
 
-            // This shouldn't be anything else but check just in case
-            if (node_left_left->field.index != 0) {
+            // Optimised arithmetic progression: value % k = n
+            // (column on the left of %, constants elsewhere). Forms like
+            // k % value = 0 must be evaluated per row — do not drop them.
+            if (
+                op != OPERATOR_EQ ||
+                node_left_left->function != FUNC_UNITY ||
+                node_left_left->field.index != 0 ||
+                node_left_right->function != FUNC_UNITY ||
+                node_left_right->field.index != FIELD_CONSTANT
+            ) {
+                have_unprocessed_predicates = 1;
                 continue;
             }
 

@@ -296,3 +296,9 @@ SELECT AT_TIME_ZONE('2023-10-31T03:00:00Z', LOCAL);
 SELECT NOW(UTC);
 SELECT NOW(LOCAL);
 SELECT NOW('LOCAL');
+-- SEQUENCE % optimisation: value % k = n → arithmetic progression
+FROM SEQUENCE WHERE value < 20 AND value % 3 = 2 SELECT value;
+-- Constant % column must not be dropped by SEQUENCE (evaluate per row)
+FROM SEQUENCE WHERE value BETWEEN 1 AND 20 AND 15 % value = 0 SELECT value;
+-- Prime: no divisors in range → empty (must not return every row)
+FROM SEQUENCE WHERE value BETWEEN 2 AND 30 AND 97 % value = 0 SELECT value;
