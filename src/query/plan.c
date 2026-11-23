@@ -748,6 +748,21 @@ static enum PlanStepType findIndexSource(struct Query *query)
 
     if (field_left->index == FIELD_ROW_INDEX)
     {
+        // SEQUENCE/CALENDAR bound multi-predicate and open-ended ranges in
+        // fullTableAccess. PLAN_TABLE_SCAN only handles a single EQ/LT/LE.
+        enum VFSType vfs = query->tables[0].db->vfs;
+        if (vfs == VFS_SEQUENCE || vfs == VFS_CALENDAR)
+        {
+            if (
+                query->predicate_count == 1 &&
+                (op == OPERATOR_EQ ||
+                 op == OPERATOR_LT ||
+                 op == OPERATOR_LE))
+            {
+                return PLAN_TABLE_SCAN;
+            }
+            return 0;
+        }
         return PLAN_TABLE_SCAN;
     }
 
