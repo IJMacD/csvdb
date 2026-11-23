@@ -448,8 +448,8 @@ Concatenation is via `||` (there is no `CONCAT()` call form).
 | `TIME` | `(datetime)` | Time part of a datetime |
 | `DATE_TRUNC` | `(unit, date\|datetime)` | Truncate to `MILLENNIUM` / `CENTURY` / `DECADE` / `YEAR` / `QUARTER` / `MONTH` / `WEEK` / `DAY` / `HOUR` / `MINUTE` / `SECOND` (bare unit keyword). Coarser year units use the same floor division as `EXTRACT` (e.g. decade of 2023 → `2020-01-01`) |
 | `DATE_ADD` | `(date, days)` | Add days to a date |
-| `DATE_ADD` | `(date\|datetime, n, unit)` | Add *n* of `unit` (path A). Month/year overflow clamps to last valid day |
-| `DATE_ADD` | `(date\|datetime, INTERVAL n unit)` | Same with an interval operand (path B) |
+| `DATE_ADD` | `(date\|datetime, n, unit)` | Add *n* of `unit`. Month/year overflow clamps to last valid day |
+| `DATE_ADD` | `(date\|datetime, INTERVAL n unit)` | Same with an interval operand |
 | `DATE_SUB` | *(same shapes as `DATE_ADD`)* | Subtract |
 | `DATE_DIFF` | `(date1, date2)` | `date1 − date2` in days |
 | `AT_TIME_ZONE` | `(datetime, zone)` | Convert a zoned datetime. `zone` is bare `LOCAL` / `UTC` / `Z`, or a quoted offset `'+09:00'` / `'-05:30'` / `'LOCAL'`. Fails on untagged (local) inputs |
