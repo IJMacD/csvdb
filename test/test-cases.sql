@@ -302,3 +302,18 @@ FROM SEQUENCE WHERE value < 20 AND value % 3 = 2 SELECT value;
 FROM SEQUENCE WHERE value BETWEEN 1 AND 20 AND 15 % value = 0 SELECT value;
 -- Prime: no divisors in range → empty (must not return every row)
 FROM SEQUENCE WHERE value BETWEEN 2 AND 30 AND 97 % value = 0 SELECT value;
+-- Multi-MOD combined via LCM/CRT (multiples of 6)
+FROM SEQUENCE WHERE value < 30 AND value % 2 = 0 AND value % 3 = 0 SELECT value;
+-- Incongruent MOD pair → empty
+FROM SEQUENCE WHERE value < 30 AND value % 2 = 0 AND value % 2 = 1 SELECT value;
+-- SEQUENCE value is rowid: algebra rewrite value+1=10 → value=9
+FROM SEQUENCE WHERE value + 1 = 10 SELECT value, rowid;
+-- CALENDAR finer bounds inside year
+FROM CALENDAR WHERE year = 2024 AND month = 6 SELECT COUNT(*);
+FROM CALENDAR WHERE year = 2024 AND month = 6 ORDER BY date SELECT date LIMIT 1;
+FROM CALENDAR WHERE year = 2024 AND month = 6 ORDER BY date DESC SELECT date LIMIT 1;
+FROM CALENDAR WHERE year = 2020 AND quarter = 2 SELECT COUNT(*);
+FROM CALENDAR WHERE year = 2024 AND yearday = 60 SELECT date;
+FROM CALENDAR WHERE year = 2024 AND month = 2 AND day = 29 SELECT date;
+-- CALENDAR weekday stepping within a bounded range
+FROM CALENDAR WHERE date BETWEEN '2024-01-01' AND '2024-01-31' AND weekday = 3 SELECT date;

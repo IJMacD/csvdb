@@ -539,7 +539,7 @@ Virtual table of integers.
 
 | Column | Description |
 |--------|-------------|
-| `value` | Integer from 0 up to 10 000 000 − 1 |
+| `value` / `rowid` | Integer from 0 up to 10 000 000 − 1 (same column; supports rowid algebra) |
 
 ```sql
 FROM SEQUENCE WHERE value < 10;
@@ -547,11 +547,17 @@ FROM SEQUENCE OFFSET 5 ROWS LIMIT 10;
 
 -- Arithmetic progression via MOD / % (here 3n+2: 2, 5, 8, …)
 FROM SEQUENCE WHERE value % 3 = 2 AND value < 20;
+
+-- Multiple MOD predicates combine when congruent (LCM / CRT)
+FROM SEQUENCE WHERE value < 30 AND value % 2 = 0 AND value % 3 = 0;
+
+-- Rowid algebra: value + 1 = 10 → value = 9
+FROM SEQUENCE WHERE value + 1 = 10;
 ```
 
 ### `CALENDAR`
 
-Virtual date table (one row per Julian day). Prefer predicates on `date` / `julian` so the planner can bound the scan.
+Virtual date table (one row per Julian day). Prefer predicates on `date` / `julian` so the planner can bound the scan. Equality on `year` plus `month`, `quarter`, `yearday`, or `month`+`day` further tightens the julian window; `weekday = N` steps by 7 within a bounded range.
 
 | Column | Description |
 |--------|-------------|

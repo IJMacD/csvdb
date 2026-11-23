@@ -71,11 +71,20 @@ static char *field_names[] = {
 
 const int month_lengths[] = {31,28,31,30,31,30,31,31,30,31,30,31};
 
+struct CalendarScanHints {
+    int eq_month;      /* 1–12, or -1 */
+    int eq_quarter;    /* 1–4, or -1 */
+    int eq_yearday;    /* 1–366, or -1 */
+    int eq_day;        /* 1–31, or -1 */
+    int eq_weekday;    /* 1–7 (Mon–Sun), or -1 */
+};
+
 static int getJulianRange (
     struct Node *predicates,
     int predicate_count,
     int *julian_start,
-    int *julian_end
+    int *julian_end,
+    struct CalendarScanHints *hints
 );
 
 static void getSingleJulianRange (
@@ -83,6 +92,14 @@ static void getSingleJulianRange (
     int *julian_start,
     int *julian_end
 );
+
+static void tightenJulianRangeFromParts (
+    int *julian_start,
+    int *julian_end,
+    const struct CalendarScanHints *hints
+);
+
+static int calendarWeekdayFromJulian (int julian);
 
 static int printDate (
     char *value,
@@ -447,10 +464,22 @@ int calendar_fullTableAccess (
     int limit_value
 ) {
     int julian = -1, max_julian = -1;
+    struct CalendarScanHints hints = {
+        .eq_month = -1,
+        .eq_quarter = -1,
+        .eq_yearday = -1,
+        .eq_day = -1,
+        .eq_weekday = -1,
+    };
 
     // Try to get range from predicates
-    int have_unprocessed_predicates =
-        getJulianRange(predicates, predicate_count, &julian, &max_julian);
+    int have_unprocessed_predicates = getJulianRange(
+        predicates,
+        predicate_count,
+        &julian,
+        &max_julian,
+        &hints
+    );
 
     // Default to min and max
     // There could still be a predicate which limits the output further - we
@@ -474,15 +503,21 @@ int calendar_fullTableAccess (
         exit(-1);
     }
 
+    int step = 1;
+    if (hints.eq_weekday >= 1 && hints.eq_weekday <= 7 && julian < max_julian) {
+        int wd = calendarWeekdayFromJulian(julian);
+        int delta = (hints.eq_weekday - wd + 7) % 7;
+        julian += delta;
+        step = 7;
+    }
+
     int count = 0;
 
     struct Table table;
     table.db = db;
 
-    for (; julian < max_julian; julian++) {
+    for (; julian < max_julian; julian += step) {
         int matching = 1;
-
-        // printf("Julian: %d\n", julian);
 
         // Perform filtering if necessary
         if (have_unprocessed_predicates) {
@@ -510,6 +545,108 @@ int calendar_fullTableAccess (
     return count;
 }
 
+static int calendarWeekdayFromJulian (int julian) {
+    struct DateTime dt = {0};
+    datetimeFromJulian(&dt, julian);
+    return datetimeGetWeekDay(&dt);
+}
+
+/**
+ * When the scan is already bounded to a single calendar year (typical after
+ * year = Y), tighten further using month / quarter / yearday / day EQ hints.
+ */
+static void tightenJulianRangeFromParts (
+    int *julian_start,
+    int *julian_end,
+    const struct CalendarScanHints *hints
+) {
+    if (*julian_start < 0 || *julian_end < 0 || *julian_start >= *julian_end) {
+        return;
+    }
+
+    struct DateTime dt_start = {0};
+    struct DateTime dt_last = {0};
+    datetimeFromJulian(&dt_start, *julian_start);
+    datetimeFromJulian(&dt_last, *julian_end - 1);
+
+    // Only compose inside a single year window
+    if (dt_start.year != dt_last.year) {
+        return;
+    }
+
+    int year = dt_start.year;
+    int month = hints->eq_month;
+    int day = hints->eq_day;
+    int quarter = hints->eq_quarter;
+    int yearday = hints->eq_yearday;
+
+    struct DateTime lo = {0};
+    struct DateTime hi = {0};
+    lo.year = year;
+    hi.year = year;
+
+    if (yearday >= 1) {
+        int max_yd = isLeapYear(year) ? 366 : 365;
+        if (yearday > max_yd) {
+            *julian_start = *julian_end;
+            return;
+        }
+        lo.month = 1;
+        lo.day = 1;
+        int base = datetimeGetJulian(&lo);
+        *julian_start = MAX(*julian_start, base + yearday - 1);
+        *julian_end = MIN(*julian_end, base + yearday);
+        return;
+    }
+
+    if (quarter >= 1 && quarter <= 4 && month < 0) {
+        month = (quarter - 1) * 3 + 1;
+        // Range is the whole quarter unless day is also set (then month+day)
+        lo.month = month;
+        lo.day = 1;
+        hi.month = month + 3;
+        hi.day = 1;
+        if (hi.month > 12) {
+            hi.year++;
+            hi.month -= 12;
+        }
+        int js = datetimeGetJulian(&lo);
+        int je = datetimeGetJulian(&hi);
+        *julian_start = MAX(*julian_start, js);
+        *julian_end = MIN(*julian_end, je);
+        return;
+    }
+
+    if (month >= 1 && month <= 12) {
+        if (day >= 1) {
+            int dim = daysInMonth(year, month);
+            if (day > dim) {
+                *julian_start = *julian_end;
+                return;
+            }
+            lo.month = month;
+            lo.day = day;
+            int js = datetimeGetJulian(&lo);
+            *julian_start = MAX(*julian_start, js);
+            *julian_end = MIN(*julian_end, js + 1);
+            return;
+        }
+
+        lo.month = month;
+        lo.day = 1;
+        hi.month = month + 1;
+        hi.day = 1;
+        if (hi.month > 12) {
+            hi.year++;
+            hi.month = 1;
+        }
+        int js = datetimeGetJulian(&lo);
+        int je = datetimeGetJulian(&hi);
+        *julian_start = MAX(*julian_start, js);
+        *julian_end = MIN(*julian_end, je);
+    }
+}
+
 /**
  * @returns 1 if there are unprocessed predicates, 0 if all predicates are fully
  * satisfied
@@ -518,7 +655,8 @@ static int getJulianRange (
     struct Node *predicates,
     int predicate_count,
     int *julian_start,
-    int *julian_end
+    int *julian_end,
+    struct CalendarScanHints *hints
 ) {
     int have_unprocessed_predicates = 0;
 
@@ -573,6 +711,39 @@ static int getJulianRange (
             }
         }
         else {
+            // Collect EQ hints for parts that alone cannot bound the scan
+            if (
+                op == OPERATOR_EQ &&
+                predicate->child_count >= 2 &&
+                predicate->children[1].field.index == FIELD_CONSTANT
+            ) {
+                struct Field *field_left =
+                    (struct Field *)&predicate->children[0];
+                int val = atoi(predicate->children[1].field.text);
+
+                if (field_left->index == COL_MONTH && hints->eq_month < 0) {
+                    hints->eq_month = val;
+                }
+                else if (
+                    field_left->index == COL_QUARTER && hints->eq_quarter < 0)
+                {
+                    hints->eq_quarter = val;
+                }
+                else if (
+                    field_left->index == COL_YEARDAY && hints->eq_yearday < 0)
+                {
+                    hints->eq_yearday = val;
+                }
+                else if (field_left->index == COL_DAY && hints->eq_day < 0) {
+                    hints->eq_day = val;
+                }
+                else if (
+                    field_left->index == COL_WEEKDAY && hints->eq_weekday < 0)
+                {
+                    hints->eq_weekday = val;
+                }
+            }
+
             have_unprocessed_predicates = 1;
         }
 
@@ -582,6 +753,8 @@ static int getJulianRange (
         }
         #endif
     }
+
+    tightenJulianRangeFromParts(julian_start, julian_end, hints);
 
     return have_unprocessed_predicates;
 }
