@@ -536,23 +536,48 @@ static FILE *tryOpenIndexPath(
 }
 
 /**
- * Basename of a table stem (strip directory). `stem` may include a path.
+ * Try opening name (and name.csv) under a single directory.
+ * Writes the winning path into out. Returns open FILE* or NULL.
  */
-static const char *tableStemBasename(const char *stem)
+static FILE *searchIndexInDir(
+    const char *dir,
+    const char *name,
+    size_t name_len,
+    char *out,
+    size_t out_sz)
 {
-    const char *base = stem;
-    for (const char *p = stem; *p != '\0'; p++)
+    size_t dir_len = strlen(dir);
+    /* dir + '/' + name + optional ".csv" + NUL */
+    if (dir_len + 1 + name_len + 4 + 1 > out_sz)
     {
-        if (*p == '/')
+        return NULL;
+    }
+
+    memcpy(out, dir, dir_len);
+    out[dir_len] = '/';
+    memcpy(out + dir_len + 1, name, name_len + 1);
+
+    FILE *f = fopen(out, "r");
+    if (f != NULL)
+    {
+        return f;
+    }
+
+    if (name_len < 4 || strcmp(name + name_len - 4, ".csv") != 0)
+    {
+        memcpy(out + dir_len + 1 + name_len, ".csv", 5);
+        f = fopen(out, "r");
+        if (f != NULL)
         {
-            base = p + 1;
+            return f;
         }
     }
-    return base;
+
+    return NULL;
 }
 
 /**
- * Search configured index_dirs for name (and name.csv).
+ * Search index_write_dir then index_dirs for name (and name.csv).
  * Writes the winning path into out. Returns open FILE* or NULL.
  */
 static FILE *searchIndexDirs(
@@ -560,7 +585,7 @@ static FILE *searchIndexDirs(
     char *out,
     size_t out_sz)
 {
-    /* Absolute paths are not resolved via index_dirs */
+    /* Absolute paths are not resolved via index dirs */
     if (name[0] == '/')
     {
         return NULL;
@@ -569,33 +594,31 @@ static FILE *searchIndexDirs(
     const struct CsvdbConfig *cfg = csvdb_config();
     size_t name_len = strlen(name);
 
-    for (int i = 0; i < cfg->index_dir_count; i++)
+    if (cfg->has_index_write_dir)
     {
-        size_t dir_len = strlen(cfg->index_dirs[i]);
-        /* dir + '/' + name + optional ".csv" + NUL */
-        if (dir_len + 1 + name_len + 4 + 1 > out_sz)
-        {
-            continue;
-        }
-
-        memcpy(out, cfg->index_dirs[i], dir_len);
-        out[dir_len] = '/';
-        memcpy(out + dir_len + 1, name, name_len + 1);
-
-        FILE *f = fopen(out, "r");
+        FILE *f = searchIndexInDir(
+            cfg->index_write_dir,
+            name,
+            name_len,
+            out,
+            out_sz);
         if (f != NULL)
         {
             return f;
         }
+    }
 
-        if (name_len < 4 || strcmp(name + name_len - 4, ".csv") != 0)
+    for (int i = 0; i < cfg->index_dir_count; i++)
+    {
+        FILE *f = searchIndexInDir(
+            cfg->index_dirs[i],
+            name,
+            name_len,
+            out,
+            out_sz);
+        if (f != NULL)
         {
-            memcpy(out + dir_len + 1 + name_len, ".csv", 5);
-            f = fopen(out, "r");
-            if (f != NULL)
-            {
-                return f;
-            }
+            return f;
         }
     }
 
@@ -608,10 +631,11 @@ static FILE *searchIndexDirs(
  *
  * Lookup order for auto-named indexes:
  *   1. Beside the table: `<table_stem>__<col>.{unique,index}.csv`
- *   2. Each configured index_dirs entry, using the table basename only
+ *   2. index_write_dir (if set), then each index_dirs entry, using the
+ *      table basename only
  *
  * Explicit INDEX/UNIQUE names try the path as given, then `.csv`, then
- * index_dirs.
+ * index_write_dir / index_dirs.
  *
  * @param db struct DB * OUT - Database to populate with index, can be NULL
  *
@@ -728,7 +752,7 @@ enum IndexSearchType csv_findIndex(
         /* Fall back to configured index_dirs using the table basename */
         if (!f)
         {
-            const char *base = tableStemBasename(table_filename);
+            const char *base = csvdb_path_basename(table_filename);
             char auto_name[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 14];
 
             snprintf(

@@ -61,14 +61,24 @@ format = "box"
 headers = true
 
 [paths]
-# Searched after table-sidecar index paths, in order
+# Extra roots for unqualified table names (after cwd)
+data_dirs = ["./data", "~/datasets"]
+
+# Where CREATE INDEX writes when no path is given (basename under this dir)
+index_write_dir = "~/.cache/csvdb/indexes"
+
+# Searched after table-sidecar paths (and index_write_dir), in order
 index_dirs = [
   "~/.cache/csvdb/indexes",
 ]
+
+[defaults]
+# Enable --stats unless overridden on the CLI
+stats = false
 ```
 
 Pipes and redirects keep CSV output (and default headers) so scripts stay portable.
-CLI flags always win over config.
+CLI flags always win over config. `index_write_dir` is also searched when looking up indexes.
 
 ## Docker
 

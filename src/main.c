@@ -180,6 +180,7 @@ int main(int argc, char *argv[])
 
     int flags = 0;
     int headers_from_cli = 0;
+    int stats_from_cli = 0;
 
     FILE *output = stdout;
     const char *format_val = NULL;
@@ -330,6 +331,7 @@ int main(int argc, char *argv[])
         else if (strcmp(arg, "--stats") == 0)
         {
             flags |= OUTPUT_OPTION_STATS;
+            stats_from_cli = 1;
         }
         else if (strcmp(arg, "-f") == 0)
         {
@@ -486,6 +488,11 @@ int main(int argc, char *argv[])
             // Default: with headers (including non-TTY)
             flags |= OUTPUT_OPTION_HEADERS;
         }
+    }
+
+    if (!stats_from_cli && cfg->has_stats && cfg->stats)
+    {
+        flags |= OUTPUT_OPTION_STATS;
     }
 
 #ifdef PERSISTENT_TEMP

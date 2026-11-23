@@ -186,6 +186,73 @@ if command -v script >/dev/null 2>&1; then
     fi
 fi
 
+# index_write_dir: CREATE INDEX lands in the write dir and is still findable
+write_dir="$cfg_root/write-indexes"
+mkdir -p "$write_dir"
+cat > "$cfg_file" <<EOF
+[paths]
+index_write_dir = "$write_dir"
+EOF
+printf 'id,name\n1,alpha\n2,beta\n' > "$cfg_root/writeme.csv"
+cfg_prev_cwd=$PWD
+cd "$cfg_root" || cli_die "could not cd for index_write_dir test"
+CSVDB_CONFIG="$cfg_file" "$CSVDB" "CREATE INDEX ON writeme (name)" >/dev/null
+if [[ -e writeme__name.index.csv ]]; then
+    cd "$cfg_prev_cwd" || true
+    cli_die "index_write_dir still wrote a sidecar"
+fi
+if [[ ! -f "$write_dir/writeme__name.index.csv" ]]; then
+    cd "$cfg_prev_cwd" || true
+    cli_die "index_write_dir did not create index"
+fi
+write_hit=$(CSVDB_CONFIG="$cfg_file" "$CSVDB" -N -F csv \
+    "SELECT name FROM writeme WHERE name = 'beta'")
+if [[ "$write_hit" != "beta" ]]; then
+    cd "$cfg_prev_cwd" || true
+    cli_die "index_write_dir index not used: [$write_hit]"
+fi
+cd "$cfg_prev_cwd" || cli_die "could not restore cwd after index_write_dir test"
+
+# data_dirs: unqualified table name resolves under configured root
+data_dir="$cfg_root/datasets"
+mkdir -p "$data_dir"
+printf 'n\n9\n' > "$data_dir/away.csv"
+cat > "$cfg_file" <<EOF
+[paths]
+data_dirs = ["$data_dir"]
+EOF
+data_hit=$(CSVDB_CONFIG="$cfg_file" "$CSVDB" -N -F csv "SELECT n FROM away")
+if [[ "$data_hit" != "9" ]]; then
+    cli_die "data_dirs did not resolve table: [$data_hit]"
+fi
+data_miss=$(CSVDB_CONFIG= "$CSVDB" -N -F csv "SELECT n FROM away" 2>/dev/null || true)
+if [[ "$data_miss" == "9" ]]; then
+    cli_die "away.csv unexpectedly found without data_dirs"
+fi
+
+# defaults.stats: enables stats.csv without --stats
+cat > "$cfg_file" <<EOF
+[defaults]
+stats = true
+EOF
+stats_cwd=$(mktemp -d)
+cfg_prev_cwd=$PWD
+cd "$stats_cwd" || cli_die "could not cd for stats test"
+rm -f stats.csv
+CSVDB_CONFIG="$cfg_file" "$CSVDB" -N -F csv "SELECT 1" >/dev/null
+if [[ ! -f stats.csv ]]; then
+    cd "$cfg_prev_cwd" || true
+    cli_die "defaults.stats did not create stats.csv"
+fi
+rm -f stats.csv
+CSVDB_CONFIG= "$CSVDB" -N -F csv "SELECT 1" >/dev/null
+if [[ -f stats.csv ]]; then
+    cd "$cfg_prev_cwd" || true
+    cli_die "stats.csv created without defaults.stats or --stats"
+fi
+cd "$cfg_prev_cwd" || cli_die "could not restore cwd after stats test"
+rm -rf "$stats_cwd"
+
 rm -rf "$cfg_root"
 
 # Unclosed function args must abort — not print an error and still run.

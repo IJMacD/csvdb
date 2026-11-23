@@ -218,18 +218,22 @@ For a bare column predicate on the first table (e.g. `WHERE name = '…'`), the 
 1. Beside the table: `<table_stem>__<column>.unique.csv`, then `.index.csv`
    (`table_stem` is the table path with a trailing `.csv` stripped, so
    `data/test.csv` → `data/test__name.index.csv`)
-2. Each `index_dirs` entry from `~/.config/csvdb/config` (or `CSVDB_CONFIG`),
-   using only the table basename: `<dir>/<basename>__<column>.{unique,index}.csv`
+2. `index_write_dir` (if set), then each `index_dirs` entry from
+   `~/.config/csvdb/config` (or `CSVDB_CONFIG`), using only the table basename:
+   `<dir>/<basename>__<column>.{unique,index}.csv`
 
-Sidecar paths win over `index_dirs`. Explicit `INDEX('file')` / `UNIQUE('file')`
-try the given path (and `.csv`), then the same names under `index_dirs`.
+Sidecar paths win over config dirs. Explicit `INDEX('file')` / `UNIQUE('file')`
+try the given path (and `.csv`), then the same names under those dirs.
+`CREATE INDEX` without an explicit path writes under `index_write_dir` when set
+(otherwise next to the table).
 
 If found, equality can become an index unique/seek plan; ranges and trailing-`%` `LIKE` patterns can use index range seeks. Selecting only indexed columns may use a covering index seek.
 
 ### Config
 
 See `README.md` for the optional `~/.config/csvdb/config` file (`[output]` TTY
-defaults and `[paths] index_dirs`).
+defaults, `[paths]` `data_dirs` / `index_dirs` / `index_write_dir`, and
+`[defaults] stats`).
 
 ### Index hints
 

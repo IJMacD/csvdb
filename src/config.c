@@ -10,7 +10,8 @@ static struct CsvdbConfig g_config;
 enum ConfigSection {
     SECTION_NONE = 0,
     SECTION_OUTPUT,
-    SECTION_PATHS
+    SECTION_PATHS,
+    SECTION_DEFAULTS
 };
 
 static void skip_ws(const char **p)
@@ -180,43 +181,54 @@ static int parse_bool(const char *val, int *out)
     return -1;
 }
 
-static int add_index_dir(struct CsvdbConfig *cfg, const char *raw)
+static void trim_trailing_slashes(char *path)
 {
-    if (cfg->index_dir_count >= CSVDB_MAX_INDEX_DIRS)
+    size_t n = strlen(path);
+    while (n > 1 && path[n - 1] == '/')
+    {
+        path[--n] = '\0';
+    }
+}
+
+static int add_path_entry(
+    char dest[][CSVDB_MAX_PATH_LEN],
+    int *count,
+    int max_count,
+    const char *raw,
+    const char *what)
+{
+    if (*count >= max_count)
     {
         fprintf(
             stderr,
-            "csvdb config: ignoring index_dirs entry (max %d)\n",
-            CSVDB_MAX_INDEX_DIRS);
+            "csvdb config: ignoring %s entry (max %d)\n",
+            what,
+            max_count);
         return -1;
     }
 
     char expanded[CSVDB_MAX_PATH_LEN];
     if (expand_path(raw, expanded, sizeof(expanded)) != 0)
     {
-        fprintf(stderr, "csvdb config: bad index_dirs path: %s\n", raw);
+        fprintf(stderr, "csvdb config: bad %s path: %s\n", what, raw);
         return -1;
     }
 
-    /* Drop trailing slashes (keep root "/") */
-    size_t n = strlen(expanded);
-    while (n > 1 && expanded[n - 1] == '/')
-    {
-        expanded[--n] = '\0';
-    }
-
-    strcpy(cfg->index_dirs[cfg->index_dir_count], expanded);
-    cfg->index_dir_count++;
+    trim_trailing_slashes(expanded);
+    strcpy(dest[*count], expanded);
+    (*count)++;
     return 0;
 }
 
 /**
- * Parse index_dirs = [ "a", "b" ] starting at the '[' (or value after =).
+ * Parse key = [ "a", "b" ] starting at the '[' (or value after =).
  * Supports values continuing on following lines until ']'.
- * Returns 0 on success. Updates *line_owned if it consumed extra lines via fgets.
  */
-static int parse_index_dirs_list(
-    struct CsvdbConfig *cfg,
+static int parse_path_array(
+    char dest[][CSVDB_MAX_PATH_LEN],
+    int *count,
+    int max_count,
+    const char *what,
     const char *after_eq,
     FILE *f,
     char *line_buf,
@@ -227,7 +239,7 @@ static int parse_index_dirs_list(
 
     if (*p != '[')
     {
-        fprintf(stderr, "csvdb config: index_dirs expects an array\n");
+        fprintf(stderr, "csvdb config: %s expects an array\n", what);
         return -1;
     }
     p++;
@@ -239,7 +251,7 @@ static int parse_index_dirs_list(
         {
             if (fgets(line_buf, (int)line_buf_sz, f) == NULL)
             {
-                fprintf(stderr, "csvdb config: unclosed index_dirs array\n");
+                fprintf(stderr, "csvdb config: unclosed %s array\n", what);
                 return -1;
             }
             strip_comment(line_buf);
@@ -256,11 +268,11 @@ static int parse_index_dirs_list(
         char token[CSVDB_MAX_PATH_LEN];
         if (parse_value_token(&p, token, sizeof(token)) != 0)
         {
-            fprintf(stderr, "csvdb config: bad index_dirs value\n");
+            fprintf(stderr, "csvdb config: bad %s value\n", what);
             return -1;
         }
 
-        add_index_dir(cfg, token);
+        add_path_entry(dest, count, max_count, token, what);
 
         skip_ws(&p);
         if (*p == ',')
@@ -277,7 +289,7 @@ static int parse_index_dirs_list(
             continue;
         }
 
-        fprintf(stderr, "csvdb config: bad index_dirs list syntax\n");
+        fprintf(stderr, "csvdb config: bad %s list syntax\n", what);
         return -1;
     }
 }
@@ -324,6 +336,10 @@ static void parse_file(struct CsvdbConfig *cfg, FILE *f)
             else if (strcmp(name, "paths") == 0)
             {
                 section = SECTION_PATHS;
+            }
+            else if (strcmp(name, "defaults") == 0)
+            {
+                section = SECTION_DEFAULTS;
             }
             else
             {
@@ -389,9 +405,69 @@ static void parse_file(struct CsvdbConfig *cfg, FILE *f)
             cfg->has_headers = 1;
             cfg->headers = headers;
         }
+        else if (section == SECTION_DEFAULTS && strcmp(key, "stats") == 0)
+        {
+            char token[64];
+            const char *vp = val_start;
+            if (parse_value_token(&vp, token, sizeof(token)) != 0)
+            {
+                fprintf(stderr, "csvdb config: bad stats value\n");
+                continue;
+            }
+            int stats = 0;
+            if (parse_bool(token, &stats) != 0)
+            {
+                fprintf(stderr, "csvdb config: bad stats value: %s\n", token);
+                continue;
+            }
+            cfg->has_stats = 1;
+            cfg->stats = stats;
+        }
         else if (section == SECTION_PATHS && strcmp(key, "index_dirs") == 0)
         {
-            parse_index_dirs_list(cfg, val_start, f, line, sizeof(line));
+            parse_path_array(
+                cfg->index_dirs,
+                &cfg->index_dir_count,
+                CSVDB_MAX_INDEX_DIRS,
+                "index_dirs",
+                val_start,
+                f,
+                line,
+                sizeof(line));
+        }
+        else if (section == SECTION_PATHS && strcmp(key, "data_dirs") == 0)
+        {
+            parse_path_array(
+                cfg->data_dirs,
+                &cfg->data_dir_count,
+                CSVDB_MAX_DATA_DIRS,
+                "data_dirs",
+                val_start,
+                f,
+                line,
+                sizeof(line));
+        }
+        else if (section == SECTION_PATHS && strcmp(key, "index_write_dir") == 0)
+        {
+            char token[CSVDB_MAX_PATH_LEN];
+            const char *vp = val_start;
+            if (parse_value_token(&vp, token, sizeof(token)) != 0)
+            {
+                fprintf(stderr, "csvdb config: bad index_write_dir value\n");
+                continue;
+            }
+            char expanded[CSVDB_MAX_PATH_LEN];
+            if (expand_path(token, expanded, sizeof(expanded)) != 0)
+            {
+                fprintf(
+                    stderr,
+                    "csvdb config: bad index_write_dir path: %s\n",
+                    token);
+                continue;
+            }
+            trim_trailing_slashes(expanded);
+            strcpy(cfg->index_write_dir, expanded);
+            cfg->has_index_write_dir = 1;
         }
     }
 }
@@ -468,6 +544,25 @@ const struct CsvdbConfig *csvdb_config(void)
 {
     csvdb_config_load();
     return &g_config;
+}
+
+const char *csvdb_path_basename(const char *path)
+{
+    const char *base = path;
+    if (path == NULL)
+    {
+        return "";
+    }
+
+    for (const char *p = path; *p != '\0'; p++)
+    {
+        if (*p == '/')
+        {
+            base = p + 1;
+        }
+    }
+
+    return base;
 }
 
 int csvdb_parse_format(const char *format_val)
