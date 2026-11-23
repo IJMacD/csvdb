@@ -37,9 +37,10 @@ An esoteric toy command line app for processing CSV using a custom SQL dialect.
         [-v] Print version when no query is given
         [-f (<filename.sql>|-)] Read SQL from file ('-' for stdin)
         [-E|--explain]
-        [-H|--headers] (default)
+        [-H|--headers] (default; TTY may follow config)
         [-N|--no-headers]
-        [-F|--format <format>] Set output formatting (TTY default: box)
+        [-F|--format <format>] Set output formatting
+                               (TTY default: box, or config [output] format)
         [-i|--input <filename>] Read from file instead of stdin
         [-o|--output <filename>] Write output to file instead of stdout
         Value options accept --option value and --option=value
@@ -47,6 +48,27 @@ An esoteric toy command line app for processing CSV using a custom SQL dialect.
 
     Where <format> is one of:
         (table|box|tsv|csv[:excel]|html|json[:(object|array)]|sql[:(insert|create|values)]|xml|record)
+
+## Config
+
+Optional user config at `$XDG_CONFIG_HOME/csvdb/config` (default `~/.config/csvdb/config`).
+Override the path with `CSVDB_CONFIG`; set it to empty to disable loading.
+
+```toml
+[output]
+# Applied when stdout is a TTY and -F / -H / -N are not set
+format = "box"
+headers = true
+
+[paths]
+# Searched after table-sidecar index paths, in order
+index_dirs = [
+  "~/.cache/csvdb/indexes",
+]
+```
+
+Pipes and redirects keep CSV output (and default headers) so scripts stay portable.
+CLI flags always win over config.
 
 ## Docker
 

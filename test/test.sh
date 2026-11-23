@@ -114,6 +114,80 @@ if ! cmp -s "$cli_out_space" "$cli_out_equals"; then
 fi
 rm -f "$cli_in" "$cli_out_space" "$cli_out_equals"
 
+# --- Config: TTY format/headers + index_dirs ---
+cfg_root=$(mktemp -d)
+cfg_file="$cfg_root/config"
+idx_dir="$cfg_root/indexes"
+mkdir -p "$idx_dir"
+cat > "$cfg_file" <<EOF
+[output]
+format = "table"
+headers = false
+
+[paths]
+index_dirs = [
+  "$idx_dir",
+]
+EOF
+
+# Redirected stdout must ignore config format/headers (stay csv + headers)
+cfg_pipe=$(CSVDB_CONFIG="$cfg_file" "$CSVDB" "SELECT 1 AS n")
+cfg_pipe_expected=$'n\n1'
+if [[ "$cfg_pipe" != "$cfg_pipe_expected" ]]; then
+    cli_die "config format/headers leaked into a pipe: [$cfg_pipe]"
+fi
+
+# CLI still overrides when redirected
+cfg_cli=$(CSVDB_CONFIG="$cfg_file" "$CSVDB" -N -F csv "SELECT 1 AS n")
+if [[ "$cfg_cli" != "1" ]]; then
+    cli_die "CLI did not override config on a pipe: [$cfg_cli]"
+fi
+
+# index_dirs: index beside table is moved away; config dir should still find it
+printf 'id,name\n1,alpha\n2,beta\n' > "$cfg_root/tiny.csv"
+cfg_prev_cwd=$PWD
+cd "$cfg_root" || cli_die "could not cd to config test dir"
+CSVDB_CONFIG= "$CSVDB" "CREATE INDEX ON tiny (name)" >/dev/null
+mv tiny__name.index.csv indexes/tiny__name.index.csv
+
+plan_with=$(CSVDB_CONFIG="$cfg_file" "$CSVDB" -E -N -F csv \
+    "SELECT name FROM tiny WHERE name = 'beta'")
+plan_without=$(CSVDB_CONFIG= "$CSVDB" -E -N -F csv \
+    "SELECT name FROM tiny WHERE name = 'beta'")
+if [[ "$plan_with" != *INDEX* ]]; then
+    cd "$cfg_prev_cwd" || true
+    cli_die "index_dirs did not find index: [$plan_with]"
+fi
+if [[ "$plan_without" == *INDEX* ]]; then
+    cd "$cfg_prev_cwd" || true
+    cli_die "expected no index without index_dirs: [$plan_without]"
+fi
+hit=$(CSVDB_CONFIG="$cfg_file" "$CSVDB" -N -F csv \
+    "SELECT name FROM tiny WHERE name = 'beta'")
+if [[ "$hit" != "beta" ]]; then
+    cd "$cfg_prev_cwd" || true
+    cli_die "index_dirs query failed: [$hit]"
+fi
+cd "$cfg_prev_cwd" || cli_die "could not restore cwd after config test"
+
+# TTY path (when `script` is available): config format/headers apply
+if command -v script >/dev/null 2>&1; then
+    tty_out=$(CSVDB_CONFIG="$cfg_file" script -qfec "$CSVDB \"SELECT 1 AS n\"" /dev/null 2>/dev/null | tr -d '\r')
+    if [[ "$tty_out" != *"|"* ]]; then
+        cli_die "TTY config format was not applied: [$tty_out]"
+    fi
+    # headers=false → single data row; -H adds a header line containing n
+    tty_h=$(CSVDB_CONFIG="$cfg_file" script -qfec "$CSVDB -H \"SELECT 1 AS n\"" /dev/null 2>/dev/null | tr -d '\r')
+    if [[ "$tty_h" != *"n"* ]]; then
+        cli_die "TTY -H did not force headers: [$tty_h]"
+    fi
+    if [[ $(printf '%s\n' "$tty_out" | wc -l) -ge $(printf '%s\n' "$tty_h" | wc -l) ]]; then
+        cli_die "TTY headers=false did not reduce output vs -H: [$tty_out] vs [$tty_h]"
+    fi
+fi
+
+rm -rf "$cfg_root"
+
 # Unclosed function args must abort — not print an error and still run.
 bad_count_out=$(mktemp)
 if "$CSVDB" -N -F csv "FROM CALENDAR SELECT COUNT(* WHERE date BETWEEN '2026-11-01' ANDX '2027-01-01'" \
