@@ -1,7 +1,9 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "../structs.h"
+#include "../config.h"
 
 #include "csv.h"
 #include "csv-mem.h"
@@ -216,6 +218,36 @@ int openDB (struct DB *db, const char *filename, char **resolved) {
         f = fopen(buffer, "r");
 
         if (!f) {
+            /*
+             * Unqualified names may live under configured data_dirs.
+             * Recurse with an absolute/relative prefixed path; those paths
+             * contain '/' so they will not re-enter this fallback.
+             */
+            if (
+                strcmp(filename, "stdin") != 0 &&
+                strchr(filename, '/') == NULL)
+            {
+                const struct CsvdbConfig *cfg = csvdb_config();
+                char candidate[
+                    CSVDB_MAX_PATH_LEN + MAX_TABLE_LENGTH + 1];
+
+                for (int i = 0; i < cfg->data_dir_count; i++) {
+                    int n = snprintf(
+                        candidate,
+                        sizeof(candidate),
+                        "%s/%s",
+                        cfg->data_dirs[i],
+                        filename);
+                    if (n < 0 || (size_t)n >= sizeof(candidate)) {
+                        continue;
+                    }
+
+                    if (openDB(db, candidate, resolved) == 0) {
+                        return 0;
+                    }
+                }
+            }
+
             return -1;
         }
 

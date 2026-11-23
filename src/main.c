@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "structs.h"
+#include "config.h"
 #include "gitversion.h"
 #include "query/query.h"
 #include "query/output.h"
@@ -13,7 +14,6 @@
 #include "repl.h"
 
 static int read_file(FILE *file, char **output);
-static enum OutputOption get_format_flag(const char *format_val);
 static int is_long_option(const char *arg, const char *name);
 static int read_long_value(
     int argc,
@@ -149,9 +149,10 @@ void printUsage(const char *name, FILE *file)
 #endif
         "\t[-f (<filename.sql>|-)] Read SQL from file ('-' for stdin)\n"
         "\t[-E|--explain]\n"
-        "\t[-H|--headers] (default)\n"
+        "\t[-H|--headers] (default; TTY may follow ~/.config/csvdb/config)\n"
         "\t[-N|--no-headers]\n"
-        "\t[-F|--format <format>] Set output formatting (TTY default: box)\n"
+        "\t[-F|--format <format>] Set output formatting\n"
+        "\t                       (TTY default: box, or config [output] format)\n"
         "\t[-i|--input <filename>] Read from file instead of stdin\n"
         "\t[-o|--output <filename>] Write output to file instead of stdout\n"
         "\tValue options accept --option value and --option=value\n"
@@ -175,10 +176,11 @@ int main(int argc, char *argv[])
 {
     srand((unsigned)time(NULL) * getpid());
 
-    int flags = 0;
+    csvdb_config_load();
 
-    // Default: with headers
-    flags |= OUTPUT_OPTION_HEADERS;
+    int flags = 0;
+    int headers_from_cli = 0;
+    int stats_from_cli = 0;
 
     FILE *output = stdout;
     const char *format_val = NULL;
@@ -212,10 +214,12 @@ int main(int argc, char *argv[])
         else if (strcmp(arg, "-H") == 0 || strcmp(arg, "--headers") == 0)
         {
             flags |= OUTPUT_OPTION_HEADERS;
+            headers_from_cli = 1;
         }
         else if (strcmp(arg, "-N") == 0 || strcmp(arg, "--no-headers") == 0)
         {
             flags &= ~OUTPUT_OPTION_HEADERS;
+            headers_from_cli = 1;
         }
         else if (strcmp(arg, "-F") == 0 || is_long_option(arg, "--format"))
         {
@@ -327,6 +331,7 @@ int main(int argc, char *argv[])
         else if (strcmp(arg, "--stats") == 0)
         {
             flags |= OUTPUT_OPTION_STATS;
+            stats_from_cli = 1;
         }
         else if (strcmp(arg, "-f") == 0)
         {
@@ -439,9 +444,12 @@ int main(int argc, char *argv[])
         }
     }
 
+    int output_is_tty = isatty(fileno(output));
+    const struct CsvdbConfig *cfg = csvdb_config();
+
     if (format_val != NULL)
     {
-        int format_flag = get_format_flag(format_val);
+        int format_flag = csvdb_parse_format(format_val);
         if (format_flag < 0)
         {
             fprintf(stderr, "Unrecognised format: %s\n", format_val);
@@ -449,14 +457,42 @@ int main(int argc, char *argv[])
         }
         flags |= format_flag;
     }
-    else if (isatty(fileno(output)))
+    else if (output_is_tty)
     {
-        flags |= OUTPUT_FORMAT_BOX;
+        if (cfg->has_format)
+        {
+            flags |= cfg->format;
+        }
+        else
+        {
+            flags |= OUTPUT_FORMAT_BOX;
+        }
     }
     else
     {
-        // Disable next line for some fun just dumping data with no delineation
+        // Pipes/redirects stay machine-readable regardless of config format
         flags |= OUTPUT_FORMAT_COMMA;
+    }
+
+    if (!headers_from_cli)
+    {
+        if (output_is_tty && cfg->has_headers)
+        {
+            if (cfg->headers)
+            {
+                flags |= OUTPUT_OPTION_HEADERS;
+            }
+        }
+        else
+        {
+            // Default: with headers (including non-TTY)
+            flags |= OUTPUT_OPTION_HEADERS;
+        }
+    }
+
+    if (!stats_from_cli && cfg->has_stats && cfg->stats)
+    {
+        flags |= OUTPUT_OPTION_STATS;
     }
 
 #ifdef PERSISTENT_TEMP
@@ -504,7 +540,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
-    repl();
+    repl(flags);
 
 #ifndef PERSISTENT_TEMP
     temp_dropAll();
@@ -558,86 +594,3 @@ static int read_file(FILE *file, char **output)
     return count;
 }
 
-static enum OutputOption get_format_flag(const char *format_val)
-{
-
-    if (strcmp(format_val, "tsv") == 0)
-    {
-        return OUTPUT_FORMAT_TAB;
-    }
-
-    if (strcmp(format_val, "csv") == 0)
-    {
-        return OUTPUT_FORMAT_COMMA;
-    }
-
-    if (strcmp(format_val, "csv:excel") == 0)
-    {
-        return OUTPUT_FORMAT_CSV_EXCEL;
-    }
-
-    if (strcmp(format_val, "html") == 0)
-    {
-        return OUTPUT_FORMAT_HTML;
-    }
-
-    if (
-        strcmp(format_val, "json") == 0 ||
-        strcmp(format_val, "json:object") == 0)
-    {
-        return OUTPUT_FORMAT_JSON;
-    }
-
-    if (
-        strcmp(format_val, "json:array") == 0 ||
-        strcmp(format_val, "json_array") == 0 // compat
-    )
-    {
-        return OUTPUT_FORMAT_JSON_ARRAY;
-    }
-
-    if (strcmp(format_val, "table") == 0)
-    {
-        return OUTPUT_FORMAT_TABLE;
-    }
-
-    if (strcmp(format_val, "record") == 0)
-    {
-        return OUTPUT_FORMAT_INFO_SEP;
-    }
-
-    if (strcmp(format_val, "xml") == 0)
-    {
-        return OUTPUT_FORMAT_XML;
-    }
-
-    if (
-        strcmp(format_val, "sql") == 0 ||
-        strcmp(format_val, "sql:insert") == 0)
-    {
-        return OUTPUT_FORMAT_SQL_INSERT;
-    }
-
-    if (
-        strcmp(format_val, "sql:values") == 0 ||
-        strcmp(format_val, "sql_values") == 0 // compat
-    )
-    {
-        return OUTPUT_FORMAT_SQL_VALUES;
-    }
-
-    if (
-        strcmp(format_val, "sql:create") == 0 ||
-        strcmp(format_val, "sql_create") == 0 // compat
-    )
-    {
-        return OUTPUT_FORMAT_SQL_CREATE;
-    }
-
-    if (strcmp(format_val, "box") == 0)
-    {
-        return OUTPUT_FORMAT_BOX;
-    }
-
-    return -1;
-}

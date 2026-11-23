@@ -10,7 +10,7 @@ CFLAGS = -Wall -Werror -Wextra -fdata-sections -ffunction-sections
 SRCDIR = src
 SUBDIRS = db query execute evaluate sort functions
 SRCDIRS = $(addprefix $(SRCDIR)/, $(SUBDIRS))
-RAWSRCS = main.c $(wildcard $(addsuffix /*.c, $(SRCDIRS)))
+RAWSRCS = main.c config.c $(wildcard $(addsuffix /*.c, $(SRCDIRS)))
 SRCS = $(RAWSRCS:src/%=%)
 OBJS = $(SRCS:.c=.o)
 EXE  = csvdb
@@ -68,7 +68,7 @@ CGIDOBJS = $(addprefix $(CGIDDIR)/, $(CGIDSRCS:.c=.o))
 #
 GENDIR = gen
 GENEXE = $(GENDIR)/gen
-GENSRCS = $(filter-out main.c, $(SRCS)) gen.c
+GENSRCS = $(filter-out main.c, $(SRCS)) gen.c gitversion.c
 GENOBJS = $(addprefix $(GENDIR)/, $(GENSRCS:.c=.o))
 GENCFLAGS = -O3 -DNDEBUG -DJSON_NULL -DJSON_BOOL -DCOMPILE_SAMPLE
 

@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "../structs.h"
+#include "../config.h"
 #include "token.h"
 #include "../db/db.h"
 #include "../db/csv.h"
@@ -24,7 +25,8 @@ static int create_index(
     const char *table_name,
     const char (*index_field)[MAX_FIELD_LENGTH],
     int field_count,
-    int unique_flag);
+    int unique_flag,
+    int auto_name);
 
 static int create_temp_table_query(const char *query, const char **end_ptr);
 
@@ -178,7 +180,13 @@ int create_index_query(const char *query, const char **end_ptr)
         sprintf(index_name, "%s__%s", table_name, index_field[0]);
     }
 
-    create_index(index_name, table_name, index_field, field_count, unique_flag);
+    create_index(
+        index_name,
+        table_name,
+        index_field,
+        field_count,
+        unique_flag,
+        auto_name);
 
     if (query[index] == ';')
     {
@@ -198,7 +206,8 @@ static int create_index(
     const char *table_name,
     const char (*index_field)[MAX_FIELD_LENGTH],
     int field_count,
-    int unique_flag)
+    int unique_flag,
+    int auto_name)
 {
     struct DB db;
     struct Table table = {0};
@@ -249,12 +258,35 @@ static int create_index(
     columns[field_count].child_count = 0;
     columns[field_count].children = NULL;
 
-    char file_name[MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 12];
-    sprintf(
-        file_name,
-        "%s.%s.csv",
-        index_name,
-        unique_flag ? "unique" : "index");
+    char file_name[CSVDB_MAX_PATH_LEN + MAX_TABLE_LENGTH + MAX_FIELD_LENGTH + 16];
+    const char *kind = unique_flag ? "unique" : "index";
+    const struct CsvdbConfig *cfg = csvdb_config();
+
+    /*
+     * index_write_dir redirects CREATE INDEX when:
+     *   - auto-named (use table basename__col under the write dir), or
+     *   - explicit name with no '/' (write_dir/name.index.csv)
+     * Explicit names that include '/' keep their chosen path.
+     */
+    if (cfg->has_index_write_dir && (auto_name || strchr(index_name, '/') == NULL))
+    {
+        snprintf(
+            file_name,
+            sizeof(file_name),
+            "%s/%s.%s.csv",
+            cfg->index_write_dir,
+            csvdb_path_basename(index_name),
+            kind);
+    }
+    else
+    {
+        snprintf(
+            file_name,
+            sizeof(file_name),
+            "%s.%s.csv",
+            index_name,
+            kind);
+    }
 
     FILE *f = fopen(file_name, "w");
 
