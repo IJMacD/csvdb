@@ -183,6 +183,20 @@ int parseSimpleNode(
         return 0;
     }
 
+    // `table.*` tokenises as `table.` then `*` (* is not a token char). Absorb
+    // the star so find_field sees the documented `table.*` form.
+    size_t value_len = strlen(value);
+    if (
+        value_len > 0 &&
+        value[value_len - 1] == '.' &&
+        query[*index] == '*' &&
+        value_len + 1 < MAX_FIELD_LENGTH
+    ) {
+        value[value_len] = '*';
+        value[value_len + 1] = '\0';
+        (*index)++;
+    }
+
     // Just a regular bare field or named constant
     strcpy(node->field.text, value);
 
