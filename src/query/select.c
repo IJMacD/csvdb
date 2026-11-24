@@ -1319,21 +1319,13 @@ struct Node *allocateHavingNode(struct Query *q)
  */
 static void expandFieldStar(struct Query *query)
 {
-    // Count the total number of fields in all tables and cache the
-    // result.
-    int table_field_count = 0;
-    for (int j = 0; j < query->table_count; j++)
-    {
-        struct Table *table = &query->tables[j];
-
-        table_field_count += table->db->field_count;
-    }
-
     for (int i = 0; i < query->column_count; i++)
     {
         struct Node *col = &query->column_nodes[i];
 
         int child_index = NOT_FOUND;
+        /* Which table's fields to expand: -1 means every table (bare *). */
+        int star_table_id = -1;
 
         if (col->function == FUNC_AGG_COUNT)
         {
@@ -1345,8 +1337,10 @@ static void expandFieldStar(struct Query *query)
         {
             // Could be one of:
             // - SELECT *
+            // - SELECT table.*
             // - SELECT FN(*)
             child_index = -1;
+            star_table_id = col->field.table_id;
         }
         else if (col->function != FUNC_UNITY)
         {
@@ -1372,23 +1366,38 @@ static void expandFieldStar(struct Query *query)
                     }
 
                     child_index = j;
+                    star_table_id = child_col->field.table_id;
                 }
             }
         }
 
         if (child_index != NOT_FOUND)
         {
+            int j_start = 0;
+            int j_end = query->table_count;
+            if (star_table_id >= 0)
+            {
+                j_start = star_table_id;
+                j_end = star_table_id + 1;
+            }
 
-            int new_column_count = query->column_count + table_field_count - 1;
+            int expand_field_count = 0;
+            for (int j = j_start; j < j_end; j++)
+            {
+                expand_field_count += query->tables[j].db->field_count;
+            }
+
+            int new_column_count =
+                query->column_count + expand_field_count - 1;
 
             struct Node *new_cols = malloc(new_column_count * sizeof *col);
 
             // Copy first half of nodes from old list to new list;
             memcpy(new_cols, query->column_nodes, i * sizeof *col);
 
-            // Create nodes for all fields in all tables
+            // Create nodes for fields in the selected table(s)
             int index = i;
-            for (int j = 0; j < query->table_count; j++)
+            for (int j = j_start; j < j_end; j++)
             {
                 struct Table *table = &query->tables[j];
 
@@ -1450,15 +1459,19 @@ static void expandFieldStar(struct Query *query)
             }
 
             // Copy rest of nodes
-            memcpy(new_cols + index, query->column_nodes + i + 1, (new_column_count - index) * sizeof *col);
+            memcpy(
+                new_cols + index,
+                query->column_nodes + i + 1,
+                (new_column_count - index) * sizeof *col
+            );
 
             free(query->column_nodes);
 
             query->column_nodes = new_cols;
 
-            query->column_count += table_field_count - 1;
+            query->column_count += expand_field_count - 1;
 
-            i += table_field_count - 1;
+            i += expand_field_count - 1;
         }
     }
 }
