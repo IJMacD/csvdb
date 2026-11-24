@@ -681,6 +681,62 @@ static void sql_quote_literal(char *out, size_t out_size, const char *value)
  * alias.col / basename.col keys; also binds unique bare column names.
  * Returns malloc'd rewritten SQL (caller frees), or NULL on failure.
  */
+/**
+ * True if SQL has a FROM/JOIN/TABLE table source (identifiers only; strings
+ * skipped). Used to avoid rewriting bare outer column names that more often
+ * refer to inner columns once a FROM is present.
+ */
+static int sql_has_table_source(const char *sql)
+{
+    for (size_t i = 0; sql[i] != '\0';)
+    {
+        if (sql[i] == '\'')
+        {
+            i++;
+            while (sql[i] != '\0')
+            {
+                if (sql[i] == '\'' && sql[i + 1] == '\'')
+                {
+                    i += 2;
+                    continue;
+                }
+                if (sql[i] == '\'')
+                {
+                    i++;
+                    break;
+                }
+                i++;
+            }
+            continue;
+        }
+
+        if (isalpha((unsigned char)sql[i]) || sql[i] == '_')
+        {
+            char word[16];
+            size_t w = 0;
+            while (isalnum((unsigned char)sql[i]) || sql[i] == '_')
+            {
+                if (w + 1 < sizeof(word))
+                {
+                    word[w++] = sql[i];
+                }
+                i++;
+            }
+            word[w] = '\0';
+            if (strcasecmp(word, "FROM") == 0 ||
+                strcasecmp(word, "JOIN") == 0 ||
+                strcasecmp(word, "TABLE") == 0)
+            {
+                return 1;
+            }
+            continue;
+        }
+
+        i++;
+    }
+    return 0;
+}
+
 static char *rewrite_correlated_sql(
     const char *sql,
     struct Table *outer_tables,
@@ -845,6 +901,23 @@ static char *rewrite_correlated_sql(
         {
             if (strchr(binds[i].key, '.') == NULL &&
                 strcmp(binds[i].key, dup_bare[d]) == 0)
+            {
+                binds[i] = binds[bind_count - 1];
+                bind_count--;
+                continue;
+            }
+            i++;
+        }
+    }
+
+    // With a FROM/JOIN/TABLE, bare names usually refer to the inner table.
+    // Only rewrite qualified outer refs in that case (tableless subqueries
+    // like `(SELECT value * 2)` still get bare outer binds).
+    if (sql_has_table_source(sql))
+    {
+        for (int i = 0; i < bind_count;)
+        {
+            if (strchr(binds[i].key, '.') == NULL)
             {
                 binds[i] = binds[bind_count - 1];
                 bind_count--;
