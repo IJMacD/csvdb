@@ -190,6 +190,7 @@ INSERT INTO tt2 VALUES (14),(15),(16);
 | `CALENDAR` | Builtin calendar virtual table |
 | `SEQUENCE` | Builtin integer sequence (`value` = 0 … 9999999) |
 | `EPHEMERIS` | Builtin solar/lunar ephemeris (one row per Julian day) |
+| `EPHEMERIS(lat, lon)` | Same, with observer for rise/set times |
 
 Quoted identifiers are allowed: `FROM "my file.csv"`.
 
@@ -616,11 +617,19 @@ Virtual solar/lunar table (one row per Julian day; same key space as `CALENDAR`)
 | `isFullMoon` | `1` if full moon occurs on this day |
 | `isFirstQuarter` | `1` if first quarter occurs on this day |
 | `isLastQuarter` | `1` if last quarter occurs on this day |
+| `sunRise` / `sunSet` | Local untagged datetime (`…T…`); empty without observer |
+| `moonRise` / `moonSet` | Local untagged datetime; empty without observer |
+| `isLunarEclipse` / `isSolarEclipse` | Approximate eclipse-day flags (syzygy near a node) |
+
+`EPHEMERIS(lat, lon)` sets the observer (degrees; east longitude positive) used for rise/set. Bare `EPHEMERIS` leaves rise/set empty. Eclipse flags do not require an observer.
 
 ```sql
 FROM EPHEMERIS WHERE date BETWEEN '2024-01-01' AND '2024-01-31'
   AND isFullMoon = 1
 SELECT date, moonIllumination;
+
+FROM EPHEMERIS(51.477, 0.0) WHERE date = '2024-06-21'
+SELECT date, sunRise, sunSet;
 ```
 
 ---

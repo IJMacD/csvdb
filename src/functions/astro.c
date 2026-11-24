@@ -122,6 +122,20 @@ void astroComputeDay (int julian, struct AstroDay *out) {
         illum = 1;
     }
 
+    /* Rough lunar latitude and equatorial conversion for rise/set */
+    double beta = 5.128 * sin(F * DEG); /* max inclination ~5° */
+    double moon_ra = atan2(
+        sin(lunar_long * DEG) * cos_eps - tan(beta * DEG) * sin_eps,
+        cos(lunar_long * DEG)
+    ) * RAD;
+    if (moon_ra < 0) {
+        moon_ra += 360.0;
+    }
+    double moon_decl = asin(
+        sin(beta * DEG) * cos_eps
+        + cos(beta * DEG) * sin_eps * sin(lunar_long * DEG)
+    ) * RAD;
+
     out->solar_longitude = lambda;
     out->equation_of_time = eot;
     out->solar_declination = decl;
@@ -130,6 +144,8 @@ void astroComputeDay (int julian, struct AstroDay *out) {
     out->moon_phase = phase;
     out->moon_illumination = illum;
     out->moon_age_days = phase * SYNODIC;
+    out->moon_ra = moon_ra;
+    out->moon_decl = moon_decl;
 }
 
 int astroPhaseCrossed (double prev_phase, double curr_phase, double target) {
@@ -212,7 +228,7 @@ void astroEclipseFlags (int julian, int *lunar, int *solar) {
     }
     double node_dist = f_mod > 90.0 ? 180.0 - f_mod : f_mod;
 
-    int near_node = node_dist < 12.0; /* generous season window */
+    int near_node = node_dist < 18.0; /* includes penumbral seasons */
 
     *solar = 0;
     *lunar = 0;
@@ -228,13 +244,13 @@ void astroEclipseFlags (int julian, int *lunar, int *solar) {
         *lunar = 1;
     }
 
-    /* Also flag if phase crossed today */
-    struct AstroDay prev;
-    astroComputeDay(julian - 1, &prev);
-    if (near_node && astroPhaseCrossed(prev.moon_phase, d.moon_phase, 0.0)) {
+    /* Also flag if phase crossed during this civil day */
+    struct AstroDay next;
+    astroComputeDay(julian + 1, &next);
+    if (near_node && astroPhaseCrossed(d.moon_phase, next.moon_phase, 0.0)) {
         *solar = 1;
     }
-    if (near_node && astroPhaseCrossed(prev.moon_phase, d.moon_phase, 0.5)) {
+    if (near_node && astroPhaseCrossed(d.moon_phase, next.moon_phase, 0.5)) {
         *lunar = 1;
     }
 }

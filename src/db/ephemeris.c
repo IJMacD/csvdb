@@ -24,6 +24,19 @@
 #define COL_IS_FULL_MOON        10
 #define COL_IS_FIRST_QUARTER    11
 #define COL_IS_LAST_QUARTER     12
+#define COL_SUN_RISE            13
+#define COL_SUN_SET             14
+#define COL_MOON_RISE           15
+#define COL_MOON_SET            16
+#define COL_IS_LUNAR_ECLIPSE    17
+#define COL_IS_SOLAR_ECLIPSE    18
+
+struct EphemerisState {
+    int has_observer;
+    double lat;
+    double lon;
+    char index_kind;
+};
 
 static char *field_names[] = {
     "julian",
@@ -39,7 +52,17 @@ static char *field_names[] = {
     "isFullMoon",
     "isFirstQuarter",
     "isLastQuarter",
+    "sunRise",
+    "sunSet",
+    "moonRise",
+    "moonSet",
+    "isLunarEclipse",
+    "isSolarEclipse",
 };
+
+static struct EphemerisState *ephemerisState (struct DB *db) {
+    return (struct EphemerisState *)db->data;
+}
 
 static void getSingleJulianRange (
     struct Node *predicate,
@@ -61,7 +84,47 @@ int ephemeris_openDB (
     const char *filename,
     __attribute__((unused)) char **resolved
 ) {
-    if (strcmp(filename, "EPHEMERIS") != 0) {
+    int has_observer = 0;
+    double lat = 0;
+    double lon = 0;
+
+    if (strcmp(filename, "EPHEMERIS") == 0) {
+        has_observer = 0;
+    }
+    else if (strncmp(filename, "EPHEMERIS(", 10) == 0) {
+        const char *p = filename + 10;
+        char *end = NULL;
+        lat = strtod(p, &end);
+        if (end == p) {
+            return -1;
+        }
+        while (*end == ' ') {
+            end++;
+        }
+        if (*end != ',') {
+            return -1;
+        }
+        end++;
+        while (*end == ' ') {
+            end++;
+        }
+        p = end;
+        lon = strtod(p, &end);
+        if (end == p) {
+            return -1;
+        }
+        while (*end == ' ') {
+            end++;
+        }
+        if (*end != ')') {
+            return -1;
+        }
+        if (end[1] != '\0') {
+            return -1;
+        }
+        has_observer = 1;
+    }
+    else {
         return -1;
     }
 
@@ -69,8 +132,17 @@ int ephemeris_openDB (
     db->_record_count = 1e7;
     db->line_indices = NULL;
     db->field_count = (int)(sizeof(field_names) / sizeof(field_names[0]));
-    db->data = NULL;
     db->file = NULL;
+
+    struct EphemerisState *state = calloc(1, sizeof(*state));
+    if (state == NULL) {
+        return -1;
+    }
+    state->has_observer = has_observer;
+    state->lat = lat;
+    state->lon = lon;
+    state->index_kind = -1;
+    db->data = (char *)state;
 
     return 0;
 }
@@ -203,6 +275,88 @@ int ephemeris_getRecordValue (
         );
     }
 
+    struct EphemerisState *state = ephemerisState(db);
+
+    if (
+        field_index == COL_SUN_RISE ||
+        field_index == COL_SUN_SET ||
+        field_index == COL_MOON_RISE ||
+        field_index == COL_MOON_SET
+    ) {
+        if (state == NULL || !state->has_observer) {
+            value[0] = '\0';
+            return 0;
+        }
+
+        struct DateTime event = {0};
+        int ok = 0;
+        if (field_index == COL_SUN_RISE) {
+            ok = astroRiseSet(
+                record_index,
+                state->lat,
+                state->lon,
+                today.solar_declination,
+                today.sun_ra,
+                -0.833,
+                1,
+                &event
+            );
+        }
+        else if (field_index == COL_SUN_SET) {
+            ok = astroRiseSet(
+                record_index,
+                state->lat,
+                state->lon,
+                today.solar_declination,
+                today.sun_ra,
+                -0.833,
+                0,
+                &event
+            );
+        }
+        else if (field_index == COL_MOON_RISE) {
+            ok = astroRiseSet(
+                record_index,
+                state->lat,
+                state->lon,
+                today.moon_decl,
+                today.moon_ra,
+                0.125,
+                1,
+                &event
+            );
+        }
+        else if (field_index == COL_MOON_SET) {
+            ok = astroRiseSet(
+                record_index,
+                state->lat,
+                state->lon,
+                today.moon_decl,
+                today.moon_ra,
+                0.125,
+                0,
+                &event
+            );
+        }
+
+        if (!ok) {
+            value[0] = '\0';
+            return 0;
+        }
+        return sprintDateTime(value, &event);
+    }
+
+    if (
+        field_index == COL_IS_LUNAR_ECLIPSE ||
+        field_index == COL_IS_SOLAR_ECLIPSE
+    ) {
+        int lunar = 0;
+        int solar = 0;
+        astroEclipseFlags(record_index, &lunar, &solar);
+        int flag = field_index == COL_IS_LUNAR_ECLIPSE ? lunar : solar;
+        return snprintf(value, value_max_length, "%d", flag);
+    }
+
     return 0;
 }
 
@@ -221,10 +375,15 @@ enum IndexSearchType ephemeris_findIndex (
 
     if (strcmp(field_name, "julian") == 0) {
         if (db != NULL) {
-            ephemeris_openDB(db, "EPHEMERIS", NULL);
+            const char *open_name =
+                (table_name != NULL && table_name[0] != '\0')
+                    ? table_name
+                    : "EPHEMERIS";
+            ephemeris_openDB(db, open_name, NULL);
             db->field_count = 2;
-            db->data = malloc(1);
-            db->data[0] = COL_JULIAN;
+            if (db->data != NULL) {
+                ephemerisState(db)->index_kind = COL_JULIAN;
+            }
         }
         if (resolved != NULL) {
             *resolved = malloc(strlen("EPHEMERIS__julian") + 1);
@@ -235,10 +394,15 @@ enum IndexSearchType ephemeris_findIndex (
 
     if (strcmp(field_name, "date") == 0) {
         if (db != NULL) {
-            ephemeris_openDB(db, "EPHEMERIS", NULL);
+            const char *open_name =
+                (table_name != NULL && table_name[0] != '\0')
+                    ? table_name
+                    : "EPHEMERIS";
+            ephemeris_openDB(db, open_name, NULL);
             db->field_count = 2;
-            db->data = malloc(1);
-            db->data[0] = COL_DATE;
+            if (db->data != NULL) {
+                ephemerisState(db)->index_kind = COL_DATE;
+            }
         }
         if (resolved != NULL) {
             *resolved = malloc(strlen("EPHEMERIS__date") + 1);
@@ -315,12 +479,13 @@ int ephemeris_indexSearch (
     __attribute__((unused)) int mode,
     int *output_flag
 ) {
-    if (db->field_count == 2) {
-        if (db->data[0] == COL_JULIAN) {
+    if (db->field_count == 2 && db->data != NULL) {
+        char kind = ephemerisState(db)->index_kind;
+        if (kind == COL_JULIAN) {
             *output_flag = RESULT_FOUND;
             return (int)atol(value);
         }
-        if (db->data[0] == COL_DATE) {
+        if (kind == COL_DATE) {
             struct DateTime dt = {0};
             if (parseDate(value, &dt)) {
                 *output_flag = RESULT_FOUND;

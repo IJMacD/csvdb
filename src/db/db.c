@@ -413,7 +413,10 @@ enum IndexSearchType findIndex(
     #endif
 
     #ifdef COMPILE_EPHEMERIS
-    if (strcmp(table_name, "EPHEMERIS") == 0) {
+    if (
+        strcmp(table_name, "EPHEMERIS") == 0 ||
+        strncmp(table_name, "EPHEMERIS(", 10) == 0
+    ) {
         return ephemeris_findIndex(
             db,
             table_name,

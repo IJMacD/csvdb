@@ -342,3 +342,8 @@ FROM EPHEMERIS WHERE date BETWEEN '2024-01-01' AND '2024-01-31' AND isFullMoon =
 FROM EPHEMERIS WHERE date = '2024-06-21' SELECT ROUND(solarDeclination, 1);
 FROM EPHEMERIS WHERE date = '2024-01-11' SELECT isNewMoon, isFullMoon, isFirstQuarter, isLastQuarter;
 FROM EPHEMERIS WHERE date BETWEEN '2024-01-01' AND '2024-01-07' SELECT date, ROUND(moonPhase, 2);
+-- EPHEMERIS(lat,lon): rise/set and eclipse flags
+FROM EPHEMERIS(51.477, 0.0) WHERE date = '2024-06-21' SELECT LEFT(sunRise, 13), LEFT(sunSet, 13), sunRise < sunSet;
+FROM EPHEMERIS WHERE date = '2024-06-21' SELECT LENGTH(sunRise), LENGTH(sunSet);
+FROM EPHEMERIS WHERE date BETWEEN '2024-04-01' AND '2024-04-15' AND isSolarEclipse = 1 AND isNewMoon = 1 SELECT date;
+FROM EPHEMERIS WHERE date BETWEEN '2024-03-20' AND '2024-03-30' AND isLunarEclipse = 1 SELECT date, isFullMoon;

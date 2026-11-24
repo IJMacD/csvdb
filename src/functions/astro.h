@@ -15,6 +15,8 @@ struct AstroDay {
     double moon_illumination; /* 0..1 */
     double moon_age_days;     /* 0 .. ~29.53 */
     double sun_ra;            /* degrees, for rise/set */
+    double moon_ra;           /* degrees, for rise/set */
+    double moon_decl;         /* degrees, for rise/set */
 };
 
 /** Fill AstroDay for noon on the civil day identified by julian. */
