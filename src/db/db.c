@@ -12,6 +12,9 @@
 #include "sequence.h"
 #include "sample.h"
 #include "dir.h"
+#include "ephemeris.h"
+#include "permutations.h"
+#include "cron.h"
 #include "view.h"
 #include "temp.h"
 #include "tsv.h"
@@ -75,6 +78,48 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordCount = &sequence_getRecordCount,
         .getRecordValue = &sequence_getRecordValue,
         .fullTableAccess = &sequence_fullTableAccess,
+    },
+    #endif
+    #ifdef COMPILE_EPHEMERIS
+    [VFS_EPHEMERIS] = {
+        .openDB = &ephemeris_openDB,
+        .closeDB = &ephemeris_closeDB,
+        .getFieldIndex = &ephemeris_getFieldIndex,
+        .getFieldName = &ephemeris_getFieldName,
+        .getRecordCount = &ephemeris_getRecordCount,
+        .getRecordValue = &ephemeris_getRecordValue,
+        .findIndex = &ephemeris_findIndex,
+        .fullTableAccess = &ephemeris_fullTableAccess,
+        .indexSearch = &ephemeris_indexSearch,
+    },
+    #endif
+    #ifdef COMPILE_PERMUTATIONS
+    [VFS_PERMUTATIONS] = {
+        .openDB = &permutations_openDB,
+        .closeDB = &permutations_closeDB,
+        .getFieldIndex = &permutations_getFieldIndex,
+        .getFieldName = &permutations_getFieldName,
+        .getRecordCount = &permutations_getRecordCount,
+        .getRecordValue = &permutations_getRecordValue,
+    },
+    [VFS_COMBINATIONS] = {
+        .openDB = &permutations_openDB,
+        .closeDB = &permutations_closeDB,
+        .getFieldIndex = &permutations_getFieldIndex,
+        .getFieldName = &permutations_getFieldName,
+        .getRecordCount = &permutations_getRecordCount,
+        .getRecordValue = &permutations_getRecordValue,
+    },
+    #endif
+    #ifdef COMPILE_CRON
+    [VFS_CRON] = {
+        .openDB = &cron_openDB,
+        .closeDB = &cron_closeDB,
+        .getFieldIndex = &cron_getFieldIndex,
+        .getFieldName = &cron_getFieldName,
+        .getRecordCount = &cron_getRecordCount,
+        .getRecordValue = &cron_getRecordValue,
+        .fullTableAccess = &cron_fullTableAccess,
     },
     #endif
     #ifdef COMPILE_SAMPLE
@@ -395,6 +440,21 @@ enum IndexSearchType findIndex(
     #ifdef COMPILE_CALENDAR
     if (strcmp(table_name, "CALENDAR") == 0) {
         return calendar_findIndex(db, table_name, node, index_type_flags, resolved);
+    }
+    #endif
+
+    #ifdef COMPILE_EPHEMERIS
+    if (
+        strcmp(table_name, "EPHEMERIS") == 0 ||
+        strncmp(table_name, "EPHEMERIS(", 10) == 0
+    ) {
+        return ephemeris_findIndex(
+            db,
+            table_name,
+            node,
+            index_type_flags,
+            resolved
+        );
     }
     #endif
 

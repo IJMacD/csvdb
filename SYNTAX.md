@@ -189,6 +189,11 @@ INSERT INTO tt2 VALUES (14),(15),(16);
 | `stdin.tsv` / `stdin.col` / `stdin.wsv` | Stdin with that format |
 | `CALENDAR` | Builtin calendar virtual table |
 | `SEQUENCE` | Builtin integer sequence (`value` = 0 … 9999999) |
+| `EPHEMERIS` | Builtin solar/lunar ephemeris (one row per Julian day) |
+| `EPHEMERIS(lat, lon)` | Same, with observer for rise/set times |
+| `PERMUTATIONS(n)` | All orderings of `{0..n-1}` (`n` ≤ 10) |
+| `COMBINATIONS(n, k)` | All k-subsets of `{0..n-1}` |
+| `CRON('spec')` | Expand a five-field cron pattern over a bounded date range |
 
 Quoted identifiers are allowed: `FROM "my file.csv"`.
 
@@ -594,6 +599,73 @@ Virtual date table (one row per Julian day). Prefer predicates on `date` / `juli
 ```sql
 FROM CALENDAR WHERE date = CURRENT_DATE
 SELECT julian, date, ordinalDate, weekDate;
+```
+
+### `EPHEMERIS`
+
+Virtual solar/lunar table (one row per Julian day; same key space as `CALENDAR`). Prefer predicates on `date` / `julian` so the planner can bound the scan. Phase flags mark the civil day on which that phase is crossed (vs the previous day).
+
+| Column | Description |
+|--------|-------------|
+| `julian` / `rowid` | Julian day number |
+| `date` | `YYYY-MM-DD` |
+| `solarLongitude` | Apparent solar longitude (degrees) |
+| `equationOfTime` | Equation of time (minutes) |
+| `solarDeclination` | Solar declination (degrees) |
+| `moonPhase` | Lunation fraction (`0` = new … `0.5` = full) |
+| `moonIllumination` | Illuminated fraction `0`…`1` |
+| `moonAgeDays` | Age in days since new moon |
+| `lunarLongitude` | Approximate lunar ecliptic longitude (degrees) |
+| `isNewMoon` | `1` if new moon occurs on this day |
+| `isFullMoon` | `1` if full moon occurs on this day |
+| `isFirstQuarter` | `1` if first quarter occurs on this day |
+| `isLastQuarter` | `1` if last quarter occurs on this day |
+| `sunRise` / `sunSet` | Local untagged datetime (`…T…`); empty without observer |
+| `moonRise` / `moonSet` | Local untagged datetime; empty without observer |
+| `isLunarEclipse` / `isSolarEclipse` | Approximate eclipse-day flags (syzygy near a node) |
+
+`EPHEMERIS(lat, lon)` sets the observer (degrees; east longitude positive) used for rise/set. Bare `EPHEMERIS` leaves rise/set empty. Eclipse flags do not require an observer.
+
+```sql
+FROM EPHEMERIS WHERE date BETWEEN '2024-01-01' AND '2024-01-31'
+  AND isFullMoon = 1
+SELECT date, moonIllumination;
+
+FROM EPHEMERIS(51.477, 0.0) WHERE date = '2024-06-21'
+SELECT date, sunRise, sunSet;
+```
+
+### `PERMUTATIONS(n)` / `COMBINATIONS(n, k)`
+
+Lexicographic generators over `{0,1,…,n−1}`. Wide integer columns only (no comma-joined display string). `PERMUTATIONS` allows `0 ≤ n ≤ 10`; `COMBINATIONS` requires `0 ≤ k ≤ n`, `n ≤ 20`, `k ≤ 10`.
+
+| Table | Columns |
+|-------|---------|
+| `PERMUTATIONS(n)` | `rank` / `rowid`, `p0` … `p{n-1}` |
+| `COMBINATIONS(n, k)` | `rank` / `rowid`, `c0` … `c{k-1}` (sorted ascending) |
+
+```sql
+FROM PERMUTATIONS(3) SELECT rank, p0, p1, p2;
+FROM COMBINATIONS(5, 2) SELECT rank, c0, c1;
+```
+
+### `CRON('spec')`
+
+Expands a five-field cron expression (`minute hour dom month dow`) into occurrence rows. **Requires** `date` / `julian` / `datetime` bounds (or the scan aborts). `datetime` uses the untagged `YYYY-MM-DDTHH:MM:SS` form. `weekday` matches `CALENDAR` (Mon=1 … Sun=7). Dow in the cron spec uses 0-or-7=Sunday, 1=Monday (Vixie-style); when both DOM and DOW are restricted, a day matches if either field matches.
+
+| Column | Description |
+|--------|-------------|
+| `datetime` | `YYYY-MM-DDTHH:MM:SS` |
+| `date` | `YYYY-MM-DD` |
+| `julian` | Julian day |
+| `hour`, `minute` | Components |
+| `weekday` | Mon=1 … Sun=7 |
+| `expr` | Echo of the cron pattern |
+
+```sql
+FROM CRON('0 9 * * 1-5')
+WHERE date BETWEEN '2024-01-01' AND '2024-01-07'
+SELECT datetime, weekday;
 ```
 
 ---

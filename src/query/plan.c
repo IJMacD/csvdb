@@ -344,7 +344,10 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
     // be.
     // In the future with real index ranges this special case could
     // probably be removed.
-    if (predicatesOnFirstTable > 1 && table->db->vfs == VFS_CALENDAR)
+    if (
+        predicatesOnFirstTable > 1 &&
+        (table->db->vfs == VFS_CALENDAR || table->db->vfs == VFS_EPHEMERIS)
+    )
     {
         struct Node *p2 = &query->predicate_nodes[1];
         struct Field *p2_field_left = (struct Field *)&p2->children[0];
@@ -751,7 +754,11 @@ static enum PlanStepType findIndexSource(struct Query *query)
         // SEQUENCE/CALENDAR bound multi-predicate and open-ended ranges in
         // fullTableAccess. PLAN_TABLE_SCAN only handles a single EQ/LT/LE.
         enum VFSType vfs = query->tables[0].db->vfs;
-        if (vfs == VFS_SEQUENCE || vfs == VFS_CALENDAR)
+        if (
+            vfs == VFS_SEQUENCE ||
+            vfs == VFS_CALENDAR ||
+            vfs == VFS_EPHEMERIS
+        )
         {
             if (
                 query->predicate_count == 1 &&

@@ -42,6 +42,14 @@ void checkPlan (struct Query *query, struct Plan *plan) {
                 fprintf(stderr, "Error: Unbounded CALENDAR. Add predicates to limit output\n");
                 exit(-1);
             }
+            if (table->db->vfs == VFS_EPHEMERIS) {
+                fprintf(stderr, "Error: Unbounded EPHEMERIS. Add predicates to limit output\n");
+                exit(-1);
+            }
+            if (table->db->vfs == VFS_CRON) {
+                fprintf(stderr, "Error: Unbounded CRON. Add predicates to limit output\n");
+                exit(-1);
+            }
         }
 
         if (
@@ -55,6 +63,14 @@ void checkPlan (struct Query *query, struct Plan *plan) {
             }
             if (table->db->vfs == VFS_CALENDAR) {
                 fprintf(stderr, "Error: Unbounded CALENDAR. Add predicates to limit output\n");
+                exit(-1);
+            }
+            if (table->db->vfs == VFS_EPHEMERIS) {
+                fprintf(stderr, "Error: Unbounded EPHEMERIS. Add predicates to limit output\n");
+                exit(-1);
+            }
+            if (table->db->vfs == VFS_CRON) {
+                fprintf(stderr, "Error: Unbounded CRON. Add predicates to limit output\n");
                 exit(-1);
             }
         }
