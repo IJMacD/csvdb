@@ -378,7 +378,7 @@ SELECT (SELECT name FROM suits WHERE name = 'hearts' OR name = 'spades' ORDER BY
 SELECT (SELECT COUNT(*) FROM suits) AS a, (SELECT COUNT(*) FROM ranks) AS b;
 SELECT (SELECT COUNT(*) FROM suits) AS a, (SELECT COUNT(*) FROM ranks) AS b FROM ranks LIMIT 1;
 FROM ranks SELECT (SELECT COUNT(*) FROM suits) AS a, (SELECT SUM(value) FROM ranks) AS b LIMIT 1;
--- Correlated scalar subqueries (FUNC_SUBQUERY + AST outer bind)
+-- Correlated scalar subqueries (FUNC_SUBQUERY + parse-once clone + AST bind)
 FROM ranks AS r SELECT name, value, (SELECT COUNT(*) FROM ranks AS r2 WHERE r2.value < r.value) AS less_count ORDER BY value LIMIT 5;
 FROM suits AS s SELECT name, (SELECT COUNT(*) FROM ranks WHERE value = LENGTH(s.name)) AS matches;
 FROM ranks AS r WHERE (SELECT COUNT(*) FROM ranks AS r2 WHERE r2.value > r.value) = 0 SELECT name, value;

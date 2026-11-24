@@ -18,13 +18,14 @@ int select_subquery_mem(
     const char **end_ptr);
 
 /**
- * Run a scalar subquery, optionally binding unresolved columns from the
- * current outer row as constants (AST-bind correlation).
+ * Run a scalar subquery from a pre-parsed template Query, cloning it and
+ * optionally binding unresolved columns from the current outer row as
+ * constants (AST-bind correlation).
  * Writes the first column of the first result row into output.
  * Returns bytes written, 0 for empty/NULL, or -1 on error.
  */
 int evaluate_scalar_subquery(
-    const char *sql,
+    struct Query *template_query,
     struct Table *outer_tables,
     int outer_table_count,
     RowListIndex outer_row_list,
@@ -32,6 +33,12 @@ int evaluate_scalar_subquery(
     int has_outer_row,
     char *output,
     int max_length);
+
+/** Deep-copy a parsed Query (tables unopened; safe to clone repeatedly). */
+struct Query *cloneQuery(const struct Query *src);
+
+/** Free a Query allocated with makeQuery/cloneQuery/calloc + parseQuery. */
+void destroyQuery(struct Query *query);
 
 int process_query(
     struct Query *q,

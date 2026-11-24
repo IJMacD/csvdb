@@ -252,6 +252,8 @@ struct Field {
     enum FieldIndex index;
 };
 
+struct Query; /* forward decl — Node may own a nested Query for FUNC_SUBQUERY */
+
 // Since Field is first field of Node, it means that Node can be cast to Field
 struct Node {
     struct Field field;
@@ -268,6 +270,11 @@ struct Node {
     struct Node *children;
     /* To filter aggregate functions */
     struct Node *filter;
+    /**
+     * Parsed scalar subquery (FUNC_SUBQUERY only). Owned by this node;
+     * cloned per outer row at evaluation time.
+     */
+    struct Query *subquery;
 };
 
 enum AliasSearchMode {

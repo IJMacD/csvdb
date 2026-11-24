@@ -66,7 +66,7 @@ int evaluateNode(
         }
 
         int result = evaluate_scalar_subquery(
-            node->field.text,
+            node->subquery,
             tables,
             outer_table_count,
             row_list,

@@ -51,7 +51,6 @@ static int process_subquery(
     enum OutputOption options,
     char *output_filename);
 
-static void destroy_query(struct Query *q);
 
 static int wrap_query(
     struct Query *query,
@@ -120,7 +119,7 @@ int select_query(
             format | (output_flags & OUTPUT_OPTION_HEADERS),
             output);
 
-        destroy_query(q);
+        destroyQuery(q);
 
         free(q);
 
@@ -162,7 +161,7 @@ int select_query(
             (output_flags & OUTPUT_OPTION_STATS),
             table.name);
 
-        destroy_query(q2a);
+        destroyQuery(q2a);
 
         if (result < 0)
         {
@@ -190,20 +189,20 @@ int select_query(
 
         q2b->tables = NULL;
 
-        destroy_query(q2b);
+        destroyQuery(q2b);
 
         free(q2a);
         free(q2b);
 
         //      Why aren't we destroying here?
-        // destroy_query(&q);
+        // destroyQuery(&q);
 
         return result;
     }
 
     int result = process_query(q, output_flags, output);
 
-    destroy_query(q);
+    destroyQuery(q);
 
     free(q);
 
@@ -579,7 +578,7 @@ int select_subquery_file(
 
     result = process_subquery(q, 0, filename);
 
-    destroy_query(q);
+    destroyQuery(q);
 
     free(q);
 
@@ -628,7 +627,7 @@ int select_subquery_mem(
 
     result = csvMem_fromQuery(db, q);
 
-    destroy_query(q);
+    destroyQuery(q);
 
     free(q);
 
@@ -636,7 +635,7 @@ int select_subquery_mem(
 }
 
 int evaluate_scalar_subquery(
-    const char *sql,
+    struct Query *template_query,
     struct Table *outer_tables,
     int outer_table_count,
     RowListIndex outer_row_list,
@@ -647,15 +646,16 @@ int evaluate_scalar_subquery(
 {
     output[0] = '\0';
 
+    if (template_query == NULL)
+    {
+        return -1;
+    }
+
     beginRowListPoolNest();
 
-    struct Query *q = makeQuery();
-
-    int result = parseQuery(q, sql, NULL);
-    if (result < 0)
+    struct Query *q = cloneQuery(template_query);
+    if (q == NULL)
     {
-        destroy_query(q);
-        free(q);
         endRowListPoolNest();
         return -1;
     }
@@ -666,19 +666,12 @@ int evaluate_scalar_subquery(
     q->outer_row_index = outer_row_index;
     q->has_outer_row = has_outer_row;
 
-#ifdef DEBUG
-    if (debug_verbosity >= 1)
-    {
-        fprintf(stderr, "Scalar subquery: %s\n", sql);
-    }
-#endif
-
     struct DB db = {0};
-    result = csvMem_fromQuery(&db, q);
+    int result = csvMem_fromQuery(&db, q);
     if (result < 0)
     {
         closeDB(&db);
-        destroy_query(q);
+        destroyQuery(q);
         free(q);
         endRowListPoolNest();
         return -1;
@@ -695,7 +688,7 @@ int evaluate_scalar_subquery(
     }
 
     closeDB(&db);
-    destroy_query(q);
+    destroyQuery(q);
     free(q);
     endRowListPoolNest();
 
@@ -781,10 +774,54 @@ static int information_query(const char *table, FILE *output)
     return 0;
 }
 
-static void destroy_query(struct Query *query)
+/**
+ * Free FUNC_SUBQUERY template Queries in a node tree without freeNode'ing
+ * child arrays (safe when optimise has shallow-moved nodes).
+ */
+static void releaseSubqueryTemplates(struct Node *node)
 {
+    if (node == NULL)
+    {
+        return;
+    }
+
+    if (node->function == FUNC_SUBQUERY && node->subquery != NULL)
+    {
+        destroyQuery(node->subquery);
+        free(node->subquery);
+        node->subquery = NULL;
+    }
+
+    if (node->children != NULL && node->child_count > 0)
+    {
+        for (int i = 0; i < node->child_count; i++)
+        {
+            releaseSubqueryTemplates(&node->children[i]);
+        }
+    }
+
+    if (node->filter != NULL)
+    {
+        releaseSubqueryTemplates(node->filter);
+    }
+}
+
+void destroyQuery(struct Query *query)
+{
+    if (query == NULL)
+    {
+        return;
+    }
+
     if (query->predicate_nodes != NULL)
     {
+        // Optimise may shallow-move predicate nodes; do not freeNode the
+        // whole tree (double-frees children). Only release owned subquery
+        // templates, then free the array like historical destroy_query.
+        for (int i = 0; i < query->predicate_count; i++)
+        {
+            releaseSubqueryTemplates(&query->predicate_nodes[i]);
+        }
         free(query->predicate_nodes);
         query->predicate_nodes = NULL;
     }
@@ -803,9 +840,18 @@ static void destroy_query(struct Query *query)
     {
         for (int i = 0; i < query->table_count; i++)
         {
+            freeNode(&query->tables[i].join);
+
             if (query->tables[i].db == stdin_db)
             {
                 // Don't close special DB created from stdin
+                continue;
+            }
+
+            // Unresolved table-subquery sentinel — never close/free.
+            if (query->tables[i].db == DB_SUBQUERY)
+            {
+                query->tables[i].db = NULL;
                 continue;
             }
 
@@ -832,9 +878,14 @@ static void destroy_query(struct Query *query)
         query->tables = NULL;
     }
 
-    for (int i = 0; i < query->column_count; i++)
+    if (query->column_nodes != NULL)
     {
-        freeNode((struct Node *)&query->column_nodes[i]);
+        for (int i = 0; i < query->column_count; i++)
+        {
+            freeNode(&query->column_nodes[i]);
+        }
+        free(query->column_nodes);
+        query->column_nodes = NULL;
     }
 
     for (int i = 0; i < query->order_count; i++)
@@ -851,6 +902,147 @@ static void destroy_query(struct Query *query)
     {
         freeNode(&query->distinct_nodes[i]);
     }
+
+    query->outer_tables = NULL;
+    query->outer_table_count = 0;
+    query->has_outer_row = 0;
+}
+
+struct Query *cloneQuery(const struct Query *src)
+{
+    if (src == NULL)
+    {
+        return NULL;
+    }
+
+    struct Query *q = calloc(1, sizeof(*q));
+    if (q == NULL)
+    {
+        return NULL;
+    }
+
+#ifdef DEBUG
+    q->id = ++query_count;
+#endif
+
+    q->flags = src->flags;
+    q->offset_value = src->offset_value;
+    q->limit_value = src->limit_value;
+    // Outer binds are set by the caller after clone.
+    q->outer_tables = NULL;
+    q->outer_table_count = 0;
+    q->outer_row_list = 0;
+    q->outer_row_index = 0;
+    q->has_outer_row = 0;
+
+    if (src->table_count > 0 && src->tables != NULL)
+    {
+        q->tables = calloc((size_t)src->table_count, sizeof(*q->tables));
+        if (q->tables == NULL)
+        {
+            free(q);
+            return NULL;
+        }
+        q->table_count = src->table_count;
+        for (int i = 0; i < src->table_count; i++)
+        {
+            strcpy(q->tables[i].name, src->tables[i].name);
+            strcpy(q->tables[i].alias, src->tables[i].alias);
+            q->tables[i].join_type = src->tables[i].join_type;
+            // Keep DB_SUBQUERY sentinel so populate_tables re-runs the nested
+            // table subquery; never share opened DB pointers from a prior run.
+            if (src->tables[i].db == DB_SUBQUERY)
+            {
+                q->tables[i].db = DB_SUBQUERY;
+            }
+            else
+            {
+                q->tables[i].db = NULL;
+            }
+            clearNode(&q->tables[i].join);
+            copyNodeTree(&q->tables[i].join, &src->tables[i].join);
+        }
+    }
+
+    if (src->column_count > 0 && src->column_nodes != NULL)
+    {
+        q->column_nodes =
+            calloc((size_t)src->column_count, sizeof(*q->column_nodes));
+        if (q->column_nodes == NULL)
+        {
+            destroyQuery(q);
+            free(q);
+            return NULL;
+        }
+        q->column_count = src->column_count;
+        for (int i = 0; i < src->column_count; i++)
+        {
+            clearNode(&q->column_nodes[i]);
+            copyNodeTree(&q->column_nodes[i], &src->column_nodes[i]);
+            // copyNodeTree skips alias; restore it for SELECT labels.
+            strcpy(q->column_nodes[i].alias, src->column_nodes[i].alias);
+        }
+    }
+
+    if (src->predicate_count > 0 && src->predicate_nodes != NULL)
+    {
+        q->predicate_nodes =
+            calloc((size_t)src->predicate_count, sizeof(*q->predicate_nodes));
+        if (q->predicate_nodes == NULL)
+        {
+            destroyQuery(q);
+            free(q);
+            return NULL;
+        }
+        q->predicate_count = src->predicate_count;
+        for (int i = 0; i < src->predicate_count; i++)
+        {
+            clearNode(&q->predicate_nodes[i]);
+            copyNodeTree(&q->predicate_nodes[i], &src->predicate_nodes[i]);
+        }
+    }
+
+    if (src->having_count > 0 && src->having_nodes != NULL)
+    {
+        q->having_nodes =
+            calloc((size_t)src->having_count, sizeof(*q->having_nodes));
+        if (q->having_nodes == NULL)
+        {
+            destroyQuery(q);
+            free(q);
+            return NULL;
+        }
+        q->having_count = src->having_count;
+        for (int i = 0; i < src->having_count; i++)
+        {
+            clearNode(&q->having_nodes[i]);
+            copyNodeTree(&q->having_nodes[i], &src->having_nodes[i]);
+        }
+    }
+
+    q->order_count = src->order_count;
+    for (int i = 0; i < src->order_count; i++)
+    {
+        clearNode(&q->order_nodes[i]);
+        copyNodeTree(&q->order_nodes[i], &src->order_nodes[i]);
+        strcpy(q->order_nodes[i].alias, src->order_nodes[i].alias);
+    }
+
+    q->group_count = src->group_count;
+    for (int i = 0; i < src->group_count; i++)
+    {
+        clearNode(&q->group_nodes[i]);
+        copyNodeTree(&q->group_nodes[i], &src->group_nodes[i]);
+    }
+
+    q->distinct_count = src->distinct_count;
+    for (int i = 0; i < src->distinct_count; i++)
+    {
+        clearNode(&q->distinct_nodes[i]);
+        copyNodeTree(&q->distinct_nodes[i], &src->distinct_nodes[i]);
+    }
+
+    return q;
 }
 
 static int populate_tables(struct Query *q)
@@ -1292,7 +1484,7 @@ static int wrap_query(
     remove(table.name);
 
     q2->tables = NULL;
-    destroy_query(q2);
+    destroyQuery(q2);
 
     free(q2);
 

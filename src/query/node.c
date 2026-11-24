@@ -3,6 +3,7 @@
 #include "../structs.h"
 #include "../db/db.h"
 #include "node.h"
+#include "select.h"
 
 /**
  * Allocates additional child nodes on a node
@@ -74,7 +75,7 @@ struct Node *addChildNode (struct Node *parent_node) {
  * @param src
  * @return void
  */
-void copyNodeTree (struct Node *dest, struct Node *src) {
+void copyNodeTree (struct Node *dest, const struct Node *src) {
     memcpy(&dest->field, &src->field, sizeof(dest->field));
 
     dest->function = src->function;
@@ -89,6 +90,8 @@ void copyNodeTree (struct Node *dest, struct Node *src) {
 
     dest->filter = NULL;
 
+    dest->subquery = NULL;
+
     if (src->children != NULL && src->child_count > 0) {
         dest->children = calloc(src->child_count, sizeof(*dest));
 
@@ -101,6 +104,10 @@ void copyNodeTree (struct Node *dest, struct Node *src) {
         dest->filter = calloc(1, sizeof(*dest));
         copyNodeTree(dest->filter, src->filter);
     }
+
+    if (src->subquery != NULL) {
+        dest->subquery = cloneQuery(src->subquery);
+    }
 }
 
 void clearNode (struct Node *node) {
@@ -112,6 +119,7 @@ void clearNode (struct Node *node) {
     node->function = FUNC_UNITY;
     node->alias[0] = '\0';
     node->filter = NULL;
+    node->subquery = NULL;
 }
 
 void freeNode (struct Node *node) {
@@ -127,8 +135,15 @@ void freeNode (struct Node *node) {
     }
 
     if (node->filter != NULL) {
+        freeNode(node->filter);
         free(node->filter);
         node->filter = NULL;
+    }
+
+    if (node->subquery != NULL) {
+        destroyQuery(node->subquery);
+        free(node->subquery);
+        node->subquery = NULL;
     }
 }
 
@@ -147,6 +162,8 @@ struct Node * cloneNodeIntoChild (struct Node *node) {
     // Set clone to be child of root node
     node->children = clone;
     node->child_count = 1;
+    // Owned subquery pointer moved with the child; parent must not free it.
+    node->subquery = NULL;
 
     return &node->children[0];
 }
@@ -157,6 +174,14 @@ struct Node * cloneNodeIntoChild (struct Node *node) {
  */
 int getTableBitMap (struct Node *node) {
     int map = 0;
+
+    // May reference outer columns; depend on every table bit so
+    // evaluateNodeTreePartial does not collapse the node early.
+    // Must stay positive: ~0 is -1 as signed int and compares LESS than
+    // bit_map_limit, which incorrectly triggered early collapse.
+    if (node->function == FUNC_SUBQUERY) {
+        return 0x7fffffff;
+    }
 
     if (node->child_count == -1 || node->function == FUNC_UNITY) {
         if (node->field.index != FIELD_CONSTANT) {
