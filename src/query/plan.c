@@ -1329,15 +1329,25 @@ static void addLimitStepIfRequired(struct Plan *plan, struct Query *query)
         int limit = query->offset_value + query->limit_value;
 
         if (
-            /// TODO: better tracking of predicates
-            // maybe they don't matter here. They might have been taken care of
-            // in joins etc.
-            query->predicate_count == 0 &&
             query->order_count == 0 &&
             !(query->flags & FLAG_GROUP) &&
             !(query->flags & FLAG_DISTINCT) &&
             query->having_count == 0)
         {
+            // WHERE predicates that only reference table 0 are applied on the
+            // first scan, so they do not change the 1:1 LEFT JOIN row count.
+            // Predicates on later tables can filter after the join and must
+            // not allow LIMIT pushdown onto the driving table.
+            int preds_on_first_only = 1;
+            for (int p = 0; p < query->predicate_count; p++)
+            {
+                // Bit 0 = table 0; any higher bit references another table.
+                if ((getTableBitMap(&query->predicate_nodes[p]) & ~1) != 0)
+                {
+                    preds_on_first_only = 0;
+                    break;
+                }
+            }
 
             // First thing to check is if we have all LEFT joins.
             // If we have all left joins then we will never need more than LIMIT
@@ -1366,9 +1376,10 @@ static void addLimitStepIfRequired(struct Plan *plan, struct Query *query)
                 }
             }
 
-            // If we have no joins, or only left joins; then we can
-            // apply the limit to the first "{table|index} {access|scan}""
-            if (all_left)
+            // If we have no joins, or only left joins with first-table-only
+            // predicates; then we can apply the limit to the first
+            // "{table|index} {access|scan}"
+            if (all_left && preds_on_first_only)
             {
                 plan->steps[0].limit = limit;
                 return;
