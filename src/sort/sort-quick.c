@@ -94,7 +94,10 @@ static int compare (struct SortContext *context, int index_a, int index_b) {
             MAX_VALUE_LENGTH
         );
 
-        if (is_numeric(value_a) && is_numeric(value_b)) {
+        if (is_complex(value_a) || is_complex(value_b)) {
+            result = compare_complex(value_a, value_b);
+        }
+        else if (is_numeric(value_a) && is_numeric(value_b)) {
             result = compare_numeric(value_a, value_b);
         }
         else {

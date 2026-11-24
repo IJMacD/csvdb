@@ -37,6 +37,131 @@ int is_numeric(const char *string)
     return 1;
 }
 
+/**
+ * True if body is optional '+' then a numeric (is_numeric allows '-').
+ */
+static int is_signed_numeric(const char *body)
+{
+    if (body[0] == '\0')
+        return 0;
+    if (body[0] == '+')
+        return is_numeric(body + 1);
+    return is_numeric(body);
+}
+
+static int parse_complex_form(const char *string, double *re, double *im)
+{
+    const char *ptr = string;
+    while (isspace((unsigned char)*ptr))
+        ptr++;
+
+    size_t len = strlen(ptr);
+    if (len == 0)
+        return 0;
+
+    if (ptr[len - 1] != 'i' && ptr[len - 1] != 'I')
+        return 0;
+
+    char body[256];
+    if (len - 1 >= sizeof(body))
+        return 0;
+
+    memcpy(body, ptr, len - 1);
+    body[len - 1] = '\0';
+
+    // Trim trailing spaces from body
+    {
+        size_t blen = strlen(body);
+        while (blen > 0 && isspace((unsigned char)body[blen - 1]))
+        {
+            body[--blen] = '\0';
+        }
+    }
+
+    // i / +i / -i
+    if (body[0] == '\0')
+    {
+        *re = 0;
+        *im = 1;
+        return 1;
+    }
+    if ((body[0] == '+' || body[0] == '-') && body[1] == '\0')
+    {
+        *re = 0;
+        *im = (body[0] == '-') ? -1.0 : 1.0;
+        return 1;
+    }
+
+    // Pure imag: <number>i
+    if (is_signed_numeric(body))
+    {
+        *re = 0;
+        if (body[0] == '+')
+            *im = strtod(body + 1, NULL);
+        else
+            *im = strtod(body, NULL);
+        return 1;
+    }
+
+    // a+bi / a-bi — first + or - after the leading sign of the real part
+    char *sep = NULL;
+    for (char *p = body + 1; *p != '\0'; p++)
+    {
+        if (*p == '+' || *p == '-')
+        {
+            sep = p;
+            break;
+        }
+    }
+    if (sep == NULL)
+        return 0;
+
+    char sign = *sep;
+    *sep = '\0';
+
+    if (!is_signed_numeric(body))
+        return 0;
+
+    if (body[0] == '+')
+        *re = strtod(body + 1, NULL);
+    else
+        *re = strtod(body, NULL);
+
+    const char *imag_body = sep + 1;
+    if (*imag_body == '\0')
+    {
+        *im = (sign == '-') ? -1.0 : 1.0;
+        return 1;
+    }
+
+    // Imag coefficient after the separator must be unsigned digits
+    if (!is_numeric(imag_body) || imag_body[0] == '-')
+        return 0;
+
+    *im = strtod(imag_body, NULL);
+    if (sign == '-')
+        *im = -*im;
+    return 1;
+}
+
+int is_complex(const char *string)
+{
+    double re, im;
+    return parse_complex_form(string, &re, &im);
+}
+
+int parse_complex(const char *string, double *re, double *im)
+{
+    if (is_numeric(string))
+    {
+        *re = strtod(string, NULL);
+        *im = 0;
+        return 1;
+    }
+
+    return parse_complex_form(string, re, im);
+}
+
 int sprint_number(char *output, double value)
 {
     if (isnan(value) || isinf(value))
@@ -78,6 +203,49 @@ int sprint_number(char *output, double value)
     return sprintf(output, "%s", buf);
 }
 
+static int nearly_zero(double value)
+{
+    // Absorb float noise from complex ops (e.g. EXP(I*pi) ≈ -1)
+    return fabs(value) < 1e-9;
+}
+
+static int nearly_one(double value)
+{
+    return fabs(fabs(value) - 1.0) < 1e-9;
+}
+
+int sprint_complex(char *output, double re, double im)
+{
+    if (isnan(re) || isnan(im) || isinf(re) || isinf(im))
+    {
+        output[0] = '\0';
+        return 0;
+    }
+
+    if (nearly_zero(im))
+        return sprint_number(output, re);
+
+    if (nearly_zero(re))
+    {
+        if (nearly_one(im))
+            return sprintf(output, "%s", im < 0 ? "-i" : "i");
+
+        char buf[64];
+        sprint_number(buf, im);
+        return sprintf(output, "%si", buf);
+    }
+
+    char rebuf[64];
+    sprint_number(rebuf, re);
+
+    if (nearly_one(im))
+        return sprintf(output, "%s%si", rebuf, im < 0 ? "-" : "+");
+
+    char imbuf[64];
+    sprint_number(imbuf, fabs(im));
+    return sprintf(output, "%s%s%si", rebuf, im < 0 ? "-" : "+", imbuf);
+}
+
 int compare_numeric(const char *a, const char *b)
 {
     double left = strtod(a, NULL);
@@ -90,7 +258,24 @@ int compare_numeric(const char *a, const char *b)
     return 0;
 }
 
-int format_sortable_number(char *output, const char *value)
+int compare_complex(const char *a, const char *b)
+{
+    double re_a, im_a, re_b, im_b;
+    if (!parse_complex(a, &re_a, &im_a) || !parse_complex(b, &re_b, &im_b))
+        return 0;
+
+    if (re_a < re_b)
+        return -1;
+    if (re_a > re_b)
+        return 1;
+    if (im_a < im_b)
+        return -1;
+    if (im_a > im_b)
+        return 1;
+    return 0;
+}
+
+static int format_sortable_double(char *output, double value)
 {
     // Map IEEE-754 doubles to an unsigned bit pattern that sorts
     // lexicographically in the same order as the numeric values.
@@ -100,7 +285,7 @@ int format_sortable_number(char *output, const char *value)
         uint64_t u;
     } x;
 
-    x.d = strtod(value, NULL);
+    x.d = value;
 
     if (x.u & (1ULL << 63))
         x.u = ~x.u;
@@ -108,6 +293,22 @@ int format_sortable_number(char *output, const char *value)
         x.u |= (1ULL << 63);
 
     return sprintf(output, "%016llx", (unsigned long long)x.u);
+}
+
+int format_sortable_number(char *output, const char *value)
+{
+    return format_sortable_double(output, strtod(value, NULL));
+}
+
+int format_sortable_complex(char *output, const char *value)
+{
+    double re, im;
+    if (!parse_complex(value, &re, &im))
+        return sprintf(output, "%s", value);
+
+    int n = format_sortable_double(output, re);
+    n += format_sortable_double(output + n, im);
+    return n;
 }
 
 void reverse_array(int *array, int size)

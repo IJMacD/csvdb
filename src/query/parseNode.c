@@ -601,6 +601,26 @@ static int parseFunction(const char *value, const char *query, size_t *index, st
     {
         node->function = FUNC_LOG10;
     }
+    else if (strcmp(value, "COMPLEX") == 0)
+    {
+        node->function = FUNC_COMPLEX;
+    }
+    else if (strcmp(value, "RE") == 0)
+    {
+        node->function = FUNC_RE;
+    }
+    else if (strcmp(value, "IM") == 0)
+    {
+        node->function = FUNC_IM;
+    }
+    else if (strcmp(value, "CONJ") == 0)
+    {
+        node->function = FUNC_CONJ;
+    }
+    else if (strcmp(value, "ARG") == 0)
+    {
+        node->function = FUNC_ARG;
+    }
     else if (strcmp(value, "TO_HEX") == 0)
     {
         node->function = FUNC_TO_HEX;

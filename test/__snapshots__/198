@@ -1,4 +1,6 @@
-| INTERVAL 1 WEEK    | INTERVAL 1 DAY     | INTERVAL 1 HOUR    | INTERVAL 15 MINUTE | INTERVAL 30 SECOND |
-|--------------------|--------------------|--------------------|--------------------|--------------------|
-|                  7 |                  1 |               3600 |                900 |                 30 |
+| name               |
+|--------------------|
+| diamonds           |
+| hearts             |
+| spades             |
 

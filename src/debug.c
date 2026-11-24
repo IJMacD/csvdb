@@ -36,7 +36,7 @@ const char *FUNC_NAMES[] = {
     "TODAY","NOW","DATE","TIME","CLOCK","MAKE_DATE","MAKE_TIME","MAKE_DATETIME",
     "","","","","","","","",
     // 0x80
-    "","","","","","","","",
+    "","COMPLEX","RE","IM","CONJ","ARG","","",
     "","","","","","","","",
     // 0x90
     "","","","","","","","",

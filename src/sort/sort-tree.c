@@ -49,6 +49,7 @@ void sortResultRows (
     struct TreeNode *root = NULL;
 
     int numeric_mode = 0;
+    int complex_mode = 0;
 
     for (unsigned int i = 0; i < source_list->row_count; i++) {
         struct TreeNode *treenode = &pool[i];
@@ -63,15 +64,20 @@ void sortResultRows (
             sizeof(treenode->value)
         );
 
-        // First value determines whether we're in numeric mode or not
+        // First value determines whether we're in numeric/complex mode
         if (i == 0) {
-            numeric_mode = is_numeric(treenode->value);
+            complex_mode = is_complex(treenode->value);
+            numeric_mode = !complex_mode && is_numeric(treenode->value);
         }
 
-        // Numeric values need an order-preserving fixed-width key so that
-        // lexicographic string comparison matches numeric ordering (including
-        // floats and negatives).
-        if (numeric_mode) {
+        // Numeric / complex values need an order-preserving fixed-width key so
+        // that lexicographic string comparison matches numeric ordering.
+        if (complex_mode) {
+            char sortable[MAX_VALUE_LENGTH];
+            format_sortable_complex(sortable, treenode->value);
+            strcpy(treenode->value, sortable);
+        }
+        else if (numeric_mode) {
             char sortable[MAX_VALUE_LENGTH];
             format_sortable_number(sortable, treenode->value);
             strcpy(treenode->value, sortable);
