@@ -189,6 +189,7 @@ INSERT INTO tt2 VALUES (14),(15),(16);
 | `stdin.tsv` / `stdin.col` / `stdin.wsv` | Stdin with that format |
 | `CALENDAR` | Builtin calendar virtual table |
 | `SEQUENCE` | Builtin integer sequence (`value` = 0 … 9999999) |
+| `EPHEMERIS` | Builtin solar/lunar ephemeris (one row per Julian day) |
 
 Quoted identifiers are allowed: `FROM "my file.csv"`.
 
@@ -594,6 +595,32 @@ Virtual date table (one row per Julian day). Prefer predicates on `date` / `juli
 ```sql
 FROM CALENDAR WHERE date = CURRENT_DATE
 SELECT julian, date, ordinalDate, weekDate;
+```
+
+### `EPHEMERIS`
+
+Virtual solar/lunar table (one row per Julian day; same key space as `CALENDAR`). Prefer predicates on `date` / `julian` so the planner can bound the scan. Phase flags mark the civil day on which that phase is crossed (vs the previous day).
+
+| Column | Description |
+|--------|-------------|
+| `julian` / `rowid` | Julian day number |
+| `date` | `YYYY-MM-DD` |
+| `solarLongitude` | Apparent solar longitude (degrees) |
+| `equationOfTime` | Equation of time (minutes) |
+| `solarDeclination` | Solar declination (degrees) |
+| `moonPhase` | Lunation fraction (`0` = new … `0.5` = full) |
+| `moonIllumination` | Illuminated fraction `0`…`1` |
+| `moonAgeDays` | Age in days since new moon |
+| `lunarLongitude` | Approximate lunar ecliptic longitude (degrees) |
+| `isNewMoon` | `1` if new moon occurs on this day |
+| `isFullMoon` | `1` if full moon occurs on this day |
+| `isFirstQuarter` | `1` if first quarter occurs on this day |
+| `isLastQuarter` | `1` if last quarter occurs on this day |
+
+```sql
+FROM EPHEMERIS WHERE date BETWEEN '2024-01-01' AND '2024-01-31'
+  AND isFullMoon = 1
+SELECT date, moonIllumination;
 ```
 
 ---

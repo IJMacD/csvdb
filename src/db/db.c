@@ -12,6 +12,7 @@
 #include "sequence.h"
 #include "sample.h"
 #include "dir.h"
+#include "ephemeris.h"
 #include "view.h"
 #include "temp.h"
 #include "tsv.h"
@@ -75,6 +76,19 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getRecordCount = &sequence_getRecordCount,
         .getRecordValue = &sequence_getRecordValue,
         .fullTableAccess = &sequence_fullTableAccess,
+    },
+    #endif
+    #ifdef COMPILE_EPHEMERIS
+    [VFS_EPHEMERIS] = {
+        .openDB = &ephemeris_openDB,
+        .closeDB = &ephemeris_closeDB,
+        .getFieldIndex = &ephemeris_getFieldIndex,
+        .getFieldName = &ephemeris_getFieldName,
+        .getRecordCount = &ephemeris_getRecordCount,
+        .getRecordValue = &ephemeris_getRecordValue,
+        .findIndex = &ephemeris_findIndex,
+        .fullTableAccess = &ephemeris_fullTableAccess,
+        .indexSearch = &ephemeris_indexSearch,
     },
     #endif
     #ifdef COMPILE_SAMPLE
@@ -395,6 +409,18 @@ enum IndexSearchType findIndex(
     #ifdef COMPILE_CALENDAR
     if (strcmp(table_name, "CALENDAR") == 0) {
         return calendar_findIndex(db, table_name, node, index_type_flags, resolved);
+    }
+    #endif
+
+    #ifdef COMPILE_EPHEMERIS
+    if (strcmp(table_name, "EPHEMERIS") == 0) {
+        return ephemeris_findIndex(
+            db,
+            table_name,
+            node,
+            index_type_flags,
+            resolved
+        );
     }
     #endif
 
