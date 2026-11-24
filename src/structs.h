@@ -31,6 +31,8 @@ enum VFSType {
     VFS_DIR         = 12,
     VFS_TSV         = 13,
     VFS_EPHEMERIS   = 14,
+    VFS_PERMUTATIONS = 15,
+    VFS_COMBINATIONS = 16,
 
     VFS_COUNT
 };

@@ -191,6 +191,8 @@ INSERT INTO tt2 VALUES (14),(15),(16);
 | `SEQUENCE` | Builtin integer sequence (`value` = 0 … 9999999) |
 | `EPHEMERIS` | Builtin solar/lunar ephemeris (one row per Julian day) |
 | `EPHEMERIS(lat, lon)` | Same, with observer for rise/set times |
+| `PERMUTATIONS(n)` | All orderings of `{0..n-1}` (`n` ≤ 10) |
+| `COMBINATIONS(n, k)` | All k-subsets of `{0..n-1}` |
 
 Quoted identifiers are allowed: `FROM "my file.csv"`.
 
@@ -630,6 +632,20 @@ SELECT date, moonIllumination;
 
 FROM EPHEMERIS(51.477, 0.0) WHERE date = '2024-06-21'
 SELECT date, sunRise, sunSet;
+```
+
+### `PERMUTATIONS(n)` / `COMBINATIONS(n, k)`
+
+Lexicographic generators over `{0,1,…,n−1}`. Wide integer columns only (no comma-joined display string). `PERMUTATIONS` allows `0 ≤ n ≤ 10`; `COMBINATIONS` requires `0 ≤ k ≤ n`, `n ≤ 20`, `k ≤ 10`.
+
+| Table | Columns |
+|-------|---------|
+| `PERMUTATIONS(n)` | `rank` / `rowid`, `p0` … `p{n-1}` |
+| `COMBINATIONS(n, k)` | `rank` / `rowid`, `c0` … `c{k-1}` (sorted ascending) |
+
+```sql
+FROM PERMUTATIONS(3) SELECT rank, p0, p1, p2;
+FROM COMBINATIONS(5, 2) SELECT rank, c0, c1;
 ```
 
 ---

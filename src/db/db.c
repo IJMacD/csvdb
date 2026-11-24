@@ -13,6 +13,7 @@
 #include "sample.h"
 #include "dir.h"
 #include "ephemeris.h"
+#include "permutations.h"
 #include "view.h"
 #include "temp.h"
 #include "tsv.h"
@@ -89,6 +90,24 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .findIndex = &ephemeris_findIndex,
         .fullTableAccess = &ephemeris_fullTableAccess,
         .indexSearch = &ephemeris_indexSearch,
+    },
+    #endif
+    #ifdef COMPILE_PERMUTATIONS
+    [VFS_PERMUTATIONS] = {
+        .openDB = &permutations_openDB,
+        .closeDB = &permutations_closeDB,
+        .getFieldIndex = &permutations_getFieldIndex,
+        .getFieldName = &permutations_getFieldName,
+        .getRecordCount = &permutations_getRecordCount,
+        .getRecordValue = &permutations_getRecordValue,
+    },
+    [VFS_COMBINATIONS] = {
+        .openDB = &permutations_openDB,
+        .closeDB = &permutations_closeDB,
+        .getFieldIndex = &permutations_getFieldIndex,
+        .getFieldName = &permutations_getFieldName,
+        .getRecordCount = &permutations_getRecordCount,
+        .getRecordValue = &permutations_getRecordValue,
     },
     #endif
     #ifdef COMPILE_SAMPLE
