@@ -367,3 +367,6 @@ FROM CALENDAR WHERE weekString = '2026-W48' SELECT date, weekString;
 -- ISO week parse: Jan 1 Friday still shifts correctly
 FROM CALENDAR WHERE date = '2021-W01-1' SELECT date, weekString, weekday;
 FROM CALENDAR WHERE date = '2023-W08-6' SELECT date, weekString, weekday;
+-- LIMIT pushdown onto CALENDAR for all-LEFT joins with first-table WHERE
+FROM CALENDAR AS c LEFT JOIN EPHEMERIS AS e ON e.date = c.date WHERE c.weekString >= '2026-W48' SELECT e.date, e.moonPhase LIMIT 5;
+FROM CALENDAR AS c LEFT JOIN EPHEMERIS AS e ON e.julian = c.julian WHERE c.date >= '2026-11-24' SELECT e.date LIMIT 3;

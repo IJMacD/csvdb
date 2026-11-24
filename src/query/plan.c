@@ -1329,20 +1329,16 @@ static void addLimitStepIfRequired(struct Plan *plan, struct Query *query)
         int limit = query->offset_value + query->limit_value;
 
         if (
-            /// TODO: better tracking of predicates
-            // maybe they don't matter here. They might have been taken care of
-            // in joins etc.
-            query->predicate_count == 0 &&
             query->order_count == 0 &&
             !(query->flags & FLAG_GROUP) &&
             !(query->flags & FLAG_DISTINCT) &&
             query->having_count == 0)
         {
-
             // First thing to check is if we have all LEFT joins.
             // If we have all left joins then we will never need more than LIMIT
             // rows from the first table.
             int all_left = 1;
+            int join_count = 0;
 
             int table_id = 1;
 
@@ -1355,6 +1351,7 @@ static void addLimitStepIfRequired(struct Plan *plan, struct Query *query)
                     plan->steps[i].type == PLAN_INDEX_JOIN ||
                     plan->steps[i].type == PLAN_UNIQUE_JOIN)
                 {
+                    join_count++;
 
                     if (query->tables[table_id].join_type != JOIN_LEFT)
                     {
@@ -1366,9 +1363,28 @@ static void addLimitStepIfRequired(struct Plan *plan, struct Query *query)
                 }
             }
 
-            // If we have no joins, or only left joins; then we can
-            // apply the limit to the first "{table|index} {access|scan}""
-            if (all_left)
+            // No WHERE: safe for no joins and for all-LEFT joins.
+            // With WHERE: only push when there is at least one LEFT join and
+            // every predicate is table-0-only (applied on the driving scan).
+            // Single-table residual filters after an index seek must not get
+            // LIMIT on the seek — that under-fetches before ACCESS BY ROWID.
+            int preds_on_first_only = 1;
+            for (int p = 0; p < query->predicate_count; p++)
+            {
+                // Bit 0 = table 0; any higher bit references another table.
+                if ((getTableBitMap(&query->predicate_nodes[p]) & ~1) != 0)
+                {
+                    preds_on_first_only = 0;
+                    break;
+                }
+            }
+
+            int can_push = all_left && (
+                query->predicate_count == 0 ||
+                (join_count > 0 && preds_on_first_only)
+            );
+
+            if (can_push)
             {
                 plan->steps[0].limit = limit;
                 return;
