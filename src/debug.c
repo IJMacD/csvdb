@@ -13,7 +13,7 @@ static void debugNodeInner (struct Node * node, int depth);
 const char *FUNC_NAMES[] = {
     // 0x00
     "","CHAR","TO_HEX","CODEPOINT","W1252","","","",
-    "","","RANDOM","VERSION","","","","",
+    "","","RANDOM","VERSION","PI","","","",
     // 0x10
     "LOG10","ADD","SUB","MUL","DIV","MOD","POW","ABS",
     "SQRT","FLOOR","CEIL","ROUND","EXP","LN","","",

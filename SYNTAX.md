@@ -442,6 +442,7 @@ Concatenation is via `||` (there is no `CONCAT()` call form).
 | `EXP` | `(x)` | *e*<sup>*x*</sup> (complex-capable) |
 | `LN` | `(x)` | Natural log; `NULL` only for zero. Negative reals / complex use the principal branch |
 | `LOG10` | `(x)` | Base-10 log (same domain rules as `LN`) |
+| `PI` | `()` | π (approx. `3.1415926536`) |
 | `COMPLEX` | `(re, im)` | Construct a complex value (both args real) |
 | `RE` | `(z)` | Real part |
 | `IM` | `(z)` | Imaginary part |
