@@ -355,7 +355,11 @@ int parseDate(const char *input, struct DateTime *output)
 
         julian += days - weekdayFirst;
 
-        if (weekdayFirst >= 4) {
+        // ISO week 1 contains the year's first Thursday. If Jan 1 is
+        // Friday–Sunday (weekday 5–7), that week belongs to the previous
+        // ISO year and week 1 starts the following Monday — shift by 7.
+        // Thursday (4) is still week 1 of the new year; do not shift.
+        if (weekdayFirst >= 5) {
             julian += 7;
         }
 
