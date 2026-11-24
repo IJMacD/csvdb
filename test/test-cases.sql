@@ -360,3 +360,10 @@ FROM CRON('0 9 * * 1-5') WHERE date BETWEEN '2024-01-01' AND '2024-01-07' SELECT
 FROM suits AS s SELECT s.*;
 FROM suits AS s, ranks AS r WHERE s.name = 'hearts' AND r.value = 1 SELECT r.*;
 FROM CALENDAR AS c JOIN EPHEMERIS AS e ON e.julian = c.julian WHERE c.date = '2024-01-11' SELECT e.date, e.isNewMoon;
+-- ISO week parse: Jan 1 Thursday (2026) must not shift week 1 by +7
+FROM CALENDAR WHERE date = '2026-W01-1' SELECT date, weekString, weekday;
+FROM CALENDAR WHERE date = '2026-W48-1' SELECT date, weekString, weekday;
+FROM CALENDAR WHERE weekString = '2026-W48' SELECT date, weekString;
+-- ISO week parse: Jan 1 Friday still shifts correctly
+FROM CALENDAR WHERE date = '2021-W01-1' SELECT date, weekString, weekday;
+FROM CALENDAR WHERE date = '2023-W08-6' SELECT date, weekString, weekday;
