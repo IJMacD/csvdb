@@ -635,6 +635,364 @@ int select_subquery_mem(
     return result;
 }
 
+/**
+ * Quote a value as a SQL literal for string-rewrite correlation.
+ * Numerics stay bare; everything else is single-quoted with '' escapes.
+ */
+static void sql_quote_literal(char *out, size_t out_size, const char *value)
+{
+    if (is_numeric(value) || is_complex(value))
+    {
+        snprintf(out, out_size, "%s", value);
+        return;
+    }
+
+    size_t o = 0;
+    if (o + 1 < out_size)
+    {
+        out[o++] = '\'';
+    }
+    for (const char *p = value; *p && o + 2 < out_size; p++)
+    {
+        if (*p == '\'')
+        {
+            if (o + 3 >= out_size)
+            {
+                break;
+            }
+            out[o++] = '\'';
+            out[o++] = '\'';
+        }
+        else
+        {
+            out[o++] = *p;
+        }
+    }
+    if (o + 1 < out_size)
+    {
+        out[o++] = '\'';
+    }
+    out[o] = '\0';
+}
+
+/**
+ * Rewrite outer column references in subquery SQL to literals from the
+ * current outer row (string-bind correlation). Prefers qualified
+ * alias.col / basename.col keys; also binds unique bare column names.
+ * Returns malloc'd rewritten SQL (caller frees), or NULL on failure.
+ */
+static char *rewrite_correlated_sql(
+    const char *sql,
+    struct Table *outer_tables,
+    int outer_table_count,
+    RowListIndex outer_row_list,
+    int outer_row_index)
+{
+    enum
+    {
+        MAX_BINDS = 64
+    };
+    struct
+    {
+        char key[MAX_FIELD_LENGTH];
+        char lit[MAX_VALUE_LENGTH];
+    } binds[MAX_BINDS];
+    int bind_count = 0;
+
+    // Track bare column names that appear on more than one outer table
+    char seen_bare[MAX_BINDS][MAX_FIELD_LENGTH];
+    int seen_bare_count = 0;
+    char dup_bare[MAX_BINDS][MAX_FIELD_LENGTH];
+    int dup_bare_count = 0;
+
+    for (int t = 0; t < outer_table_count && bind_count < MAX_BINDS; t++)
+    {
+        struct Table *table = &outer_tables[t];
+        if (table->db == NULL)
+        {
+            continue;
+        }
+
+        // Prefer basename of path-like table names
+        const char *slash = strrchr(table->name, '/');
+        const char *base = slash ? slash + 1 : table->name;
+
+        for (int f = -1; f < table->db->field_count && bind_count < MAX_BINDS; f++)
+        {
+            char colname[MAX_FIELD_LENGTH];
+            int field_index;
+
+            if (f < 0)
+            {
+                strcpy(colname, "rowid");
+                field_index = FIELD_ROW_INDEX;
+            }
+            else
+            {
+                char *fname = getFieldName(table->db, f);
+                if (fname == NULL || fname[0] == '\0')
+                {
+                    continue;
+                }
+                strncpy(colname, fname, MAX_FIELD_LENGTH - 1);
+                colname[MAX_FIELD_LENGTH - 1] = '\0';
+                field_index = f;
+            }
+
+            struct Node outer_ref = {0};
+            clearNode(&outer_ref);
+            outer_ref.function = FUNC_UNITY;
+            outer_ref.field.table_id = t;
+            outer_ref.field.index = field_index;
+
+            char value[MAX_VALUE_LENGTH];
+            evaluateNode(
+                outer_tables,
+                outer_row_list,
+                outer_row_index,
+                &outer_ref,
+                value,
+                MAX_VALUE_LENGTH);
+
+            char lit[MAX_VALUE_LENGTH];
+            sql_quote_literal(lit, sizeof(lit), value);
+
+            // Qualified keys: alias.col and basename.col
+            for (int q = 0; q < 3 && bind_count < MAX_BINDS; q++)
+            {
+                const char *qual = NULL;
+                if (q == 0 && table->alias[0] != '\0' &&
+                    strcmp(table->alias, table->name) != 0)
+                {
+                    qual = table->alias;
+                }
+                else if (q == 1)
+                {
+                    qual = base;
+                }
+                else if (q == 2 && strchr(table->name, '/') == NULL)
+                {
+                    qual = table->name;
+                }
+                if (qual == NULL || qual[0] == '\0')
+                {
+                    continue;
+                }
+
+                snprintf(
+                    binds[bind_count].key,
+                    sizeof(binds[bind_count].key),
+                    "%s.%s",
+                    qual,
+                    colname);
+                snprintf(
+                    binds[bind_count].lit,
+                    sizeof(binds[bind_count].lit),
+                    "%s",
+                    lit);
+                bind_count++;
+            }
+
+            // Track bare name uniqueness
+            int already = 0;
+            for (int i = 0; i < seen_bare_count; i++)
+            {
+                if (strcmp(seen_bare[i], colname) == 0)
+                {
+                    already = 1;
+                    int is_dup = 0;
+                    for (int d = 0; d < dup_bare_count; d++)
+                    {
+                        if (strcmp(dup_bare[d], colname) == 0)
+                        {
+                            is_dup = 1;
+                            break;
+                        }
+                    }
+                    if (!is_dup && dup_bare_count < MAX_BINDS)
+                    {
+                        strcpy(dup_bare[dup_bare_count++], colname);
+                    }
+                    break;
+                }
+            }
+            if (!already && seen_bare_count < MAX_BINDS)
+            {
+                strcpy(seen_bare[seen_bare_count++], colname);
+                if (bind_count < MAX_BINDS)
+                {
+                    snprintf(
+                        binds[bind_count].key,
+                        sizeof(binds[bind_count].key),
+                        "%s",
+                        colname);
+                    snprintf(
+                        binds[bind_count].lit,
+                        sizeof(binds[bind_count].lit),
+                        "%s",
+                        lit);
+                    bind_count++;
+                }
+            }
+        }
+
+    }
+
+    // Drop bare binds that are duplicated across outer tables
+    for (int d = 0; d < dup_bare_count; d++)
+    {
+        for (int i = 0; i < bind_count;)
+        {
+            if (strchr(binds[i].key, '.') == NULL &&
+                strcmp(binds[i].key, dup_bare[d]) == 0)
+            {
+                binds[i] = binds[bind_count - 1];
+                bind_count--;
+                continue;
+            }
+            i++;
+        }
+    }
+
+    // Longest key first so alias.col beats col
+    for (int i = 0; i < bind_count; i++)
+    {
+        for (int j = i + 1; j < bind_count; j++)
+        {
+            if (strlen(binds[j].key) > strlen(binds[i].key))
+            {
+                char key_tmp[MAX_FIELD_LENGTH];
+                char lit_tmp[MAX_VALUE_LENGTH];
+                strcpy(key_tmp, binds[i].key);
+                strcpy(lit_tmp, binds[i].lit);
+                strcpy(binds[i].key, binds[j].key);
+                strcpy(binds[i].lit, binds[j].lit);
+                strcpy(binds[j].key, key_tmp);
+                strcpy(binds[j].lit, lit_tmp);
+            }
+        }
+    }
+
+    size_t sql_len = strlen(sql);
+    // Worst case: every char becomes a long literal
+    size_t out_cap = sql_len * 4 + 64;
+    char *out = malloc(out_cap);
+    if (out == NULL)
+    {
+        return NULL;
+    }
+    size_t o = 0;
+
+    for (size_t i = 0; sql[i] != '\0';)
+    {
+        if (sql[i] == '\'')
+        {
+            // Copy string literal intact
+            out[o++] = sql[i++];
+            while (sql[i] != '\0')
+            {
+                out[o++] = sql[i];
+                if (sql[i] == '\'' && sql[i + 1] == '\'')
+                {
+                    out[o++] = sql[++i];
+                    i++;
+                    continue;
+                }
+                if (sql[i] == '\'')
+                {
+                    i++;
+                    break;
+                }
+                i++;
+            }
+            continue;
+        }
+
+        if (isalpha((unsigned char)sql[i]) || sql[i] == '_')
+        {
+            size_t start = i;
+            while (isalnum((unsigned char)sql[i]) || sql[i] == '_')
+            {
+                i++;
+            }
+            if (sql[i] == '.' &&
+                (isalpha((unsigned char)sql[i + 1]) || sql[i + 1] == '_'))
+            {
+                i++;
+                while (isalnum((unsigned char)sql[i]) || sql[i] == '_')
+                {
+                    i++;
+                }
+            }
+
+            size_t key_len = i - start;
+            char key[MAX_FIELD_LENGTH];
+            if (key_len >= MAX_FIELD_LENGTH)
+            {
+                key_len = MAX_FIELD_LENGTH - 1;
+            }
+            memcpy(key, sql + start, key_len);
+            key[key_len] = '\0';
+
+            int replaced = 0;
+            for (int b = 0; b < bind_count; b++)
+            {
+                if (strcmp(binds[b].key, key) == 0)
+                {
+                    size_t lit_len = strlen(binds[b].lit);
+                    if (o + lit_len + 1 >= out_cap)
+                    {
+                        out_cap *= 2;
+                        char *grown = realloc(out, out_cap);
+                        if (grown == NULL)
+                        {
+                            free(out);
+                            return NULL;
+                        }
+                        out = grown;
+                    }
+                    memcpy(out + o, binds[b].lit, lit_len);
+                    o += lit_len;
+                    replaced = 1;
+                    break;
+                }
+            }
+            if (!replaced)
+            {
+                if (o + key_len + 1 >= out_cap)
+                {
+                    out_cap *= 2;
+                    char *grown = realloc(out, out_cap);
+                    if (grown == NULL)
+                    {
+                        free(out);
+                        return NULL;
+                    }
+                    out = grown;
+                }
+                memcpy(out + o, key, key_len);
+                o += key_len;
+            }
+            continue;
+        }
+
+        if (o + 2 >= out_cap)
+        {
+            out_cap *= 2;
+            char *grown = realloc(out, out_cap);
+            if (grown == NULL)
+            {
+                free(out);
+                return NULL;
+            }
+            out = grown;
+        }
+        out[o++] = sql[i++];
+    }
+    out[o] = '\0';
+    return out;
+}
+
 int evaluate_scalar_subquery(
     const char *sql,
     struct Table *outer_tables,
@@ -649,27 +1007,45 @@ int evaluate_scalar_subquery(
 
     beginRowListPoolNest();
 
+    char *rewritten = NULL;
+    const char *run_sql = sql;
+
+    if (has_outer_row && outer_tables != NULL && outer_table_count > 0)
+    {
+        rewritten = rewrite_correlated_sql(
+            sql,
+            outer_tables,
+            outer_table_count,
+            outer_row_list,
+            outer_row_index);
+        if (rewritten == NULL)
+        {
+            endRowListPoolNest();
+            return -1;
+        }
+        run_sql = rewritten;
+    }
+
     struct Query *q = makeQuery();
 
-    int result = parseQuery(q, sql, NULL);
+    int result = parseQuery(q, run_sql, NULL);
     if (result < 0)
     {
+        free(rewritten);
         destroy_query(q);
         free(q);
         endRowListPoolNest();
         return -1;
     }
 
-    q->outer_tables = outer_tables;
-    q->outer_table_count = outer_table_count;
-    q->outer_row_list = outer_row_list;
-    q->outer_row_index = outer_row_index;
+    // After rewrite, outer refs are literals; still mark has_outer_row so
+    // tableless subqueries do not auto-bind stdin.
     q->has_outer_row = has_outer_row;
 
 #ifdef DEBUG
     if (debug_verbosity >= 1)
     {
-        fprintf(stderr, "Scalar subquery: %s\n", sql);
+        fprintf(stderr, "Scalar subquery: %s\n", run_sql);
     }
 #endif
 
@@ -678,6 +1054,7 @@ int evaluate_scalar_subquery(
     if (result < 0)
     {
         closeDB(&db);
+        free(rewritten);
         destroy_query(q);
         free(q);
         endRowListPoolNest();
@@ -695,6 +1072,7 @@ int evaluate_scalar_subquery(
     }
 
     closeDB(&db);
+    free(rewritten);
     destroy_query(q);
     free(q);
     endRowListPoolNest();
@@ -1188,61 +1566,11 @@ static int resolveNode(struct Query *query, struct Node *node, enum AliasSearchM
         }
     }
 
-    // Correlated subquery: bind unresolved names from the outer row as constants
-    if (query->has_outer_row && query->outer_tables != NULL &&
-        query->outer_table_count > 0)
-    {
-        struct Query outer_view = {0};
-        outer_view.tables = query->outer_tables;
-        outer_view.table_count = query->outer_table_count;
-
-        int outer_table_id = -1;
-        int outer_column_id = FIELD_UNKNOWN;
-
-        if (find_field(
-                &outer_view,
-                node->field.text,
-                &outer_table_id,
-                &outer_column_id,
-                NULL))
-        {
-            struct Node outer_ref = {0};
-            clearNode(&outer_ref);
-            outer_ref.function = FUNC_UNITY;
-            outer_ref.field.table_id = outer_table_id;
-            outer_ref.field.index = outer_column_id;
-
-            char value[MAX_VALUE_LENGTH];
-            evaluateNode(
-                query->outer_tables,
-                query->outer_row_list,
-                query->outer_row_index,
-                &outer_ref,
-                value,
-                MAX_VALUE_LENGTH);
-
-            if ((int)strlen(value) >= MAX_FIELD_LENGTH)
-            {
-                fprintf(
-                    stderr,
-                    "Correlated binding for '%s' exceeds %d bytes\n",
-                    node->field.text,
-                    MAX_FIELD_LENGTH - 1);
-                return -1;
-            }
-
-            node->function = FUNC_UNITY;
-            node->child_count = 0;
-            node->field.index = FIELD_CONSTANT;
-            node->field.table_id = TABLE_NONE;
-            strcpy(node->field.text, value);
-            return 0;
-        }
-    }
-
     // We couldn't resolve the node/field. If there was no table specified, then
     // that's probably why. Otherwise the field couldn't be found in any of the
     // tables that we do have.
+    // (Correlated outer refs are rewritten into literals before parse — see
+    // rewrite_correlated_sql / evaluate_scalar_subquery.)
 
     if (query->table_count == 0 && !query->has_outer_row)
     {
