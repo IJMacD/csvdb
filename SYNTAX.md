@@ -193,6 +193,7 @@ INSERT INTO tt2 VALUES (14),(15),(16);
 | `EPHEMERIS(lat, lon)` | Same, with observer for rise/set times |
 | `PERMUTATIONS(n)` | All orderings of `{0..n-1}` (`n` ≤ 10) |
 | `COMBINATIONS(n, k)` | All k-subsets of `{0..n-1}` |
+| `CRON('spec')` | Expand a five-field cron pattern over a bounded date range |
 
 Quoted identifiers are allowed: `FROM "my file.csv"`.
 
@@ -646,6 +647,25 @@ Lexicographic generators over `{0,1,…,n−1}`. Wide integer columns only (no c
 ```sql
 FROM PERMUTATIONS(3) SELECT rank, p0, p1, p2;
 FROM COMBINATIONS(5, 2) SELECT rank, c0, c1;
+```
+
+### `CRON('spec')`
+
+Expands a five-field cron expression (`minute hour dom month dow`) into occurrence rows. **Requires** `date` / `julian` / `datetime` bounds (or the scan aborts). `datetime` uses the untagged `YYYY-MM-DDTHH:MM:SS` form. `weekday` matches `CALENDAR` (Mon=1 … Sun=7). Dow in the cron spec uses 0-or-7=Sunday, 1=Monday (Vixie-style); when both DOM and DOW are restricted, a day matches if either field matches.
+
+| Column | Description |
+|--------|-------------|
+| `datetime` | `YYYY-MM-DDTHH:MM:SS` |
+| `date` | `YYYY-MM-DD` |
+| `julian` | Julian day |
+| `hour`, `minute` | Components |
+| `weekday` | Mon=1 … Sun=7 |
+| `expr` | Echo of the cron pattern |
+
+```sql
+FROM CRON('0 9 * * 1-5')
+WHERE date BETWEEN '2024-01-01' AND '2024-01-07'
+SELECT datetime, weekday;
 ```
 
 ---

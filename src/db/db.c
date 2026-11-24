@@ -14,6 +14,7 @@
 #include "dir.h"
 #include "ephemeris.h"
 #include "permutations.h"
+#include "cron.h"
 #include "view.h"
 #include "temp.h"
 #include "tsv.h"
@@ -108,6 +109,17 @@ struct VFS VFS_Table[VFS_COUNT] = {
         .getFieldName = &permutations_getFieldName,
         .getRecordCount = &permutations_getRecordCount,
         .getRecordValue = &permutations_getRecordValue,
+    },
+    #endif
+    #ifdef COMPILE_CRON
+    [VFS_CRON] = {
+        .openDB = &cron_openDB,
+        .closeDB = &cron_closeDB,
+        .getFieldIndex = &cron_getFieldIndex,
+        .getFieldName = &cron_getFieldName,
+        .getRecordCount = &cron_getRecordCount,
+        .getRecordValue = &cron_getRecordValue,
+        .fullTableAccess = &cron_fullTableAccess,
     },
     #endif
     #ifdef COMPILE_SAMPLE
