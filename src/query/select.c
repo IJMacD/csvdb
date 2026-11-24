@@ -35,6 +35,8 @@ static int populate_tables(struct Query *q);
 
 static int resolveNode(struct Query *query, struct Node *node, enum AliasSearchMode allow_aliases);
 
+static int foldUncorrelatedSubquery(struct Node *node);
+
 static void expandFieldStar(struct Query *query);
 
 static struct Query *makeQuery();
@@ -1289,12 +1291,343 @@ static int find_field(
  * tables; 2 = search aliases after tables
  * @returns 0 on success
  */
-static int resolveNode(struct Query *query, struct Node *node, enum AliasSearchMode allow_aliases)
+/**
+ * True if this node tree contains non-deterministic functions that must not
+ * be constant-folded across outer rows.
+ */
+static int nodeIsNondeterministic(struct Node *node)
 {
-    // Scalar subquery SQL is evaluated later; do not treat field.text as a column.
-    if (node->function == FUNC_SUBQUERY)
+    if (node == NULL)
     {
         return 0;
+    }
+
+    if (
+        node->function == FUNC_RANDOM ||
+        node->function == FUNC_DATE_NOW ||
+        node->function == FUNC_DATE_TODAY ||
+        node->function == FUNC_DATE_CLOCK)
+    {
+        return 1;
+    }
+
+    if (node->function == FUNC_SUBQUERY && node->subquery != NULL)
+    {
+        // Conservatively skip folding parents that embed nested scalars.
+        return 1;
+    }
+
+    if (node->filter != NULL && nodeIsNondeterministic(node->filter))
+    {
+        return 1;
+    }
+
+    if (node->child_count > 0)
+    {
+        for (int i = 0; i < node->child_count; i++)
+        {
+            if (nodeIsNondeterministic(&node->children[i]))
+            {
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+static int queryIsNondeterministic(struct Query *q)
+{
+    for (int i = 0; i < q->column_count; i++)
+    {
+        if (nodeIsNondeterministic(&q->column_nodes[i]))
+        {
+            return 1;
+        }
+    }
+    for (int i = 0; i < q->predicate_count; i++)
+    {
+        if (nodeIsNondeterministic(&q->predicate_nodes[i]))
+        {
+            return 1;
+        }
+    }
+    for (int i = 0; i < q->having_count; i++)
+    {
+        if (nodeIsNondeterministic(&q->having_nodes[i]))
+        {
+            return 1;
+        }
+    }
+    for (int i = 0; i < q->order_count; i++)
+    {
+        if (nodeIsNondeterministic(&q->order_nodes[i]))
+        {
+            return 1;
+        }
+    }
+    for (int i = 0; i < q->group_count; i++)
+    {
+        if (nodeIsNondeterministic(&q->group_nodes[i]))
+        {
+            return 1;
+        }
+    }
+    for (int i = 0; i < q->distinct_count; i++)
+    {
+        if (nodeIsNondeterministic(&q->distinct_nodes[i]))
+        {
+            return 1;
+        }
+    }
+    for (int i = 0; i < q->table_count; i++)
+    {
+        if (nodeIsNondeterministic(&q->tables[i].join))
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/**
+ * Quiet check: does this leaf field fail to resolve on sq's own tables?
+ * sq must already have populate_tables() applied.
+ */
+static int leafNeedsOuter(struct Query *sq, struct Node *node)
+{
+    if (node->field.index == FIELD_CONSTANT ||
+        node->field.index == FIELD_STAR)
+    {
+        return 0;
+    }
+
+    if (node->field.text[0] == '\0')
+    {
+        return 0;
+    }
+
+    // Already bound to a concrete column on this query
+    if (
+        node->field.table_id >= 0 &&
+        node->field.table_id < sq->table_count &&
+        (node->field.index >= 0 || node->field.index == FIELD_ROW_INDEX))
+    {
+        return 0;
+    }
+
+    char name_buf[MAX_FIELD_LENGTH];
+    strcpy(name_buf, node->field.text);
+    struct Field tmp = {0};
+    if (evaluatePossibleNamedConstantField(name_buf, &tmp) >= 0)
+    {
+        return 0;
+    }
+
+    int table_id = -1;
+    int column_id = FIELD_UNKNOWN;
+    if (find_field(sq, node->field.text, &table_id, &column_id, NULL))
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+static int nodeNeedsOuter(struct Query *sq, struct Node *node)
+{
+    if (node == NULL)
+    {
+        return 0;
+    }
+
+    // Nested scalar subquery: skip folding the parent (handled above via
+    // nondeterministic/conservative path). Treat as needing outer to be safe.
+    if (node->function == FUNC_SUBQUERY)
+    {
+        return 1;
+    }
+
+    if (node->filter != NULL && nodeNeedsOuter(sq, node->filter))
+    {
+        return 1;
+    }
+
+    if (node->child_count > 0)
+    {
+        for (int i = 0; i < node->child_count; i++)
+        {
+            if (nodeNeedsOuter(sq, &node->children[i]))
+            {
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    return leafNeedsOuter(sq, node);
+}
+
+static int queryNeedsOuter(struct Query *sq)
+{
+    for (int i = 0; i < sq->column_count; i++)
+    {
+        if (nodeNeedsOuter(sq, &sq->column_nodes[i]))
+        {
+            return 1;
+        }
+    }
+    for (int i = 0; i < sq->predicate_count; i++)
+    {
+        if (nodeNeedsOuter(sq, &sq->predicate_nodes[i]))
+        {
+            return 1;
+        }
+    }
+    for (int i = 0; i < sq->having_count; i++)
+    {
+        if (nodeNeedsOuter(sq, &sq->having_nodes[i]))
+        {
+            return 1;
+        }
+    }
+    for (int i = 0; i < sq->order_count; i++)
+    {
+        if (nodeNeedsOuter(sq, &sq->order_nodes[i]))
+        {
+            return 1;
+        }
+    }
+    for (int i = 0; i < sq->group_count; i++)
+    {
+        if (nodeNeedsOuter(sq, &sq->group_nodes[i]))
+        {
+            return 1;
+        }
+    }
+    for (int i = 0; i < sq->distinct_count; i++)
+    {
+        if (nodeNeedsOuter(sq, &sq->distinct_nodes[i]))
+        {
+            return 1;
+        }
+    }
+    for (int i = 0; i < sq->table_count; i++)
+    {
+        if (nodeNeedsOuter(sq, &sq->tables[i].join))
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/**
+ * True if the template subquery references columns outside its own FROM
+ * (i.e. is correlated), or cannot be analysed.
+ */
+static int subqueryIsCorrelated(struct Query *template_query)
+{
+    if (template_query == NULL)
+    {
+        return 1;
+    }
+
+    if (queryIsNondeterministic(template_query))
+    {
+        return 1;
+    }
+
+    struct Query *q = cloneQuery(template_query);
+    if (q == NULL)
+    {
+        return 1;
+    }
+
+    if (populate_tables(q) < 0)
+    {
+        destroyQuery(q);
+        free(q);
+        return 1;
+    }
+
+    int correlated = queryNeedsOuter(q);
+
+    destroyQuery(q);
+    free(q);
+
+    return correlated;
+}
+
+/**
+ * If node is an uncorrelated FUNC_SUBQUERY, evaluate once and replace with
+ * a constant. Correlated / nondeterministic subqueries are left unchanged.
+ * Returns 0 on success (folded or left as-is), -1 on hard failure.
+ */
+static int foldUncorrelatedSubquery(struct Node *node)
+{
+    if (node->function != FUNC_SUBQUERY || node->subquery == NULL)
+    {
+        return 0;
+    }
+
+    if (subqueryIsCorrelated(node->subquery))
+    {
+        return 0;
+    }
+
+    char value[MAX_VALUE_LENGTH];
+    int result = evaluate_scalar_subquery(
+        node->subquery,
+        NULL,
+        0,
+        -1,
+        0,
+        0,
+        value,
+        MAX_VALUE_LENGTH);
+
+    if (result < 0)
+    {
+        // Leave for runtime rather than failing the outer query here.
+        return 0;
+    }
+
+    if ((int)strlen(value) >= MAX_FIELD_LENGTH)
+    {
+        fprintf(
+            stderr,
+            "Uncorrelated subquery result exceeds %d bytes\n",
+            MAX_FIELD_LENGTH - 1);
+        return -1;
+    }
+
+    char alias[MAX_FIELD_LENGTH];
+    strcpy(alias, node->alias);
+
+    destroyQuery(node->subquery);
+    free(node->subquery);
+    node->subquery = NULL;
+
+    freeNode(node);
+    clearNode(node);
+
+    node->function = FUNC_UNITY;
+    node->field.index = FIELD_CONSTANT;
+    node->field.table_id = TABLE_NONE;
+    strcpy(node->field.text, value);
+    strcpy(node->alias, alias);
+
+    return 0;
+}
+
+static int resolveNode(struct Query *query, struct Node *node, enum AliasSearchMode allow_aliases)
+{
+    // Uncorrelated scalar subqueries fold to constants; correlated ones are
+    // left as FUNC_SUBQUERY for per-row clone/eval.
+    if (node->function == FUNC_SUBQUERY)
+    {
+        return foldUncorrelatedSubquery(node);
     }
 
     if (node->filter != NULL)
