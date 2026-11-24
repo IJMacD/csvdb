@@ -370,3 +370,11 @@ FROM CALENDAR WHERE date = '2023-W08-6' SELECT date, weekString, weekday;
 -- LIMIT pushdown onto CALENDAR for all-LEFT joins with first-table WHERE
 FROM CALENDAR AS c LEFT JOIN EPHEMERIS AS e ON e.date = c.date WHERE c.weekString >= '2026-W48' SELECT e.date, e.moonPhase LIMIT 5;
 FROM CALENDAR AS c LEFT JOIN EPHEMERIS AS e ON e.julian = c.julian WHERE c.date >= '2026-11-24' SELECT e.date LIMIT 3;
+-- Scalar subquery with WHERE (must not be mistaken for a boolean group)
+SELECT (SELECT COUNT(*) FROM suits WHERE name = 'spades') AS n;
+SELECT (SELECT COUNT(*) FROM suits WHERE name = 'spades' AND symbol = '♠') AS n;
+SELECT (SELECT name FROM suits WHERE name = 'hearts' OR name = 'spades' ORDER BY name LIMIT 1) AS n;
+-- Multiple scalar subqueries in one SELECT (join.function must be ALWAYS)
+SELECT (SELECT COUNT(*) FROM suits) AS a, (SELECT COUNT(*) FROM ranks) AS b;
+SELECT (SELECT COUNT(*) FROM suits) AS a, (SELECT COUNT(*) FROM ranks) AS b FROM ranks LIMIT 1;
+FROM ranks SELECT (SELECT COUNT(*) FROM suits) AS a, (SELECT SUM(value) FROM ranks) AS b LIMIT 1;

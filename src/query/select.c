@@ -1215,7 +1215,15 @@ struct Table *allocateTable(struct Query *q)
             sizeof(struct Table));
     }
 
-    return &q->tables[q->table_count - 1];
+    struct Table *table = &q->tables[q->table_count - 1];
+
+    // Expression-subquery tables (allocated from parseNode) never go through
+    // the FROM-clause path that sets join.function. Leaving it as FUNC_UNITY
+    // (zero) makes optimiseOnToWhere promote the bare node into WHERE and
+    // crashes the planner when two or more such tables are joined.
+    table->join.function = OPERATOR_ALWAYS;
+
+    return table;
 }
 
 struct Node *allocateColumnNode(struct Query *q)
