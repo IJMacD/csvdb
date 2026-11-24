@@ -172,6 +172,12 @@ int evaluateFunction(
         return sprintf(output, "%s", gitversion);
     }
 
+    // PI takes 0 parameters
+    if (function == FUNC_PI)
+    {
+        return sprint_number(output, acos(-1.0));
+    }
+
     // TODAY takes 0 parameters
     if (function == FUNC_DATE_TODAY)
     {

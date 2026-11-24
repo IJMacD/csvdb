@@ -87,6 +87,8 @@ enum Function {
     // Returns the csvdb version string. The parentheses keep it distinct
     // from a column named VERSION.
     FUNC_VERSION =                  0x0B,
+    // Returns π. Zero-arg call form avoids clashing with a column named PI.
+    FUNC_PI =                       0x0C,
 
     // Maths functions
 

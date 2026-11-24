@@ -332,3 +332,7 @@ FROM CALENDAR WHERE year = 2024 AND yearday = 60 SELECT date;
 FROM CALENDAR WHERE year = 2024 AND month = 2 AND day = 29 SELECT date;
 -- CALENDAR weekday stepping within a bounded range
 FROM CALENDAR WHERE date BETWEEN '2024-01-01' AND '2024-01-31' AND weekday = 3 SELECT date;
+-- PI()
+SELECT PI();
+SELECT EXP(I * PI());
+SELECT ROUND(PI(), 5);
