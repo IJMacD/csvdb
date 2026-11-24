@@ -1,7 +1,4 @@
-| name               |
+| COMPLEX(1, 2) + COMPLEX(3, 4)|
 |--------------------|
-| clubs              |
-| diamonds           |
-| hearts             |
-| spades             |
+|               4+6i |
 

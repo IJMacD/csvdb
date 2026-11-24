@@ -190,6 +190,23 @@ int evaluateExpression (enum Function op, const char *left, const char *right) {
         return 0;
     }
 
+    // Complex: component EQ/NE only; ordered compares are undefined → false
+    if (is_complex(left) || is_complex(right)) {
+        double re_l, im_l, re_r, im_r;
+        if (!parse_complex(left, &re_l, &im_l) ||
+            !parse_complex(right, &re_r, &im_r))
+        {
+            // Fall through to string compare if either side is not parseable
+        }
+        else
+        {
+            int eq = (re_l == re_r && im_l == im_r);
+            if (op == OPERATOR_EQ) return eq;
+            if (op == OPERATOR_NE) return !eq;
+            return 0;
+        }
+    }
+
     if (is_numeric(left)) {
         int cmp = compare_numeric(left, right);
 

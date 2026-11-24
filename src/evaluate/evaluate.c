@@ -247,10 +247,14 @@ int evaluateNodeList(
             value,
             sizeof(value));
 
-        // Numeric values need an order-preserving fixed-width key so that
-        // lexicographic string comparison matches numeric ordering (including
-        // floats and negatives).
-        if (is_numeric(value))
+        // Numeric / complex values need an order-preserving fixed-width key so
+        // that lexicographic string comparison matches numeric ordering
+        // (including floats, negatives, and complex re-then-im).
+        if (is_complex(value))
+        {
+            count = format_sortable_complex(output, value);
+        }
+        else if (is_numeric(value))
         {
             count = format_sortable_number(output, value);
         }
@@ -360,6 +364,11 @@ int evaluatePossibleNamedConstantField(char *output, struct Field *field)
     {
         output[0] = '\0';
         return 0;
+    }
+
+    if (strcmp(field->text, "I") == 0)
+    {
+        return sprintf(output, "i");
     }
 
     if (strcmp(field->text, "CSVDB_VERSION") == 0)

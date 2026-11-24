@@ -167,8 +167,14 @@ enum Function {
     FUNC_MAKE_TIME =                0x76,
     FUNC_MAKE_DATETIME =            0x77,
 
-    // Family 100x (0x80) (Undefined)
-    FUNC_FAM_UNDEF_80 =             0x80,
+    // Family 100x (0x80) Complex
+    FUNC_FAM_COMPLEX =              0x80,
+
+    FUNC_COMPLEX =                  0x81,
+    FUNC_RE =                       0x82,
+    FUNC_IM =                       0x83,
+    FUNC_CONJ =                     0x84,
+    FUNC_ARG =                      0x85,
 
     // Family 101x (0xA0) Agg
     FUNC_FAM_AGG =                  0xA0,

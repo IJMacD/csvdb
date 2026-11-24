@@ -717,7 +717,7 @@ static void printColumnValue(
     const char *name,
     const char *value)
 {
-    int value_is_numeric = is_numeric(value);
+    int value_is_numeric = is_numeric(value) || is_complex(value);
 
     char *escaped_value = (void *)value;
 

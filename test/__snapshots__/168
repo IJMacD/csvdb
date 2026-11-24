@@ -1,5 +1,9 @@
-| value              | name               |
+| name               | COUNT(*)           |
 |--------------------|--------------------|
-|                  1 | Ace                |
-|                 13 | King               |
+| Adam WEAVER        |                 17 |
+| Adam WEBB          |                 13 |
+| Adam WEBER         |                 18 |
+| Adam WELCH         |                 24 |
+| Adam WELLS         |                 12 |
+| Adam WEST          |                  6 |
 

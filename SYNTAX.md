@@ -257,11 +257,14 @@ FROM test WHERE PK(id) = 1000;
 |-------|--------|
 | `'string'` | String (`''` escapes a quote) |
 | `123`, `1.5`, `0xFF` | Numbers (hex → decimal integer) |
+| `I` | Imaginary unit (`i`) |
 | `NULL` | Empty / null value |
 | `CURRENT_DATE` | Today’s date (`YYYY-MM-DD`) |
 | `CURRENT_TIME` | Current time (`HH:MM:SS`) |
 | `CSVDB_VERSION` | Version string (also `VERSION()`) |
 | `INTERVAL n UNIT` | Fixed-length interval as an integer (see [Intervals](#intervals)) |
+
+Complex values are duck-typed strings in canonical form `a+bi` / `a-bi` (no spaces; pure imag as `4i` / `i` / `-i`; pure real unchanged). Construct with `COMPLEX(re, im)` or `3 + 4 * I`. There is no lexer-level `3+4i` literal.
 
 ### Special fields
 
@@ -425,20 +428,27 @@ Concatenation is via `||` (there is no `CONCAT()` call form).
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `ADD` | `(a, b, …)` | Sum (also dates/times; same as `+`) |
+| `ADD` | `(a, b, …)` | Sum (also dates/times/complex; same as `+`) |
 | `SUB` | `(a, b, …)` | Left-associative difference (same as `-`) |
 | `MUL` | `(a, b, …)` | Product |
 | `DIV` | `(a, b, …)` | Left-associative division: `DIV(36, 6, 2)` → `(36/6)/2` → `3`. `NULL` on divide-by-zero |
-| `MOD` | `(a, b)` | Remainder (`fmod`) |
-| `POW` | `(a, b)` | Power |
-| `ABS` | `(x)` | Absolute value |
-| `SQRT` | `(x)` | Square root (`NULL` if *x* &lt; 0) |
-| `FLOOR` | `(x)` | Floor |
-| `CEIL` / `CEILING` | `(x)` | Ceiling |
-| `ROUND` | `(x)` or `(x, digits)` | Round; *digits* may be negative |
-| `EXP` | `(x)` | *e*<sup>*x*</sup> |
-| `LN` | `(x)` | Natural log (`NULL` if *x* ≤ 0) |
-| `LOG10` | `(x)` | Base-10 log (`NULL` if *x* ≤ 0) |
+| `MOD` | `(a, b)` | Remainder (`fmod`); real-only (`NULL` if either arg is complex) |
+| `POW` | `(a, b)` | Power (complex-capable) |
+| `ABS` | `(x)` | Absolute value (modulus for complex) |
+| `SQRT` | `(x)` | Square root; negative reals and complex use the principal value in ℂ |
+| `FLOOR` | `(x)` | Floor (real-only) |
+| `CEIL` / `CEILING` | `(x)` | Ceiling (real-only) |
+| `ROUND` | `(x)` or `(x, digits)` | Round; *digits* may be negative (real-only) |
+| `EXP` | `(x)` | *e*<sup>*x*</sup> (complex-capable) |
+| `LN` | `(x)` | Natural log; `NULL` only for zero. Negative reals / complex use the principal branch |
+| `LOG10` | `(x)` | Base-10 log (same domain rules as `LN`) |
+| `COMPLEX` | `(re, im)` | Construct a complex value (both args real) |
+| `RE` | `(z)` | Real part |
+| `IM` | `(z)` | Imaginary part |
+| `CONJ` | `(z)` | Complex conjugate |
+| `ARG` | `(z)` | Argument (`atan2(im, re)`) in radians |
+
+Any of `+ − * / POW EXP LN LOG10 SQRT ABS` promotes to complex when an operand is complex. `=` / `!=` compare by components; `< > <= >=` on complex values are undefined and evaluate false. `ORDER BY` sorts by real, then imag. `SUM` / `AVG` are componentwise; `MIN` / `MAX` ignore complex inputs.
 
 ### Scalar — date / time
 

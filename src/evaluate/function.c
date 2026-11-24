@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <limits.h>
 #include <math.h>
+#include <complex.h>
 #include <float.h>
 #include <time.h>
 #include <ctype.h>
@@ -15,6 +16,25 @@
 #include "../query/result.h"
 #include "./predicates.h"
 #include "../db/db.h"
+
+static int values_have_complex(char **values, int value_count)
+{
+    for (int i = 0; i < value_count; i++)
+    {
+        if (is_complex(values[i]))
+            return 1;
+    }
+    return 0;
+}
+
+static int parse_complex_value(const char *value, double complex *out)
+{
+    double re, im;
+    if (!parse_complex(value, &re, &im))
+        return 0;
+    *out = re + im * I;
+    return 1;
+}
 
 /**
  * Parse DATE_ADD/DATE_SUB amount: either a plain integer (days), an
@@ -380,6 +400,7 @@ int evaluateFunction(
     {
         // We can add:
         // * number + number
+        // * complex + complex (promotes reals)
         // * dateTime + int (seconds)
         // * int + dateTime (seconds)
         // * date + int (days)
@@ -387,6 +408,22 @@ int evaluateFunction(
         // * time + int (seconds)
         // * int + time (seconds)
         // * time + time
+
+        if (values_have_complex(values, value_count))
+        {
+            double complex sum = 0;
+            for (int i = 0; i < value_count; i++)
+            {
+                double complex z;
+                if (!parse_complex_value(values[i], &z))
+                {
+                    output[0] = '\0';
+                    return 0;
+                }
+                sum += z;
+            }
+            return sprint_complex(output, creal(sum), cimag(sum));
+        }
 
         long val = 0;
         double dval = 0;
@@ -471,12 +508,32 @@ int evaluateFunction(
     {
         // We can subtract:
         // * number - number
+        // * complex - complex (promotes reals)
         // * dateTime - int (seconds)
         // * dateTime - dateTime
         // * date - int     (days)
         // * date - date    (days)
         // * time - int     (seconds)
         // * time - time    (seconds)
+
+        if (values_have_complex(values, value_count))
+        {
+            double complex result = 0;
+            for (int i = 0; i < value_count; i++)
+            {
+                double complex z;
+                if (!parse_complex_value(values[i], &z))
+                {
+                    output[0] = '\0';
+                    return 0;
+                }
+                if (i == 0)
+                    result = z;
+                else
+                    result -= z;
+            }
+            return sprint_complex(output, creal(result), cimag(result));
+        }
 
         long val = 0;
         double dval = 0;
@@ -584,7 +641,24 @@ int evaluateFunction(
     {
         // We can do:
         //  number * number
+        //  complex * complex (promotes reals)
         //  time * int
+
+        if (values_have_complex(values, value_count))
+        {
+            double complex product = 1;
+            for (int i = 0; i < value_count; i++)
+            {
+                double complex z;
+                if (!parse_complex_value(values[i], &z))
+                {
+                    output[0] = '\0';
+                    return 0;
+                }
+                product *= z;
+            }
+            return sprint_complex(output, creal(product), cimag(product));
+        }
 
         long val = 1;
         double dval = 1;
@@ -629,7 +703,35 @@ int evaluateFunction(
     {
         // We can do:
         //  number / number
+        //  complex / complex (promotes reals)
         //  time / int
+
+        if (values_have_complex(values, value_count))
+        {
+            double complex result;
+            if (!parse_complex_value(values[0], &result))
+            {
+                output[0] = '\0';
+                return 0;
+            }
+
+            for (int i = 1; i < value_count; i++)
+            {
+                double complex z;
+                if (!parse_complex_value(values[i], &z))
+                {
+                    output[0] = '\0';
+                    return 0;
+                }
+                if (creal(z) == 0 && cimag(z) == 0)
+                {
+                    output[0] = '\0';
+                    return 0;
+                }
+                result /= z;
+            }
+            return sprint_complex(output, creal(result), cimag(result));
+        }
 
         struct DateTime dt = {0};
 
@@ -673,6 +775,13 @@ int evaluateFunction(
     }
     else if (function == FUNC_MOD)
     {
+        // Real-only
+        if (is_complex(values[0]) || (value_count >= 2 && is_complex(values[1])))
+        {
+            output[0] = '\0';
+            return 0;
+        }
+
         double val1 = strtod(values[0], NULL);
         double val2 = strtod(values[1], NULL);
 
@@ -686,6 +795,19 @@ int evaluateFunction(
     }
     else if (function == FUNC_POW)
     {
+        if (values_have_complex(values, value_count))
+        {
+            double complex base, expn;
+            if (!parse_complex_value(values[0], &base) ||
+                !parse_complex_value(values[1], &expn))
+            {
+                output[0] = '\0';
+                return 0;
+            }
+            double complex result = cpow(base, expn);
+            return sprint_complex(output, creal(result), cimag(result));
+        }
+
         double val1 = strtod(values[0], NULL);
         double val2 = strtod(values[1], NULL);
 
@@ -693,30 +815,70 @@ int evaluateFunction(
     }
     else if (function == FUNC_ABS)
     {
+        if (is_complex(values[0]))
+        {
+            double complex z;
+            if (!parse_complex_value(values[0], &z))
+            {
+                output[0] = '\0';
+                return 0;
+            }
+            return sprint_number(output, cabs(z));
+        }
         return sprint_number(output, fabs(strtod(values[0], NULL)));
     }
     else if (function == FUNC_SQRT)
     {
+        if (is_complex(values[0]))
+        {
+            double complex z;
+            if (!parse_complex_value(values[0], &z))
+            {
+                output[0] = '\0';
+                return 0;
+            }
+            double complex result = csqrt(z);
+            return sprint_complex(output, creal(result), cimag(result));
+        }
+
         double val = strtod(values[0], NULL);
 
+        // Negative reals use the principal complex square root
         if (val < 0)
         {
-            output[0] = '\0';
-            return 0;
+            double complex result = csqrt(val + 0 * I);
+            return sprint_complex(output, creal(result), cimag(result));
         }
 
         return sprint_number(output, sqrt(val));
     }
     else if (function == FUNC_FLOOR)
     {
+        if (is_complex(values[0]))
+        {
+            output[0] = '\0';
+            return 0;
+        }
         return sprint_number(output, floor(strtod(values[0], NULL)));
     }
     else if (function == FUNC_CEIL)
     {
+        if (is_complex(values[0]))
+        {
+            output[0] = '\0';
+            return 0;
+        }
         return sprint_number(output, ceil(strtod(values[0], NULL)));
     }
     else if (function == FUNC_ROUND)
     {
+        if (is_complex(values[0]) ||
+            (value_count >= 2 && is_complex(values[1])))
+        {
+            output[0] = '\0';
+            return 0;
+        }
+
         double val = strtod(values[0], NULL);
 
         if (value_count >= 2)
@@ -730,11 +892,45 @@ int evaluateFunction(
     }
     else if (function == FUNC_EXP)
     {
+        if (is_complex(values[0]))
+        {
+            double complex z;
+            if (!parse_complex_value(values[0], &z))
+            {
+                output[0] = '\0';
+                return 0;
+            }
+            double complex result = cexp(z);
+            return sprint_complex(output, creal(result), cimag(result));
+        }
         return sprint_number(output, exp(strtod(values[0], NULL)));
     }
     else if (function == FUNC_LN)
     {
+        if (is_complex(values[0]))
+        {
+            double complex z;
+            if (!parse_complex_value(values[0], &z))
+            {
+                output[0] = '\0';
+                return 0;
+            }
+            if (creal(z) == 0 && cimag(z) == 0)
+            {
+                output[0] = '\0';
+                return 0;
+            }
+            double complex result = clog(z);
+            return sprint_complex(output, creal(result), cimag(result));
+        }
+
         double val = strtod(values[0], NULL);
+
+        if (val < 0)
+        {
+            double complex result = clog(val + 0 * I);
+            return sprint_complex(output, creal(result), cimag(result));
+        }
 
         if (val <= 0)
         {
@@ -746,7 +942,31 @@ int evaluateFunction(
     }
     else if (function == FUNC_LOG10)
     {
+        if (is_complex(values[0]))
+        {
+            double complex z;
+            if (!parse_complex_value(values[0], &z))
+            {
+                output[0] = '\0';
+                return 0;
+            }
+            if (creal(z) == 0 && cimag(z) == 0)
+            {
+                output[0] = '\0';
+                return 0;
+            }
+            // clog10 is not universally available; use clog / log(10)
+            double complex result = clog(z) / log(10.0);
+            return sprint_complex(output, creal(result), cimag(result));
+        }
+
         double val = strtod(values[0], NULL);
+
+        if (val < 0)
+        {
+            double complex result = clog(val + 0 * I) / log(10.0);
+            return sprint_complex(output, creal(result), cimag(result));
+        }
 
         if (val <= 0)
         {
@@ -755,6 +975,58 @@ int evaluateFunction(
         }
 
         return sprint_number(output, log10(val));
+    }
+    else if (function == FUNC_COMPLEX)
+    {
+        if (value_count < 2 || is_complex(values[0]) || is_complex(values[1]))
+        {
+            output[0] = '\0';
+            return 0;
+        }
+        return sprint_complex(
+            output,
+            strtod(values[0], NULL),
+            strtod(values[1], NULL));
+    }
+    else if (function == FUNC_RE)
+    {
+        double re, im;
+        if (!parse_complex(values[0], &re, &im))
+        {
+            output[0] = '\0';
+            return 0;
+        }
+        return sprint_number(output, re);
+    }
+    else if (function == FUNC_IM)
+    {
+        double re, im;
+        if (!parse_complex(values[0], &re, &im))
+        {
+            output[0] = '\0';
+            return 0;
+        }
+        return sprint_number(output, im);
+    }
+    else if (function == FUNC_CONJ)
+    {
+        double re, im;
+        if (!parse_complex(values[0], &re, &im))
+        {
+            output[0] = '\0';
+            return 0;
+        }
+        return sprint_complex(output, re, -im);
+    }
+    else if (function == FUNC_ARG)
+    {
+        double re, im;
+        if (!parse_complex(values[0], &re, &im))
+        {
+            output[0] = '\0';
+            return 0;
+        }
+        return sprint_number(output, atan2(im, re));
     }
     else if (function == FUNC_PARENS)
     {
@@ -1342,8 +1614,8 @@ int evaluateAggregateFunction(
 
         for (int i = 0; i < row_count; i++)
         {
-            // Only consider the non-NULL values
-            if (IS_NOT_NULL(values[i]))
+            // Only consider non-NULL real values (complex skipped)
+            if (IS_NOT_NULL(values[i]) && !is_complex(values[i]))
             {
                 double v = strtod(values[i], NULL);
 
@@ -1365,8 +1637,8 @@ int evaluateAggregateFunction(
 
         for (int i = 0; i < row_count; i++)
         {
-            // Only consider the non-NULL values
-            if (IS_NOT_NULL(values[i]))
+            // Only consider non-NULL real values (complex skipped)
+            if (IS_NOT_NULL(values[i]) && !is_complex(values[i]))
             {
                 double v = strtod(values[i], NULL);
 
@@ -1383,44 +1655,111 @@ int evaluateAggregateFunction(
     }
     else if (node->function == FUNC_AGG_SUM)
     {
-        double sum = 0;
         int non_null = 0;
+        int any_complex = 0;
 
         for (int i = 0; i < row_count; i++)
         {
-            // Sum the non-NULL values
-            if (IS_NOT_NULL(values[i]))
+            if (IS_NOT_NULL(values[i]) && is_complex(values[i]))
             {
-                non_null = 1;
-                sum += strtod(values[i], NULL);
+                any_complex = 1;
+                break;
             }
         }
 
-        // If *all* rows are NULL then the result is NULL
-        if (non_null)
+        if (any_complex)
         {
-            bytesWritten = sprint_number(output, sum);
+            double complex sum = 0;
+            for (int i = 0; i < row_count; i++)
+            {
+                if (IS_NOT_NULL(values[i]))
+                {
+                    double complex z;
+                    if (!parse_complex_value(values[i], &z))
+                        continue;
+                    non_null = 1;
+                    sum += z;
+                }
+            }
+            if (non_null)
+            {
+                bytesWritten = sprint_complex(output, creal(sum), cimag(sum));
+            }
+        }
+        else
+        {
+            double sum = 0;
+
+            for (int i = 0; i < row_count; i++)
+            {
+                // Sum the non-NULL values
+                if (IS_NOT_NULL(values[i]))
+                {
+                    non_null = 1;
+                    sum += strtod(values[i], NULL);
+                }
+            }
+
+            // If *all* rows are NULL then the result is NULL
+            if (non_null)
+            {
+                bytesWritten = sprint_number(output, sum);
+            }
         }
     }
     else if (node->function == FUNC_AGG_AVG)
     {
         int count = 0;
-        double sum = 0;
+        int any_complex = 0;
 
         for (int i = 0; i < row_count; i++)
         {
-            // Count up the non-NULL values
-            if (IS_NOT_NULL(values[i]))
+            if (IS_NOT_NULL(values[i]) && is_complex(values[i]))
             {
-                count++;
-
-                sum += strtod(values[i], NULL);
+                any_complex = 1;
+                break;
             }
         }
 
-        if (count > 0)
+        if (any_complex)
         {
-            bytesWritten = sprint_number(output, sum / count);
+            double complex sum = 0;
+            for (int i = 0; i < row_count; i++)
+            {
+                if (IS_NOT_NULL(values[i]))
+                {
+                    double complex z;
+                    if (!parse_complex_value(values[i], &z))
+                        continue;
+                    count++;
+                    sum += z;
+                }
+            }
+            if (count > 0)
+            {
+                double complex avg = sum / count;
+                bytesWritten = sprint_complex(output, creal(avg), cimag(avg));
+            }
+        }
+        else
+        {
+            double sum = 0;
+
+            for (int i = 0; i < row_count; i++)
+            {
+                // Count up the non-NULL values
+                if (IS_NOT_NULL(values[i]))
+                {
+                    count++;
+
+                    sum += strtod(values[i], NULL);
+                }
+            }
+
+            if (count > 0)
+            {
+                bytesWritten = sprint_number(output, sum / count);
+            }
         }
     }
     else if (node->function == FUNC_AGG_LISTAGG)

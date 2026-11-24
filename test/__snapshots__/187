@@ -1,6 +1,5 @@
-| name               | birth_date         |
+| l.id               | r.id               |
 |--------------------|--------------------|
-| Walter KELLY       | 0100-09-14         |
-| Walter KELLY       | 0208-06-29         |
-| Walter KELLY       | 0571-07-23         |
+|                  2 |                  2 |
+|                  3 |                  3 |
 

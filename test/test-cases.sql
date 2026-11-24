@@ -227,6 +227,19 @@ FROM (VALUES (10.5), (2), (10), (2.25)) AS t(v) ORDER BY v;
 SELECT ABS(-3.5), SQRT(9), SQRT(2), FLOOR(3.7), FLOOR(-3.7), CEIL(3.2), CEILING(-3.2);
 SELECT ROUND(3.5), ROUND(3.14159, 2), ROUND(1234.56, -2);
 SELECT EXP(0), EXP(1), LN(2.718281828459), LOG10(1000);
+-- Complex numbers
+SELECT COMPLEX(3, 4);
+SELECT 3 + 4 * I;
+SELECT SQRT(-1);
+SELECT ABS('3+4i');
+SELECT RE('3+4i'), IM('3+4i');
+SELECT CONJ(3 + 4 * I);
+SELECT COMPLEX(1, 2) + COMPLEX(3, 4);
+SELECT COMPLEX(3, 4) * COMPLEX(0, 1);
+SELECT '3+4i' = COMPLEX(3, 4), '3+4i' != COMPLEX(3, 5), '3+4i' < COMPLEX(3, 5);
+FROM (VALUES ('1+2i'), ('3+4i'), ('5')) AS t(z) SELECT SUM(z), AVG(z);
+FROM (VALUES ('3+4i'), ('1+2i'), ('2')) AS t(z) ORDER BY z SELECT z;
+FROM (VALUES ('3+4i'), (10), (2)) AS t(v) SELECT MIN(v), MAX(v);
 -- HAVING
 FROM test WHERE name LIKE 'Adam WE%' GROUP BY name HAVING COUNT(*) > 1 ORDER BY name SELECT name, COUNT(*);
 FROM test WHERE name LIKE 'Adam K%' GROUP BY name HAVING SUM(score) > 500 ORDER BY score DESC SELECT name, COUNT(*), SUM(score) AS score;
