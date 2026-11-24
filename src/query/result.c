@@ -224,6 +224,22 @@ static int pool_count = 0;
 
 static unsigned long pool_map = 0;
 
+/** Nesting depth for scalar subqueries evaluated mid-outer-query. */
+static int pool_nest_depth = 0;
+
+void beginRowListPoolNest(void)
+{
+    pool_nest_depth++;
+}
+
+void endRowListPoolNest(void)
+{
+    if (pool_nest_depth > 0)
+    {
+        pool_nest_depth--;
+    }
+}
+
 /**
  * @brief Get the RowList object from the pool by index.
  * Important: DO NOT hold on to this pointer for long.
@@ -421,6 +437,15 @@ void destroyResultSet (struct ResultSet *results) {
  * @param results
  */
 void destroyRowListPool () {
+    // Nested scalar subqueries share this pool with the outer query. Freeing
+    // it here would invalidate the outer row lists still in use.
+    if (pool_nest_depth > 0)
+    {
+        return;
+    }
+
     free(row_list_pool);
     row_list_pool = NULL;
+    pool_count = 0;
+    pool_map = 0;
 }

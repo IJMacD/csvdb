@@ -49,3 +49,7 @@ struct ResultSet *createResultSet ();
 void destroyResultSet (struct ResultSet *results);
 
 void destroyRowListPool ();
+
+/** Nest RowList pool so mid-query scalar subqueries do not free the outer pool. */
+void beginRowListPoolNest(void);
+void endRowListPoolNest(void);

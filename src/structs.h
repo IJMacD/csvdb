@@ -412,6 +412,8 @@ struct Table {
     enum JoinType join_type;
 };
 
+typedef int RowListIndex;
+
 struct Query {
     #ifdef DEBUG
     int id;
@@ -434,9 +436,18 @@ struct Query {
     int distinct_count;
     int offset_value;
     int limit_value;
-};
 
-typedef int RowListIndex;
+    /**
+     * Optional outer-row binding for correlated scalar subqueries.
+     * When set, unresolved columns in this query are looked up on the outer
+     * tables and frozen to FIELD_CONSTANT from the current outer row.
+     */
+    struct Table *outer_tables;
+    int outer_table_count;
+    RowListIndex outer_row_list;
+    int outer_row_index;
+    int has_outer_row;
+};
 
 #define ROWLIST_ROWID -1
 

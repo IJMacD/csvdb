@@ -60,6 +60,12 @@ void optimiseCollapseConstantNode(struct Node *node)
         return;
     }
 
+    if (node->function == FUNC_SUBQUERY)
+    {
+        // May be correlated; evaluated at runtime
+        return;
+    }
+
     // Optimise all children first
     for (int i = 0; i < node->child_count; i++)
     {
@@ -452,6 +458,14 @@ void optimiseWhereToOn(struct Query *query)
 
         struct Node *left_node = &predicate->children[0];
         struct Node *right_node = &predicate->children[1];
+
+        // Scalar subqueries are residual filters (may be correlated).
+        if (
+            left_node->function == FUNC_SUBQUERY ||
+            right_node->function == FUNC_SUBQUERY)
+        {
+            continue;
+        }
 
         int bit_map = getTableBitMap(left_node);
         int left_table_id = whichBit(bit_map);

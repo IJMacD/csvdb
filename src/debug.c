@@ -16,7 +16,7 @@ const char *FUNC_NAMES[] = {
     "","","RANDOM","VERSION","PI","","","",
     // 0x10
     "LOG10","ADD","SUB","MUL","DIV","MOD","POW","ABS",
-    "SQRT","FLOOR","CEIL","ROUND","EXP","LN","","",
+    "SQRT","FLOOR","CEIL","ROUND","EXP","LN","SUBQUERY","",
     // 0x20
     "","LENGTH","LEFT","RIGHT","CONCAT","","","",
     "","","","","","","","",

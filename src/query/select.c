@@ -230,10 +230,11 @@ int process_query(
 
     // If there are no tables specified then we default to "FROM stdin".
     // However, the special case of all constant columns means we just want a
-    // dummy row query.
+    // dummy row query. Correlated scalar subqueries bind outer columns as
+    // constants — never steal the process stdin.
     if (q->table_count == 0)
     {
-        if (!isatty(fileno(stdin)))
+        if (!q->has_outer_row && !isatty(fileno(stdin)))
         {
             // If there's something on stdin then default to 'FROM stdin'
             q->tables = calloc(1, sizeof(struct Table));
@@ -630,6 +631,73 @@ int select_subquery_mem(
     destroy_query(q);
 
     free(q);
+
+    return result;
+}
+
+int evaluate_scalar_subquery(
+    const char *sql,
+    struct Table *outer_tables,
+    int outer_table_count,
+    RowListIndex outer_row_list,
+    int outer_row_index,
+    int has_outer_row,
+    char *output,
+    int max_length)
+{
+    output[0] = '\0';
+
+    beginRowListPoolNest();
+
+    struct Query *q = makeQuery();
+
+    int result = parseQuery(q, sql, NULL);
+    if (result < 0)
+    {
+        destroy_query(q);
+        free(q);
+        endRowListPoolNest();
+        return -1;
+    }
+
+    q->outer_tables = outer_tables;
+    q->outer_table_count = outer_table_count;
+    q->outer_row_list = outer_row_list;
+    q->outer_row_index = outer_row_index;
+    q->has_outer_row = has_outer_row;
+
+#ifdef DEBUG
+    if (debug_verbosity >= 1)
+    {
+        fprintf(stderr, "Scalar subquery: %s\n", sql);
+    }
+#endif
+
+    struct DB db = {0};
+    result = csvMem_fromQuery(&db, q);
+    if (result < 0)
+    {
+        closeDB(&db);
+        destroy_query(q);
+        free(q);
+        endRowListPoolNest();
+        return -1;
+    }
+
+    int rows = getRecordCount(&db);
+    if (rows > 0 && db.field_count > 0)
+    {
+        result = getRecordValue(&db, 0, 0, output, max_length);
+    }
+    else
+    {
+        result = 0;
+    }
+
+    closeDB(&db);
+    destroy_query(q);
+    free(q);
+    endRowListPoolNest();
 
     return result;
 }
@@ -1031,6 +1099,12 @@ static int find_field(
  */
 static int resolveNode(struct Query *query, struct Node *node, enum AliasSearchMode allow_aliases)
 {
+    // Scalar subquery SQL is evaluated later; do not treat field.text as a column.
+    if (node->function == FUNC_SUBQUERY)
+    {
+        return 0;
+    }
+
     if (node->filter != NULL)
     {
         int result = resolveNode(query, node->filter, allow_aliases);
@@ -1114,11 +1188,63 @@ static int resolveNode(struct Query *query, struct Node *node, enum AliasSearchM
         }
     }
 
+    // Correlated subquery: bind unresolved names from the outer row as constants
+    if (query->has_outer_row && query->outer_tables != NULL &&
+        query->outer_table_count > 0)
+    {
+        struct Query outer_view = {0};
+        outer_view.tables = query->outer_tables;
+        outer_view.table_count = query->outer_table_count;
+
+        int outer_table_id = -1;
+        int outer_column_id = FIELD_UNKNOWN;
+
+        if (find_field(
+                &outer_view,
+                node->field.text,
+                &outer_table_id,
+                &outer_column_id,
+                NULL))
+        {
+            struct Node outer_ref = {0};
+            clearNode(&outer_ref);
+            outer_ref.function = FUNC_UNITY;
+            outer_ref.field.table_id = outer_table_id;
+            outer_ref.field.index = outer_column_id;
+
+            char value[MAX_VALUE_LENGTH];
+            evaluateNode(
+                query->outer_tables,
+                query->outer_row_list,
+                query->outer_row_index,
+                &outer_ref,
+                value,
+                MAX_VALUE_LENGTH);
+
+            if ((int)strlen(value) >= MAX_FIELD_LENGTH)
+            {
+                fprintf(
+                    stderr,
+                    "Correlated binding for '%s' exceeds %d bytes\n",
+                    node->field.text,
+                    MAX_FIELD_LENGTH - 1);
+                return -1;
+            }
+
+            node->function = FUNC_UNITY;
+            node->child_count = 0;
+            node->field.index = FIELD_CONSTANT;
+            node->field.table_id = TABLE_NONE;
+            strcpy(node->field.text, value);
+            return 0;
+        }
+    }
+
     // We couldn't resolve the node/field. If there was no table specified, then
     // that's probably why. Otherwise the field couldn't be found in any of the
     // tables that we do have.
 
-    if (query->table_count == 0)
+    if (query->table_count == 0 && !query->has_outer_row)
     {
         fprintf(stderr, "No tables specified\n");
         return -1;

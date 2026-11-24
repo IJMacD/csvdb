@@ -857,25 +857,27 @@ int parseNode(
         {
             int len = find_matching_parenthesis(query + *index - 1);
 
-            if (len >= MAX_TABLE_LENGTH)
+            // SQL body length is len-2 (exclude '(' and ')'); field.text holds it
+            if (len - 2 >= MAX_FIELD_LENGTH)
             {
                 fprintf(
                     stderr,
                     "Subqueries longer than %d are not supported. Subquery was "
                     "%d bytes.\n",
-                    MAX_TABLE_LENGTH,
-                    len);
+                    MAX_FIELD_LENGTH - 1,
+                    len - 2);
                 return -1;
             }
 
-            struct Table *table = allocateTable(q);
-
-            strncpy(table->name, query + *index, len - 2);
-            table->db = DB_SUBQUERY;
-
-            node->field.index = 0;
-            node->field.table_id = q->table_count - 1;
-            node->function = FUNC_UNITY;
+            // Scalar expression subquery: evaluate via FUNC_SUBQUERY (supports
+            // correlation). FROM (subquery) AS t still uses allocateTable in
+            // parse.c.
+            strncpy(node->field.text, query + *index, len - 2);
+            node->field.text[len - 2] = '\0';
+            node->field.index = FIELD_CONSTANT;
+            node->field.table_id = TABLE_NONE;
+            node->function = FUNC_SUBQUERY;
+            node->child_count = 0;
 
             (*index) += len - 1;
         }
