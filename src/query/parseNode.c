@@ -1434,10 +1434,34 @@ static int hasKeywordAt(const char *query, size_t i, const char *keyword)
  * True if '(' at index groups a boolean/comparison expression rather than a
  * math expression like (5 + 3). Looks for comparison ops or AND/OR inside
  * the matching paren pair (depth 1), skipping strings and nested parens.
+ *
+ * Scalar / table subqueries — `(SELECT …)`, `(FROM …)`, etc. — must not be
+ * treated as boolean groups even when their body contains WHERE/= /AND/OR;
+ * those belong to parseNode's subquery path instead.
  */
 static int isBooleanGroupingParen(const char *query, size_t index)
 {
     if (query[index] != '(')
+    {
+        return 0;
+    }
+
+    size_t body = index + 1;
+    while (
+        query[body] == ' ' ||
+        query[body] == '\t' ||
+        query[body] == '\n' ||
+        query[body] == '\r')
+    {
+        body++;
+    }
+
+    if (
+        hasKeywordAt(query, body, "SELECT") ||
+        hasKeywordAt(query, body, "FROM") ||
+        hasKeywordAt(query, body, "VALUES") ||
+        hasKeywordAt(query, body, "WITH") ||
+        hasKeywordAt(query, body, "TABLE"))
     {
         return 0;
     }
