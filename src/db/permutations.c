@@ -13,7 +13,8 @@ struct PermState {
     int n;
     int k;
     int count;
-    char names[1 + MAX_PERM_N][8]; /* "rank" + p0.. or c0.. */
+    /* "rank" + p0..p9 or c0..c9; size 16 silences -Wformat-truncation */
+    char names[1 + MAX_PERM_N][16];
 };
 
 static long factorial (int n) {
