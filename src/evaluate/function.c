@@ -372,7 +372,12 @@ int evaluateFunction(
         return 0;
     }
 
-    if (function == FUNC_UNITY)
+    // PK / UNIQUE / INDEX are planner hints; in expressions they are identity.
+    if (
+        function == FUNC_UNITY ||
+        function == FUNC_PK ||
+        function == FUNC_UNIQUE ||
+        function == FUNC_INDEX)
     {
         return sprintf(output, "%s", values[0]);
     }

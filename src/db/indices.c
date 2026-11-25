@@ -215,28 +215,73 @@ enum IndexSearchResult indexUniqueSeek (
         }
         else if (predicate_op == OPERATOR_LT || predicate_op == OPERATOR_LE)
         {
-            lower_bound = 0;
-            upper_bound = index_rowid;
-
-            if (predicate_op == OPERATOR_LE && search_status == RESULT_FOUND)
+            // Below minimum: nothing is less/equal. Above maximum: every row.
+            if (search_status == RESULT_BELOW_MIN)
             {
-                upper_bound++;
+                return RESULT_NO_ROWS;
+            }
+            if (search_status == RESULT_ABOVE_MAX)
+            {
+                lower_bound = 0;
+                upper_bound = getRecordCount(index_db);
+            }
+            else
+            {
+                lower_bound = 0;
+                upper_bound = index_rowid;
+
+                if (
+                    predicate_op == OPERATOR_LE &&
+                    search_status == RESULT_FOUND)
+                {
+                    upper_bound++;
+                }
             }
         }
         else if (predicate_op == OPERATOR_GT || predicate_op == OPERATOR_GE)
         {
-            lower_bound = index_rowid;
-            upper_bound = getRecordCount(index_db);
-
-            if (predicate_op == OPERATOR_GT && search_status == RESULT_FOUND)
+            // Above maximum: nothing is greater/equal. Below minimum: every row.
+            if (search_status == RESULT_ABOVE_MAX)
             {
-                lower_bound++;
+                return RESULT_NO_ROWS;
             }
+            if (search_status == RESULT_BELOW_MIN)
+            {
+                lower_bound = 0;
+            }
+            else
+            {
+                lower_bound = index_rowid;
+
+                if (
+                    predicate_op == OPERATOR_GT &&
+                    search_status == RESULT_FOUND)
+                {
+                    lower_bound++;
+                }
+            }
+            upper_bound = getRecordCount(index_db);
         }
         // Special treatment for NOT EQUAL; do the two halves separately
         else if (predicate_op == OPERATOR_NE)
         {
             int record_count = getRecordCount(index_db);
+
+            // Value outside the key range: every row matches.
+            if (
+                search_status == RESULT_BELOW_MIN ||
+                search_status == RESULT_ABOVE_MAX)
+            {
+                return indexWalk(
+                    index_db,
+                    rowid_column,
+                    0,
+                    record_count,
+                    filters,
+                    filter_count,
+                    limit,
+                    row_list);
+            }
 
             int a = indexWalk(
                 index_db,
@@ -415,33 +460,84 @@ enum IndexSearchResult indexSeek (
         }
     }
     else if (predicate_op == OPERATOR_LT) {
-        lower_bound = 0;
-        upper_bound = lower_index_rowid;
+        if (search_status1 == RESULT_BELOW_MIN) {
+            return RESULT_NO_ROWS;
+        }
+        if (search_status1 == RESULT_ABOVE_MAX) {
+            lower_bound = 0;
+            upper_bound = getRecordCount(index_db);
+        }
+        else {
+            lower_bound = 0;
+            upper_bound = lower_index_rowid;
+        }
     }
     else if (predicate_op == OPERATOR_LE) {
-        lower_bound = 0;
-        upper_bound = upper_index_rowid;
+        if (search_status1 == RESULT_BELOW_MIN) {
+            return RESULT_NO_ROWS;
+        }
+        if (search_status2 == RESULT_ABOVE_MAX) {
+            lower_bound = 0;
+            upper_bound = getRecordCount(index_db);
+        }
+        else {
+            lower_bound = 0;
+            upper_bound = upper_index_rowid;
 
-        if (search_status2 == RESULT_FOUND) {
-            upper_bound++;
+            if (search_status2 == RESULT_FOUND) {
+                upper_bound++;
+            }
         }
     }
     else if (predicate_op == OPERATOR_GT) {
-        lower_bound = upper_index_rowid;
+        if (search_status1 == RESULT_ABOVE_MAX) {
+            return RESULT_NO_ROWS;
+        }
+        if (search_status1 == RESULT_BELOW_MIN) {
+            lower_bound = 0;
+        }
+        else {
+            lower_bound = upper_index_rowid;
 
-        if (search_status1 == RESULT_FOUND) {
-            lower_bound++;
+            if (search_status1 == RESULT_FOUND) {
+                lower_bound++;
+            }
         }
 
         upper_bound = getRecordCount(index_db);
     }
     else if (predicate_op == OPERATOR_GE) {
-        lower_bound = lower_index_rowid;
+        if (search_status1 == RESULT_ABOVE_MAX) {
+            return RESULT_NO_ROWS;
+        }
+        if (search_status1 == RESULT_BELOW_MIN) {
+            lower_bound = 0;
+        }
+        else {
+            lower_bound = lower_index_rowid;
+        }
         upper_bound = getRecordCount(index_db);
     }
     // Special treatment for NOT EQUAL; do the two halves separately
     else if (predicate_op == OPERATOR_NE) {
         int record_count = getRecordCount(index_db);
+
+        if (
+            search_status1 == RESULT_BELOW_MIN ||
+            search_status1 == RESULT_ABOVE_MAX)
+        {
+            return indexWalk(
+                index_db,
+                rowid_column,
+                0,
+                record_count,
+                filters,
+                filter_count,
+                limit,
+                row_list
+            );
+        }
+
         int a = indexWalk(
             index_db,
             rowid_column,
@@ -476,6 +572,13 @@ enum IndexSearchResult indexSeek (
             predicate_op
         );
         exit(-1);
+    }
+
+    if (lower_bound < 0) {
+        lower_bound = 0;
+    }
+    if (upper_bound < 0) {
+        upper_bound = 0;
     }
 
     return indexWalk(
@@ -526,29 +629,73 @@ enum IndexSearchResult indexBoundedSeek (
     int lower_bound = 0;
     int upper_bound = getRecordCount(index_db);
 
+    // Lower value above the max key → empty range for GE/GT.
+    if (
+        (lower_op == OPERATOR_GE || lower_op == OPERATOR_GT) &&
+        status_lo_lower == RESULT_ABOVE_MAX)
+    {
+        return RESULT_NO_ROWS;
+    }
+
+    // Upper value below the min key → empty range for LE/LT.
+    if (
+        (upper_op == OPERATOR_LE || upper_op == OPERATOR_LT) &&
+        status_hi_lower == RESULT_BELOW_MIN)
+    {
+        return RESULT_NO_ROWS;
+    }
+
     if (lower_op == OPERATOR_GE)
     {
-        lower_bound = lo_lower;
+        if (status_lo_lower == RESULT_BELOW_MIN)
+        {
+            lower_bound = 0;
+        }
+        else
+        {
+            lower_bound = lo_lower;
+        }
     }
     else if (lower_op == OPERATOR_GT)
     {
-        lower_bound = lo_upper;
-        if (status_lo_lower == RESULT_FOUND)
+        if (status_lo_lower == RESULT_BELOW_MIN)
         {
-            lower_bound++;
+            lower_bound = 0;
+        }
+        else
+        {
+            lower_bound = lo_upper;
+            if (status_lo_lower == RESULT_FOUND)
+            {
+                lower_bound++;
+            }
         }
     }
 
     if (upper_op == OPERATOR_LT)
     {
-        upper_bound = hi_lower;
+        if (status_hi_lower == RESULT_ABOVE_MAX)
+        {
+            upper_bound = getRecordCount(index_db);
+        }
+        else
+        {
+            upper_bound = hi_lower;
+        }
     }
     else if (upper_op == OPERATOR_LE)
     {
-        upper_bound = hi_upper;
-        if (status_hi_upper == RESULT_FOUND)
+        if (status_hi_upper == RESULT_ABOVE_MAX)
         {
-            upper_bound++;
+            upper_bound = getRecordCount(index_db);
+        }
+        else
+        {
+            upper_bound = hi_upper;
+            if (status_hi_upper == RESULT_FOUND)
+            {
+                upper_bound++;
+            }
         }
     }
 
