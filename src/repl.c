@@ -74,14 +74,117 @@ static void redrawLine(
 {
     /* Move to start of line, print prompt+buffer, clear tail, place cursor. */
     printf("\r%s", prompt);
-    fwrite(buf, 1, len, stdout);
-    printf("\033[K");
-    printf("\r%s", prompt);
-    if (cursor > 0)
+    if (len > 0)
     {
-        fwrite(buf, 1, cursor, stdout);
+        fwrite(buf, 1, len, stdout);
+    }
+    printf("\033[K");
+    /* Move cursor back from end of text to the edit position. */
+    if (cursor < len)
+    {
+        printf("\033[%zuD", len - cursor);
     }
     fflush(stdout);
+}
+
+static void moveCursorLeft(void)
+{
+    printf("\033[D");
+    fflush(stdout);
+}
+
+static void moveCursorRight(void)
+{
+    printf("\033[C");
+    fflush(stdout);
+}
+
+/**
+ * Read a CSI / SS3 escape sequence after the initial ESC byte.
+ * Sets *final to the terminating byte (e.g. 'D' for left) and *param to the
+ * leading numeric CSI parameter (0 if none). Returns 0 on failure, 1 on success.
+ */
+static int readEscapeSequence(int *final, int *param)
+{
+    unsigned char c;
+    int value = 0;
+    int have_digit = 0;
+
+    *final = 0;
+    *param = 0;
+
+    if (read(STDIN_FILENO, &c, 1) != 1)
+    {
+        return 0;
+    }
+
+    /* SS3: ESC O A/B/C/D (application cursor keys) */
+    if (c == 'O')
+    {
+        if (read(STDIN_FILENO, &c, 1) != 1)
+        {
+            return 0;
+        }
+        *final = (int)c;
+        return 1;
+    }
+
+    /* CSI: ESC [ ... final */
+    if (c != '[')
+    {
+        return 0;
+    }
+
+    while (1)
+    {
+        if (read(STDIN_FILENO, &c, 1) != 1)
+        {
+            return 0;
+        }
+
+        if (c >= '0' && c <= '9')
+        {
+            /* Accumulate only until the first parameter is committed. */
+            if (*param == 0 && !have_digit)
+            {
+                value = c - '0';
+                have_digit = 1;
+            }
+            else if (*param == 0 && have_digit)
+            {
+                value = value * 10 + (c - '0');
+            }
+            continue;
+        }
+
+        if (c == ';')
+        {
+            /* Commit first parameter; ignore modifier parameters after. */
+            if (*param == 0 && have_digit)
+            {
+                *param = value;
+            }
+            have_digit = 0;
+            value = 0;
+            continue;
+        }
+
+        if (c >= 0x40 && c <= 0x7E)
+        {
+            if (*param == 0 && have_digit)
+            {
+                *param = value;
+            }
+            *final = (int)c;
+            return 1;
+        }
+
+        if (c < 0x20 || c > 0x3F)
+        {
+            return 0;
+        }
+        /* Other intermediate bytes — ignore */
+    }
 }
 
 /**
@@ -209,107 +312,123 @@ static char *readEditedLine(const char *prompt, int *interrupted)
 
         if (c == 27) /* Escape sequence */
         {
-            unsigned char seq[2];
-            if (read(STDIN_FILENO, &seq[0], 1) != 1)
-            {
-                continue;
-            }
-            if (read(STDIN_FILENO, &seq[1], 1) != 1)
+            int final = 0;
+            int param = 0;
+            if (!readEscapeSequence(&final, &param))
             {
                 continue;
             }
 
-            if (seq[0] == '[')
+            if (final == 'D') /* Left */
             {
-                if (seq[1] == 'D') /* Left */
+                if (cursor > 0)
                 {
-                    if (cursor > 0)
-                    {
-                        cursor--;
-                        redrawLine(prompt, buf, len, cursor);
-                    }
+                    cursor--;
+                    moveCursorLeft();
                 }
-                else if (seq[1] == 'C') /* Right */
+            }
+            else if (final == 'C') /* Right */
+            {
+                if (cursor < len)
                 {
-                    if (cursor < len)
-                    {
-                        cursor++;
-                        redrawLine(prompt, buf, len, cursor);
-                    }
+                    cursor++;
+                    moveCursorRight();
                 }
-                else if (seq[1] == 'A') /* Up */
+            }
+            else if (final == 'A') /* Up */
+            {
+                if (history_index > 0)
                 {
-                    if (history_index > 0)
+                    if (history_index == history_count)
                     {
-                        if (history_index == history_count)
-                        {
-                            free(stash);
-                            buf[len] = '\0';
-                            stash = strdup(buf);
-                        }
-                        history_index--;
-                        const char *h = history[history_index];
-                        size_t hlen = strlen(h);
-                        if (hlen >= REPL_LINE_CAP)
-                        {
-                            hlen = REPL_LINE_CAP - 1;
-                        }
-                        memcpy(buf, h, hlen);
-                        len = hlen;
-                        cursor = len;
-                        redrawLine(prompt, buf, len, cursor);
+                        free(stash);
+                        buf[len] = '\0';
+                        stash = strdup(buf);
                     }
+                    history_index--;
+                    const char *h = history[history_index];
+                    size_t hlen = strlen(h);
+                    if (hlen >= REPL_LINE_CAP)
+                    {
+                        hlen = REPL_LINE_CAP - 1;
+                    }
+                    memcpy(buf, h, hlen);
+                    len = hlen;
+                    cursor = len;
+                    redrawLine(prompt, buf, len, cursor);
                 }
-                else if (seq[1] == 'B') /* Down */
+            }
+            else if (final == 'B') /* Down */
+            {
+                if (history_index < history_count)
                 {
-                    if (history_index < history_count)
+                    history_index++;
+                    const char *h;
+                    if (history_index == history_count)
                     {
-                        history_index++;
-                        const char *h;
-                        if (history_index == history_count)
-                        {
-                            h = stash ? stash : "";
-                        }
-                        else
-                        {
-                            h = history[history_index];
-                        }
-                        size_t hlen = strlen(h);
-                        if (hlen >= REPL_LINE_CAP)
-                        {
-                            hlen = REPL_LINE_CAP - 1;
-                        }
-                        memcpy(buf, h, hlen);
-                        len = hlen;
-                        cursor = len;
-                        redrawLine(prompt, buf, len, cursor);
+                        h = stash ? stash : "";
                     }
-                }
-                else if (seq[1] == '3') /* Delete: ESC [ 3 ~ */
-                {
-                    unsigned char tilde;
-                    if (read(STDIN_FILENO, &tilde, 1) == 1 && tilde == '~')
+                    else
                     {
-                        if (cursor < len)
-                        {
-                            memmove(
-                                buf + cursor,
-                                buf + cursor + 1,
-                                len - cursor - 1);
-                            len--;
-                            redrawLine(prompt, buf, len, cursor);
-                        }
+                        h = history[history_index];
                     }
+                    size_t hlen = strlen(h);
+                    if (hlen >= REPL_LINE_CAP)
+                    {
+                        hlen = REPL_LINE_CAP - 1;
+                    }
+                    memcpy(buf, h, hlen);
+                    len = hlen;
+                    cursor = len;
+                    redrawLine(prompt, buf, len, cursor);
                 }
-                else if (seq[1] == 'H') /* Home */
+            }
+            else if (final == 'H') /* Home */
+            {
+                if (cursor > 0)
                 {
                     cursor = 0;
                     redrawLine(prompt, buf, len, cursor);
                 }
-                else if (seq[1] == 'F') /* End */
+            }
+            else if (final == 'F') /* End */
+            {
+                if (cursor < len)
                 {
                     cursor = len;
                     redrawLine(prompt, buf, len, cursor);
+                }
+            }
+            else if (final == '~')
+            {
+                /* CSI n~ : 1/7 Home, 4/8 End, 3 Delete */
+                if (param == 1 || param == 7)
+                {
+                    if (cursor > 0)
+                    {
+                        cursor = 0;
+                        redrawLine(prompt, buf, len, cursor);
+                    }
+                }
+                else if (param == 4 || param == 8)
+                {
+                    if (cursor < len)
+                    {
+                        cursor = len;
+                        redrawLine(prompt, buf, len, cursor);
+                    }
+                }
+                else if (param == 3)
+                {
+                    if (cursor < len)
+                    {
+                        memmove(
+                            buf + cursor,
+                            buf + cursor + 1,
+                            len - cursor - 1);
+                        len--;
+                        redrawLine(prompt, buf, len, cursor);
+                    }
                 }
             }
             continue;
