@@ -1,12 +1,123 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "./predicates.h"
 #include "./evaluate.h"
 #include "../structs.h"
 #include "../query/result.h"
+#include "../query/select.h"
+#include "../db/db.h"
 #include "../functions/date.h"
 #include "../functions/util.h"
+
+/**
+ * Evaluate <left> <compare> ANY|ALL (subquery) by materialising the subquery
+ * and testing the comparison against each first-column value.
+ * ANY: true if any row matches; empty → false.
+ * ALL: true if every row matches; empty → true.
+ */
+static int evaluateQuantifiedOperator(
+    struct Table *tables,
+    RowListIndex list_id,
+    int row_index,
+    struct Node *node)
+{
+    if (node->child_count != 2) {
+        fprintf(stderr, "Quantified operator expects two children\n");
+        exit(-1);
+    }
+
+    enum Function compare = quantifiedCompare(node);
+    if ((compare & MASK_FUNC_FAMILY) != FUNC_FAM_OPERATOR ||
+        compare == OPERATOR_OR ||
+        compare == OPERATOR_AND ||
+        compare == OPERATOR_ANY ||
+        compare == OPERATOR_ALL ||
+        compare == OPERATOR_ALWAYS ||
+        compare == OPERATOR_NEVER)
+    {
+        fprintf(stderr, "Invalid comparison on quantified operator\n");
+        exit(-1);
+    }
+
+    char value_left[MAX_VALUE_LENGTH] = {0};
+    int result = evaluateNode(
+        tables,
+        list_id,
+        row_index,
+        &node->children[0],
+        value_left,
+        MAX_VALUE_LENGTH);
+    if (result < 0) {
+        fprintf(stderr, "Unable to evaluate quantified left side\n");
+        exit(-1);
+    }
+
+    struct Node *right = &node->children[1];
+    if (right->function != FUNC_SUBQUERY || right->subquery == NULL) {
+        fprintf(stderr, "Quantified operator RHS must be a subquery\n");
+        exit(-1);
+    }
+
+    int outer_table_count = 0;
+    if (list_id >= 0) {
+        struct RowList *rl = getRowList(list_id);
+        if (rl != NULL) {
+            outer_table_count = (int)rl->join_count;
+        }
+    }
+
+    struct DB db = {0};
+    result = evaluate_subquery_to_db(
+        right->subquery,
+        tables,
+        outer_table_count,
+        list_id,
+        row_index,
+        list_id >= 0,
+        &db);
+    if (result < 0) {
+        fprintf(stderr, "Unable to evaluate quantified subquery\n");
+        exit(-1);
+    }
+
+    int rows = getRecordCount(&db);
+    int is_any = (node->function == OPERATOR_ANY);
+    int matched = is_any ? 0 : 1;
+    int saw_row = 0;
+
+    if (rows == 0 || db.field_count <= 0) {
+        closeDB(&db);
+        return is_any ? 0 : 1;
+    }
+
+    for (int i = 0; i < rows; i++) {
+        char value_right[MAX_VALUE_LENGTH] = {0};
+        if (getRecordValue(&db, i, 0, value_right, MAX_VALUE_LENGTH) < 0) {
+            // Skip unreadable rows (header-only phantom); treat as absent.
+            continue;
+        }
+        saw_row = 1;
+
+        int cmp = evaluateExpression(compare, value_left, value_right);
+        if (is_any) {
+            if (cmp) {
+                matched = 1;
+                break;
+            }
+        } else if (!cmp) {
+            matched = 0;
+            break;
+        }
+    }
+
+    closeDB(&db);
+    if (!saw_row) {
+        return is_any ? 0 : 1;
+    }
+    return matched;
+}
 
 /**
  * Evaluate an OPERATOR node
@@ -36,6 +147,10 @@ int evaluateOperatorNode (struct Table *tables, RowListIndex list_id, int row_in
 
     if (node->function == OPERATOR_AND) {
         return evaluateOperatorNodeListAND(tables, list_id, row_index, node->children, node->child_count);
+    }
+
+    if (node->function == OPERATOR_ANY || node->function == OPERATOR_ALL) {
+        return evaluateQuantifiedOperator(tables, list_id, row_index, node);
     }
 
     char value_left[MAX_VALUE_LENGTH] = {0};
@@ -235,6 +350,14 @@ int evaluateExpression (enum Function op, const char *left, const char *right) {
  * @param p
  */
 void normalisePredicate (struct Node *predicate) {
+    if (predicate->function == OPERATOR_ANY ||
+        predicate->function == OPERATOR_ALL ||
+        predicate->function == OPERATOR_OR ||
+        predicate->function == OPERATOR_AND)
+    {
+        return;
+    }
+
     struct Node *left = &predicate->children[0];
     struct Node *right = &predicate->children[1];
 
@@ -254,6 +377,17 @@ void normalisePredicate (struct Node *predicate) {
  * @returns 0 for success, -1 for error
  */
 int flipPredicate (struct Node *predicate) {
+    enum Function op = predicate->function;
+
+    if (op == OPERATOR_ANY ||
+        op == OPERATOR_ALL ||
+        op == OPERATOR_OR ||
+        op == OPERATOR_AND ||
+        op == OPERATOR_LIKE)
+    {
+        return -1;
+    }
+
     struct Node *left = &predicate->children[0];
     struct Node *right = &predicate->children[1];
 
@@ -263,8 +397,6 @@ int flipPredicate (struct Node *predicate) {
     // swap
     memcpy(left, right, sizeof(tmp));
     memcpy(right, &tmp, sizeof(tmp));
-
-    enum Function op = predicate->function;
 
     // flip operator as necessary
     if (op == OPERATOR_LT) {
@@ -277,8 +409,12 @@ int flipPredicate (struct Node *predicate) {
         op = OPERATOR_LE;
     } else if (op == OPERATOR_EQ) {
         // no op
+    } else if (op == OPERATOR_NE) {
+        // no op
     } else {
-        // Unable to swap
+        // Unable to swap — restore
+        memcpy(right, left, sizeof(tmp));
+        memcpy(left, &tmp, sizeof(tmp));
         return -1;
     }
 

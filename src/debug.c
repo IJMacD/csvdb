@@ -49,7 +49,7 @@ const char *FUNC_NAMES[] = {
     "","","","","","","","",
     // 0xC0
     "NEVER","EQ","LT","LE","GT","GE","NE","ALWAYS",
-    "LIKE","OR","AND","","","","","",
+    "LIKE","OR","AND","ANY","ALL","","","",
     // 0xD0
     "","","","","","","","",
     "","","","","","","","",
@@ -133,9 +133,13 @@ static void debugNodeInner (struct Node * node, int depth) {
     if (node->function != FUNC_UNITY) {
         if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR) {
             char *operators[] = {
-                "NEVER","EQ","LT","LE","GT","GE","NE","ALWAYS","LIKE","OR","AND"
+                "NEVER","EQ","LT","LE","GT","GE","NE","ALWAYS","LIKE","OR","AND",
+                "ANY","ALL"
             };
-            char *s = operators[node->function & ~MASK_FUNC_FAMILY];
+            unsigned idx = node->function & ~MASK_FUNC_FAMILY;
+            char *s = (idx < sizeof(operators) / sizeof(operators[0]))
+                ? operators[idx]
+                : "?";
             fprintf(
                 stderr,
                 "OPERATOR_%s ",

@@ -303,7 +303,9 @@ Complex values are duck-typed strings in canonical form `a+bi` / `a-bi` (no spac
 | `LIKE` | Prefix match; trailing `%` is a wildcard (`name LIKE 'Wa%'`). Exact match if no `%`. |
 | `BETWEEN a AND b` | Inclusive both ends: `>= a AND <= b` |
 | `BETWEEN a ANDX b` | Exclusive upper bound: `>= a AND < b` |
-| `IN (…)` | Membership (`x` equals any listed value) |
+| `IN (…)` | Membership (`x` equals any listed value, or any row of a subquery) |
+| `= ANY (subquery)` / `= SOME (…)` | Same as `IN (subquery)`; other compares (`>`, `<`, …) allowed |
+| `> ALL (subquery)` (etc.) | True when the comparison holds for every subquery row |
 | `AND` | Conjunction (binds tighter than `OR`) |
 | `OR` | Disjunction |
 
@@ -376,6 +378,23 @@ SELECT (SELECT SUM(value) FROM ranks) + 10 FROM suits;
 ```
 
 Scalar subqueries must start with `SELECT` or `FROM` inside `(…)`.
+
+### `IN (subquery)` / `ANY` / `ALL`
+
+```sql
+FROM suits WHERE name IN (SELECT name FROM suits WHERE name = 'hearts');
+FROM ranks WHERE value = ANY (SELECT value FROM ranks WHERE value < 5);
+FROM ranks WHERE value > ALL (SELECT value FROM ranks WHERE value < 5);
+FROM suits AS s WHERE name = ANY (
+  SELECT name FROM suits WHERE LENGTH(name) = LENGTH(s.name)
+);
+```
+
+- `IN (subquery)` is `= ANY (subquery)`.
+- `SOME` is a synonym for `ANY`.
+- Uncorrelated subqueries are expanded once (to `OR`/`AND` of compares); correlated ones re-run per outer row.
+- Empty subquery: `ANY` is false, `ALL` is true.
+- Literal `IN ('a','b')` is unchanged (desugared to `OR` of equalities).
 
 ### `*` in function arguments
 

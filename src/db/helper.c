@@ -61,6 +61,14 @@ int indexLines (struct DB *db, int max_lines, char quote_char) {
         max_size = ptr - sizeof(*max_size);
     }
 
+    // Header-only / empty body: no data rows (avoid phantom row at offset 0
+    // and the data[-1] read when i stays 0).
+    if (db->data != NULL && db->data[0] == '\0' && db->_record_count >= -1) {
+        db->line_indices[0] = 0;
+        db->_record_count = 0;
+        return 0;
+    }
+
     // Check if we've already done a partial index
     if (db->_record_count < -1) {
         count = -db->_record_count - 1;
@@ -121,7 +129,7 @@ int indexLines (struct DB *db, int max_lines, char quote_char) {
         i++;
     }
 
-    if (db->data[i-1] == '\n') {
+    if (i > 0 && db->data[i-1] == '\n') {
         count--;
     }
 

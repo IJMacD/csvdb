@@ -210,6 +210,15 @@ void optimiseCollapseConstantNode(struct Node *node)
 
     if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR)
     {
+        // Quantified / boolean-combo operators are not binary value compares.
+        if (node->function == OPERATOR_ANY ||
+            node->function == OPERATOR_ALL ||
+            node->function == OPERATOR_OR ||
+            node->function == OPERATOR_AND)
+        {
+            return;
+        }
+
         // If we're evaluating an operator then we can definitively set the node
         // to OPERATOR_ALWAYS or OPERATOR_NEVER
 
@@ -266,6 +275,14 @@ void optimiseCollapseConstantNode(struct Node *node)
 void optimiseRowidAlgebra(struct Node *node)
 {
     int isOperator = (node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR;
+
+    if (node->function == OPERATOR_ANY ||
+        node->function == OPERATOR_ALL ||
+        node->function == OPERATOR_OR ||
+        node->function == OPERATOR_AND)
+    {
+        return;
+    }
 
     if (isOperator && node->child_count == 2)
     {

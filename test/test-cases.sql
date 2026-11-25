@@ -418,3 +418,16 @@ FROM lefty AS l LEFT OUTER JOIN righty AS r ON l.id = r.id SELECT l.id, l.name, 
 FROM suits RIGHT JOIN ranks ON LENGTH(ranks.name) = LENGTH(suits.name) SELECT suits.name, ranks.name ORDER BY ranks.name, suits.name;
 -- CROSS JOIN keyword (same as comma / JOIN without ON)
 FROM lefty AS l CROSS JOIN righty AS r WHERE r.id = 4 SELECT l.id, r.name ORDER BY l.id;
+-- IN (subquery) / = ANY / > ALL (uncorrelated + correlated)
+FROM suits WHERE name IN (SELECT name FROM suits WHERE name = 'hearts') SELECT name;
+FROM suits WHERE name = ANY (SELECT name FROM suits WHERE name IN ('spades','diamonds')) SELECT name ORDER BY name;
+FROM suits WHERE name = SOME (SELECT name FROM suits WHERE name = 'clubs') SELECT name;
+FROM ranks WHERE value > ALL (SELECT value FROM ranks WHERE value < 5) SELECT name, value ORDER BY value;
+FROM ranks WHERE value > ANY (SELECT value FROM ranks WHERE value = 3 OR value = 5) SELECT name, value ORDER BY value;
+FROM ranks WHERE value = ALL (SELECT value FROM ranks WHERE value = 1) SELECT name, value;
+-- Empty subquery: ANY false, ALL true
+FROM suits WHERE name = ANY (SELECT name FROM suits WHERE name = 'nope') SELECT name;
+FROM suits WHERE name = ALL (SELECT name FROM suits WHERE name = 'nope') SELECT name ORDER BY name LIMIT 1;
+-- Correlated IN / ANY
+FROM suits AS s WHERE name IN (SELECT name FROM suits WHERE LENGTH(name) = LENGTH(s.name) AND name = 'hearts') SELECT name;
+FROM ranks AS r WHERE value = ANY (SELECT value FROM ranks WHERE value = r.value AND name = 'Ace') SELECT name, value;

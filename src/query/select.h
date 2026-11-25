@@ -34,6 +34,20 @@ int evaluate_scalar_subquery(
     char *output,
     int max_length);
 
+/**
+ * Like evaluate_scalar_subquery but keeps the full result set in db.
+ * On success the caller owns db and must closeDB(db).
+ * Returns 0 on success, -1 on error (db is closed on failure).
+ */
+int evaluate_subquery_to_db(
+    struct Query *template_query,
+    struct Table *outer_tables,
+    int outer_table_count,
+    RowListIndex outer_row_list,
+    int outer_row_index,
+    int has_outer_row,
+    struct DB *db);
+
 /** Deep-copy a parsed Query (tables unopened; safe to clone repeatedly). */
 struct Query *cloneQuery(const struct Query *src);
 

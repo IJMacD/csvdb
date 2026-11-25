@@ -1291,9 +1291,31 @@ int parseComplexNode(
             return -1;
         }
 
+        // IN (SELECT|FROM …) → OPERATOR_ANY with EQ (set membership).
+        // parseNode consumes the surrounding parentheses for subqueries.
+        size_t after_paren = *index;
         (*index)++;
+        skipWhitespace(query, index);
+        if (strncmp(query + *index, "SELECT", 6) == 0 ||
+            strncmp(query + *index, "FROM", 4) == 0)
+        {
+            *index = after_paren;
+            int result = parseNode(query, index, right, q);
+            if (result != 0)
+            {
+                return result;
+            }
+            if (right->function != FUNC_SUBQUERY)
+            {
+                fprintf(stderr, "IN (subquery) did not parse as a subquery\n");
+                return -1;
+            }
+            node->function = OPERATOR_ANY;
+            setQuantifiedCompare(node, OPERATOR_EQ);
+            return 0;
+        }
 
-        // Parse first child
+        // Parse first literal / expression child (index already past '(')
         int result = parseNode(query, index, right, q);
         if (result != 0)
         {
@@ -1370,6 +1392,55 @@ int parseComplexNode(
     /*******************
      * Parse Right Side
      *******************/
+
+    // <expr> <op> ANY|SOME|ALL (subquery)
+    if (strcmp(op, "BETWEEN") != 0 &&
+        strcmp(op, "LIKE") != 0 &&
+        strcmp(op, "IS") != 0)
+    {
+        skipWhitespace(query, index);
+        size_t quant_start = *index;
+        char quant_tok[8] = {0};
+        int quant_len = getToken(query, index, quant_tok, 7);
+        enum Function quant = FUNC_UNKNOWN;
+        if (quant_len > 0)
+        {
+            if (strcmp(quant_tok, "ANY") == 0 || strcmp(quant_tok, "SOME") == 0)
+            {
+                quant = OPERATOR_ANY;
+            }
+            else if (strcmp(quant_tok, "ALL") == 0)
+            {
+                quant = OPERATOR_ALL;
+            }
+        }
+        if (quant == FUNC_UNKNOWN)
+        {
+            *index = quant_start;
+        }
+        else
+        {
+            skipWhitespace(query, index);
+            if (query[*index] != '(')
+            {
+                fprintf(stderr, "Expected '(' after ANY/ALL\n");
+                return -1;
+            }
+            int result = parseNode(query, index, right, q);
+            if (result != 0)
+            {
+                return result;
+            }
+            if (right->function != FUNC_SUBQUERY)
+            {
+                fprintf(stderr, "ANY/ALL requires a subquery\n");
+                return -1;
+            }
+            setQuantifiedCompare(node, function);
+            node->function = quant;
+            return 0;
+        }
+    }
 
     int result = parseNode(query, index, right, q);
     if (result != 0)
