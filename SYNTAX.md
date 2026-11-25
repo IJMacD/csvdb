@@ -544,17 +544,17 @@ INTERVAL(expr)            -- same as CAST(expr AS INT)
 | `MAX` | `(expr)` | Maximum (numeric) |
 | `SUM` | `(expr)` | Sum |
 | `AVG` | `(expr)` | Average |
-| `LISTAGG` | `(expr)` or `(*)` | Concatenate non-null values |
+| `LISTAGG` | `(expr [, sep])` or `(*)` | Concatenate non-null values; optional *sep* (default `,`) |
 | `STDDEV` / `STDDEV_SAMP` | `(expr)` | Sample standard deviation (`√(Σ(x−μ)²/(n−1))`); `NULL` if fewer than 2 non-null reals |
 | `STDDEV_POP` | `(expr)` | Population standard deviation (`√(Σ(x−μ)²/n)`); `NULL` if no non-null reals |
 | `VARIANCE` / `VAR_SAMP` | `(expr)` | Sample variance (`Σ(x−μ)²/(n−1)`); `NULL` if fewer than 2 non-null reals |
 | `VAR_POP` | `(expr)` | Population variance (`Σ(x−μ)²/n`); `NULL` if no non-null reals |
-| `MEDIAN` | `(expr)` | Discrete median of non-null reals: sorted value at index `(n−1)/2` (lower middle when *n* is even). Always a value from the set — never an average of two middles. Equivalent to `PERCENTILE_DISC(expr, 0.5)`. `NULL` if no non-null reals |
+| `MEDIAN` | `(expr)` | Discrete median of non-null reals: sorted value at index `(n−1)/2` (lower middle when *n* is even). Always a value from the set — never an average of two middles. Equivalent to `PERCENTILE(expr, 0.5)` / `PERCENTILE_DISC(expr, 0.5)`. `NULL` if no non-null reals |
 | `MODE` | `(expr)` | Most frequent non-null value using string equality (works for text and numbers). Ties → lexicographically smallest. `NULL` if no non-null values |
-| `PERCENTILE` / `PERCENTILE_CONT` | `(expr, p)` | Continuous percentile of non-null reals; *p* in `[0, 1]`. Interpolates at position `(n−1)·p`. `NULL` if no non-null reals or *p* invalid |
-| `PERCENTILE_DISC` | `(expr, p)` | Discrete percentile: sorted value at index `⌈n·p⌉−1` (*p*=0 → first). Always a value from the set. `NULL` if no non-null reals or *p* invalid |
+| `PERCENTILE` / `PERCENTILE_DISC` | `(expr, p)` | Discrete percentile: sorted value at index `⌈n·p⌉−1` (*p*=0 → first). Always a value from the set. `NULL` if no non-null reals or *p* invalid |
+| `PERCENTILE_CONT` | `(expr, p)` | Continuous percentile of non-null reals; *p* in `[0, 1]`. Interpolates at position `(n−1)·p`. `NULL` if no non-null reals or *p* invalid |
 
-`STDDEV` / `VARIANCE` / `MEDIAN` / `PERCENTILE*` ignore complex values (same as `MIN` / `MAX`). `MODE` treats values as strings. Aggregates use the first expression argument; `PERCENTILE*` take a second fraction argument (others ignore extras). All aggregates accept `FILTER (WHERE …)`. Aggregates imply grouping when used without `GROUP BY` (single group over the result).
+`STDDEV` / `VARIANCE` / `MEDIAN` / `PERCENTILE*` ignore complex values (same as `MIN` / `MAX`). `MODE` treats values as strings. Wrong arity is an error (`SUM`/`AVG`/… take one expression; `PERCENTILE*` require two; `LISTAGG` allows an optional separator). All aggregates accept `FILTER (WHERE …)`. Aggregates imply grouping when used without `GROUP BY` (single group over the result).
 
 ---
 

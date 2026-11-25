@@ -403,11 +403,11 @@ FROM (VALUES (1), (3), (2), (9)) AS t(v) SELECT MEDIAN(v);
 FROM (VALUES ('apple'), ('apple'), ('banana'), ('banana'), ('banana'), ('cherry')) AS t(v) SELECT MODE(v);
 FROM (VALUES ('apple'), ('apple'), ('banana'), ('banana'), ('cherry')) AS t(v) SELECT MODE(v);
 FROM (VALUES (1), (2), (2), (3), (3), (3)) AS t(v) SELECT MODE(v);
--- Multi-arg aggs allowed: first expression is aggregated; extras ignored unless used
-FROM (VALUES (1), (2)) AS t(v) SELECT SUM(v, 99);
 -- Constant-only aggregates must not be folded via evaluateFunction
 SELECT SUM(1), MEDIAN(1), MODE('x');
--- PERCENTILE: continuous interpolates; discrete matches MEDIAN at 0.5
-FROM (VALUES (1), (2), (3), (4)) AS t(v) SELECT PERCENTILE(v, 0.5), PERCENTILE_CONT(v, 0.5), PERCENTILE_DISC(v, 0.5), MEDIAN(v);
+-- PERCENTILE aliases DISC; CONT interpolates; both match MEDIAN at 0.5 for DISC
+FROM (VALUES (1), (2), (3), (4)) AS t(v) SELECT PERCENTILE(v, 0.5), PERCENTILE_DISC(v, 0.5), PERCENTILE_CONT(v, 0.5), MEDIAN(v);
 FROM (VALUES (1), (2), (3), (4)) AS t(v) SELECT PERCENTILE_DISC(v, 0), PERCENTILE_DISC(v, 1), PERCENTILE(v, 0), PERCENTILE(v, 1);
-FROM (VALUES (10), (20), (30), (40), (50)) AS t(v) SELECT PERCENTILE(v, 0.25), PERCENTILE_DISC(v, 0.25);
+FROM (VALUES (10), (20), (30), (40), (50)) AS t(v) SELECT PERCENTILE(v, 0.25), PERCENTILE_DISC(v, 0.25), PERCENTILE_CONT(v, 0.25);
+-- LISTAGG optional separator (default comma)
+FROM (VALUES ('a'), ('b'), ('c')) AS t(v) SELECT LISTAGG(v), LISTAGG(v, '|'), LISTAGG(v, '');

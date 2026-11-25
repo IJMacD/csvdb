@@ -1543,6 +1543,37 @@ static int cmp_numeric_ptrs(const void *a, const void *b)
 }
 
 /**
+ * Evaluate a non-aggregated trailing arg (separator, percentile fraction, …)
+ * once. Prefers constant folding; otherwise uses row 0 of the list.
+ * Returns 0 on success.
+ */
+static int agg_eval_aux_arg(
+    struct Table *tables,
+    RowListIndex list_id,
+    struct Node *arg_node,
+    char *output,
+    int max_length)
+{
+    if (isConstantNode(arg_node))
+    {
+        if (evaluateConstantNode(arg_node, output) < 0)
+        {
+            return -1;
+        }
+        return 0;
+    }
+
+    struct RowList *rl = getRowList(list_id);
+    if (rl == NULL || rl->row_count == 0)
+    {
+        return -1;
+    }
+
+    evaluateNode(tables, list_id, 0, arg_node, output, max_length);
+    return 0;
+}
+
+/**
  * Evaluate the percentile fraction (second arg) into [0, 1].
  * Returns 0 on success, -1 if missing/invalid/out of range.
  */
@@ -1558,29 +1589,14 @@ static int agg_eval_percentile_p(
     }
 
     char p_buf[MAX_VALUE_LENGTH] = {0};
-    struct Node *p_node = &node->children[1];
-
-    if (isConstantNode(p_node))
-    {
-        if (evaluateConstantNode(p_node, p_buf) < 0)
-        {
-            return -1;
-        }
-    }
-    else
-    {
-        struct RowList *rl = getRowList(list_id);
-        if (rl == NULL || rl->row_count == 0)
-        {
-            return -1;
-        }
-        evaluateNode(
+    if (agg_eval_aux_arg(
             tables,
             list_id,
-            0,
-            p_node,
+            &node->children[1],
             p_buf,
-            MAX_VALUE_LENGTH);
+            MAX_VALUE_LENGTH) < 0)
+    {
+        return -1;
     }
 
     if (p_buf[0] == '\0')
@@ -1597,6 +1613,31 @@ static int agg_eval_percentile_p(
 
     *p_out = p;
     return 0;
+}
+
+/** Max positional args for an aggregate (self-child counts as 1). */
+static int agg_max_args(int function)
+{
+    if (
+        function == FUNC_AGG_LISTAGG ||
+        function == FUNC_AGG_PERCENTILE_CONT ||
+        function == FUNC_AGG_PERCENTILE_DISC)
+    {
+        return 2;
+    }
+    return 1;
+}
+
+/** Min positional args (PERCENTILE* require the fraction). */
+static int agg_min_args(int function)
+{
+    if (
+        function == FUNC_AGG_PERCENTILE_CONT ||
+        function == FUNC_AGG_PERCENTILE_DISC)
+    {
+        return 2;
+    }
+    return 1;
 }
 
 /**
@@ -1619,9 +1660,34 @@ int evaluateAggregateFunction(
         return -1;
     }
 
-    // Aggregates collect the first expression argument per row. Extra args are
-    // allowed (e.g. PERCENTILE(expr, p)); functions that only use one
-    // expression simply ignore children beyond [0].
+    // Aggregates collect the first expression argument per row. Trailing args
+    // are only for LISTAGG(sep) and PERCENTILE*(p); anything else is an error.
+
+    int arg_count = node->child_count == -1 ? 1 : node->child_count;
+    int max_args = agg_max_args(node->function);
+    int min_args = agg_min_args(node->function);
+
+    if (arg_count > max_args)
+    {
+        fprintf(
+            stderr,
+            "Wrong number of arguments to aggregate: got %d, expected at most "
+            "%d\n",
+            arg_count,
+            max_args);
+        exit(-1);
+    }
+
+    if (arg_count < min_args)
+    {
+        fprintf(
+            stderr,
+            "Wrong number of arguments to aggregate: got %d, expected at least "
+            "%d\n",
+            arg_count,
+            min_args);
+        exit(-1);
+    }
 
     int is_count_star = node->function == FUNC_AGG_COUNT && ((node->child_count == -1 && node->field.index == FIELD_STAR) ||
                                                              (node->child_count == 1 && node->children[0].field.index == FIELD_STAR));
@@ -1882,6 +1948,23 @@ int evaluateAggregateFunction(
     }
     else if (node->function == FUNC_AGG_LISTAGG)
     {
+        // Optional separator (default ",")
+        char sep_buf[MAX_VALUE_LENGTH] = ",";
+        if (node->child_count >= 2)
+        {
+            if (agg_eval_aux_arg(
+                    tables,
+                    list_id,
+                    &node->children[1],
+                    sep_buf,
+                    MAX_VALUE_LENGTH) < 0)
+            {
+                sep_buf[0] = ',';
+                sep_buf[1] = '\0';
+            }
+            // Empty separator is allowed (concat with no delimiter)
+        }
+
         int have_prev = 0;
 
         char *output_start = output;
@@ -1893,7 +1976,13 @@ int evaluateAggregateFunction(
             {
                 if (have_prev == 1)
                 {
-                    sprintf(output++, ",");
+                    int sep_len = sprintf(output, "%s", sep_buf);
+                    output += sep_len;
+                    bytesWritten = output - output_start;
+                    if (bytesWritten > MAX_VALUE_LENGTH)
+                    {
+                        return bytesWritten;
+                    }
                 }
 
                 output += sprintf(output, "%s", values[i]);
