@@ -995,6 +995,127 @@ int parseIso8601Period(const char *input, struct IsoPeriod *out)
     return saw_any;
 }
 
+int scaleIsoPeriod(struct IsoPeriod *period, int factor)
+{
+    if (period == NULL)
+    {
+        return 0;
+    }
+
+    long long comps[] = {
+        period->years,
+        period->months,
+        period->weeks,
+        period->days,
+        period->hours,
+        period->minutes,
+        period->seconds};
+
+    for (size_t i = 0; i < sizeof(comps) / sizeof(comps[0]); i++)
+    {
+        long long p = comps[i] * (long long)factor;
+        if (p < INT_MIN || p > INT_MAX)
+        {
+            return 0;
+        }
+        comps[i] = p;
+    }
+
+    period->years = (int)comps[0];
+    period->months = (int)comps[1];
+    period->weeks = (int)comps[2];
+    period->days = (int)comps[3];
+    period->hours = (int)comps[4];
+    period->minutes = (int)comps[5];
+    period->seconds = (int)comps[6];
+    return 1;
+}
+
+int sprintIso8601Period(char *output, const struct IsoPeriod *period)
+{
+    if (output == NULL || period == NULL)
+    {
+        return 0;
+    }
+
+    int years = period->years;
+    int months = period->months;
+    int weeks = period->weeks;
+    int days = period->days;
+    int hours = period->hours;
+    int minutes = period->minutes;
+    int seconds = period->seconds;
+
+    int any = years || months || weeks || days || hours || minutes || seconds;
+    if (!any)
+    {
+        // Zero period: keep time designator if the source was time-only.
+        if (period->has_time)
+        {
+            return sprintf(output, "PT0S");
+        }
+        return sprintf(output, "P0D");
+    }
+
+    int negative = 0;
+    if (years <= 0 && months <= 0 && weeks <= 0 && days <= 0 && hours <= 0 &&
+        minutes <= 0 && seconds <= 0)
+    {
+        negative = 1;
+        years = -years;
+        months = -months;
+        weeks = -weeks;
+        days = -days;
+        hours = -hours;
+        minutes = -minutes;
+        seconds = -seconds;
+    }
+
+    char *p = output;
+    if (negative)
+    {
+        *p++ = '-';
+    }
+    *p++ = 'P';
+
+    if (years)
+    {
+        p += sprintf(p, "%dY", years);
+    }
+    if (months)
+    {
+        p += sprintf(p, "%dM", months);
+    }
+    if (weeks)
+    {
+        p += sprintf(p, "%dW", weeks);
+    }
+    if (days)
+    {
+        p += sprintf(p, "%dD", days);
+    }
+
+    if (hours || minutes || seconds || (period->has_time && !years && !months &&
+                                        !weeks && !days))
+    {
+        *p++ = 'T';
+        if (hours)
+        {
+            p += sprintf(p, "%dH", hours);
+        }
+        if (minutes)
+        {
+            p += sprintf(p, "%dM", minutes);
+        }
+        if (seconds || (period->has_time && !hours && !minutes))
+        {
+            p += sprintf(p, "%dS", seconds);
+        }
+    }
+
+    return (int)(p - output);
+}
+
 void dateAddPeriod(struct DateTime *dt, const struct IsoPeriod *period, int sign)
 {
     if (dt == NULL || period == NULL)

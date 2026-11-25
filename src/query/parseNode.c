@@ -45,6 +45,16 @@ static int looksLikeQueryStart(const char *query, size_t i);
 static int rewriteDateIntervalArithmetic(struct Node *node);
 
 /**
+ * After consuming '-', parse a numeric simple node and prepend '-'.
+ * Returns -1 on error; flags otherwise.
+ */
+static int parseNegatedNumeric(
+    const char *query,
+    size_t *index,
+    struct Node *node,
+    struct Query *q);
+
+/**
  * Parses simple nodes:
  *  Simple nodes: (<node>)
  *      <field>
@@ -991,31 +1001,11 @@ int parseNode(
     {
         // Unary minus before a numeric literal (e.g. ABS(-3.5), ROUND(x, -2))
         (*index)++;
-        flags |= parseSimpleNode(query, index, node, q);
+        flags |= parseNegatedNumeric(query, index, node, q);
 
         if (flags < 0)
         {
             return flags;
-        }
-
-        if (node->function == FUNC_UNITY &&
-            node->field.index == FIELD_CONSTANT &&
-            is_numeric(node->field.text))
-        {
-            size_t len = strlen(node->field.text);
-            if (len + 1 < MAX_FIELD_LENGTH)
-            {
-                memmove(
-                    node->field.text + 1,
-                    node->field.text,
-                    len + 1);
-                node->field.text[0] = '-';
-            }
-        }
-        else
-        {
-            fprintf(stderr, "Unsupported unary minus expression\n");
-            return -1;
         }
     }
     else
@@ -1062,6 +1052,22 @@ int parseNode(
             }
 
             (*index)++;
+        }
+        else if (
+            query[*index] == '-' &&
+            (isdigit((unsigned char)query[*index + 1]) ||
+             query[*index + 1] == '.'))
+        {
+            // Unary minus after an operator (e.g. 1 + -2, 'P1Y' * -1).
+            // Must not call parseNode here — it would steal lower-precedence
+            // operators from the left-associative tree (1 * -2 + 3).
+            (*index)++;
+            flags |= parseNegatedNumeric(query, index, next_child, q);
+
+            if (flags < 0)
+            {
+                return flags;
+            }
         }
         else
         {
@@ -1588,6 +1594,36 @@ static int hasKeywordAt(const char *query, size_t i, const char *keyword)
     }
 
     return 1;
+}
+
+static int parseNegatedNumeric(
+    const char *query,
+    size_t *index,
+    struct Node *node,
+    struct Query *q)
+{
+    int flags = parseSimpleNode(query, index, node, q);
+
+    if (flags < 0)
+    {
+        return flags;
+    }
+
+    if (node->function == FUNC_UNITY &&
+        node->field.index == FIELD_CONSTANT &&
+        is_numeric(node->field.text))
+    {
+        size_t len = strlen(node->field.text);
+        if (len + 1 < MAX_FIELD_LENGTH)
+        {
+            memmove(node->field.text + 1, node->field.text, len + 1);
+            node->field.text[0] = '-';
+        }
+        return flags;
+    }
+
+    fprintf(stderr, "Unsupported unary minus expression\n");
+    return -1;
 }
 
 static int isCalendarIntervalNode(const struct Node *node)

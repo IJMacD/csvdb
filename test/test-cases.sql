@@ -449,3 +449,9 @@ SELECT '2023-01-31' + 'P1M', 'P1M' + '2023-01-31', '2024-03-31' - 'P1M';
 SELECT '2023-01-31' + 'P1Y2M', DATE_ADD('2023-01-31', 'P10Y'), '2023-01-31' + 'P2W';
 SELECT '2023-10-31T12:00:00' + 'PT1H30M', DATE_SUB('2023-10-31T12:00:00', 'PT90M');
 SELECT '2023-01-31' + '-P1Y', '2023-01-31' - '-P1M';
+-- ISO-8601 period * integer (and date + period * n)
+SELECT 'P1Y6M' * 2, 2 * 'P1Y6M', 'PT15M' * 4;
+SELECT '2023-01-31' + 'P1Y6M' * 2, '2023-01-31' + 2 * 'P6M';
+SELECT '2023-01-31' + 'P1Y' * -1, 'P1M' * 0;
+-- Unary minus after operators (1 + -2, 1 * -2 + 3)
+SELECT 1 + -2, 1 * -2 + 3, 10 / -2;
