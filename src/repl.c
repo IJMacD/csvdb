@@ -54,6 +54,12 @@ static int enableRawMode(void)
     struct termios raw = saved_termios;
     raw.c_lflag &= ~(ECHO | ICANON | IEXTEN);
     raw.c_iflag &= ~(IXON | ICRNL);
+    /*
+     * OCRNL maps output CR to NL. If left on, redraws that use '\r' advance
+     * to a new line instead of returning to column 0 — so each edit appears
+     * to reprint the line above. Keep ONLCR so printf("\n") still yields CR+LF.
+     */
+    raw.c_oflag &= ~(OCRNL);
     raw.c_cc[VMIN] = 1;
     raw.c_cc[VTIME] = 0;
 
@@ -66,6 +72,15 @@ static int enableRawMode(void)
     return 0;
 }
 
+/**
+ * Move to column 1 of the current row. Prefer CSI CHA over bare '\r' so a
+ * mis-set OCRNL cannot turn the home movement into a line feed.
+ */
+static void moveToLineStart(void)
+{
+    printf("\033[1G");
+}
+
 static void redrawLine(
     const char *prompt,
     const char *buf,
@@ -73,13 +88,37 @@ static void redrawLine(
     size_t cursor)
 {
     /* Move to start of line, print prompt+buffer, clear tail, place cursor. */
-    printf("\r%s", prompt);
+    moveToLineStart();
+    printf("%s", prompt);
     if (len > 0)
     {
         fwrite(buf, 1, len, stdout);
     }
     printf("\033[K");
-    /* Move cursor back from end of text to the edit position. */
+    /* Reposition by reprinting up to the cursor (avoids CUB wrap quirks). */
+    moveToLineStart();
+    printf("%s", prompt);
+    if (cursor > 0)
+    {
+        fwrite(buf, 1, cursor, stdout);
+    }
+    fflush(stdout);
+}
+
+/**
+ * After a mid-line insert or delete, rewrite the suffix from the cursor
+ * without a full-line home+reprint (so the row above is never touched).
+ */
+static void redrawSuffix(
+    const char *buf,
+    size_t len,
+    size_t cursor)
+{
+    if (cursor < len)
+    {
+        fwrite(buf + cursor, 1, len - cursor, stdout);
+    }
+    printf("\033[K");
     if (cursor < len)
     {
         printf("\033[%zuD", len - cursor);
@@ -291,7 +330,18 @@ static char *readEditedLine(const char *prompt, int *interrupted)
                 memmove(buf + cursor - 1, buf + cursor, len - cursor);
                 cursor--;
                 len--;
-                redrawLine(prompt, buf, len, cursor);
+                if (cursor == len)
+                {
+                    /* At end: erase the last cell in place. */
+                    printf("\b \b");
+                    fflush(stdout);
+                }
+                else
+                {
+                    /* In the middle: move left, then rewrite the tail. */
+                    printf("\b");
+                    redrawSuffix(buf, len, cursor);
+                }
             }
             continue;
         }
@@ -459,7 +509,14 @@ static char *readEditedLine(const char *prompt, int *interrupted)
             buf[cursor] = (char)c;
             cursor++;
             len++;
-            redrawLine(prompt, buf, len, cursor);
+            /* Write new char + remainder from the current cursor cell. */
+            fwrite(buf + cursor - 1, 1, len - (cursor - 1), stdout);
+            printf("\033[K");
+            if (cursor < len)
+            {
+                printf("\033[%zuD", len - cursor);
+            }
+            fflush(stdout);
         }
     }
 }
