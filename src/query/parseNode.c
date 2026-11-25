@@ -33,6 +33,11 @@ static int getPrecedence(enum Function fn);
 
 static enum Function parseSimpleOperators(const char *query, size_t *index);
 
+static int hasKeywordAt(const char *query, size_t i, const char *keyword);
+
+/** True if query[i…] starts a full query (usable as a subquery body). */
+static int looksLikeQueryStart(const char *query, size_t i);
+
 /**
  * Parses simple nodes:
  *  Simple nodes: (<node>)
@@ -897,13 +902,16 @@ int parseNode(
 
     if (query[*index] == '(')
     {
+        size_t paren_start = *index;
         (*index)++;
+        // Allow whitespace/newlines between '(' and the query-start keyword
+        // so multiline forms like `= ANY (\n  WHERE …)` parse as subqueries.
+        skipWhitespace(query, index);
 
-        // Check to see if it looks like a subquery
-        if (strncmp(query + *index, "SELECT", 6) == 0 ||
-            strncmp(query + *index, "FROM", 4) == 0)
+        // Check to see if it looks like a subquery (any valid query start)
+        if (looksLikeQueryStart(query, *index))
         {
-            int len = find_matching_parenthesis(query + *index - 1);
+            int len = find_matching_parenthesis(query + paren_start);
 
             // Scalar expression subquery: parse once into a nested Query AST.
             // Evaluated via FUNC_SUBQUERY (supports correlation by cloning +
@@ -921,7 +929,7 @@ int parseNode(
                 fprintf(stderr, "Out of memory\n");
                 return -1;
             }
-            memcpy(sql, query + *index, (size_t)(len - 2));
+            memcpy(sql, query + paren_start + 1, (size_t)(len - 2));
             sql[len - 2] = '\0';
 
             struct Query *sq = calloc(1, sizeof(*sq));
@@ -948,7 +956,7 @@ int parseNode(
             node->child_count = 0;
             node->subquery = sq;
 
-            (*index) += len - 1;
+            *index = paren_start + (size_t)len;
         }
         else
         {
@@ -1291,13 +1299,12 @@ int parseComplexNode(
             return -1;
         }
 
-        // IN (SELECT|FROM …) → OPERATOR_ANY with EQ (set membership).
+        // IN (<query>) → OPERATOR_ANY with EQ (set membership).
         // parseNode consumes the surrounding parentheses for subqueries.
         size_t after_paren = *index;
         (*index)++;
         skipWhitespace(query, index);
-        if (strncmp(query + *index, "SELECT", 6) == 0 ||
-            strncmp(query + *index, "FROM", 4) == 0)
+        if (looksLikeQueryStart(query, *index))
         {
             *index = after_paren;
             int result = parseNode(query, index, right, q);
@@ -1573,11 +1580,32 @@ static int hasKeywordAt(const char *query, size_t i, const char *keyword)
 }
 
 /**
+ * Keywords that may begin a csvdb query (declarative clause order, plus
+ * VALUES / TABLE). Used to recognise `(…)` as a subquery rather than an
+ * expression group. JOIN and similar mid-FROM tokens are not starts.
+ */
+static int looksLikeQueryStart(const char *query, size_t i)
+{
+    return hasKeywordAt(query, i, "SELECT") ||
+           hasKeywordAt(query, i, "FROM") ||
+           hasKeywordAt(query, i, "WHERE") ||
+           hasKeywordAt(query, i, "HAVING") ||
+           hasKeywordAt(query, i, "GROUP") ||
+           hasKeywordAt(query, i, "ORDER") ||
+           hasKeywordAt(query, i, "LIMIT") ||
+           hasKeywordAt(query, i, "OFFSET") ||
+           hasKeywordAt(query, i, "FETCH") ||
+           hasKeywordAt(query, i, "WITH") ||
+           hasKeywordAt(query, i, "VALUES") ||
+           hasKeywordAt(query, i, "TABLE");
+}
+
+/**
  * True if '(' at index groups a boolean/comparison expression rather than a
  * math expression like (5 + 3). Looks for comparison ops or AND/OR inside
  * the matching paren pair (depth 1), skipping strings and nested parens.
  *
- * Scalar / table subqueries — `(SELECT …)`, `(FROM …)`, etc. — must not be
+ * Scalar / table subqueries — `(SELECT …)`, `(WHERE …)`, etc. — must not be
  * treated as boolean groups even when their body contains WHERE/= /AND/OR;
  * those belong to parseNode's subquery path instead.
  */
@@ -1598,12 +1626,7 @@ static int isBooleanGroupingParen(const char *query, size_t index)
         body++;
     }
 
-    if (
-        hasKeywordAt(query, body, "SELECT") ||
-        hasKeywordAt(query, body, "FROM") ||
-        hasKeywordAt(query, body, "VALUES") ||
-        hasKeywordAt(query, body, "WITH") ||
-        hasKeywordAt(query, body, "TABLE"))
+    if (looksLikeQueryStart(query, body))
     {
         return 0;
     }

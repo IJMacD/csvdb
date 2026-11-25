@@ -1,0 +1,4 @@
+| (LIMIT 1 FROM suits SELECT name ORDER BY name)|
+|--------------------|
+| clubs              |
+

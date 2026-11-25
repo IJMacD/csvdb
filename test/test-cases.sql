@@ -431,3 +431,12 @@ FROM suits WHERE name = ALL (SELECT name FROM suits WHERE name = 'nope') SELECT 
 -- Correlated IN / ANY
 FROM suits AS s WHERE name IN (SELECT name FROM suits WHERE LENGTH(name) = LENGTH(s.name) AND name = 'hearts') SELECT name;
 FROM ranks AS r WHERE value = ANY (SELECT value FROM ranks WHERE value = r.value AND name = 'Ace') SELECT name, value;
+-- Whitespace between '(' and SELECT must still parse as a subquery
+FROM suits AS s WHERE name = ANY ( SELECT name FROM suits WHERE LENGTH(name) = LENGTH(s.name)) SELECT name ORDER BY name;
+-- Subquery may start with any query-start clause (not only SELECT/FROM)
+FROM suits WHERE name IN (WHERE name = 'hearts' FROM suits SELECT name) SELECT name;
+FROM suits WHERE name = ANY (WHERE name IN ('spades','diamonds') FROM suits SELECT name) SELECT name ORDER BY name;
+SELECT (LIMIT 1 FROM suits SELECT name ORDER BY name);
+SELECT (TABLE suits);
+FROM suits WHERE name IN (TABLE suits) SELECT name ORDER BY name;
+SELECT (WITH x AS (FROM suits SELECT name LIMIT 1) FROM x SELECT name);

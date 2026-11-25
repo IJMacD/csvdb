@@ -323,6 +323,26 @@ if [[ "$(cat "$multi_out")" != "$multi_expected" ]]; then
 fi
 rm -f "$multi_sql" "$multi_out"
 
+# Subquery after '(' with newlines/spaces (parseNode must skipWhitespace)
+multi_sql=$(mktemp)
+multi_out=$(mktemp)
+cat > "$multi_sql" <<'EOF'
+FROM suits AS s WHERE name = ANY (
+  SELECT name FROM suits WHERE LENGTH(name) = LENGTH(s.name)
+);
+EOF
+if ! "$CSVDB" -N -F csv -f "$multi_sql" </dev/null >"$multi_out" 2>/dev/null; then
+    rm -f "$multi_sql" "$multi_out"
+    cli_die "multiline = ANY (SELECT …) failed to parse"
+fi
+# All four suits have unique-or-shared lengths; each row matches itself
+multi_expected=$'spades,♠\nclubs,♣\nhearts,♥\ndiamonds,♦'
+if [[ "$(cat "$multi_out")" != "$multi_expected" ]]; then
+    rm -f "$multi_sql" "$multi_out"
+    cli_die "multiline = ANY unexpected output: [$(cat "$multi_out")]"
+fi
+rm -f "$multi_sql" "$multi_out"
+
 echo "csvdb version:" "$ver_flag" 
 
 echo
