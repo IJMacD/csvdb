@@ -452,4 +452,6 @@ SELECT '2023-01-31' + '-P1Y', '2023-01-31' - '-P1M';
 -- ISO-8601 period * integer (and date + period * n)
 SELECT 'P1Y6M' * 2, 2 * 'P1Y6M', 'PT15M' * 4;
 SELECT '2023-01-31' + 'P1Y6M' * 2, '2023-01-31' + 2 * 'P6M';
-SELECT '2023-01-31' + 'P1Y' * (-1), 'P1M' * 0;
+SELECT '2023-01-31' + 'P1Y' * -1, 'P1M' * 0;
+-- Unary minus after operators (1 + -2, 1 * -2 + 3)
+SELECT 1 + -2, 1 * -2 + 3, 10 / -2;
