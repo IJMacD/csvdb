@@ -344,7 +344,7 @@ WHERE (value = 1 OR value = 13) AND name != 'Nope';  -- both values, then AND
 | `time + n` / `time - n` | Time ± seconds |
 | `time + time` / `time - time` | Time sum / difference |
 
-`n` may be a plain integer or an `INTERVAL` constant (e.g. `CURRENT_DATE + INTERVAL 1 WEEK`). Day-scale intervals (`DAY`, `WEEK`) produce day counts; second-scale intervals (`HOUR`, `MINUTE`, `SECOND`) produce seconds — matching the `+`/`-` rules above. Calendar-unit intervals (`MONTH`, `YEAR`, `MILLENNIUM`, …) under `+`/`-` are rewritten at parse time to `DATE_ADD` / `DATE_SUB` (e.g. `CURRENT_DATE + INTERVAL 1 MONTH` → `DATE_ADD(CURRENT_DATE, INTERVAL 1 MONTH)`).
+`n` may be a plain integer or an `INTERVAL` constant (e.g. `CURRENT_DATE + INTERVAL 1 WEEK`). Day-scale intervals (`DAY`, `WEEK`) produce day counts; second-scale intervals (`HOUR`, `MINUTE`, `SECOND`) produce seconds — matching the `+`/`-` rules above. Calendar-unit intervals (`MONTH`, `YEAR`, `MILLENNIUM`, …) also work with `+`/`-` (e.g. `CURRENT_DATE + INTERVAL 1 MONTH`), or use `DATE_ADD` / `DATE_SUB` explicitly.
 
 ### Date / time formats
 
@@ -368,7 +368,7 @@ INTERVAL 1 MONTH         -- → kept as "1 MONTH" for DATE_ADD / DATE_SUB
 INTERVAL('00:15:00')     -- function form: synonym for CAST(… AS INT) → seconds
 ```
 
-Units (singular or plural): `MILLENNIUM` / `MILLENNIA`, `CENTURY` / `CENTURIES`, `DECADE` / `DECADES`, `YEAR`, `QUARTER`, `MONTH`, `WEEK`, `DAY`, `HOUR`, `MINUTE`, `SECOND`. Fixed-length units (`WEEK`/`DAY`/`HOUR`/`MINUTE`/`SECOND`) fold to integers for `+`/`-`. Calendar units (`MILLENNIUM` … `MONTH`) stay as `"n UNIT"` for `DATE_ADD` / `DATE_SUB` / `DATE_TRUNC`, and `date ± INTERVAL n UNIT` is rewritten to those functions.
+Units (singular or plural): `MILLENNIUM` / `MILLENNIA`, `CENTURY` / `CENTURIES`, `DECADE` / `DECADES`, `YEAR`, `QUARTER`, `MONTH`, `WEEK`, `DAY`, `HOUR`, `MINUTE`, `SECOND`. Fixed-length units (`WEEK`/`DAY`/`HOUR`/`MINUTE`/`SECOND`) fold to integers for `+`/`-`. Calendar units (`MILLENNIUM` … `MONTH`) are for calendar arithmetic with `+`/`-`, `DATE_ADD` / `DATE_SUB`, and `DATE_TRUNC`.
 
 ### Subqueries in expressions
 
