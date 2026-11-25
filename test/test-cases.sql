@@ -455,3 +455,9 @@ SELECT '2023-01-31' + 'P1Y6M' * 2, '2023-01-31' + 2 * 'P6M';
 SELECT '2023-01-31' + 'P1Y' * -1, 'P1M' * 0;
 -- Unary minus after operators (1 + -2, 1 * -2 + 3)
 SELECT 1 + -2, 1 * -2 + 3, 10 / -2;
+-- PK as identity in SELECT; range seek below min key
+SELECT PK(id) FROM test WHERE PK(id) = 1000;
+SELECT PK(id) > 1000 FROM test WHERE PK(id) = 10;
+FROM test WHERE PK(id) > 1 LIMIT 1;
+FROM test WHERE PK(id) > 9 LIMIT 1;
+FROM test WHERE PK(id) >= 1 LIMIT 1;

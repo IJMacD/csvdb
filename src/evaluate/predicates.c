@@ -166,7 +166,7 @@ int evaluateOperatorNode (struct Table *tables, RowListIndex list_id, int row_in
     );
     if (result < 0) {
         fprintf(stderr, "Unable to evaluate node\n");
-        exit(-1);
+        return 0;
     }
 
     result = evaluateNode(
@@ -179,7 +179,7 @@ int evaluateOperatorNode (struct Table *tables, RowListIndex list_id, int row_in
     );
     if (result < 0) {
         fprintf(stderr, "Unable to evaluate node\n");
-        exit(-1);
+        return 0;
     }
 
     if (!evaluateExpression(node->function, value_left, value_right)) {
