@@ -268,6 +268,24 @@ if [[ -s "$bad_count_out" ]]; then
 fi
 rm -f "$bad_count_out"
 
+# CROSS JOIN must not take ON / USING (standard SQL).
+cross_err=$(mktemp)
+if "$CSVDB" -N -F csv "FROM lefty AS a CROSS JOIN righty AS b ON a.id = b.id" \
+        >"$cross_err" 2>/dev/null; then
+    rm -f "$cross_err"
+    cli_die "CROSS JOIN … ON still succeeded"
+fi
+if [[ -s "$cross_err" ]]; then
+    rm -f "$cross_err"
+    cli_die "CROSS JOIN … ON still produced output"
+fi
+if "$CSVDB" -N -F csv "FROM lefty AS a CROSS JOIN righty AS b USING id" \
+        >"$cross_err" 2>/dev/null; then
+    rm -f "$cross_err"
+    cli_die "CROSS JOIN … USING still succeeded"
+fi
+rm -f "$cross_err"
+
 # Multi-statement -f scripts: comments between statements must not segfault
 # (empty auto-stdin rollback used to leave stdin_db dangling).
 multi_sql=$(mktemp)

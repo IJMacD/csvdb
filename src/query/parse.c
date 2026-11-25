@@ -453,6 +453,8 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
         else if (strcmp(keyword, "FROM") == 0)
         {
             int next_join_flag = 0;
+            /* CROSS JOIN must not take ON/USING (standard SQL). */
+            int next_is_cross = 0;
 
             while (query[index] != '\0' && query[index] != ';')
             {
@@ -460,7 +462,9 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 
                 table->join.function = OPERATOR_ALWAYS;
                 table->join_type = next_join_flag;
+                int is_cross = next_is_cross;
                 next_join_flag = 0;
+                next_is_cross = 0;
 
                 skipWhitespace(query, &index);
 
@@ -645,6 +649,15 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                 // Parse JOIN predicate
                 if (strncmp(query + index, "ON ", 3) == 0)
                 {
+                    if (is_cross)
+                    {
+                        fprintf(
+                            stderr,
+                            "CROSS JOIN cannot have ON or USING; "
+                            "use INNER JOIN\n");
+                        return -1;
+                    }
+
                     index += 3;
                     skipWhitespace(query, &index);
 
@@ -660,6 +673,15 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                 }
                 else if (strncmp(query + index, "USING ", 6) == 0)
                 {
+                    if (is_cross)
+                    {
+                        fprintf(
+                            stderr,
+                            "CROSS JOIN cannot have ON or USING; "
+                            "use INNER JOIN\n");
+                        return -1;
+                    }
+
                     index += 6;
                     skipWhitespace(query, &index);
 
@@ -738,11 +760,14 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                     int old_index = index;
                     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-                    if (strcmp(keyword, "INNER") == 0 ||
-                        strcmp(keyword, "CROSS") == 0)
+                    if (strcmp(keyword, "INNER") == 0)
                     {
-                        // Carry on; CROSS JOIN is JOIN with no ON (already
-                        // OPERATOR_ALWAYS when ON/USING omitted).
+                        getToken(query, &index, keyword, MAX_FIELD_LENGTH);
+                    }
+                    else if (strcmp(keyword, "CROSS") == 0)
+                    {
+                        // CROSS JOIN: Cartesian product only (no ON/USING).
+                        next_is_cross = 1;
                         getToken(query, &index, keyword, MAX_FIELD_LENGTH);
                     }
                     else if (strcmp(keyword, "LEFT") == 0)
