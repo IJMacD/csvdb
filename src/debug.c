@@ -42,8 +42,8 @@ const char *FUNC_NAMES[] = {
     "","","","","","","","",
     "","","","","","","","",
     // 0xA0
-    "","COUNT","MIN","MAX","SUM","AVG","LISTAGG","",
-    "","","","","","","","",
+    "","COUNT","MIN","MAX","SUM","AVG","LISTAGG","STDDEV",
+    "VARIANCE","STDDEV_POP","VAR_POP","","","","",
     // 0xB0
     "","","","","","","","",
     "","","","","","","","",
