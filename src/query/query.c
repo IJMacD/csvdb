@@ -35,10 +35,13 @@ int runQueries(
 
     while (*end_ptr != '\0')
     {
-        // Skip leading whitespace and semi-colons
-        while (*end_ptr != '\0' && (isspace(*end_ptr) || *end_ptr == ';'))
+        // Skip leading whitespace, semi-colons, and comments so a trailing
+        // `-- note` after the last statement is not treated as another query.
+        skipWhitespacePtr(&end_ptr);
+        while (*end_ptr == ';')
         {
             end_ptr++;
+            skipWhitespacePtr(&end_ptr);
         }
 
         // There wasn't actually another query
@@ -83,6 +86,16 @@ int query(
     const char **end_ptr)
 {
     skipWhitespacePtr(&query);
+
+    // Comment-only / whitespace-only remainder after a prior statement.
+    if (*query == '\0')
+    {
+        if (end_ptr != NULL)
+        {
+            *end_ptr = query;
+        }
+        return 0;
+    }
 
     if (strncmp(query, "CREATE ", 7) == 0)
     {

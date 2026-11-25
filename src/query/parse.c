@@ -141,9 +141,15 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
         if (query[index] == '/' && query[index + 1] == '*')
         {
             index += 2;
-            while (query[index] != '*' && query[index + 1] != '/')
+            while (query[index] != '\0' &&
+                   !(query[index] == '*' && query[index + 1] == '/'))
+            {
                 index++;
-            index += 2;
+            }
+            if (query[index] == '*' && query[index + 1] == '/')
+            {
+                index += 2;
+            }
         }
 
         if (query[index] == ';')
