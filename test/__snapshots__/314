@@ -1,0 +1,4 @@
+| (WITH x AS (FROM suits SELECT name LIMIT 1) FROM x SELECT name)|
+|--------------------|
+| spades             |
+
