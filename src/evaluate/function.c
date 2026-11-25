@@ -794,6 +794,7 @@ int evaluateFunction(
         //  number * number
         //  complex * complex (promotes reals)
         //  time * int
+        //  ISO-8601 period * int (and int * period)
 
         if (values_have_complex(values, value_count))
         {
@@ -809,6 +810,59 @@ int evaluateFunction(
                 product *= z;
             }
             return sprint_complex(output, creal(product), cimag(product));
+        }
+
+        // Exactly one ISO-8601 period; remaining operands must be integers.
+        if (value_count >= 2)
+        {
+            int period_index = -1;
+            struct IsoPeriod period = {0};
+            for (int i = 0; i < value_count; i++)
+            {
+                struct IsoPeriod trial = {0};
+                if (parseIso8601Period(values[i], &trial))
+                {
+                    if (period_index >= 0)
+                    {
+                        period_index = -2; // more than one period
+                        break;
+                    }
+                    period = trial;
+                    period_index = i;
+                }
+            }
+
+            if (period_index >= 0)
+            {
+                long long factor = 1;
+                for (int i = 0; i < value_count; i++)
+                {
+                    if (i == period_index)
+                    {
+                        continue;
+                    }
+                    char *end = NULL;
+                    long n = strtol(values[i], &end, 10);
+                    if (end == values[i] || *end != '\0')
+                    {
+                        output[0] = '\0';
+                        return 0;
+                    }
+                    factor *= n;
+                    if (factor < INT_MIN || factor > INT_MAX)
+                    {
+                        output[0] = '\0';
+                        return 0;
+                    }
+                }
+
+                if (!scaleIsoPeriod(&period, (int)factor))
+                {
+                    output[0] = '\0';
+                    return 0;
+                }
+                return sprintIso8601Period(output, &period);
+            }
         }
 
         long val = 1;

@@ -121,6 +121,17 @@ struct IsoPeriod {
 int parseIso8601Period(const char *input, struct IsoPeriod *out);
 
 /**
+ * Format period as ISO-8601 (e.g. P1Y6M, PT1H30M, -P2Y).
+ * Returns bytes written (excluding NUL), or 0 on failure.
+ */
+int sprintIso8601Period(char *output, const struct IsoPeriod *period);
+
+/**
+ * Multiply each component by factor. Returns 1 on success; 0 on overflow.
+ */
+int scaleIsoPeriod(struct IsoPeriod *period, int factor);
+
+/**
  * Apply period × sign to dt (years, months, weeks, days, then time units).
  */
 void dateAddPeriod(struct DateTime *dt, const struct IsoPeriod *period, int sign);
