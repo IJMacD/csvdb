@@ -544,7 +544,7 @@ INTERVAL(expr)            -- same as CAST(expr AS INT)
 | `MAX` | `(expr)` | Maximum (numeric) |
 | `SUM` | `(expr)` | Sum |
 | `AVG` | `(expr)` | Average |
-| `LISTAGG` | `(expr [, sep])` or `(*)` | Concatenate non-null values; optional *sep* (default `,`) |
+| `LISTAGG` | `(expr [, sep])` | Concatenate non-null values; optional *sep* (default `,`) |
 | `STDDEV` / `STDDEV_SAMP` | `(expr)` | Sample standard deviation (`√(Σ(x−μ)²/(n−1))`); `NULL` if fewer than 2 non-null reals |
 | `STDDEV_POP` | `(expr)` | Population standard deviation (`√(Σ(x−μ)²/n)`); `NULL` if no non-null reals |
 | `VARIANCE` / `VAR_SAMP` | `(expr)` | Sample variance (`Σ(x−μ)²/(n−1)`); `NULL` if fewer than 2 non-null reals |
