@@ -7,6 +7,7 @@
 #include <errno.h>
 
 #include "structs.h"
+#include "config.h"
 #include "query/query.h"
 #include "query/token.h"
 
@@ -603,60 +604,59 @@ void repl(int options)
             continue;
         }
 
+        if (strcmp(token, ".headers") == 0)
+        {
+            getToken(statement, &index, token, 32);
+
+            if (token[0] == '\0')
+            {
+                options ^= OUTPUT_OPTION_HEADERS;
+            }
+            else if (
+                strcmp(token, "on") == 0 ||
+                strcmp(token, "1") == 0 ||
+                strcmp(token, "true") == 0)
+            {
+                options |= OUTPUT_OPTION_HEADERS;
+            }
+            else if (
+                strcmp(token, "off") == 0 ||
+                strcmp(token, "0") == 0 ||
+                strcmp(token, "false") == 0)
+            {
+                options &= ~OUTPUT_OPTION_HEADERS;
+            }
+            else
+            {
+                fprintf(stderr, "Usage: .headers [on|off]\n");
+                free(statement);
+                continue;
+            }
+
+            printf(
+                "Headers: %s\n",
+                (options & OUTPUT_OPTION_HEADERS) ? "ON" : "OFF");
+            free(statement);
+            continue;
+        }
+
         if (strcmp(token, ".format") == 0)
         {
             getToken(statement, &index, token, 32);
 
-            options &= ~OUTPUT_MASK_FORMAT;
+            int format = csvdb_parse_format(token);
+            if (format < 0)
+            {
+                fprintf(
+                    stderr,
+                    "Unknown format '%s'. "
+                    "See .help for supported formats.\n",
+                    token);
+                free(statement);
+                continue;
+            }
 
-            if (strcmp(token, "tsv") == 0)
-            {
-                options |= OUTPUT_FORMAT_TAB;
-            }
-            else if (strcmp(token, "csv") == 0)
-            {
-                options |= OUTPUT_FORMAT_COMMA;
-            }
-            else if (strcmp(token, "html") == 0)
-            {
-                options |= OUTPUT_FORMAT_HTML;
-            }
-            else if (strcmp(token, "json_array") == 0)
-            {
-                options |= OUTPUT_FORMAT_JSON_ARRAY;
-            }
-            else if (strcmp(token, "json") == 0)
-            {
-                options |= OUTPUT_FORMAT_JSON;
-            }
-            else if (strcmp(token, "sql") == 0)
-            {
-                options |= OUTPUT_FORMAT_SQL_INSERT;
-            }
-            else if (strcmp(token, "table") == 0)
-            {
-                options |= OUTPUT_FORMAT_TABLE;
-            }
-            else if (strcmp(token, "box") == 0)
-            {
-                options |= OUTPUT_FORMAT_BOX;
-            }
-            else if (strcmp(token, "record") == 0)
-            {
-                options |= OUTPUT_FORMAT_INFO_SEP;
-            }
-            else if (strcmp(token, "xml") == 0)
-            {
-                options |= OUTPUT_FORMAT_XML;
-            }
-            else if (strcmp(token, "sql_values") == 0)
-            {
-                options |= OUTPUT_FORMAT_SQL_VALUES;
-            }
-            else
-            {
-                options |= OUTPUT_FORMAT_BOX;
-            }
+            options = (options & ~OUTPUT_MASK_FORMAT) | format;
 
             free(statement);
             continue;
@@ -685,6 +685,7 @@ static void printHelp(void)
         "\t.help\n"
         "\t.version\n"
         "\t.exit\n"
-        "\t.format tsv|csv|html|table|box|json|json_array|sql|sql_values|xml|record\n"
+        "\t.format tsv|csv|html|table|box|json|json:array|sql|sql:values|xml|record\n"
+        "\t.headers [on|off]\n"
         "\t.explain\n");
 }
