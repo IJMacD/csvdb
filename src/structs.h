@@ -423,6 +423,8 @@ enum JoinType {
     JOIN_INNER =    0,
     JOIN_CROSS =    0,
     JOIN_LEFT =     1,
+    /* Parsed only; rewritten to JOIN_LEFT by swapping tables. */
+    JOIN_RIGHT =    2,
 };
 
 struct Table {

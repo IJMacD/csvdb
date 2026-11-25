@@ -245,7 +245,7 @@ void debugFrom (struct Query *query) {
                 fprintf(stderr, ", CROSS\n");
             }
             else {
-                const char *JOIN_TYPES[] = {"INNER","LEFT"};
+                const char *JOIN_TYPES[] = {"INNER","LEFT","RIGHT"};
                 fprintf(stderr, ", %s\n", JOIN_TYPES[table->join_type]);
             }
             debugNode(&table->join);
@@ -269,7 +269,11 @@ void debugAST (FILE *output, struct Query *query) {
                     fprintf(
                         output,
                         ", \"joinType\": %s",
-                        table->join_type == JOIN_LEFT ? "\"left\"" : "\"cross\""
+                        table->join_type == JOIN_LEFT
+                            ? "\"left\""
+                            : (table->join_type == JOIN_RIGHT
+                                   ? "\"right\""
+                                   : "\"cross\"")
                     );
                 }
 
