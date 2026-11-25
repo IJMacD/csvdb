@@ -8,6 +8,7 @@
 #include "../evaluate/predicates.h"
 #include "../query/result.h"
 #include "../debug.h"
+#include "../fatal.h"
 
 #define COL_JULIAN              0
 #define COL_DATE                1
@@ -500,7 +501,7 @@ int calendar_fullTableAccess (
 
     if (max_julian == db->_record_count && limit_value == db->_record_count) {
         fprintf(stderr, "Error: Unbounded CALENDAR\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     int step = 1;

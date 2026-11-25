@@ -8,6 +8,7 @@
 #include "../evaluate/function.h"
 #include "../db/db.h"
 #include "../functions/util.h"
+#include "../fatal.h"
 
 static void printHeaderName(
     FILE *f,
@@ -80,7 +81,7 @@ void printResultLine(
             if (node->field.index == FIELD_STAR)
             {
                 fprintf(stderr, "Found FIELD_STAR at output step\n");
-                exit(-1);
+                csvdb_fatal(-1);
             }
             else if (node->field.index == FIELD_ROW_NUMBER)
             {
@@ -273,7 +274,7 @@ void printHeaderLine(
         if (node->field.index == FIELD_STAR)
         {
             fprintf(stderr, "Found FIELD_STAR at output step\n");
-            exit(-1);
+            csvdb_fatal(-1);
         }
         else if (node->alias[0] != '\0')
         {

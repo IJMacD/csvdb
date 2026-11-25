@@ -6,9 +6,11 @@
 #include <termios.h>
 #include <errno.h>
 #include <sys/ioctl.h>
+#include <setjmp.h>
 
 #include "structs.h"
 #include "config.h"
+#include "fatal.h"
 #include "query/query.h"
 #include "query/token.h"
 
@@ -882,8 +884,15 @@ static int statementComplete(const char *buf, int require_semicolon)
     return 0;
 }
 
-void repl(int options)
+void repl(int options_in)
 {
+    /*
+     * options / explain must be volatile: they are modified across the loop and
+     * a query-time longjmp (csvdb_fatal) must not clobber them under -O3.
+     */
+    volatile int options = options_in;
+    volatile int explain = 0;
+
     /* Ensure a usable interactive format if caller left format unset */
     if ((options & OUTPUT_MASK_FORMAT) == 0)
     {
@@ -892,7 +901,6 @@ void repl(int options)
 
     printf("CSVDB REPL\nType \".help\" for help.\n\n");
 
-    int explain = 0;
     int require_semicolon = isatty(STDIN_FILENO);
     atexit(historyFree);
     atexit(disableRawMode);
@@ -1101,14 +1109,25 @@ void repl(int options)
             continue;
         }
 
-        options &= ~FLAG_EXPLAIN;
+        int run_flags = options;
+        run_flags &= ~FLAG_EXPLAIN;
         if (explain)
         {
-            options |= FLAG_EXPLAIN;
+            run_flags |= FLAG_EXPLAIN;
         }
 
-        const char *end_ptr;
-        query(statement, options, stdout, &end_ptr);
+        /*
+         * Recover from query-time csvdb_fatal() so the session continues.
+         * setjmp returns non-zero after a fatal; both paths share cleanup.
+         */
+        jmp_buf fatal_jmp;
+        csvdb_fatal_catch(&fatal_jmp);
+        if (setjmp(fatal_jmp) == 0)
+        {
+            const char *end_ptr;
+            query(statement, run_flags, stdout, &end_ptr);
+        }
+        csvdb_fatal_catch(NULL);
 
         free(statement);
         printf("\n");

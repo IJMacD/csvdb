@@ -7,6 +7,7 @@
 #include "../structs.h"
 #include "../functions/util.h"
 #include "../query/select.h"
+#include "../fatal.h"
 
 static int prepareHeaders(struct DB *db);
 
@@ -291,7 +292,7 @@ const char *wsvMem_fromValues(struct DB *db, const char *input, int length)
                 "VALUES: expected row %d to start with '('. Found: %c\n",
                 line_index,
                 *in_ptr);
-            exit(-1);
+            csvdb_fatal(-1);
         }
 
         db->line_indices[line_index++] = out_ptr - db->data;
@@ -305,7 +306,7 @@ const char *wsvMem_fromValues(struct DB *db, const char *input, int length)
             if (ptr == NULL)
             {
                 fprintf(stderr, "Unable to allocate memory: %ld\n", size);
-                exit(-1);
+                csvdb_fatal(-1);
             }
             db->line_indices = ptr;
         }
@@ -315,7 +316,7 @@ const char *wsvMem_fromValues(struct DB *db, const char *input, int length)
         if (line_length < 0)
         {
             fprintf(stderr, "Can't find matching parenthesis\n");
-            exit(-1);
+            csvdb_fatal(-1);
         }
 
         // Check to see if we need to extend the data allocation
@@ -332,7 +333,7 @@ const char *wsvMem_fromValues(struct DB *db, const char *input, int length)
                     stderr,
                     "Unable to allocate memory: %ld\n",
                     max_data_size);
-                exit(-1);
+                csvdb_fatal(-1);
             }
             db->fields = ptr;
             db->data = ptr + sizeof(headers);
@@ -462,7 +463,7 @@ int wsvMem_insertRow(struct DB *db, const char *row)
     if (db->fields == NULL)
     {
         fprintf(stderr, "Unable to allocate %d for wsv_insertRow\n", new_size);
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     db->data = db->fields + header_len;

@@ -10,6 +10,7 @@
 #include "../evaluate/evaluate.h"
 #include "../query/result.h"
 #include "../debug.h"
+#include "../fatal.h"
 
 #define COL_JULIAN              0
 #define COL_DATE                1
@@ -443,7 +444,7 @@ int ephemeris_fullTableAccess (
 
     if (max_julian == db->_record_count && limit_value == db->_record_count) {
         fprintf(stderr, "Error: Unbounded EPHEMERIS\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     int count = 0;

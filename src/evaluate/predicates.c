@@ -10,6 +10,7 @@
 #include "../db/db.h"
 #include "../functions/date.h"
 #include "../functions/util.h"
+#include "../fatal.h"
 
 /**
  * Evaluate <left> <compare> ANY|ALL (subquery) by materialising the subquery
@@ -25,7 +26,7 @@ static int evaluateQuantifiedOperator(
 {
     if (node->child_count != 2) {
         fprintf(stderr, "Quantified operator expects two children\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     enum Function compare = quantifiedCompare(node);
@@ -38,7 +39,7 @@ static int evaluateQuantifiedOperator(
         compare == OPERATOR_NEVER)
     {
         fprintf(stderr, "Invalid comparison on quantified operator\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     char value_left[MAX_VALUE_LENGTH] = {0};
@@ -51,13 +52,13 @@ static int evaluateQuantifiedOperator(
         MAX_VALUE_LENGTH);
     if (result < 0) {
         fprintf(stderr, "Unable to evaluate quantified left side\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     struct Node *right = &node->children[1];
     if (right->function != FUNC_SUBQUERY || right->subquery == NULL) {
         fprintf(stderr, "Quantified operator RHS must be a subquery\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     int outer_table_count = 0;
@@ -79,7 +80,7 @@ static int evaluateQuantifiedOperator(
         &db);
     if (result < 0) {
         fprintf(stderr, "Unable to evaluate quantified subquery\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     int rows = getRecordCount(&db);
@@ -130,7 +131,7 @@ int evaluateOperatorNode (struct Table *tables, RowListIndex list_id, int row_in
             "Node must be an operator. Found function 0x%X\n",
             node->function
         );
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     if (node->function == OPERATOR_NEVER) {
@@ -341,7 +342,7 @@ int evaluateExpression (enum Function op, const char *left, const char *right) {
     if (op == OPERATOR_GE) return strcmp(left, right) >= 0;
 
     fprintf(stderr, "Unrecognised operator: %d\n", op);
-    exit(-1);
+    csvdb_fatal(-1);
 }
 
 /**

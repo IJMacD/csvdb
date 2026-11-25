@@ -8,6 +8,7 @@
 #include "../evaluate/predicates.h"
 #include "../evaluate/evaluate.h"
 #include "../query/result.h"
+#include "../fatal.h"
 
 #define COL_DATETIME 0
 #define COL_DATE     1
@@ -529,14 +530,14 @@ int cron_fullTableAccess (
                 "Error: Unbounded CRON. Add date/julian predicates to limit "
                 "output\n"
             );
-            exit(-1);
+            csvdb_fatal(-1);
         }
         fprintf(
             stderr,
             "Error: Unbounded CRON. Add date/julian predicates to limit "
             "output\n"
         );
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     if (limit_value < 0) {
@@ -565,7 +566,7 @@ int cron_fullTableAccess (
 
                 if (!pushHit(state, j, h, m)) {
                     fprintf(stderr, "Error: out of memory expanding CRON\n");
-                    exit(-1);
+                    csvdb_fatal(-1);
                 }
 
                 int rowid = state->hit_count - 1;

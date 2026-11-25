@@ -9,6 +9,7 @@
 #include "../db/indices.h"
 #include "../functions/util.h"
 #include "../debug.h"
+#include "../fatal.h"
 
 static void replaceTableID (struct Node *node, int table_id);
 
@@ -92,7 +93,7 @@ int executeConstantJoin (
 
     if (next_db == NULL) {
         fprintf(stderr, "Unknown DB in JOIN\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     int record_count = getRecordCount(next_db);
@@ -238,7 +239,7 @@ int executeLoopJoin (
         if (bit_id != table_id) {
             fprintf(stderr, "Limitation of RowList: tables must be joined in "
                 "order specified.\n");
-            exit(-1);
+            csvdb_fatal(-1);
         }
 
         // We're only passing one table to fullTableScan so predicate will

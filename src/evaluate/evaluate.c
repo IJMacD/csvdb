@@ -12,6 +12,7 @@
 #include "../db/db.h"
 #include "../functions/date.h"
 #include "../functions/util.h"
+#include "../fatal.h"
 
 static int evaluateField(
     struct Table *tables,
@@ -140,7 +141,7 @@ int evaluateNode(
             __FILE__ ":%d Unable to allocate %d bytes for %d child node values\n", __LINE__,
             value_count * MAX_VALUE_LENGTH,
             value_count);
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     for (int i = 0; i < node->child_count; i++)
@@ -207,7 +208,7 @@ int evaluateConstantNode(
             __FILE__ ":%d Unable to allocate %d bytes for %d child node values\n", __LINE__,
             value_count * MAX_VALUE_LENGTH,
             value_count);
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     if (node->child_count == -1)
@@ -328,7 +329,7 @@ static int evaluateField(
     if (field->index == FIELD_UNKNOWN)
     {
         fprintf(stderr, "Trying to evaluate unknown field\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     if (field->index == FIELD_CONSTANT)

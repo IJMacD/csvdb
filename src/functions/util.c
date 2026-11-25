@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <math.h>
 #include <limits.h>
+#include "../fatal.h"
 
 int is_numeric(const char *string)
 {
@@ -464,7 +465,7 @@ int find_matching_parenthesis(const char *string)
             "find_matching_parenthesis was expecting '(' but actually got '%c'"
             "\n",
             string[offset]);
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     offset++;

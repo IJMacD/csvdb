@@ -8,6 +8,7 @@
 #include "../evaluate/predicates.h"
 #include "../functions/util.h"
 #include "indices.h"
+#include "../fatal.h"
 
 static int indexWalk(
     struct DB *db,
@@ -314,7 +315,7 @@ enum IndexSearchResult indexUniqueSeek (
                 stderr,
                 "Not Implemented: Unique Index range scan for operator: %d\n",
                 predicate_op);
-            exit(-1);
+            csvdb_fatal(-1);
         }
     }
 
@@ -402,7 +403,7 @@ enum IndexSearchResult indexSeek (
                 stderr,
                 "Cannot do INDEX SEEK on LIKE with without '%%' at the end\n"
             );
-            exit(-1);
+            csvdb_fatal(-1);
         }
         value[len - 1] = '\0';
     }
@@ -571,7 +572,7 @@ enum IndexSearchResult indexSeek (
             "Not Implemented: Index seek for operator: %d\n",
             predicate_op
         );
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     if (lower_bound < 0) {
@@ -814,7 +815,7 @@ static int indexWalk(
 
             if (result < 0) {
                 fprintf(stderr, "unable to get value for rowid %d\n", i);
-                exit(-1);
+                csvdb_fatal(-1);
             }
 
             appendRowID(row_list, atoi(value));

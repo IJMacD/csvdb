@@ -28,6 +28,7 @@
 #include "../functions/util.h"
 #include "../evaluate/function.h"
 #include "../debug.h"
+#include "../fatal.h"
 
 struct VFS VFS_Table[VFS_COUNT] = {
     [VFS_NULL] = {
@@ -481,7 +482,7 @@ int fullTableAccess (
 ) {
     if (db->vfs == 0) {
         fprintf(stderr, "Trying to access uninitialised DB\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     int (*vfs_fullTableAccess) (
@@ -552,7 +553,7 @@ int fullTableScan (
 
     if (db->vfs == 0) {
         fprintf(stderr, "Trying to access uninitialised DB\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     int count = limit_value;
@@ -613,7 +614,7 @@ int indexSearch (
 ) {
     if (db->vfs == 0) {
         fprintf(stderr, "Trying to perform index search on uninitialised DB\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     int (*vfs_indexSearch) (struct DB *, const char *, int, int *)
@@ -816,7 +817,7 @@ int uniqueIndexSearch (struct DB *db, const char * value, int * output_flag) {
 int insertRow (struct DB *db, const char *row) {
     if (db->vfs == 0) {
         fprintf(stderr, "Trying to perform insert on uninitialised DB\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     int (*vfs_insertRow) (struct DB *, const char *)
@@ -827,13 +828,13 @@ int insertRow (struct DB *db, const char *row) {
     }
 
     fprintf(stderr, "VFS doesn't support insertion\n");
-    exit(-1);
+    csvdb_fatal(-1);
 }
 
 int insertFromQuery (struct DB *db, const char *query, const char **end_ptr) {
     if (db->vfs == 0) {
         fprintf(stderr, "Trying to perform insert on uninitialised DB\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     int (*vfs_insertFromQuery) (struct DB *, const char *, const char **)
@@ -844,5 +845,5 @@ int insertFromQuery (struct DB *db, const char *query, const char **end_ptr) {
     }
 
     fprintf(stderr, "VFS doesn't support insertion\n");
-    exit(-1);
+    csvdb_fatal(-1);
 }
