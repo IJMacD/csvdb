@@ -304,8 +304,18 @@ int process_query(
     // not. If it was empty then rollback to a tableless query.
     if (auto_stdin && q->tables[0].db->field_count == 0)
     {
+        // populate_tables may have cached this as stdin_db for reuse across
+        // statements. Clear it before free — otherwise the next statement's
+        // auto-stdin path reuses a dangling pointer (heap UAF / segfault).
+        if (stdin_db == q->tables[0].db)
+        {
+            stdin_db = NULL;
+        }
         closeDB(q->tables[0].db);
         free(q->tables[0].db);
+        q->tables[0].db = NULL;
+        free(q->tables);
+        q->tables = NULL;
         q->table_count = 0;
     }
 

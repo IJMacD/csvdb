@@ -15,7 +15,7 @@ static int isTokenChar (char c);
 static int isOperatorChar (char c);
 
 /**
- * @brief Skips spaces, newlines, tabs and comment lines
+ * @brief Skips spaces, newlines, tabs and SQL comments (-- and block comments)
  *
  * @param string
  * @param index
@@ -26,6 +26,16 @@ void skipWhitespace (const char *string, size_t *index) {
 
         if (strncmp(string + *index, "--", 2) == 0) {
             skipLine(string, index);
+        } else if (string[*index] == '/' && string[*index + 1] == '*') {
+            *index += 2;
+            while (string[*index] != '\0' &&
+                   !(string[*index] == '*' && string[*index + 1] == '/'))
+            {
+                (*index)++;
+            }
+            if (string[*index] == '*' && string[*index + 1] == '/') {
+                *index += 2;
+            }
         } else {
             break;
         }
@@ -33,7 +43,7 @@ void skipWhitespace (const char *string, size_t *index) {
 }
 
 /**
- * @brief Skips spaces, newlines, tabs and comment lines
+ * @brief Skips spaces, newlines, tabs and SQL comments (-- and block comments)
  *
  * @param string
  * @param index
@@ -44,6 +54,16 @@ void skipWhitespacePtr (const char **string) {
 
         if (strncmp(*string, "--", 2) == 0) {
             skipLinePtr(string);
+        } else if ((*string)[0] == '/' && (*string)[1] == '*') {
+            *string += 2;
+            while (**string != '\0' &&
+                   !((*string)[0] == '*' && (*string)[1] == '/'))
+            {
+                (*string)++;
+            }
+            if ((*string)[0] == '*' && (*string)[1] == '/') {
+                *string += 2;
+            }
         } else {
             break;
         }

@@ -268,6 +268,43 @@ if [[ -s "$bad_count_out" ]]; then
 fi
 rm -f "$bad_count_out"
 
+# Multi-statement -f scripts: comments between statements must not segfault
+# (empty auto-stdin rollback used to leave stdin_db dangling).
+multi_sql=$(mktemp)
+multi_out=$(mktemp)
+cat > "$multi_sql" <<'EOF'
+SELECT 1;
+-- between
+SELECT 2; -- trailing
+/* block */
+SELECT 3;
+EOF
+if ! "$CSVDB" -N -F csv -f "$multi_sql" </dev/null >"$multi_out" 2>/dev/null; then
+    rm -f "$multi_sql" "$multi_out"
+    cli_die "multi-statement file with comments failed or segfaulted"
+fi
+multi_expected=$'1\n2\n3'
+if [[ "$(cat "$multi_out")" != "$multi_expected" ]]; then
+    rm -f "$multi_sql" "$multi_out"
+    cli_die "multi-statement comment script unexpected output"
+fi
+# Same pattern as aggregate demos: VALUES + inline -- notes
+cat > "$multi_sql" <<'EOF'
+FROM (VALUES (1),(3),(2),(9)) AS t(v) SELECT MEDIAN(v);  -- 2
+FROM (VALUES ('a'),('b'),('c')) AS t(v)
+SELECT LISTAGG(v, '|');  -- a|b|c
+EOF
+if ! "$CSVDB" -N -F csv -f "$multi_sql" </dev/null >"$multi_out" 2>/dev/null; then
+    rm -f "$multi_sql" "$multi_out"
+    cli_die "VALUES multi-statement with comments failed"
+fi
+multi_expected=$'2\na|b|c'
+if [[ "$(cat "$multi_out")" != "$multi_expected" ]]; then
+    rm -f "$multi_sql" "$multi_out"
+    cli_die "VALUES multi-statement unexpected output: [$(cat "$multi_out")]"
+fi
+rm -f "$multi_sql" "$multi_out"
+
 echo "csvdb version:" "$ver_flag" 
 
 echo
