@@ -252,6 +252,8 @@ struct Field {
     enum FieldIndex index;
 };
 
+struct Query; /* forward decl — Node may own a nested Query for FUNC_SUBQUERY */
+
 // Since Field is first field of Node, it means that Node can be cast to Field
 struct Node {
     struct Field field;
@@ -268,6 +270,11 @@ struct Node {
     struct Node *children;
     /* To filter aggregate functions */
     struct Node *filter;
+    /**
+     * Parsed scalar subquery (FUNC_SUBQUERY only). Owned by this node;
+     * cloned per outer row at evaluation time.
+     */
+    struct Query *subquery;
 };
 
 enum AliasSearchMode {
@@ -412,6 +419,8 @@ struct Table {
     enum JoinType join_type;
 };
 
+typedef int RowListIndex;
+
 struct Query {
     #ifdef DEBUG
     int id;
@@ -434,9 +443,18 @@ struct Query {
     int distinct_count;
     int offset_value;
     int limit_value;
-};
 
-typedef int RowListIndex;
+    /**
+     * Optional outer-row binding for correlated scalar subqueries.
+     * When set, unresolved columns in this query are looked up on the outer
+     * tables and frozen to FIELD_CONSTANT from the current outer row.
+     */
+    struct Table *outer_tables;
+    int outer_table_count;
+    RowListIndex outer_row_list;
+    int outer_row_index;
+    int has_outer_row;
+};
 
 #define ROWLIST_ROWID -1
 

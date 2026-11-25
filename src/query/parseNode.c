@@ -7,6 +7,7 @@
 #include "token.h"
 #include "node.h"
 #include "select.h"
+#include "parse.h"
 #include "../functions/util.h"
 #include "../functions/date.h"
 
@@ -857,25 +858,48 @@ int parseNode(
         {
             int len = find_matching_parenthesis(query + *index - 1);
 
-            if (len >= MAX_TABLE_LENGTH)
+            // Scalar expression subquery: parse once into a nested Query AST.
+            // Evaluated via FUNC_SUBQUERY (supports correlation by cloning +
+            // outer bind). FROM (subquery) AS t still uses allocateTable in
+            // parse.c. Body is not limited by MAX_FIELD_LENGTH.
+            if (len < 2)
             {
-                fprintf(
-                    stderr,
-                    "Subqueries longer than %d are not supported. Subquery was "
-                    "%d bytes.\n",
-                    MAX_TABLE_LENGTH,
-                    len);
+                fprintf(stderr, "Empty subquery\n");
                 return -1;
             }
 
-            struct Table *table = allocateTable(q);
+            char *sql = malloc((size_t)(len - 1));
+            if (sql == NULL)
+            {
+                fprintf(stderr, "Out of memory\n");
+                return -1;
+            }
+            memcpy(sql, query + *index, (size_t)(len - 2));
+            sql[len - 2] = '\0';
 
-            strncpy(table->name, query + *index, len - 2);
-            table->db = DB_SUBQUERY;
+            struct Query *sq = calloc(1, sizeof(*sq));
+            if (sq == NULL)
+            {
+                free(sql);
+                fprintf(stderr, "Out of memory\n");
+                return -1;
+            }
 
-            node->field.index = 0;
-            node->field.table_id = q->table_count - 1;
-            node->function = FUNC_UNITY;
+            if (parseQuery(sq, sql, NULL) < 0)
+            {
+                free(sql);
+                destroyQuery(sq);
+                free(sq);
+                return -1;
+            }
+            free(sql);
+
+            node->field.text[0] = '\0';
+            node->field.index = FIELD_CONSTANT;
+            node->field.table_id = TABLE_NONE;
+            node->function = FUNC_SUBQUERY;
+            node->child_count = 0;
+            node->subquery = sq;
 
             (*index) += len - 1;
         }

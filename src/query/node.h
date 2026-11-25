@@ -2,7 +2,7 @@ struct Node * allocateNodeChildren (struct Node *node, int new_children);
 
 struct Node * addChildNode (struct Node *node);
 
-void copyNodeTree (struct Node *dest, struct Node *src);
+void copyNodeTree (struct Node *dest, const struct Node *src);
 
 void clearNode (struct Node *node);
 

@@ -8,6 +8,7 @@
 #include "predicates.h"
 #include "../query/node.h"
 #include "../query/result.h"
+#include "../query/select.h"
 #include "../db/db.h"
 #include "../functions/date.h"
 #include "../functions/util.h"
@@ -49,6 +50,38 @@ int evaluateNode(
             (struct Field *)node,
             output,
             max_length);
+    }
+
+    if (node->function == FUNC_SUBQUERY)
+    {
+        // Count outer tables from the active join (row list width).
+        int outer_table_count = 0;
+        if (row_list >= 0)
+        {
+            struct RowList *rl = getRowList(row_list);
+            if (rl != NULL)
+            {
+                outer_table_count = (int)rl->join_count;
+            }
+        }
+
+        int result = evaluate_scalar_subquery(
+            node->subquery,
+            tables,
+            outer_table_count,
+            row_list,
+            index,
+            row_list >= 0,
+            output,
+            max_length);
+
+        if (result < 0)
+        {
+            output[0] = '\0';
+            return 0;
+        }
+
+        return result;
     }
 
     if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_OPERATOR)
@@ -409,6 +442,12 @@ int evaluateConstantField(char *output, struct Field *field)
  */
 int isConstantNode(struct Node *node)
 {
+    // May reference outer columns; never treat as a foldable constant.
+    if (node->function == FUNC_SUBQUERY)
+    {
+        return 0;
+    }
+
     if (node->function == FUNC_UNITY
         // Optimisation where node is its own child
         || node->child_count == -1)
