@@ -396,3 +396,18 @@ FROM (VALUES (2), (4), (4), (4), (5), (5), (7), (9)) AS t(v) SELECT VAR_SAMP(v),
 FROM (VALUES (10)) AS t(v) SELECT VAR_POP(v), VAR_SAMP(v), STDDEV_POP(v), STDDEV_SAMP(v);
 -- FILTER must pack included rows densely (regression for skipped indices)
 FROM (VALUES (1), (3), (5)) AS t(v) SELECT AVG(v) FILTER (WHERE v > 1), STDDEV(v) FILTER (WHERE v > 1), COUNT(v) FILTER (WHERE v > 1);
+-- Discrete MEDIAN: odd → middle; even → lower middle (always from the set)
+FROM (VALUES (1), (3), (2), (9), (5)) AS t(v) SELECT MEDIAN(v);
+FROM (VALUES (1), (3), (2), (9)) AS t(v) SELECT MEDIAN(v);
+-- MODE: strings + numeric ties (lexicographically smallest wins)
+FROM (VALUES ('apple'), ('apple'), ('banana'), ('banana'), ('banana'), ('cherry')) AS t(v) SELECT MODE(v);
+FROM (VALUES ('apple'), ('apple'), ('banana'), ('banana'), ('cherry')) AS t(v) SELECT MODE(v);
+FROM (VALUES (1), (2), (2), (3), (3), (3)) AS t(v) SELECT MODE(v);
+-- Constant-only aggregates must not be folded via evaluateFunction
+SELECT SUM(1), MEDIAN(1), MODE('x');
+-- PERCENTILE aliases DISC; CONT interpolates; both match MEDIAN at 0.5 for DISC
+FROM (VALUES (1), (2), (3), (4)) AS t(v) SELECT PERCENTILE(v, 0.5), PERCENTILE_DISC(v, 0.5), PERCENTILE_CONT(v, 0.5), MEDIAN(v);
+FROM (VALUES (1), (2), (3), (4)) AS t(v) SELECT PERCENTILE_DISC(v, 0), PERCENTILE_DISC(v, 1), PERCENTILE(v, 0), PERCENTILE(v, 1);
+FROM (VALUES (10), (20), (30), (40), (50)) AS t(v) SELECT PERCENTILE(v, 0.25), PERCENTILE_DISC(v, 0.25), PERCENTILE_CONT(v, 0.25);
+-- LISTAGG optional separator (default comma)
+FROM (VALUES ('a'), ('b'), ('c')) AS t(v) SELECT LISTAGG(v), LISTAGG(v, '|'), LISTAGG(v, '');

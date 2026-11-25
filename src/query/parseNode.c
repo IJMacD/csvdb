@@ -781,6 +781,29 @@ static int parseFunction(const char *value, const char *query, size_t *index, st
         node->function = FUNC_AGG_VAR_POP;
         flags |= FLAG_GROUP;
     }
+    else if (strcmp(value, "MEDIAN") == 0)
+    {
+        node->function = FUNC_AGG_MEDIAN;
+        flags |= FLAG_GROUP;
+    }
+    else if (strcmp(value, "MODE") == 0)
+    {
+        node->function = FUNC_AGG_MODE;
+        flags |= FLAG_GROUP;
+    }
+    else if (strcmp(value, "PERCENTILE_CONT") == 0)
+    {
+        node->function = FUNC_AGG_PERCENTILE_CONT;
+        flags |= FLAG_GROUP;
+    }
+    else if (
+        strcmp(value, "PERCENTILE") == 0 ||
+        strcmp(value, "PERCENTILE_DISC") == 0)
+    {
+        // Bare PERCENTILE matches DISC (and MEDIAN at p=0.5)
+        node->function = FUNC_AGG_PERCENTILE_DISC;
+        flags |= FLAG_GROUP;
+    }
     else
     {
         fprintf(stderr, "Unknown function: %s\n", value);
