@@ -201,6 +201,10 @@ enum Function {
     FUNC_AGG_MEDIAN =               0xAB,
     // Most frequent value (string equality); ties → lexicographically smallest
     FUNC_AGG_MODE =                 0xAC,
+    // Continuous percentile (interpolated); PERCENTILE is an alias
+    FUNC_AGG_PERCENTILE_CONT =      0xAD,
+    // Discrete percentile: always a value from the set
+    FUNC_AGG_PERCENTILE_DISC =      0xAE,
 
     FUNC_VECTOR_CODEPOINT =         0xB1,
 

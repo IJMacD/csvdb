@@ -1543,6 +1543,63 @@ static int cmp_numeric_ptrs(const void *a, const void *b)
 }
 
 /**
+ * Evaluate the percentile fraction (second arg) into [0, 1].
+ * Returns 0 on success, -1 if missing/invalid/out of range.
+ */
+static int agg_eval_percentile_p(
+    struct Table *tables,
+    RowListIndex list_id,
+    struct Node *node,
+    double *p_out)
+{
+    if (node->child_count < 2)
+    {
+        return -1;
+    }
+
+    char p_buf[MAX_VALUE_LENGTH] = {0};
+    struct Node *p_node = &node->children[1];
+
+    if (isConstantNode(p_node))
+    {
+        if (evaluateConstantNode(p_node, p_buf) < 0)
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        struct RowList *rl = getRowList(list_id);
+        if (rl == NULL || rl->row_count == 0)
+        {
+            return -1;
+        }
+        evaluateNode(
+            tables,
+            list_id,
+            0,
+            p_node,
+            p_buf,
+            MAX_VALUE_LENGTH);
+    }
+
+    if (p_buf[0] == '\0')
+    {
+        return -1;
+    }
+
+    char *end = NULL;
+    double p = strtod(p_buf, &end);
+    if (end == p_buf || *end != '\0' || p < 0.0 || p > 1.0)
+    {
+        return -1;
+    }
+
+    *p_out = p;
+    return 0;
+}
+
+/**
  * @brief
  *
  * @param output
@@ -1563,8 +1620,8 @@ int evaluateAggregateFunction(
     }
 
     // Aggregates collect the first expression argument per row. Extra args are
-    // allowed (no hard ban) for future multi-arg aggs; functions that only use
-    // one expression simply ignore children beyond [0].
+    // allowed (e.g. PERCENTILE(expr, p)); functions that only use one
+    // expression simply ignore children beyond [0].
 
     int is_count_star = node->function == FUNC_AGG_COUNT && ((node->child_count == -1 && node->field.index == FIELD_STAR) ||
                                                              (node->child_count == 1 && node->children[0].field.index == FIELD_STAR));
@@ -1628,8 +1685,8 @@ int evaluateAggregateFunction(
                     }
                     else if (node->child_count >= 1)
                     {
-                        // First child is the aggregated expression; any further
-                        // children are left for multi-arg aggs (unused for now).
+                        // First child is the aggregated expression; further
+                        // children (e.g. percentile fraction) are read later.
                         evaluateNode(
                             tables,
                             list_id,
@@ -1988,6 +2045,81 @@ int evaluateAggregateFunction(
         }
 
         free(ptrs);
+    }
+    else if (
+        node->function == FUNC_AGG_PERCENTILE_CONT ||
+        node->function == FUNC_AGG_PERCENTILE_DISC)
+    {
+        double p = 0;
+        if (agg_eval_percentile_p(tables, list_id, node, &p) == 0)
+        {
+            int count = 0;
+            const char **ptrs = malloc((size_t)row_count * sizeof(*ptrs));
+
+            if (ptrs == NULL)
+            {
+                fprintf(stderr, "Unable to allocate for PERCENTILE\n");
+                exit(-1);
+            }
+
+            for (int i = 0; i < row_count; i++)
+            {
+                if (IS_NOT_NULL(values[i]) && !is_complex(values[i]))
+                {
+                    ptrs[count++] = values[i];
+                }
+            }
+
+            if (count > 0)
+            {
+                qsort(ptrs, (size_t)count, sizeof(*ptrs), cmp_numeric_ptrs);
+
+                if (node->function == FUNC_AGG_PERCENTILE_DISC)
+                {
+                    // Discrete: value at ceil(n*p)-1 (p=0 → first).
+                    // Matches MEDIAN at p=0.5 (index (n-1)/2).
+                    int idx;
+                    if (p <= 0.0)
+                    {
+                        idx = 0;
+                    }
+                    else
+                    {
+                        idx = (int)ceil(p * (double)count) - 1;
+                        if (idx < 0)
+                            idx = 0;
+                        if (idx >= count)
+                            idx = count - 1;
+                    }
+                    bytesWritten = sprintf(output, "%s", ptrs[idx]);
+                }
+                else
+                {
+                    // Continuous: interpolate at (n-1)*p.
+                    double h = p * (double)(count - 1);
+                    int lo = (int)floor(h);
+                    int hi = (int)ceil(h);
+                    if (lo < 0)
+                        lo = 0;
+                    if (hi >= count)
+                        hi = count - 1;
+
+                    if (lo == hi)
+                    {
+                        bytesWritten = sprintf(output, "%s", ptrs[lo]);
+                    }
+                    else
+                    {
+                        double a = strtod(ptrs[lo], NULL);
+                        double b = strtod(ptrs[hi], NULL);
+                        double frac = h - (double)lo;
+                        bytesWritten = sprint_number(output, a + (b - a) * frac);
+                    }
+                }
+            }
+
+            free(ptrs);
+        }
     }
     else
     {
