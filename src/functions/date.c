@@ -827,6 +827,52 @@ int intervalToInt(int count, enum DateUnit unit, long *out)
     }
 }
 
+int isCalendarIntervalConstant(const char *text)
+{
+    if (text == NULL || text[0] == '\0')
+    {
+        return 0;
+    }
+
+    const char *p = text;
+    while (*p == ' ')
+    {
+        p++;
+    }
+
+    char *end = NULL;
+    long amount = strtol(p, &end, 10);
+    if (end == p)
+    {
+        return 0;
+    }
+
+    while (*end == ' ')
+    {
+        end++;
+    }
+
+    // Plain integer (day-/second-scale INTERVAL already folded at parse time)
+    if (*end == '\0')
+    {
+        return 0;
+    }
+
+    enum DateUnit unit = parseDateUnit(end);
+    if (unit == DATE_UNIT_INVALID)
+    {
+        return 0;
+    }
+
+    if (amount < INT_MIN || amount > INT_MAX)
+    {
+        return 0;
+    }
+
+    long unused = 0;
+    return intervalToInt((int)amount, unit, &unused) != 0;
+}
+
 int parseTzOffset(const char *input, short *offset_minutes)
 {
     if (input == NULL || offset_minutes == NULL)

@@ -39,6 +39,12 @@ static int hasKeywordAt(const char *query, size_t i, const char *keyword);
 static int looksLikeQueryStart(const char *query, size_t i);
 
 /**
+ * Rewrite date ± calendar INTERVAL into DATE_ADD / DATE_SUB.
+ * Returns 0 on success; -1 on unsupported forms.
+ */
+static int rewriteDateIntervalArithmetic(struct Node *node);
+
+/**
  * Parses simple nodes:
  *  Simple nodes: (<node>)
  *      <field>
@@ -1068,6 +1074,11 @@ int parseNode(
         }
     }
 
+    if (rewriteDateIntervalArithmetic(node) < 0)
+    {
+        return -1;
+    }
+
     return flags;
 }
 
@@ -1577,6 +1588,87 @@ static int hasKeywordAt(const char *query, size_t i, const char *keyword)
     }
 
     return 1;
+}
+
+static int isCalendarIntervalNode(const struct Node *node)
+{
+    return node != NULL &&
+           node->function == FUNC_UNITY &&
+           node->child_count == 0 &&
+           node->field.index == FIELD_CONSTANT &&
+           isCalendarIntervalConstant(node->field.text);
+}
+
+/**
+ * Calendar INTERVAL literals under +/− cannot fold to day/second integers.
+ * Rewrite date ± INTERVAL n UNIT into DATE_ADD / DATE_SUB (and INTERVAL + date
+ * into DATE_ADD). Reject forms that cannot be rewritten safely.
+ */
+static int rewriteDateIntervalArithmetic(struct Node *node)
+{
+    if (node == NULL)
+    {
+        return 0;
+    }
+
+    if (node->child_count > 0)
+    {
+        for (int i = 0; i < node->child_count; i++)
+        {
+            if (rewriteDateIntervalArithmetic(&node->children[i]) < 0)
+            {
+                return -1;
+            }
+        }
+    }
+
+    if (node->filter != NULL &&
+        rewriteDateIntervalArithmetic(node->filter) < 0)
+    {
+        return -1;
+    }
+
+    if ((node->function != FUNC_ADD && node->function != FUNC_SUB) ||
+        node->child_count != 2)
+    {
+        return 0;
+    }
+
+    int left_cal = isCalendarIntervalNode(&node->children[0]);
+    int right_cal = isCalendarIntervalNode(&node->children[1]);
+
+    if (!left_cal && !right_cal)
+    {
+        return 0;
+    }
+
+    if (left_cal && right_cal)
+    {
+        fprintf(
+            stderr,
+            "calendar INTERVAL cannot be combined with +/−; "
+            "use DATE_ADD / DATE_SUB\n");
+        return -1;
+    }
+
+    if (node->function == FUNC_SUB && left_cal)
+    {
+        fprintf(
+            stderr,
+            "calendar INTERVAL cannot be the left operand of -; "
+            "use DATE_SUB\n");
+        return -1;
+    }
+
+    if (left_cal)
+    {
+        // INTERVAL + date → DATE_ADD(date, INTERVAL)
+        swapNodes(&node->children[0], &node->children[1]);
+    }
+
+    node->function =
+        (node->function == FUNC_SUB) ? FUNC_DATE_SUB : FUNC_DATE_ADD;
+    return 0;
 }
 
 /**

@@ -94,6 +94,12 @@ enum DateUnit parseDateUnit(const char *unit);
 int intervalToInt(int count, enum DateUnit unit, long *out);
 
 /**
+ * True if text is an INTERVAL calendar form ("N UNIT") that cannot fold to a
+ * fixed day/second integer (MONTH, YEAR, MILLENNIUM, …).
+ */
+int isCalendarIntervalConstant(const char *text);
+
+/**
  * Parse timezone target: Z, UTC, +HH:MM, -HH:MM.
  * Writes minutes east of UTC to *offset_minutes.
  * Returns 1 on success; 0 on failure.
