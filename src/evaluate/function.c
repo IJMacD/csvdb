@@ -247,6 +247,52 @@ int evaluateFunction(
             dt.hour, dt.minute, dt.second);
     }
 
+    // CHAR/CHR accepts multiple code points and skips NULLs, so handle it
+    // before the generic "first arg NULL → NULL" rule.
+    if (function == FUNC_CHR)
+    {
+        char *out = output;
+        int written = 0;
+        int any_non_null = 0;
+
+        for (int i = 0; i < value_count; i++)
+        {
+            if (values[i] == NULL || values[i][0] == '\0')
+            {
+                continue;
+            }
+
+            any_non_null = 1;
+
+            int codepoint = atoi(values[i]);
+            char tmp[5];
+            int n = writeUTF8(tmp, codepoint);
+            if (n <= 0)
+            {
+                continue;
+            }
+
+            if (written + n >= MAX_VALUE_LENGTH)
+            {
+                break;
+            }
+
+            memcpy(out, tmp, (size_t)n);
+            out += n;
+            written += n;
+        }
+
+        *out = '\0';
+
+        // All arguments NULL → NULL; otherwise the concatenated characters.
+        if (!any_non_null)
+        {
+            return 0;
+        }
+
+        return written;
+    }
+
     // Most functions take at least 1 parameter. If the first field is NULL then
     // the whole function evaluates to NULL. Zero-arg builders (MAKE_DATE /
     // MAKE_TIME / MAKE_DATETIME) are allowed through with defaults.
@@ -258,13 +304,6 @@ int evaluateFunction(
 
     if (function == FUNC_UNITY)
     {
-        return sprintf(output, "%s", values[0]);
-    }
-    else if (function == FUNC_CHR)
-    {
-        int codepoint = atoi(values[0]);
-        writeUTF8(values[0], codepoint);
-
         return sprintf(output, "%s", values[0]);
     }
     // Reads a single codepoint from the first one, two, three, or four bytes.
@@ -1557,6 +1596,9 @@ int evaluateAggregateFunction(
                 // We don't need to evaluate nodes if it's COUNT(*)
                 if (!is_count_star)
                 {
+                    // Pack included values densely at [0..row_count) so later
+                    // passes over row_count see every filtered row (FILTER can
+                    // skip earlier indices).
                     if (node->child_count == -1)
                     {
                         // Self-child optimisation
@@ -1569,7 +1611,7 @@ int evaluateAggregateFunction(
                             tables[field->table_id].db,
                             rowid,
                             field->index,
-                            values[i],
+                            values[row_count],
                             MAX_VALUE_LENGTH);
                     }
                     else if (node->child_count == 1)
@@ -1580,7 +1622,7 @@ int evaluateAggregateFunction(
                             list_id,
                             i,
                             &node->children[0],
-                            values[i],
+                            values[row_count],
                             MAX_VALUE_LENGTH);
                     }
                 }
@@ -1795,6 +1837,60 @@ int evaluateAggregateFunction(
                 }
 
                 have_prev = 1;
+            }
+        }
+    }
+    else if (
+        node->function == FUNC_AGG_STDDEV_SAMP ||
+        node->function == FUNC_AGG_STDDEV_POP ||
+        node->function == FUNC_AGG_VAR_SAMP ||
+        node->function == FUNC_AGG_VAR_POP)
+    {
+        // Two-pass mean / sum-of-squared-deviations over non-NULL reals.
+        // Complex values are ignored (same as MIN/MAX).
+        int count = 0;
+        double sum = 0;
+
+        for (int i = 0; i < row_count; i++)
+        {
+            if (IS_NOT_NULL(values[i]) && !is_complex(values[i]))
+            {
+                count++;
+                sum += strtod(values[i], NULL);
+            }
+        }
+
+        int is_sample =
+            node->function == FUNC_AGG_STDDEV_SAMP ||
+            node->function == FUNC_AGG_VAR_SAMP;
+
+        // Sample needs ≥2 observations; population needs ≥1.
+        if ((is_sample && count >= 2) || (!is_sample && count >= 1))
+        {
+            double mean = sum / count;
+            double ss = 0;
+
+            for (int i = 0; i < row_count; i++)
+            {
+                if (IS_NOT_NULL(values[i]) && !is_complex(values[i]))
+                {
+                    double d = strtod(values[i], NULL) - mean;
+                    ss += d * d;
+                }
+            }
+
+            double denom = is_sample ? (double)(count - 1) : (double)count;
+            double variance = ss / denom;
+
+            if (
+                node->function == FUNC_AGG_STDDEV_SAMP ||
+                node->function == FUNC_AGG_STDDEV_POP)
+            {
+                bytesWritten = sprint_number(output, sqrt(variance));
+            }
+            else
+            {
+                bytesWritten = sprint_number(output, variance);
             }
         }
     }

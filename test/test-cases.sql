@@ -384,3 +384,15 @@ FROM ranks AS r SELECT name, value, (SELECT COUNT(*) FROM ranks AS r2 WHERE r2.v
 FROM suits AS s SELECT name, (SELECT COUNT(*) FROM ranks WHERE value = LENGTH(s.name)) AS matches;
 FROM ranks AS r WHERE (SELECT COUNT(*) FROM ranks AS r2 WHERE r2.value > r.value) = 0 SELECT name, value;
 FROM SEQUENCE WHERE value < 4 SELECT value, (SELECT value * 2) AS doubled;
+-- Multi-arg CHAR/CHR builds a string from code points (NULLs skipped)
+SELECT CHAR(72, 101, 108, 108, 111);
+SELECT CHR(65, 66, 67);
+SELECT CHAR(72, NULL, 105);
+-- Statistical aggregates (sample vs population)
+-- Classic set 2,4,4,4,5,5,7,9 → μ=5, VAR_POP=4, VAR_SAMP=32/7, STDDEV_POP=2
+FROM (VALUES (2), (4), (4), (4), (5), (5), (7), (9)) AS t(v) SELECT AVG(v), VAR_POP(v), VARIANCE(v), STDDEV_POP(v), STDDEV(v);
+FROM (VALUES (2), (4), (4), (4), (5), (5), (7), (9)) AS t(v) SELECT VAR_SAMP(v), STDDEV_SAMP(v);
+-- Fewer than 2 non-nulls → sample stats NULL; population still defined for n=1
+FROM (VALUES (10)) AS t(v) SELECT VAR_POP(v), VAR_SAMP(v), STDDEV_POP(v), STDDEV_SAMP(v);
+-- FILTER must pack included rows densely (regression for skipped indices)
+FROM (VALUES (1), (3), (5)) AS t(v) SELECT AVG(v) FILTER (WHERE v > 1), STDDEV(v) FILTER (WHERE v > 1), COUNT(v) FILTER (WHERE v > 1);

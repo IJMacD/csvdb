@@ -191,6 +191,12 @@ enum Function {
     FUNC_AGG_SUM =                  0xA4,
     FUNC_AGG_AVG =                  0xA5,
     FUNC_AGG_LISTAGG =              0xA6,
+    // Sample (Bessel-corrected, n−1) standard deviation / variance
+    FUNC_AGG_STDDEV_SAMP =          0xA7,
+    FUNC_AGG_VAR_SAMP =             0xA8,
+    // Population (n) standard deviation / variance
+    FUNC_AGG_STDDEV_POP =           0xA9,
+    FUNC_AGG_VAR_POP =              0xAA,
 
     FUNC_VECTOR_CODEPOINT =         0xB1,
 

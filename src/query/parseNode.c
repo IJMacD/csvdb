@@ -757,6 +757,30 @@ static int parseFunction(const char *value, const char *query, size_t *index, st
         node->function = FUNC_AGG_LISTAGG;
         flags |= FLAG_GROUP;
     }
+    else if (
+        strcmp(value, "STDDEV") == 0 ||
+        strcmp(value, "STDDEV_SAMP") == 0)
+    {
+        node->function = FUNC_AGG_STDDEV_SAMP;
+        flags |= FLAG_GROUP;
+    }
+    else if (strcmp(value, "STDDEV_POP") == 0)
+    {
+        node->function = FUNC_AGG_STDDEV_POP;
+        flags |= FLAG_GROUP;
+    }
+    else if (
+        strcmp(value, "VARIANCE") == 0 ||
+        strcmp(value, "VAR_SAMP") == 0)
+    {
+        node->function = FUNC_AGG_VAR_SAMP;
+        flags |= FLAG_GROUP;
+    }
+    else if (strcmp(value, "VAR_POP") == 0)
+    {
+        node->function = FUNC_AGG_VAR_POP;
+        flags |= FLAG_GROUP;
+    }
     else
     {
         fprintf(stderr, "Unknown function: %s\n", value);

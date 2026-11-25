@@ -421,13 +421,13 @@ Unless noted, a `NULL` (empty) first argument makes the whole call `NULL`.
 | `LENGTH` | `(s)` | Byte length of string |
 | `LEFT` | `(s, n)` | Leftmost *n* characters |
 | `RIGHT` | `(s, n)` | Rightmost *n* characters |
-| `CHR` / `CHAR` | `(codepoint)` | UTF-8 character from Unicode code point |
+| `CHR` / `CHAR` | `(codepoint [, …])` | UTF-8 string from one or more Unicode code points. `NULL` arguments are skipped; all-`NULL` → `NULL`. Invalid code points are skipped |
 | `CODEPOINT` | `(s)` | Code point of first UTF-8 character |
 | `HEX` | `(s)` | Hex digits of each byte (MySQL-style) |
 | `TO_HEX` | `(n)` | Integer as `0x…` hex |
 | `W1252` | `(s)` | Repair Windows-1252 mis-decoded as UTF-8 |
 
-Concatenation is via `||` (there is no `CONCAT()` call form).
+Concatenation is via `||` (there is no `CONCAT()` / `STRING()` call form).
 
 ### Scalar — maths
 
@@ -545,8 +545,12 @@ INTERVAL(expr)            -- same as CAST(expr AS INT)
 | `SUM` | `(expr)` | Sum |
 | `AVG` | `(expr)` | Average |
 | `LISTAGG` | `(expr)` or `(*)` | Concatenate non-null values |
+| `STDDEV` / `STDDEV_SAMP` | `(expr)` | Sample standard deviation (`√(Σ(x−μ)²/(n−1))`); `NULL` if fewer than 2 non-null reals |
+| `STDDEV_POP` | `(expr)` | Population standard deviation (`√(Σ(x−μ)²/n)`); `NULL` if no non-null reals |
+| `VARIANCE` / `VAR_SAMP` | `(expr)` | Sample variance (`Σ(x−μ)²/(n−1)`); `NULL` if fewer than 2 non-null reals |
+| `VAR_POP` | `(expr)` | Population variance (`Σ(x−μ)²/n`); `NULL` if no non-null reals |
 
-All aggregates accept `FILTER (WHERE …)`. Aggregates imply grouping when used without `GROUP BY` (single group over the result).
+Statistical aggregates ignore complex values (same as `MIN` / `MAX`). All aggregates accept `FILTER (WHERE …)`. Aggregates imply grouping when used without `GROUP BY` (single group over the result).
 
 ---
 
