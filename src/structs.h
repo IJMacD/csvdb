@@ -234,6 +234,14 @@ enum Function {
     OPERATOR_LIKE =                 0xC8,
     OPERATOR_OR =                   0xC9,
     OPERATOR_AND =                  0xCA,
+    /**
+     * Quantified comparison: <expr> <op> ANY|ALL (subquery).
+     * children[0] = left expr, children[1] = FUNC_SUBQUERY (or folded).
+     * field.index holds the comparison operator (OPERATOR_EQ/LT/…).
+     * IN (subquery) is parsed as OPERATOR_ANY with compare EQ.
+     */
+    OPERATOR_ANY =                  0xCB,
+    OPERATOR_ALL =                  0xCC,
 
     // Family 111x (0xE0) (Dummy)
     FUNC_FAM_DUMMY =                0xE0,
@@ -285,11 +293,16 @@ struct Node {
     /* To filter aggregate functions */
     struct Node *filter;
     /**
-     * Parsed scalar subquery (FUNC_SUBQUERY only). Owned by this node;
-     * cloned per outer row at evaluation time.
+     * Parsed subquery (FUNC_SUBQUERY, or RHS of OPERATOR_ANY/ALL).
+     * Owned by this node; cloned per outer row at evaluation time.
      */
     struct Query *subquery;
 };
+
+/** Comparison operator stored on OPERATOR_ANY / OPERATOR_ALL nodes. */
+#define quantifiedCompare(node) ((enum Function)(int)(node)->field.index)
+#define setQuantifiedCompare(node, op) \
+    ((node)->field.index = (enum FieldIndex)(int)(op))
 
 enum AliasSearchMode {
     NO_ALIASES,

@@ -37,6 +37,13 @@ static int resolveNode(struct Query *query, struct Node *node, enum AliasSearchM
 
 static int foldUncorrelatedSubquery(struct Node *node);
 
+static int resolveQuantifiedOperator(
+    struct Query *query,
+    struct Node *node,
+    enum AliasSearchMode allow_aliases);
+
+static int foldUncorrelatedQuantified(struct Node *node);
+
 static void expandFieldStar(struct Query *query);
 
 static struct Query *makeQuery();
@@ -380,15 +387,14 @@ int process_query(
     {
         struct Node *predicate = &q->predicate_nodes[i];
 
-        for (int j = 0; j < predicate->child_count; j++)
-        {
-            result = resolveNode(q, &predicate->children[j], ALIASES_FIRST);
+        // Resolve the whole predicate so OPERATOR_ANY/ALL can fold multi-row
+        // subqueries (resolving children alone would scalar-fold the RHS).
+        result = resolveNode(q, predicate, ALIASES_FIRST);
 
-            if (result < 0)
-            {
-                fprintf(stderr, "Unable to resolve WHERE node (%d,%d)\n", i, j);
-                return result;
-            }
+        if (result < 0)
+        {
+            fprintf(stderr, "Unable to resolve WHERE node (%d)\n", i);
+            return result;
         }
 
         optimiseRowidAlgebra(predicate);
@@ -458,14 +464,11 @@ int process_query(
     {
         struct Node *predicate = &q->having_nodes[i];
 
-        for (int j = 0; j < predicate->child_count; j++)
+        result = resolveNode(q, predicate, ALIASES_FIRST);
+        if (result < 0)
         {
-            result = resolveNode(q, &predicate->children[j], ALIASES_FIRST);
-            if (result < 0)
-            {
-                fprintf(stderr, "Unable to resolve HAVING node %i\n", i);
-                return result;
-            }
+            fprintf(stderr, "Unable to resolve HAVING node %i\n", i);
+            return result;
         }
     }
 
@@ -646,22 +649,21 @@ int select_subquery_mem(
     return result;
 }
 
-int evaluate_scalar_subquery(
+int evaluate_subquery_to_db(
     struct Query *template_query,
     struct Table *outer_tables,
     int outer_table_count,
     RowListIndex outer_row_list,
     int outer_row_index,
     int has_outer_row,
-    char *output,
-    int max_length)
+    struct DB *db)
 {
-    output[0] = '\0';
-
-    if (template_query == NULL)
+    if (template_query == NULL || db == NULL)
     {
         return -1;
     }
+
+    memset(db, 0, sizeof(*db));
 
     beginRowListPoolNest();
 
@@ -678,14 +680,44 @@ int evaluate_scalar_subquery(
     q->outer_row_index = outer_row_index;
     q->has_outer_row = has_outer_row;
 
-    struct DB db = {0};
-    int result = csvMem_fromQuery(&db, q);
+    int result = csvMem_fromQuery(db, q);
+    destroyQuery(q);
+    free(q);
+    endRowListPoolNest();
+
     if (result < 0)
     {
-        closeDB(&db);
-        destroyQuery(q);
-        free(q);
-        endRowListPoolNest();
+        closeDB(db);
+        memset(db, 0, sizeof(*db));
+        return -1;
+    }
+
+    return 0;
+}
+
+int evaluate_scalar_subquery(
+    struct Query *template_query,
+    struct Table *outer_tables,
+    int outer_table_count,
+    RowListIndex outer_row_list,
+    int outer_row_index,
+    int has_outer_row,
+    char *output,
+    int max_length)
+{
+    output[0] = '\0';
+
+    struct DB db = {0};
+    int result = evaluate_subquery_to_db(
+        template_query,
+        outer_tables,
+        outer_table_count,
+        outer_row_list,
+        outer_row_index,
+        has_outer_row,
+        &db);
+    if (result < 0)
+    {
         return -1;
     }
 
@@ -700,10 +732,6 @@ int evaluate_scalar_subquery(
     }
 
     closeDB(&db);
-    destroyQuery(q);
-    free(q);
-    endRowListPoolNest();
-
     return result;
 }
 
@@ -1161,12 +1189,7 @@ static int populate_tables(struct Query *q)
         if (
             table->join.function != OPERATOR_ALWAYS && table->join.function != FUNC_UNITY)
         {
-            result = resolveNode(q, &table->join.children[0], NO_ALIASES);
-            if (result < 0)
-            {
-                return result;
-            }
-            result = resolveNode(q, &table->join.children[1], NO_ALIASES);
+            result = resolveNode(q, &table->join, NO_ALIASES);
             if (result < 0)
             {
                 return result;
@@ -1631,6 +1654,191 @@ static int foldUncorrelatedSubquery(struct Node *node)
     return 0;
 }
 
+/**
+ * Expand uncorrelated <expr> op ANY|ALL (subquery) into OR/AND of compares
+ * against constant RHS values (same shape as literal IN). Empty ANY → NEVER;
+ * empty ALL → ALWAYS. Correlated subqueries are left for per-row eval.
+ */
+static int foldUncorrelatedQuantified(struct Node *node)
+{
+    if (node->function != OPERATOR_ANY && node->function != OPERATOR_ALL)
+    {
+        return 0;
+    }
+    if (node->child_count != 2)
+    {
+        return 0;
+    }
+
+    struct Node *right = &node->children[1];
+    if (right->function != FUNC_SUBQUERY || right->subquery == NULL)
+    {
+        return 0;
+    }
+
+    if (subqueryIsCorrelated(right->subquery))
+    {
+        return 0;
+    }
+
+    enum Function compare = quantifiedCompare(node);
+    enum Function quant = node->function;
+
+    struct DB db = {0};
+    int result = evaluate_subquery_to_db(
+        right->subquery,
+        NULL,
+        0,
+        -1,
+        0,
+        0,
+        &db);
+    if (result < 0)
+    {
+        // Leave for runtime.
+        return 0;
+    }
+
+    int rows = getRecordCount(&db);
+    if (rows == 0 || db.field_count <= 0)
+    {
+        closeDB(&db);
+        // Replace in place: free children/subquery, then become NEVER/ALWAYS.
+        freeNode(node);
+        node->function = (quant == OPERATOR_ANY) ? OPERATOR_NEVER : OPERATOR_ALWAYS;
+        node->child_count = 0;
+        node->children = NULL;
+        node->filter = NULL;
+        node->subquery = NULL;
+        node->field.index = FIELD_UNKNOWN;
+        node->field.table_id = TABLE_NONE;
+        node->field.text[0] = '\0';
+        node->alias[0] = '\0';
+        return 0;
+    }
+
+    // Build replacement OR/AND tree from a copy of the left expr.
+    struct Node left_copy;
+    clearNode(&left_copy);
+    copyNodeTree(&left_copy, &node->children[0]);
+
+    struct Node *arms = calloc((size_t)rows, sizeof(*arms));
+    if (arms == NULL)
+    {
+        freeNode(&left_copy);
+        closeDB(&db);
+        fprintf(stderr, "Out of memory expanding quantified subquery\n");
+        return -1;
+    }
+
+    int arm_count = 0;
+    for (int i = 0; i < rows; i++)
+    {
+        char value[MAX_VALUE_LENGTH];
+        if (getRecordValue(&db, i, 0, value, MAX_VALUE_LENGTH) < 0)
+        {
+            // Unreadable row (e.g. historic header-only phantom) — skip.
+            continue;
+        }
+        if ((int)strlen(value) >= MAX_FIELD_LENGTH)
+        {
+            for (int j = 0; j < arm_count; j++)
+            {
+                freeNode(&arms[j]);
+            }
+            free(arms);
+            freeNode(&left_copy);
+            closeDB(&db);
+            fprintf(
+                stderr,
+                "Uncorrelated quantified subquery value exceeds %d bytes\n",
+                MAX_FIELD_LENGTH - 1);
+            return -1;
+        }
+
+        clearNode(&arms[arm_count]);
+        struct Node *pair = allocateNodeChildren(&arms[arm_count], 2);
+        arms[arm_count].function = compare;
+        copyNodeTree(&pair[0], &left_copy);
+        pair[1].function = FUNC_UNITY;
+        pair[1].field.index = FIELD_CONSTANT;
+        pair[1].field.table_id = TABLE_NONE;
+        strcpy(pair[1].field.text, value);
+        arm_count++;
+    }
+
+    closeDB(&db);
+    freeNode(&left_copy);
+
+    if (arm_count == 0)
+    {
+        free(arms);
+        freeNode(node);
+        node->function = (quant == OPERATOR_ANY) ? OPERATOR_NEVER : OPERATOR_ALWAYS;
+        node->child_count = 0;
+        node->children = NULL;
+        node->filter = NULL;
+        node->subquery = NULL;
+        node->field.index = FIELD_UNKNOWN;
+        node->field.table_id = TABLE_NONE;
+        node->field.text[0] = '\0';
+        node->alias[0] = '\0';
+        return 0;
+    }
+
+    freeNode(node);
+    clearNode(node);
+
+    if (arm_count == 1)
+    {
+        // Single arm: promote the compare node itself.
+        memcpy(node, &arms[0], sizeof(*node));
+        free(arms);
+        return 0;
+    }
+
+    node->function = (quant == OPERATOR_ANY) ? OPERATOR_OR : OPERATOR_AND;
+    node->children = arms;
+    node->child_count = arm_count;
+    return 0;
+}
+
+/**
+ * Resolve OPERATOR_ANY / OPERATOR_ALL without scalar-folding the subquery
+ * child (multi-row RHS). Uncorrelated quantified forms expand to OR/AND.
+ */
+static int resolveQuantifiedOperator(
+    struct Query *query,
+    struct Node *node,
+    enum AliasSearchMode allow_aliases)
+{
+    if (node->child_count != 2)
+    {
+        fprintf(stderr, "Quantified operator expects two children\n");
+        return -1;
+    }
+
+    int result = resolveNode(query, &node->children[0], allow_aliases);
+    if (result < 0)
+    {
+        return -1;
+    }
+
+    // Do not call foldUncorrelatedSubquery on the RHS — keep FUNC_SUBQUERY
+    // for foldUncorrelatedQuantified / runtime multi-row eval.
+    struct Node *right = &node->children[1];
+    if (right->function != FUNC_SUBQUERY)
+    {
+        result = resolveNode(query, right, allow_aliases);
+        if (result < 0)
+        {
+            return -1;
+        }
+    }
+
+    return foldUncorrelatedQuantified(node);
+}
+
 static int resolveNode(struct Query *query, struct Node *node, enum AliasSearchMode allow_aliases)
 {
     // Uncorrelated scalar subqueries fold to constants; correlated ones are
@@ -1638,6 +1846,11 @@ static int resolveNode(struct Query *query, struct Node *node, enum AliasSearchM
     if (node->function == FUNC_SUBQUERY)
     {
         return foldUncorrelatedSubquery(node);
+    }
+
+    if (node->function == OPERATOR_ANY || node->function == OPERATOR_ALL)
+    {
+        return resolveQuantifiedOperator(query, node, allow_aliases);
     }
 
     if (node->filter != NULL)
