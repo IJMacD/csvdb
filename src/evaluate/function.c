@@ -96,6 +96,50 @@ static int parseDateAddAmount(
     return 0;
 }
 
+/**
+ * date|datetime ± ISO-8601 period. Returns bytes written, or 0 on failure.
+ */
+static int evaluateDatePeriodOp(
+    char *output,
+    const char *date_value,
+    const char *period_value,
+    int sign)
+{
+    struct DateTime dt = {0};
+    struct IsoPeriod period = {0};
+    int is_datetime = 0;
+
+    if (!parseIso8601Period(period_value, &period))
+    {
+        return 0;
+    }
+
+    if (parseDateTime(date_value, &dt))
+    {
+        is_datetime = 1;
+    }
+    else if (!parseDate(date_value, &dt))
+    {
+        return 0;
+    }
+
+    if (!is_datetime && period.has_time)
+    {
+        dt.hour = 0;
+        dt.minute = 0;
+        dt.second = 0;
+    }
+
+    dateAddPeriod(&dt, &period, sign);
+
+    if (is_datetime || period.has_time)
+    {
+        return sprintDateTime(output, &dt);
+    }
+
+    return sprintDate(output, &dt);
+}
+
 static int evaluateDateAddSub(
     char *output,
     char **values,
@@ -105,6 +149,11 @@ static int evaluateDateAddSub(
     struct DateTime dt = {0};
     int is_datetime = 0;
 
+    if (value_count < 1)
+    {
+        return 0;
+    }
+
     if (parseDateTime(values[0], &dt))
     {
         is_datetime = 1;
@@ -112,6 +161,27 @@ static int evaluateDateAddSub(
     else if (!parseDate(values[0], &dt))
     {
         return 0;
+    }
+
+    // DATE_ADD(date, 'P1Y2M') / DATE_SUB(date, 'PT1H')
+    if (value_count == 2)
+    {
+        struct IsoPeriod period = {0};
+        if (parseIso8601Period(values[1], &period))
+        {
+            if (!is_datetime && period.has_time)
+            {
+                dt.hour = 0;
+                dt.minute = 0;
+                dt.second = 0;
+            }
+            dateAddPeriod(&dt, &period, sign);
+            if (is_datetime || period.has_time)
+            {
+                return sprintDateTime(output, &dt);
+            }
+            return sprintDate(output, &dt);
+        }
     }
 
     int count = 0;
@@ -453,6 +523,28 @@ int evaluateFunction(
         // * time + int (seconds)
         // * int + time (seconds)
         // * time + time
+        // * date|datetime + ISO-8601 period (and period + date|datetime)
+
+        if (value_count == 2)
+        {
+            struct IsoPeriod period = {0};
+            if (parseIso8601Period(values[0], &period))
+            {
+                int n = evaluateDatePeriodOp(output, values[1], values[0], 1);
+                if (n > 0)
+                {
+                    return n;
+                }
+            }
+            else if (parseIso8601Period(values[1], &period))
+            {
+                int n = evaluateDatePeriodOp(output, values[0], values[1], 1);
+                if (n > 0)
+                {
+                    return n;
+                }
+            }
+        }
 
         if (values_have_complex(values, value_count))
         {
@@ -560,6 +652,20 @@ int evaluateFunction(
         // * date - date    (days)
         // * time - int     (seconds)
         // * time - time    (seconds)
+        // * date|datetime - ISO-8601 period
+
+        if (value_count == 2)
+        {
+            struct IsoPeriod period = {0};
+            if (parseIso8601Period(values[1], &period))
+            {
+                int n = evaluateDatePeriodOp(output, values[0], values[1], -1);
+                if (n > 0)
+                {
+                    return n;
+                }
+            }
+        }
 
         if (values_have_complex(values, value_count))
         {
