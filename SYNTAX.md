@@ -377,7 +377,7 @@ SELECT (SELECT LISTAGG(name) FROM suits) AS n FROM ranks LIMIT 2;
 SELECT (SELECT SUM(value) FROM ranks) + 10 FROM suits;
 ```
 
-Scalar subqueries must start with `SELECT` or `FROM` inside `(…)`.
+Scalar subqueries must start with `SELECT` or `FROM` inside `(…)`; whitespace or newlines between `(` and the keyword are allowed.
 
 ### `IN (subquery)` / `ANY` / `ALL`
 

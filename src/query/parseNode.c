@@ -897,13 +897,17 @@ int parseNode(
 
     if (query[*index] == '(')
     {
+        size_t paren_start = *index;
         (*index)++;
+        // Allow whitespace/newlines between '(' and SELECT|FROM so that
+        // multiline forms like `= ANY (\n  SELECT …)` parse as subqueries.
+        skipWhitespace(query, index);
 
         // Check to see if it looks like a subquery
         if (strncmp(query + *index, "SELECT", 6) == 0 ||
             strncmp(query + *index, "FROM", 4) == 0)
         {
-            int len = find_matching_parenthesis(query + *index - 1);
+            int len = find_matching_parenthesis(query + paren_start);
 
             // Scalar expression subquery: parse once into a nested Query AST.
             // Evaluated via FUNC_SUBQUERY (supports correlation by cloning +
@@ -921,7 +925,7 @@ int parseNode(
                 fprintf(stderr, "Out of memory\n");
                 return -1;
             }
-            memcpy(sql, query + *index, (size_t)(len - 2));
+            memcpy(sql, query + paren_start + 1, (size_t)(len - 2));
             sql[len - 2] = '\0';
 
             struct Query *sq = calloc(1, sizeof(*sq));
@@ -948,7 +952,7 @@ int parseNode(
             node->child_count = 0;
             node->subquery = sq;
 
-            (*index) += len - 1;
+            *index = paren_start + (size_t)len;
         }
         else
         {
