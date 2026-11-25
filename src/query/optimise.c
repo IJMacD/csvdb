@@ -66,6 +66,16 @@ void optimiseCollapseConstantNode(struct Node *node)
         return;
     }
 
+    if ((node->function & MASK_FUNC_FAMILY) == FUNC_FAM_AGG)
+    {
+        // Aggregates need a row list (FILTER / grouping); fold children only.
+        for (int i = 0; i < node->child_count; i++)
+        {
+            optimiseCollapseConstantNode(&node->children[i]);
+        }
+        return;
+    }
+
     // Optimise all children first
     for (int i = 0; i < node->child_count; i++)
     {

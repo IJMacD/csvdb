@@ -781,6 +781,16 @@ static int parseFunction(const char *value, const char *query, size_t *index, st
         node->function = FUNC_AGG_VAR_POP;
         flags |= FLAG_GROUP;
     }
+    else if (strcmp(value, "MEDIAN") == 0)
+    {
+        node->function = FUNC_AGG_MEDIAN;
+        flags |= FLAG_GROUP;
+    }
+    else if (strcmp(value, "MODE") == 0)
+    {
+        node->function = FUNC_AGG_MODE;
+        flags |= FLAG_GROUP;
+    }
     else
     {
         fprintf(stderr, "Unknown function: %s\n", value);

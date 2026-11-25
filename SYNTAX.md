@@ -549,8 +549,10 @@ INTERVAL(expr)            -- same as CAST(expr AS INT)
 | `STDDEV_POP` | `(expr)` | Population standard deviation (`√(Σ(x−μ)²/n)`); `NULL` if no non-null reals |
 | `VARIANCE` / `VAR_SAMP` | `(expr)` | Sample variance (`Σ(x−μ)²/(n−1)`); `NULL` if fewer than 2 non-null reals |
 | `VAR_POP` | `(expr)` | Population variance (`Σ(x−μ)²/n`); `NULL` if no non-null reals |
+| `MEDIAN` | `(expr)` | Discrete median of non-null reals: sorted value at index `(n−1)/2` (lower middle when *n* is even). Always a value from the set — never an average of two middles. `NULL` if no non-null reals |
+| `MODE` | `(expr)` | Most frequent non-null value using string equality (works for text and numbers). Ties → lexicographically smallest. `NULL` if no non-null values |
 
-Statistical aggregates ignore complex values (same as `MIN` / `MAX`). All aggregates accept `FILTER (WHERE …)`. Aggregates imply grouping when used without `GROUP BY` (single group over the result).
+`STDDEV` / `VARIANCE` / `MEDIAN` ignore complex values (same as `MIN` / `MAX`). `MODE` treats values as strings. Aggregates use the first expression argument; extra arguments are currently ignored (reserved for future multi-arg aggregates such as percentiles). All aggregates accept `FILTER (WHERE …)`. Aggregates imply grouping when used without `GROUP BY` (single group over the result).
 
 ---
 

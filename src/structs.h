@@ -197,6 +197,10 @@ enum Function {
     // Population (n) standard deviation / variance
     FUNC_AGG_STDDEV_POP =           0xA9,
     FUNC_AGG_VAR_POP =              0xAA,
+    // Discrete median: always a value from the set (lower middle when n even)
+    FUNC_AGG_MEDIAN =               0xAB,
+    // Most frequent value (string equality); ties → lexicographically smallest
+    FUNC_AGG_MODE =                 0xAC,
 
     FUNC_VECTOR_CODEPOINT =         0xB1,
 

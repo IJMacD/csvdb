@@ -1528,6 +1528,20 @@ int evaluateFunction(
 
 typedef char LongestValue[MAX_VALUE_LENGTH];
 
+static int cmp_string_ptrs(const void *a, const void *b)
+{
+    const char *sa = *(const char *const *)a;
+    const char *sb = *(const char *const *)b;
+    return strcmp(sa, sb);
+}
+
+static int cmp_numeric_ptrs(const void *a, const void *b)
+{
+    const char *sa = *(const char *const *)a;
+    const char *sb = *(const char *const *)b;
+    return compare_numeric(sa, sb);
+}
+
 /**
  * @brief
  *
@@ -1548,11 +1562,9 @@ int evaluateAggregateFunction(
         return -1;
     }
 
-    if (node->child_count > 1)
-    {
-        fprintf(stderr, "Not supported: Multi-param agg functions\n");
-        exit(-1);
-    }
+    // Aggregates collect the first expression argument per row. Extra args are
+    // allowed (no hard ban) for future multi-arg aggs; functions that only use
+    // one expression simply ignore children beyond [0].
 
     int is_count_star = node->function == FUNC_AGG_COUNT && ((node->child_count == -1 && node->field.index == FIELD_STAR) ||
                                                              (node->child_count == 1 && node->children[0].field.index == FIELD_STAR));
@@ -1614,9 +1626,10 @@ int evaluateAggregateFunction(
                             values[row_count],
                             MAX_VALUE_LENGTH);
                     }
-                    else if (node->child_count == 1)
+                    else if (node->child_count >= 1)
                     {
-                        // Evaluate (only) child node for each item in the RowList
+                        // First child is the aggregated expression; any further
+                        // children are left for multi-arg aggs (unused for now).
                         evaluateNode(
                             tables,
                             list_id,
@@ -1893,6 +1906,88 @@ int evaluateAggregateFunction(
                 bytesWritten = sprint_number(output, variance);
             }
         }
+    }
+    else if (node->function == FUNC_AGG_MEDIAN)
+    {
+        // Discrete median: sort non-NULL reals, return the value at index
+        // (n-1)/2 (lower middle when n is even — always a member of the set).
+        int count = 0;
+        const char **ptrs = malloc((size_t)row_count * sizeof(*ptrs));
+
+        if (ptrs == NULL)
+        {
+            fprintf(stderr, "Unable to allocate for MEDIAN\n");
+            exit(-1);
+        }
+
+        for (int i = 0; i < row_count; i++)
+        {
+            if (IS_NOT_NULL(values[i]) && !is_complex(values[i]))
+            {
+                ptrs[count++] = values[i];
+            }
+        }
+
+        if (count > 0)
+        {
+            qsort(ptrs, (size_t)count, sizeof(*ptrs), cmp_numeric_ptrs);
+            bytesWritten = sprintf(output, "%s", ptrs[(count - 1) / 2]);
+        }
+
+        free(ptrs);
+    }
+    else if (node->function == FUNC_AGG_MODE)
+    {
+        // Mode via string equality (works for text and identical numeric
+        // spellings). Ties → lexicographically smallest value.
+        int count = 0;
+        const char **ptrs = malloc((size_t)row_count * sizeof(*ptrs));
+
+        if (ptrs == NULL)
+        {
+            fprintf(stderr, "Unable to allocate for MODE\n");
+            exit(-1);
+        }
+
+        for (int i = 0; i < row_count; i++)
+        {
+            if (IS_NOT_NULL(values[i]))
+            {
+                ptrs[count++] = values[i];
+            }
+        }
+
+        if (count > 0)
+        {
+            qsort(ptrs, (size_t)count, sizeof(*ptrs), cmp_string_ptrs);
+
+            const char *best = ptrs[0];
+            int best_run = 1;
+            int run = 1;
+
+            for (int i = 1; i < count; i++)
+            {
+                if (strcmp(ptrs[i], ptrs[i - 1]) == 0)
+                {
+                    run++;
+                }
+                else
+                {
+                    run = 1;
+                }
+
+                // Strict > keeps the first (lexicographically smallest) on ties
+                if (run > best_run)
+                {
+                    best_run = run;
+                    best = ptrs[i];
+                }
+            }
+
+            bytesWritten = sprintf(output, "%s", best);
+        }
+
+        free(ptrs);
     }
     else
     {
