@@ -701,6 +701,32 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                     table->join.function = OPERATOR_ALWAYS;
                 }
 
+                // A RIGHT JOIN B ≡ B LEFT JOIN A. Swap while table_ids in
+                // SELECT/WHERE are still unresolved (by name/alias later).
+                if (table->join_type == JOIN_RIGHT)
+                {
+                    if (q->table_count != 2)
+                    {
+                        fprintf(
+                            stderr,
+                            "RIGHT JOIN only supported with a single table on "
+                            "the left; rewrite as LEFT JOIN\n");
+                        return -1;
+                    }
+
+                    struct Table left = q->tables[0];
+                    struct Table right = q->tables[1];
+
+                    // Preserve join predicate/type on the inner (ex-left) side.
+                    q->tables[0] = right;
+                    q->tables[0].join = left.join;
+                    q->tables[0].join_type = JOIN_INNER;
+
+                    q->tables[1] = left;
+                    q->tables[1].join = right.join;
+                    q->tables[1].join_type = JOIN_LEFT;
+                }
+
                 if (query[index] == ',')
                 {
                     index++;
@@ -712,16 +738,43 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                     int old_index = index;
                     getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
-                    if (strcmp(keyword, "INNER") == 0)
+                    if (strcmp(keyword, "INNER") == 0 ||
+                        strcmp(keyword, "CROSS") == 0)
                     {
-                        // Carry on
+                        // Carry on; CROSS JOIN is JOIN with no ON (already
+                        // OPERATOR_ALWAYS when ON/USING omitted).
                         getToken(query, &index, keyword, MAX_FIELD_LENGTH);
                     }
                     else if (strcmp(keyword, "LEFT") == 0)
                     {
-                        // Mark join type and carry on
                         next_join_flag = JOIN_LEFT;
                         getToken(query, &index, keyword, MAX_FIELD_LENGTH);
+
+                        // Optional OUTER keyword: LEFT OUTER JOIN
+                        if (strcmp(keyword, "OUTER") == 0)
+                        {
+                            getToken(
+                                query, &index, keyword, MAX_FIELD_LENGTH);
+                        }
+                    }
+                    else if (strcmp(keyword, "RIGHT") == 0)
+                    {
+                        next_join_flag = JOIN_RIGHT;
+                        getToken(query, &index, keyword, MAX_FIELD_LENGTH);
+
+                        // Optional OUTER keyword: RIGHT OUTER JOIN
+                        if (strcmp(keyword, "OUTER") == 0)
+                        {
+                            getToken(
+                                query, &index, keyword, MAX_FIELD_LENGTH);
+                        }
+                    }
+                    else if (strcmp(keyword, "FULL") == 0)
+                    {
+                        fprintf(
+                            stderr,
+                            "FULL OUTER JOIN is not supported\n");
+                        return -1;
                     }
 
                     if (strcmp(keyword, "JOIN") == 0)

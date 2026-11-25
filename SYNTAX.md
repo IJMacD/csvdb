@@ -42,7 +42,7 @@ SELECT [DISTINCT [ON (<expr> [, …])]]
     <expr> [FILTER (WHERE <predicate>)] [AS alias] [, …]
 FROM <source> [[AS] alias [(col_alias, …)]]
     [, <source> …]
-    | [INNER|LEFT] JOIN <source> [ON <predicate> | USING <expr>]
+    | [INNER|CROSS|LEFT|RIGHT] [OUTER] JOIN <source> [ON <predicate> | USING <expr>]
 WHERE <predicate> [{AND|OR} <predicate> …]
 GROUP BY <expr> [, …]
 HAVING <predicate> [{AND|OR} <predicate> …]
@@ -84,13 +84,17 @@ FROM suits AS s (n, s);                          -- table + column aliases
 FROM suits, ranks WHERE value > 10;
 FROM suits INNER JOIN ranks ON LENGTH(ranks.name) = LENGTH(suits.name);
 FROM suits LEFT JOIN ranks ON …;
+FROM suits RIGHT JOIN ranks ON …;                -- rewritten as ranks LEFT JOIN suits
+FROM suits CROSS JOIN ranks;
 FROM suits JOIN ranks USING LENGTH(name);        -- equality on same expression
 FROM (FROM SEQUENCE LIMIT 10) AS a;
 FROM (VALUES ('a',1),('b',2)) AS t (first, second);
 ```
 
 - Comma joins are cross joins (predicates go in `WHERE` / `ON`).
-- Supported join keywords: `JOIN`, `INNER JOIN`, `LEFT JOIN`.
+- Supported join keywords: `JOIN`, `INNER JOIN`, `CROSS JOIN`, `LEFT [OUTER] JOIN`, `RIGHT [OUTER] JOIN`.
+- `RIGHT JOIN` is rewritten by swapping the two sides into a `LEFT JOIN` (only when the left side is a single table). `SELECT *` column order follows the rewritten `FROM` (preserved side first).
+- `FULL OUTER JOIN` is not supported (would need `UNION`).
 - Join conditions: `ON <predicate>` (`AND`/`OR`, same precedence as `WHERE`) or `USING <expr>` (equality on that expression across the joined tables).
 
 ### `WHERE`
@@ -682,7 +686,7 @@ SELECT datetime, weekday;
 
 1. **Declarative clause order** — write clauses in whatever order is readable.
 2. **Optional `SELECT` / `FROM`** — `FROM test LIMIT 5` and `SELECT 1 + 1` are both fine.
-3. **Not supported** — `UNION` / `INTERSECT` / `EXCEPT`, `RIGHT JOIN` / `FULL JOIN`.
+3. **Not supported** — `UNION` / `INTERSECT` / `EXCEPT`, `FULL OUTER JOIN`.
 
 ---
 

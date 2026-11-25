@@ -1,0 +1,16 @@
+| suits.name         | ranks.name         |
+|--------------------|--------------------|
+|                    | Ace                |
+| clubs              | Eight              |
+|                    | Five               |
+|                    | Four               |
+|                    | Jack               |
+|                    | King               |
+|                    | Nine               |
+| clubs              | Queen              |
+| clubs              | Seven              |
+|                    | Six                |
+|                    | Ten                |
+| clubs              | Three              |
+|                    | Two                |
+

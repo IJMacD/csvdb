@@ -411,3 +411,10 @@ FROM (VALUES (1), (2), (3), (4)) AS t(v) SELECT PERCENTILE_DISC(v, 0), PERCENTIL
 FROM (VALUES (10), (20), (30), (40), (50)) AS t(v) SELECT PERCENTILE(v, 0.25), PERCENTILE_DISC(v, 0.25), PERCENTILE_CONT(v, 0.25);
 -- LISTAGG optional separator (default comma)
 FROM (VALUES ('a'), ('b'), ('c')) AS t(v) SELECT LISTAGG(v), LISTAGG(v, '|'), LISTAGG(v, '');
+-- RIGHT JOIN rewritten as LEFT JOIN by swapping tables
+FROM lefty AS l RIGHT JOIN righty AS r ON l.id = r.id SELECT l.id, l.name, r.id, r.name ORDER BY r.id;
+FROM lefty AS l RIGHT OUTER JOIN righty AS r ON l.id = r.id SELECT l.id, l.name, r.id, r.name ORDER BY r.id;
+FROM lefty AS l LEFT OUTER JOIN righty AS r ON l.id = r.id SELECT l.id, l.name, r.id, r.name ORDER BY l.id;
+FROM suits RIGHT JOIN ranks ON LENGTH(ranks.name) = LENGTH(suits.name) SELECT suits.name, ranks.name ORDER BY ranks.name, suits.name;
+-- CROSS JOIN keyword (same as comma / JOIN without ON)
+FROM lefty AS l CROSS JOIN righty AS r WHERE r.id = 4 SELECT l.id, r.name ORDER BY l.id;
