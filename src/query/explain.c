@@ -388,6 +388,13 @@ int explain_select_query (
                 cost = rows;
             }
         }
+        else if (s.type == PLAN_UNION) {
+            operation = "UNION";
+            // Two source lists collapsed; approximate with prior row estimate.
+            if (cost < rows) {
+                cost = rows;
+            }
+        }
         else if (s.type == PLAN_SLICE) {
             operation = "SLICE";
             if (s.limit < rows) {

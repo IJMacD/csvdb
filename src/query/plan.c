@@ -66,6 +66,67 @@ static const char *getNodeFieldName(struct Node *node);
 
 static int index_function_node(struct Query *query);
 
+/**
+ * True when predicate is an IN-style OR of EQ arms on one column that has an
+ * index (PK / UNIQUE / regular). Multi-source seeks then beat an ordered
+ * index scan that filters every row.
+ */
+static int isSeekableSameColumnEqOr(
+    struct Query *query,
+    struct Node *predicate)
+{
+    if (
+        !areChildrenUnique(predicate) ||
+        !isSameColumnEqOr(predicate) ||
+        predicate->child_count < 1 ||
+        predicate->children[0].child_count < 2 ||
+        predicate->children[0].children[0].function != FUNC_UNITY)
+    {
+        return 0;
+    }
+
+    struct Node index_node = predicate->children[0].children[0];
+    int dot = str_find_index(index_node.field.text, '.');
+    if (dot >= 0)
+    {
+        strcpy(
+            index_node.field.text,
+            predicate->children[0].children[0].field.text + dot + 1);
+    }
+
+    return findIndex(
+               NULL,
+               query->tables[0].name,
+               &index_node,
+               INDEX_ANY,
+               NULL) != INDEX_NONE;
+}
+
+/** Count source steps that each push their own row list. */
+static int countPlanSourceSteps(struct Plan *plan)
+{
+    int n = 0;
+    for (int i = 0; i < plan->step_count; i++)
+    {
+        enum PlanStepType t = plan->steps[i].type;
+        if (
+            t == PLAN_TABLE_ACCESS_FULL ||
+            t == PLAN_TABLE_SCAN ||
+            t == PLAN_PK ||
+            t == PLAN_PK_RANGE ||
+            t == PLAN_UNIQUE ||
+            t == PLAN_UNIQUE_RANGE ||
+            t == PLAN_INDEX_RANGE ||
+            t == PLAN_INDEX_SCAN ||
+            t == PLAN_COVERING_INDEX_SEEK ||
+            t == PLAN_DUMMY_ROW)
+        {
+            n++;
+        }
+    }
+    return n;
+}
+
 int makePlan(struct Query *q, struct Plan *plan)
 {
     plan->step_count = 0;
@@ -516,6 +577,10 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
     // Before we do a full table scan... we have one more opportunity to
     // use an index to save a sort later, see if we can use an index for
     // ordering now.
+    //
+    // Skip for seekable IN-style OR (same-column unique EQ arms): an ordered
+    // index scan + residual OR filter walks the whole table (e.g. CALENDAR
+    // ~10M rows). Multi-source unique seeks + UNION + SORT is far cheaper.
     if (
         skip_index == 0 && query->order_count == 1
         // If we're selecting a lot of rows this optimisation is
@@ -531,6 +596,8 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
         // an ordered index scan can win if matches are dense in index order.
         && (op != OPERATOR_EQ ||
             (query->limit_value >= 0 && query->limit_value <= 5)) &&
+        !(op == OPERATOR_OR &&
+          isSeekableSameColumnEqOr(query, &query->predicate_nodes[0])) &&
         query->order_nodes[0].function == FUNC_UNITY &&
         findIndex(NULL, table->name, &query->order_nodes[0], INDEX_ANY, NULL))
     {
@@ -660,25 +727,32 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
     /* table_count == 1 */
     // Special case if the only predicate is an OR of unique same-column EQ
     // arms (as produced by IN (...)). Multiple SOURCE steps each push their
-    // own row list; SORT/REVERSE only operate on the top list, so ORDER BY
-    // would leave other branches unsorted. Cross-column or non-EQ OR must
-    // use a single filter — multi-source would duplicate rows that match
-    // more than one arm.
+    // own row list; SORT/REVERSE only operate on the top list, so with
+    // ORDER BY we UNION those lists first. Without an index on the IN
+    // column, prefer a single filter (+ SORT) instead of N full scans.
+    // Cross-column or non-EQ OR must use a single filter — multi-source
+    // would duplicate rows that match more than one arm.
     else if (
         query->predicate_count == 1 &&
         query->predicate_nodes[0].function == OPERATOR_OR &&
         areChildrenUnique(&query->predicate_nodes[0]) &&
         isSameColumnEqOr(&query->predicate_nodes[0]) &&
-        !have_order_by &&
+        (!have_order_by ||
+         isSeekableSameColumnEqOr(query, &query->predicate_nodes[0])) &&
         // Multiple sources each apply LIMIT locally; skip when a global
         // LIMIT/OFFSET is present so a single OR filter + SLICE is used.
         query->limit_value < 0 &&
-        query->offset_value <= 0)
+        query->offset_value <= 0 &&
+        // UNIQUE × N + UNION × (N-1) + SORT/SELECT must fit the plan.
+        plan->step_count +
+                query->predicate_nodes[0].child_count * 2 + 2 <
+            MAX_PLAN_STEPS)
     {
         struct Node *or_children = query->predicate_nodes[0].children;
         struct Table *table0 = &query->tables[0];
+        int arm_count = query->predicate_nodes[0].child_count;
 
-        for (int i = 0; i < query->predicate_nodes[0].child_count; i++)
+        for (int i = 0; i < arm_count; i++)
         {
             struct Node *child = &or_children[i];
             enum PlanStepType child_step = PLAN_TABLE_ACCESS_FULL;
@@ -720,6 +794,16 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
             }
 
             addStepWithNode(plan, child_step, child);
+        }
+
+        if (have_order_by)
+        {
+            // Collapse N source lists into one before SORT/REVERSE.
+            for (int i = 1; i < arm_count; i++)
+            {
+                addStep(plan, PLAN_UNION);
+            }
+            addOrderStepsIfRequired(plan, query);
         }
     }
     /* table_count == 1 */
@@ -1734,7 +1818,11 @@ static int applySortLogic(
             }
 
             // UNIQUE EQ returns at most one row — never needs a sort.
-            if (first_step->type == PLAN_UNIQUE)
+            // Multi-source IN plans emit several UNIQUE seeks (+ UNION);
+            // those still need ORDER BY after the lists are collapsed.
+            if (
+                first_step->type == PLAN_UNIQUE &&
+                countPlanSourceSteps(plan) <= 1)
             {
                 return 0;
             }

@@ -461,3 +461,6 @@ SELECT PK(id) > 1000 FROM test WHERE PK(id) = 10;
 FROM test WHERE PK(id) > 1 LIMIT 1;
 FROM test WHERE PK(id) > 9 LIMIT 1;
 FROM test WHERE PK(id) >= 1 LIMIT 1;
+-- IN (literal/subquery) + ORDER BY must seek then SORT, not scan order index
+FROM CALENDAR WHERE date IN ('2026-01-03','2026-03-03','2026-02-02') ORDER BY julian SELECT date, julian;
+FROM CALENDAR WHERE date IN (SELECT date FROM EPHEMERIS WHERE date BETWEEN '2026-01-01' AND '2026-04-01' AND isFullMoon = 1) SELECT date, julian ORDER BY julian;

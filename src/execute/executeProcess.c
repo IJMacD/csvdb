@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -38,6 +39,50 @@ int executeReverse (
     RowListIndex list_id = popRowList(result_set);
     reverseRowList(getRowList(list_id), step->limit);
     pushRowList(result_set, list_id);
+
+    return 0;
+}
+
+/**
+ * POP 2 row lists, PUSH 1 concatenated list (bag union; no dedup).
+ * Used after multi-source IN seeks so SORT/REVERSE see every arm.
+ */
+int executeUnion (
+    __attribute__((unused)) struct Table *tables,
+    __attribute__((unused)) struct PlanStep *step,
+    struct ResultSet *result_set
+) {
+    RowListIndex b_id = popRowList(result_set);
+    RowListIndex a_id = popRowList(result_set);
+    struct RowList *a = getRowList(a_id);
+    struct RowList *b = getRowList(b_id);
+
+    if (a->join_count != b->join_count)
+    {
+        fprintf(
+            stderr,
+            "UNION of row lists with different join counts (%u vs %u)\n",
+            a->join_count,
+            b->join_count);
+        exit(-1);
+    }
+
+    unsigned int total = a->row_count + b->row_count;
+    RowListIndex out_id = createRowList((int)a->join_count, (int)total);
+    struct RowList *out = getRowList(out_id);
+
+    for (unsigned int i = 0; i < a->row_count; i++)
+    {
+        copyResultRow(out, a, (int)i);
+    }
+    for (unsigned int i = 0; i < b->row_count; i++)
+    {
+        copyResultRow(out, b, (int)i);
+    }
+
+    destroyRowList(a_id);
+    destroyRowList(b_id);
+    pushRowList(result_set, out_id);
 
     return 0;
 }
