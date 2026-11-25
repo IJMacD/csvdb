@@ -195,6 +195,18 @@ int parseSimpleNode(
         return 0;
     }
 
+    // ISO-8601 period literal (P1Y, PT15M, -P1Y2M, …)
+    {
+        struct IsoPeriod period = {0};
+        if (parseIso8601Period(value, &period))
+        {
+            strcpy(node->field.text, value);
+            node->field.index = FIELD_CONSTANT;
+            node->field.table_id = TABLE_NONE;
+            return 0;
+        }
+    }
+
     // `table.*` tokenises as `table.` then `*` (* is not a token char). Absorb
     // the star so find_field sees the documented `table.*` form.
     size_t value_len = strlen(value);
@@ -987,9 +999,13 @@ int parseNode(
     }
     else if (
         query[*index] == '-' &&
-        (isdigit((unsigned char)query[*index + 1]) || query[*index + 1] == '.'))
+        (isdigit((unsigned char)query[*index + 1]) ||
+         query[*index + 1] == '.' ||
+         query[*index + 1] == 'P' ||
+         query[*index + 1] == 'p'))
     {
-        // Unary minus before a numeric literal (e.g. ABS(-3.5), ROUND(x, -2))
+        // Unary minus before a numeric or ISO-8601 period literal
+        // (e.g. ABS(-3.5), ROUND(x, -2), date + -P1Y)
         (*index)++;
         flags |= parseSimpleNode(query, index, node, q);
 
@@ -998,9 +1014,12 @@ int parseNode(
             return flags;
         }
 
+        struct IsoPeriod period = {0};
+        int is_period = parseIso8601Period(node->field.text, &period);
+
         if (node->function == FUNC_UNITY &&
             node->field.index == FIELD_CONSTANT &&
-            is_numeric(node->field.text))
+            (is_numeric(node->field.text) || is_period))
         {
             size_t len = strlen(node->field.text);
             if (len + 1 < MAX_FIELD_LENGTH)

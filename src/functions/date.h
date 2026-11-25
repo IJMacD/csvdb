@@ -100,6 +100,32 @@ int intervalToInt(int count, enum DateUnit unit, long *out);
 int isCalendarIntervalConstant(const char *text);
 
 /**
+ * ISO-8601 duration / period components (PnYnMnWnDTnHnMnS).
+ * Designators after T set has_time.
+ */
+struct IsoPeriod {
+    int years;
+    int months;
+    int weeks;
+    int days;
+    int hours;
+    int minutes;
+    int seconds;
+    int has_time;
+};
+
+/**
+ * Parse an ISO-8601 period string (e.g. P1Y2M, P2W, PT15M, -P1Y).
+ * Returns 1 on success; 0 on failure.
+ */
+int parseIso8601Period(const char *input, struct IsoPeriod *out);
+
+/**
+ * Apply period × sign to dt (years, months, weeks, days, then time units).
+ */
+void dateAddPeriod(struct DateTime *dt, const struct IsoPeriod *period, int sign);
+
+/**
  * Parse timezone target: Z, UTC, +HH:MM, -HH:MM.
  * Writes minutes east of UTC to *offset_minutes.
  * Returns 1 on success; 0 on failure.

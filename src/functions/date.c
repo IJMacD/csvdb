@@ -873,6 +873,165 @@ int isCalendarIntervalConstant(const char *text)
     return intervalToInt((int)amount, unit, &unused) != 0;
 }
 
+int parseIso8601Period(const char *input, struct IsoPeriod *out)
+{
+    if (input == NULL || out == NULL)
+    {
+        return 0;
+    }
+
+    memset(out, 0, sizeof(*out));
+
+    const char *p = input;
+    while (*p == ' ')
+    {
+        p++;
+    }
+
+    int sign = 1;
+    if (*p == '-')
+    {
+        sign = -1;
+        p++;
+    }
+
+    if (*p != 'P' && *p != 'p')
+    {
+        return 0;
+    }
+    p++;
+
+    if (*p == '\0')
+    {
+        return 0;
+    }
+
+    int in_time = 0;
+    int saw_any = 0;
+
+    while (*p != '\0')
+    {
+        if (*p == 'T' || *p == 't')
+        {
+            if (in_time)
+            {
+                return 0;
+            }
+            in_time = 1;
+            p++;
+            continue;
+        }
+
+        char *end = NULL;
+        long n = strtol(p, &end, 10);
+        if (end == p)
+        {
+            return 0;
+        }
+        p = end;
+
+        if (*p == '\0')
+        {
+            return 0;
+        }
+
+        char u = (char)toupper((unsigned char)*p);
+        p++;
+
+        if (n < INT_MIN || n > INT_MAX)
+        {
+            return 0;
+        }
+
+        int v = (int)(sign * n);
+
+        if (!in_time)
+        {
+            if (u == 'Y')
+            {
+                out->years = v;
+            }
+            else if (u == 'M')
+            {
+                out->months = v;
+            }
+            else if (u == 'W')
+            {
+                out->weeks = v;
+            }
+            else if (u == 'D')
+            {
+                out->days = v;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+        else
+        {
+            out->has_time = 1;
+            if (u == 'H')
+            {
+                out->hours = v;
+            }
+            else if (u == 'M')
+            {
+                out->minutes = v;
+            }
+            else if (u == 'S')
+            {
+                out->seconds = v;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+
+        saw_any = 1;
+    }
+
+    return saw_any;
+}
+
+void dateAddPeriod(struct DateTime *dt, const struct IsoPeriod *period, int sign)
+{
+    if (dt == NULL || period == NULL)
+    {
+        return;
+    }
+
+    if (period->years)
+    {
+        dateAddUnit(dt, sign * period->years, DATE_UNIT_YEAR);
+    }
+    if (period->months)
+    {
+        dateAddUnit(dt, sign * period->months, DATE_UNIT_MONTH);
+    }
+    if (period->weeks)
+    {
+        dateAddUnit(dt, sign * period->weeks, DATE_UNIT_WEEK);
+    }
+    if (period->days)
+    {
+        dateAddUnit(dt, sign * period->days, DATE_UNIT_DAY);
+    }
+    if (period->hours)
+    {
+        dateAddUnit(dt, sign * period->hours, DATE_UNIT_HOUR);
+    }
+    if (period->minutes)
+    {
+        dateAddUnit(dt, sign * period->minutes, DATE_UNIT_MINUTE);
+    }
+    if (period->seconds)
+    {
+        dateAddUnit(dt, sign * period->seconds, DATE_UNIT_SECOND);
+    }
+}
+
 int parseTzOffset(const char *input, short *offset_minutes)
 {
     if (input == NULL || offset_minutes == NULL)
