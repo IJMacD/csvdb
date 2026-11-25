@@ -93,6 +93,7 @@ FROM (VALUES ('a',1),('b',2)) AS t (first, second);
 
 - Comma joins are cross joins (predicates go in `WHERE` / `ON`).
 - Supported join keywords: `JOIN`, `INNER JOIN`, `CROSS JOIN`, `LEFT [OUTER] JOIN`, `RIGHT [OUTER] JOIN`.
+- `CROSS JOIN` is a Cartesian product only — `ON` / `USING` are rejected (use `INNER JOIN`).
 - `RIGHT JOIN` is rewritten by swapping the two sides into a `LEFT JOIN` (only when the left side is a single table). `SELECT *` column order follows the rewritten `FROM` (preserved side first).
 - `FULL OUTER JOIN` is not supported (would need `UNION`).
 - Join conditions: `ON <predicate>` (`AND`/`OR`, same precedence as `WHERE`) or `USING <expr>` (equality on that expression across the joined tables).
