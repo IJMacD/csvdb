@@ -13,6 +13,7 @@
 #include "output.h"
 #include "query.h"
 #include "../functions/util.h"
+#include "../fatal.h"
 
 static int create_table_query(const char *query, const char **end_ptr);
 
@@ -337,7 +338,7 @@ static int create_index(
                     values[0]);
                 fclose(f);
                 remove(file_name);
-                exit(-1);
+                csvdb_fatal(-1);
             }
         }
 
@@ -418,14 +419,14 @@ static int create_table_query(const char *query, const char **end_ptr)
         else
         {
             fprintf(stderr, "Unexpected keyword: '%s'\n", keyword);
-            exit(-1);
+            csvdb_fatal(-1);
         }
     }
 
     if (sub_query == NULL && header_buffer[0] == '\0')
     {
         fprintf(stderr, "Expected column spec or AS keyword.\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     struct DB db = {0};

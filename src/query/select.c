@@ -22,6 +22,7 @@
 #include "node.h"
 #include "../debug.h"
 #include "check.h"
+#include "../fatal.h"
 
 #ifdef DEBUG
 int query_count = -1;
@@ -2077,7 +2078,7 @@ struct Table *allocateTable(struct Query *q)
         if (ptr == NULL)
         {
             fprintf(stderr, "Can't allocate memory\n");
-            exit(-1);
+            csvdb_fatal(-1);
         }
 
         q->tables = ptr;
@@ -2118,7 +2119,7 @@ struct Node *allocateColumnNode(struct Query *q)
     if (mem == NULL)
     {
         fprintf(stderr, "Out of memory\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     q->column_nodes = mem;
@@ -2153,7 +2154,7 @@ struct Node *allocatePredicateNode(struct Query *q)
     if (mem == NULL)
     {
         fprintf(stderr, "Out of memory\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     q->predicate_nodes = mem;
@@ -2183,7 +2184,7 @@ struct Node *allocateHavingNode(struct Query *q)
     if (mem == NULL)
     {
         fprintf(stderr, "Out of memory\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     q->having_nodes = mem;
@@ -2244,7 +2245,7 @@ static void expandFieldStar(struct Query *query)
                         fprintf(
                             stderr,
                             "Cannot deal with more than one '*' in params");
-                        exit(-1);
+                        csvdb_fatal(-1);
                     }
 
                     child_index = j;

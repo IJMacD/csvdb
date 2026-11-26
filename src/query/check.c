@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include "../structs.h"
 #include "../evaluate/evaluate.h"
+#include "../fatal.h"
 
 /**
  * PLAN_TABLE_SCAN applies a single rowid comparison in executeSourceTableScan.
@@ -36,19 +37,19 @@ void checkPlan (struct Query *query, struct Plan *plan) {
         if (step->limit == -1 && step->type == PLAN_CROSS_JOIN) {
             if (table->db->vfs == VFS_SEQUENCE) {
                 fprintf(stderr, "Error: Unbounded SEQUENCE. Add predicates to limit output\n");
-                exit(-1);
+                csvdb_fatal(-1);
             }
             if (table->db->vfs == VFS_CALENDAR) {
                 fprintf(stderr, "Error: Unbounded CALENDAR. Add predicates to limit output\n");
-                exit(-1);
+                csvdb_fatal(-1);
             }
             if (table->db->vfs == VFS_EPHEMERIS) {
                 fprintf(stderr, "Error: Unbounded EPHEMERIS. Add predicates to limit output\n");
-                exit(-1);
+                csvdb_fatal(-1);
             }
             if (table->db->vfs == VFS_CRON) {
                 fprintf(stderr, "Error: Unbounded CRON. Add predicates to limit output\n");
-                exit(-1);
+                csvdb_fatal(-1);
             }
         }
 
@@ -59,19 +60,19 @@ void checkPlan (struct Query *query, struct Plan *plan) {
         ) {
             if (table->db->vfs == VFS_SEQUENCE) {
                 fprintf(stderr, "Error: Unbounded SEQUENCE. Add predicates to limit output\n");
-                exit(-1);
+                csvdb_fatal(-1);
             }
             if (table->db->vfs == VFS_CALENDAR) {
                 fprintf(stderr, "Error: Unbounded CALENDAR. Add predicates to limit output\n");
-                exit(-1);
+                csvdb_fatal(-1);
             }
             if (table->db->vfs == VFS_EPHEMERIS) {
                 fprintf(stderr, "Error: Unbounded EPHEMERIS. Add predicates to limit output\n");
-                exit(-1);
+                csvdb_fatal(-1);
             }
             if (table->db->vfs == VFS_CRON) {
                 fprintf(stderr, "Error: Unbounded CRON. Add predicates to limit output\n");
-                exit(-1);
+                csvdb_fatal(-1);
             }
         }
 

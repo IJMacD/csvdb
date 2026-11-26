@@ -5,6 +5,7 @@
 #include "../query/result.h"
 #include "../sort/sort-quick.h"
 #include "../evaluate/evaluate.h"
+#include "../fatal.h"
 
 int executeSort (
     struct Table *tables,
@@ -65,7 +66,7 @@ int executeGroupSorted (
             stderr,
             "Unable to do sorted group by with more than one node.\n"
         );
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     char values[2][MAX_VALUE_LENGTH] = {0};
@@ -202,7 +203,7 @@ int executeGroupBucket (
                         "Unable to allocate space for %d buckets.\n",
                         bucket_count + 1
                     );
-                    exit(-1);
+                    csvdb_fatal(-1);
                 }
             }
 

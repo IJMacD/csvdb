@@ -5,6 +5,7 @@
 #include "../structs.h"
 #include "../functions/util.h"
 #include "../debug.h"
+#include "../fatal.h"
 
 int getRowID (struct RowList * row_list, int join_id, int index) {
     if (join_id < 0) return -1;
@@ -14,7 +15,7 @@ int getRowID (struct RowList * row_list, int join_id, int index) {
 void writeRowID (struct RowList * row_list, int join_id, int index, int value) {
     if (join_id < 0) {
         fprintf(stderr, "Error writing rowid: join=%d\n", join_id);
-        exit(-1);
+        csvdb_fatal(-1);
     }
     row_list->row_ids[index * row_list->join_count + join_id] = value;
 }
@@ -26,7 +27,7 @@ void appendRowID (struct RowList * row_list, int value) {
             "Cannot append 1 row ID to list with %d joins\n",
             row_list->join_count
         );
-        exit(-1);
+        csvdb_fatal(-1);
     }
     row_list->row_ids[row_list->row_count * row_list->join_count] = value;
     row_list->row_count++;
@@ -45,7 +46,7 @@ void appendRowID2 (struct RowList * row_list, int value1, int value2) {
             "Cannot append 2 row IDs to list with %d join(s)\n",
             row_list->join_count
         );
-        exit(-1);
+        csvdb_fatal(-1);
     }
     row_list->row_ids[row_list->row_count * row_list->join_count + 0] = value1;
     row_list->row_ids[row_list->row_count * row_list->join_count + 1] = value2;
@@ -59,7 +60,7 @@ void appendRowID3 (struct RowList * row_list, int value1, int value2, int value3
             "Cannot append 3 row IDs to list with %d join(s)\n",
             row_list->join_count
         );
-        exit(-1);
+        csvdb_fatal(-1);
     }
     row_list->row_ids[row_list->row_count * row_list->join_count + 0] = value1;
     row_list->row_ids[row_list->row_count * row_list->join_count + 1] = value2;
@@ -89,7 +90,7 @@ void appendJoinedRowID (
             src_list->join_count,
             dest_list->join_count
         );
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     int dest_index = dest_list->row_count;
@@ -124,7 +125,7 @@ void copyResultRow (
             src_list->join_count,
             dest_list->join_count
         );
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     for(unsigned int i = 0; i < src_list->join_count; i++) {
@@ -186,7 +187,7 @@ void copyRowList (struct RowList *dest_list, struct RowList *src_list) {
             src_list->join_count,
             dest_list->join_count
         );
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     if (src_list->join_count == 1) {
@@ -278,7 +279,7 @@ RowListIndex createRowList (int join_count, int max_rows) {
                 "Unable to allocate %d bytes for a RowList\n",
                 size
             );
-            exit(-1);
+            csvdb_fatal(-1);
         }
 
         row_list_pool = ptr;
@@ -313,14 +314,14 @@ RowListIndex createRowList (int join_count, int max_rows) {
 
     if (size < 0) {
         fprintf(stderr, "Not trying to allocate space for %d rows\n", max_rows);
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     row_list->row_ids = malloc(size);
 
     if (row_list->row_ids == NULL) {
         fprintf(stderr, "Cannot allocate space for %d rows\n", max_rows);
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     #ifdef DEBUG
@@ -384,7 +385,7 @@ void pushRowList(struct ResultSet *result_set, RowListIndex row_list_index) {
                 "Unable to reallocate memory for RowList. New size: %d\n",
                 size
             );
-            exit(-1);
+            csvdb_fatal(-1);
         }
         result_set->row_list_indices = ptr;
         result_set->size = size;

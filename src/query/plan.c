@@ -9,6 +9,7 @@
 #include "../db/indices.h"
 #include "../evaluate/predicates.h"
 #include "../evaluate/evaluate.h"
+#include "../fatal.h"
 
 static struct PlanStep *addStep(struct Plan *plan, int type);
 
@@ -281,7 +282,7 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
         if (query->table_count > 1)
         {
             fprintf(stderr, "INDEX() not supported with more than one table\n");
-            exit(-1);
+            csvdb_fatal(-1);
         }
 
         struct Node *predicate = &query->predicate_nodes[index_fn_node];
@@ -884,7 +885,7 @@ static struct PlanStep *addStep(struct Plan *plan, int type)
     if (plan->step_count >= MAX_PLAN_STEPS)
     {
         fprintf(stderr, "Cannot have more than %d steps\n", MAX_PLAN_STEPS);
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     int i = plan->step_count;
@@ -934,7 +935,7 @@ static struct PlanStep *addStepWithNodes(
     if (plan->step_count >= MAX_PLAN_STEPS)
     {
         fprintf(stderr, "Cannot have more than %d steps\n", MAX_PLAN_STEPS);
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     struct Node *ps = malloc(sizeof(*ps) * node_count);
@@ -964,7 +965,7 @@ static struct PlanStep *addStepWithLimit(struct Plan *plan, int type, int limit)
     if (plan->step_count >= MAX_PLAN_STEPS)
     {
         fprintf(stderr, "Cannot have more than %d steps\n", MAX_PLAN_STEPS);
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     int i = plan->step_count;
@@ -1096,7 +1097,7 @@ static void addJoinStepsIfRequired(struct Plan *plan, struct Query *q)
                         "%d TableBitMap: %X\n",
                         i,
                         tableMap);
-                    exit(-1);
+                    csvdb_fatal(-1);
                 }
             }
             else if (tableMap == tableBit)
@@ -1181,7 +1182,7 @@ static void addJoinStepsIfRequired(struct Plan *plan, struct Query *q)
                     "TableBitMap: %X\n",
                     i,
                     tableMap);
-                exit(-1);
+                csvdb_fatal(-1);
             }
         }
     }
@@ -1275,7 +1276,7 @@ static void addDistinctStepsIfRequired(struct Plan *plan, struct Query *q)
         fprintf(
             stderr,
             "DISTINCT is not supported together with GROUP BY / aggregates\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     if (q->flags & FLAG_DISTINCT_ON)

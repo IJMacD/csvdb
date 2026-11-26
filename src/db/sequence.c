@@ -8,6 +8,7 @@
 #include "../evaluate/evaluate.h"
 #include "../evaluate/predicates.h"
 #include "../debug.h"
+#include "../fatal.h"
 
 int sequence_openDB (
     struct DB *db,
@@ -337,7 +338,7 @@ int sequence_fullTableAccess (
 
     if (end == db->_record_count) {
         fprintf(stderr, "Error: Unbounded SEQUENCE\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     struct Table table;

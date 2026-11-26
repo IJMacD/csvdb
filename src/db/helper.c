@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "../structs.h"
+#include "../fatal.h"
 
 void consumeStream (struct DB *db, FILE *stream) {
     // 4 KB blocks
@@ -25,7 +26,7 @@ void consumeStream (struct DB *db, FILE *stream) {
 
             if (ptr == NULL) {
                 fprintf(stderr, "Unable to assign memory");
-                exit(-1);
+                csvdb_fatal(-1);
             }
 
             db->data = ptr;
@@ -103,7 +104,7 @@ int indexLines (struct DB *db, int max_lines, char quote_char) {
                         "Unable to allocate memory for %d line_indices\n",
                         *max_size
                     );
-                    exit(-1);
+                    csvdb_fatal(-1);
                 }
                 // save new memory addresses
                 max_size = ptr;

@@ -10,7 +10,7 @@ CFLAGS = -Wall -Werror -Wextra -fdata-sections -ffunction-sections
 SRCDIR = src
 SUBDIRS = db query execute evaluate sort functions
 SRCDIRS = $(addprefix $(SRCDIR)/, $(SUBDIRS))
-RAWSRCS = main.c config.c $(wildcard $(addsuffix /*.c, $(SRCDIRS)))
+RAWSRCS = main.c config.c fatal.c $(wildcard $(addsuffix /*.c, $(SRCDIRS)))
 SRCS = $(RAWSRCS:src/%=%)
 OBJS = $(SRCS:.c=.o)
 EXE  = csvdb

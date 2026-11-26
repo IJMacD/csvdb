@@ -8,6 +8,7 @@
 #include "csv-mem.h"
 #include "csv-mmap.h"
 #include "csv.h"
+#include "../fatal.h"
 
 struct DB *temp_mapping = NULL;
 
@@ -194,7 +195,7 @@ struct DB *temp_openMappingDB(const char *filename)
     if (result < 0)
     {
         fprintf(stderr, "Unable to create mapping DB at %s\n", filename);
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     return db;

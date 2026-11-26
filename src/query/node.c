@@ -4,6 +4,7 @@
 #include "../db/db.h"
 #include "node.h"
 #include "select.h"
+#include "../fatal.h"
 
 /**
  * Allocates additional child nodes on a node
@@ -23,7 +24,7 @@ struct Node * allocateNodeChildren (struct Node *node, int new_children) {
 
     if (mem == NULL) {
         fprintf(stderr, "Out of memory\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     node->children = mem;
@@ -61,7 +62,7 @@ struct Node *addChildNode (struct Node *parent_node) {
             stderr,
             "Cannot add a child to an optimised node.\n"
         );
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     return allocateNodeChildren(parent_node, 1);

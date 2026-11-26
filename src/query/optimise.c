@@ -8,6 +8,7 @@
 #include "../evaluate/predicates.h"
 #include "../functions/util.h"
 #include "../debug.h"
+#include "../fatal.h"
 
 /**
  * Free child at index and compact the children array.
@@ -259,7 +260,7 @@ void optimiseCollapseConstantNode(struct Node *node)
         {
             // (There might be an alias to help identify)
             fprintf(stderr, "Unable to evaluate constant node %s\n", node->alias);
-            exit(-1);
+            csvdb_fatal(-1);
         }
 
         // Mark the node as constant and remove function marker

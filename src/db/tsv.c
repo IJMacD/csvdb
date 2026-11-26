@@ -7,6 +7,7 @@
 #include "helper.h"
 #include "csv-mem.h"
 #include "../query/select.h"
+#include "../fatal.h"
 
 static int makeDB(struct DB *db, FILE *f);
 
@@ -434,7 +435,7 @@ static void prepareHeaders(struct DB *db)
     if (header_length < 0)
     {
         fprintf(stderr, "Something went wrong measuring header\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     db->fields = malloc(header_length);
@@ -442,14 +443,14 @@ static void prepareHeaders(struct DB *db)
     if (fseek(db->file, 0, SEEK_SET))
     {
         fprintf(stderr, "File is not seekable\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     int count = fread(db->fields, 1, header_length, db->file);
     if (count < header_length)
     {
         fprintf(stderr, "Something went wrong reading header\n");
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     for (int i = 0; i < header_length; i++)

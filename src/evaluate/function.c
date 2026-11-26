@@ -16,6 +16,7 @@
 #include "../query/result.h"
 #include "./predicates.h"
 #include "../db/db.h"
+#include "../fatal.h"
 
 static int values_have_complex(char **values, int value_count)
 {
@@ -1840,7 +1841,7 @@ int evaluateAggregateFunction(
             "%d\n",
             arg_count,
             max_args);
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     if (arg_count < min_args)
@@ -1851,7 +1852,7 @@ int evaluateAggregateFunction(
             "%d\n",
             arg_count,
             min_args);
-        exit(-1);
+        csvdb_fatal(-1);
     }
 
     int is_count_star = node->function == FUNC_AGG_COUNT && ((node->child_count == -1 && node->field.index == FIELD_STAR) ||
@@ -1869,7 +1870,7 @@ int evaluateAggregateFunction(
         if (values == NULL)
         {
             fprintf(stderr, "Unable to allocate %d bytes\n", row_list->row_count * MAX_VALUE_LENGTH);
-            exit(-1);
+            csvdb_fatal(-1);
         }
     }
 
@@ -2228,7 +2229,7 @@ int evaluateAggregateFunction(
         if (ptrs == NULL)
         {
             fprintf(stderr, "Unable to allocate for MEDIAN\n");
-            exit(-1);
+            csvdb_fatal(-1);
         }
 
         for (int i = 0; i < row_count; i++)
@@ -2257,7 +2258,7 @@ int evaluateAggregateFunction(
         if (ptrs == NULL)
         {
             fprintf(stderr, "Unable to allocate for MODE\n");
-            exit(-1);
+            csvdb_fatal(-1);
         }
 
         for (int i = 0; i < row_count; i++)
@@ -2313,7 +2314,7 @@ int evaluateAggregateFunction(
             if (ptrs == NULL)
             {
                 fprintf(stderr, "Unable to allocate for PERCENTILE\n");
-                exit(-1);
+                csvdb_fatal(-1);
             }
 
             for (int i = 0; i < row_count; i++)

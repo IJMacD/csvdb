@@ -7,6 +7,7 @@
 #include "../structs.h"
 #include "../functions/util.h"
 #include "../query/query.h"
+#include "../fatal.h"
 
 static int prepareHeaders(struct DB *db);
 
@@ -276,7 +277,7 @@ static int prepareHeaders(struct DB *db)
                 if (db->field_count >= VFS_COL_MAX_FIELD_COUNT)
                 {
                     fprintf(stderr, "Didn't reserve enough space for fields in VFS COL");
-                    exit(-1);
+                    csvdb_fatal(-1);
                 }
             }
         }
