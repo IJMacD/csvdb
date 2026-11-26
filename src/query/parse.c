@@ -43,19 +43,22 @@ struct Query *parseOwnedQuery(const char *sql);
  */
 static struct Query *stealQueryBody(struct Query *q);
 
-/** Attach FUNC_UNION_ALL set_op on q with left/right arm Queries. */
-static int attachUnionAll(
+/** Attach a set-op Node on q with left/right arm Queries and op code. */
+static int attachSetOp(
     struct Query *q,
     struct Query *left,
-    struct Query *right);
+    struct Query *right,
+    enum Function op);
 
 /**
- * If a UNION ALL left arm is pending, wrap current q body as the right arm.
+ * If a set-op left arm is pending, wrap current q body as the right arm using
+ * *pending_op (UNION ALL / later UNION, INTERSECT, EXCEPT).
  * Returns 0 on success, -1 on error.
  */
-static int flushPendingUnion(
+static int flushPendingSetOp(
     struct Query *q,
-    struct Query **pending_left);
+    struct Query **pending_left,
+    enum Function *pending_op);
 
 int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 {
@@ -86,7 +89,8 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 
     struct PendingCte ctes[MAX_CTES] = {0};
     int cte_count = 0;
-    struct Query *pending_union_left = NULL;
+    struct Query *pending_set_left = NULL;
+    enum Function pending_set_op = FUNC_UNITY;
 
     skipWhitespace(query, &index);
 
@@ -254,10 +258,10 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
             if (db == NULL)
             {
                 fprintf(stderr, "Out of memory\n");
-                if (pending_union_left != NULL)
+                if (pending_set_left != NULL)
                 {
-                    destroyQuery(pending_union_left);
-                    free(pending_union_left);
+                    destroyQuery(pending_set_left);
+                    free(pending_set_left);
                 }
                 return -1;
             }
@@ -1015,34 +1019,35 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                     stderr,
                     "Only UNION ALL is supported (got UNION %s)\n",
                     keyword[0] ? keyword : "(empty)");
-                if (pending_union_left != NULL)
+                if (pending_set_left != NULL)
                 {
-                    destroyQuery(pending_union_left);
-                    free(pending_union_left);
+                    destroyQuery(pending_set_left);
+                    free(pending_set_left);
                 }
                 return -1;
             }
 
             // Left-assoc: if a previous arm is pending, current q is that
             // arm's right — wrap before starting the next arm.
-            if (pending_union_left != NULL)
+            if (pending_set_left != NULL)
             {
-                if (flushPendingUnion(q, &pending_union_left) < 0)
+                if (flushPendingSetOp(q, &pending_set_left, &pending_set_op) < 0)
                 {
                     return -1;
                 }
             }
 
-            pending_union_left = stealQueryBody(q);
-            if (pending_union_left == NULL)
+            pending_set_left = stealQueryBody(q);
+            if (pending_set_left == NULL)
             {
                 fprintf(stderr, "Out of memory\n");
                 return -1;
             }
+            pending_set_op = FUNC_UNION_ALL;
         }
         else if (strcmp(keyword, "OFFSET") == 0)
         {
-            if (flushPendingUnion(q, &pending_union_left) < 0)
+            if (flushPendingSetOp(q, &pending_set_left, &pending_set_op) < 0)
             {
                 return -1;
             }
@@ -1064,7 +1069,7 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
         }
         else if (strcmp(keyword, "FETCH") == 0)
         {
-            if (flushPendingUnion(q, &pending_union_left) < 0)
+            if (flushPendingSetOp(q, &pending_set_left, &pending_set_op) < 0)
             {
                 return -1;
             }
@@ -1113,7 +1118,7 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
         }
         else if (strcmp(keyword, "LIMIT") == 0)
         {
-            if (flushPendingUnion(q, &pending_union_left) < 0)
+            if (flushPendingSetOp(q, &pending_set_left, &pending_set_op) < 0)
             {
                 return -1;
             }
@@ -1128,7 +1133,7 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
         }
         else if (strcmp(keyword, "ORDER") == 0)
         {
-            if (flushPendingUnion(q, &pending_union_left) < 0)
+            if (flushPendingSetOp(q, &pending_set_left, &pending_set_op) < 0)
             {
                 return -1;
             }
@@ -1194,7 +1199,7 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
         }
         else if (strcmp(keyword, "GROUP") == 0)
         {
-            if (flushPendingUnion(q, &pending_union_left) < 0)
+            if (flushPendingSetOp(q, &pending_set_left, &pending_set_op) < 0)
             {
                 return -1;
             }
@@ -1238,16 +1243,16 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                 "expected WITH|VALUES|SELECT|FROM|WHERE|HAVING|OFFSET|FETCH "
                 "FIRST|LIMIT|ORDER|GROUP|UNION\n");
             fprintf(stderr, "Found '%s'\n", keyword);
-            if (pending_union_left != NULL)
+            if (pending_set_left != NULL)
             {
-                destroyQuery(pending_union_left);
-                free(pending_union_left);
+                destroyQuery(pending_set_left);
+                free(pending_set_left);
             }
             return -1;
         }
     }
 
-    if (flushPendingUnion(q, &pending_union_left) < 0)
+    if (flushPendingSetOp(q, &pending_set_left, &pending_set_op) < 0)
     {
         return -1;
     }
@@ -1362,10 +1367,11 @@ static struct Query *stealQueryBody(struct Query *q)
     return left;
 }
 
-static int attachUnionAll(
+static int attachSetOp(
     struct Query *q,
     struct Query *left,
-    struct Query *right)
+    struct Query *right,
+    enum Function op)
 {
     if (left == NULL || right == NULL)
     {
@@ -1380,21 +1386,27 @@ static int attachUnionAll(
     clearNode(&q->set_op);
 
     allocateNodeChildren(&q->set_op, 2);
-    q->set_op.function = FUNC_UNION_ALL;
+    q->set_op.function = op;
     q->set_op.children[0].subquery = left;
     q->set_op.children[1].subquery = right;
 
     return 0;
 }
 
-static int flushPendingUnion(
+static int flushPendingSetOp(
     struct Query *q,
-    struct Query **pending_left)
+    struct Query **pending_left,
+    enum Function *pending_op)
 {
     if (pending_left == NULL || *pending_left == NULL)
     {
         return 0;
     }
+
+    enum Function op =
+        (pending_op != NULL && *pending_op != FUNC_UNITY)
+            ? *pending_op
+            : FUNC_UNION_ALL;
 
     struct Query *right = stealQueryBody(q);
     if (right == NULL)
@@ -1402,21 +1414,33 @@ static int flushPendingUnion(
         destroyQuery(*pending_left);
         free(*pending_left);
         *pending_left = NULL;
+        if (pending_op != NULL)
+        {
+            *pending_op = FUNC_UNITY;
+        }
         fprintf(stderr, "Out of memory\n");
         return -1;
     }
 
-    if (attachUnionAll(q, *pending_left, right) < 0)
+    if (attachSetOp(q, *pending_left, right, op) < 0)
     {
         destroyQuery(*pending_left);
         free(*pending_left);
         destroyQuery(right);
         free(right);
         *pending_left = NULL;
+        if (pending_op != NULL)
+        {
+            *pending_op = FUNC_UNITY;
+        }
         return -1;
     }
 
     *pending_left = NULL;
+    if (pending_op != NULL)
+    {
+        *pending_op = FUNC_UNITY;
+    }
     return 0;
 }
 
