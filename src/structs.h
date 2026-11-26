@@ -243,12 +243,22 @@ enum Function {
     OPERATOR_ANY =                  0xCB,
     OPERATOR_ALL =                  0xCC,
 
-    // Family 111x (0xE0) (Dummy)
+    // Family 111x (0xE0) (Dummy / non-scalar)
     FUNC_FAM_DUMMY =                0xE0,
 
     FUNC_PK =                       0xE1,
     FUNC_UNIQUE =                   0xE2,
     FUNC_INDEX =                    0xE3,
+
+    /**
+     * Relational set ops (not scalar expressions). Live on Query.set_op with
+     * two children, each holding a Query* in child.subquery.
+     * High 0xF0 block — outside maths and outside OPERATOR_* (0xC0–0xCF).
+     */
+    FUNC_UNION_ALL =                0xF0,
+    // FUNC_UNION =                 0xF1,  // set union (dedup) — not yet
+    // FUNC_INTERSECT =             0xF2,  // not yet
+    // FUNC_EXCEPT =                0xF3,  // not yet
 
     FUNC_UNKNOWN =                  0xFF
 };
@@ -479,6 +489,15 @@ struct Query {
     int distinct_count;
     int offset_value;
     int limit_value;
+
+    /**
+     * Optional set operation over two arm Queries.
+     * When function == FUNC_UNION_ALL, child_count == 2 and each child has
+     * subquery set to a full Query arm. Outer ORDER/LIMIT/OFFSET live on this
+     * Query; arms hold their own primary clauses. Not evaluated as a SELECT
+     * expression — process_query expands it to a temp table first.
+     */
+    struct Node set_op;
 
     /**
      * Optional outer-row binding for correlated scalar subqueries.

@@ -47,6 +47,9 @@ static int foldUncorrelatedQuantified(struct Node *node);
 
 static void expandFieldStar(struct Query *query);
 
+/** Expand Query.set_op (UNION ALL) into a single in-memory table on q. */
+static int expandSetOp(struct Query *q);
+
 static struct Query *makeQuery();
 
 static int find_field(
@@ -235,6 +238,19 @@ int process_query(
     if (output_flags & FLAG_EXPLAIN)
     {
         q->flags |= FLAG_EXPLAIN;
+    }
+
+    // Expand set ops (UNION ALL) to a single temp table before the normal
+    // FROM/resolve/plan path. Nested set_ops on arms expand recursively via
+    // evaluate_subquery_to_db → process_query.
+    if (q->set_op.function == FUNC_UNION_ALL)
+    {
+        result = expandSetOp(q);
+        if (result < 0)
+        {
+            fprintf(stderr, "Unable to evaluate UNION ALL\n");
+            return result;
+        }
     }
 
     // If there are no tables specified then we default to "FROM stdin".
@@ -951,6 +967,9 @@ void destroyQuery(struct Query *query)
         freeNode(&query->distinct_nodes[i]);
     }
 
+    freeNode(&query->set_op);
+    clearNode(&query->set_op);
+
     query->outer_tables = NULL;
     query->outer_table_count = 0;
     query->has_outer_row = 0;
@@ -1102,7 +1121,144 @@ struct Query *cloneQuery(const struct Query *src)
         copyNodeTree(&q->distinct_nodes[i], &src->distinct_nodes[i]);
     }
 
+    clearNode(&q->set_op);
+    if (src->set_op.function != FUNC_UNITY ||
+        src->set_op.child_count > 0 ||
+        src->set_op.subquery != NULL)
+    {
+        copyNodeTree(&q->set_op, &src->set_op);
+    }
+
     return q;
+}
+
+/**
+ * Materialize both UNION ALL arms, concatenate into one mem DB, and rewrite q
+ * as a single-table SELECT * (plus any outer ORDER/LIMIT already on q).
+ */
+static int expandSetOp(struct Query *q)
+{
+    if (q->set_op.function != FUNC_UNION_ALL)
+    {
+        fprintf(stderr, "Unsupported set operation\n");
+        return -1;
+    }
+
+    if (q->set_op.child_count != 2 ||
+        q->set_op.children[0].subquery == NULL ||
+        q->set_op.children[1].subquery == NULL)
+    {
+        fprintf(stderr, "UNION ALL requires two query arms\n");
+        return -1;
+    }
+
+    struct Query *left = q->set_op.children[0].subquery;
+    struct Query *right = q->set_op.children[1].subquery;
+
+    struct DB db_left = {0};
+    struct DB db_right = {0};
+
+    // Materialize in place (not via cloneQuery): VALUES arms already hold a
+    // live mem DB that cloneQuery would drop.
+    if (csvMem_fromQuery(&db_left, left) < 0)
+    {
+        return -1;
+    }
+
+    if (csvMem_fromQuery(&db_right, right) < 0)
+    {
+        closeDB(&db_left);
+        return -1;
+    }
+
+    if (db_left.field_count != db_right.field_count)
+    {
+        fprintf(
+            stderr,
+            "UNION ALL column count mismatch (%d vs %d)\n",
+            db_left.field_count,
+            db_right.field_count);
+        closeDB(&db_left);
+        closeDB(&db_right);
+        return -1;
+    }
+
+    if (csvMem_appendRows(&db_left, &db_right) < 0)
+    {
+        closeDB(&db_left);
+        closeDB(&db_right);
+        return -1;
+    }
+
+    closeDB(&db_right);
+
+    // Drop set_op arms (owned Queries) — results now live in db_left.
+    freeNode(&q->set_op);
+    clearNode(&q->set_op);
+
+    // Replace any tables with the combined result.
+    if (q->tables != NULL)
+    {
+        for (int i = 0; i < q->table_count; i++)
+        {
+            freeNode(&q->tables[i].join);
+            if (q->tables[i].subquery != NULL)
+            {
+                destroyQuery(q->tables[i].subquery);
+                free(q->tables[i].subquery);
+            }
+            if (q->tables[i].db != NULL &&
+                q->tables[i].db != DB_SUBQUERY &&
+                q->tables[i].db != stdin_db)
+            {
+                closeDB(q->tables[i].db);
+                free(q->tables[i].db);
+            }
+        }
+        free(q->tables);
+        q->tables = NULL;
+        q->table_count = 0;
+    }
+
+    q->tables = calloc(1, sizeof(*q->tables));
+    if (q->tables == NULL)
+    {
+        closeDB(&db_left);
+        fprintf(stderr, "Out of memory\n");
+        return -1;
+    }
+    q->table_count = 1;
+
+    struct DB *db = calloc(1, sizeof(*db));
+    if (db == NULL)
+    {
+        free(q->tables);
+        q->tables = NULL;
+        q->table_count = 0;
+        closeDB(&db_left);
+        fprintf(stderr, "Out of memory\n");
+        return -1;
+    }
+    *db = db_left;
+
+    q->tables[0].db = db;
+    strcpy(q->tables[0].name, "UNION");
+    strcpy(q->tables[0].alias, "union");
+    clearNode(&q->tables[0].join);
+
+    // Default projection to SELECT * over the combined headers.
+    if (q->column_nodes != NULL)
+    {
+        for (int i = 0; i < q->column_count; i++)
+        {
+            freeNode(&q->column_nodes[i]);
+        }
+        free(q->column_nodes);
+        q->column_nodes = NULL;
+        q->column_count = 0;
+    }
+
+    return 0;
 }
 
 static int populate_tables(struct Query *q)
