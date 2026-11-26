@@ -1,9 +1,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "../structs.h"
 #include "../fatal.h"
+#include "helper.h"
 
 void consumeStream (struct DB *db, FILE *stream) {
     // 4 KB blocks
@@ -147,4 +149,19 @@ int ends_with (const char *string, const char *search) {
     int search_len = strlen(search);
 
     return strcmp(string + string_len - search_len, search) == 0;
+}
+
+FILE *fopen_regular (const char *path, const char *mode) {
+    FILE *f = fopen(path, mode);
+    if (f == NULL) {
+        return NULL;
+    }
+
+    struct stat st;
+    if (fstat(fileno(f), &st) != 0 || !S_ISREG(st.st_mode)) {
+        fclose(f);
+        return NULL;
+    }
+
+    return f;
 }

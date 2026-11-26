@@ -54,9 +54,9 @@ int csvMem_openDB(struct DB *db, const char *filename, char **resolved)
     }
     else
     {
-        f = fopen(filename, "r");
+        f = fopen_regular(filename, "r");
 
-        if (resolved != NULL)
+        if (f != NULL && resolved != NULL)
         {
             *resolved = realpath(filename, *resolved);
         }
@@ -66,7 +66,7 @@ int csvMem_openDB(struct DB *db, const char *filename, char **resolved)
     {
         char buffer[FILENAME_MAX];
         sprintf(buffer, "%s.csv", filename);
-        f = fopen(buffer, "r");
+        f = fopen_regular(buffer, "r");
 
         if (!f)
         {

@@ -25,7 +25,7 @@ static int makeDB (struct DB *db, FILE *f);
  * @returns int 0 on success; -1 on failure
  */
 int csvMmap_openDB (struct DB *db, const char *filename, char **resolved) {
-    FILE *f = fopen(filename, "r");
+    FILE *f = fopen_regular(filename, "r");
 
     if (f != NULL && resolved != NULL) {
         *resolved = realpath(filename, *resolved);
@@ -34,7 +34,7 @@ int csvMmap_openDB (struct DB *db, const char *filename, char **resolved) {
     if (!f) {
         char buffer[FILENAME_MAX];
         sprintf(buffer, "%s.csv", filename);
-        f = fopen(buffer, "r");
+        f = fopen_regular(buffer, "r");
 
         if (!f) {
             return -1;
