@@ -46,3 +46,16 @@ int csvMem_insertRow (struct DB *db, const char *row);
  * Headers stay those of dest. Returns 0 on success, -1 on mismatch/error.
  */
 int csvMem_appendRows (struct DB *dest, struct DB *src);
+
+/**
+ * Combine left/right mem tables into out for a relational set op.
+ * op: FUNC_UNION_ALL, FUNC_UNION, FUNC_INTERSECT, or FUNC_EXCEPT.
+ * out is filled as a fresh csv-mem DB (caller owns via closeDB).
+ * Column counts must match. Returns 0 on success, -1 on error.
+ */
+int csvMem_setCombine (
+    struct DB *out,
+    struct DB *left,
+    struct DB *right,
+    enum Function op
+);

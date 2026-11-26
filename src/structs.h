@@ -256,9 +256,9 @@ enum Function {
      * High 0xF0 block — outside maths and outside OPERATOR_* (0xC0–0xCF).
      */
     FUNC_UNION_ALL =                0xF0,
-    // FUNC_UNION =                 0xF1,  // set union (dedup) — not yet
-    // FUNC_INTERSECT =             0xF2,  // not yet
-    // FUNC_EXCEPT =                0xF3,  // not yet
+    FUNC_UNION =                    0xF1,  // set union (dedup)
+    FUNC_INTERSECT =                0xF2,
+    FUNC_EXCEPT =                   0xF3,
 
     FUNC_UNKNOWN =                  0xFF
 };
@@ -492,10 +492,11 @@ struct Query {
 
     /**
      * Optional set operation over two arm Queries.
-     * When function == FUNC_UNION_ALL, child_count == 2 and each child has
-     * subquery set to a full Query arm. Outer ORDER/LIMIT/OFFSET live on this
-     * Query; arms hold their own primary clauses. Not evaluated as a SELECT
-     * expression — process_query expands it to a temp table first.
+     * When function is FUNC_UNION_ALL / FUNC_UNION / FUNC_INTERSECT /
+     * FUNC_EXCEPT, child_count == 2 and each child has subquery set to a full
+     * Query arm. Outer ORDER/LIMIT/OFFSET live on this Query; arms hold their
+     * own primary clauses. Not evaluated as a SELECT expression —
+     * process_query expands it to a temp table first.
      */
     struct Node set_op;
 
