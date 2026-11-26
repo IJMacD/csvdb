@@ -86,6 +86,16 @@ enum Function {
     // For each byte in string, return two hex digits. (Based on MySQL HEX())
     FUNC_HEX =                      0x05,
 
+    /**
+     * Relational set ops (not scalar expressions). Live on Query.set_op with
+     * two children, each holding a Query* in child.subquery. Contiguous block
+     * reserved for UNION ALL / UNION / INTERSECT / EXCEPT.
+     */
+    FUNC_UNION_ALL =                0x06,
+    // FUNC_UNION =                 0x07,  // set union (dedup) — not yet
+    // FUNC_INTERSECT =             0x08,  // not yet
+    // FUNC_EXCEPT =                0x09,  // not yet
+
     // Produces random integer between 0 and MAX_INT
     FUNC_RANDOM =                   0x0A,
     // Returns the csvdb version string. The parentheses keep it distinct
@@ -93,12 +103,6 @@ enum Function {
     FUNC_VERSION =                  0x0B,
     // Returns π. Zero-arg call form avoids clashing with a column named PI.
     FUNC_PI =                       0x0C,
-
-    /**
-     * Relational set op (not a scalar expression). Lives on Query.set_op with
-     * two children, each holding a Query* in child.subquery.
-     */
-    FUNC_UNION_ALL =                0x0D,
 
     // Maths functions
 
