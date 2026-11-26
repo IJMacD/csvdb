@@ -136,6 +136,10 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
         int continue_clauses =
             (strncmp(query + index, "UNION", 5) == 0 &&
              !isalnum((unsigned char)query[index + 5])) ||
+            (strncmp(query + index, "INTERSECT", 9) == 0 &&
+             !isalnum((unsigned char)query[index + 9])) ||
+            (strncmp(query + index, "EXCEPT", 6) == 0 &&
+             !isalnum((unsigned char)query[index + 6])) ||
             (strncmp(query + index, "ORDER", 5) == 0 &&
              !isalnum((unsigned char)query[index + 5])) ||
             (strncmp(query + index, "LIMIT", 5) == 0 &&
@@ -1010,21 +1014,51 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                 return -1;
             }
         }
-        else if (strcmp(keyword, "UNION") == 0)
+        else if (
+            strcmp(keyword, "UNION") == 0 ||
+            strcmp(keyword, "INTERSECT") == 0 ||
+            strcmp(keyword, "EXCEPT") == 0)
         {
-            getToken(query, &index, keyword, MAX_FIELD_LENGTH);
-            if (strcmp(keyword, "ALL") != 0)
+            enum Function set_op = FUNC_UNION;
+            if (strcmp(keyword, "INTERSECT") == 0)
             {
-                fprintf(
-                    stderr,
-                    "Only UNION ALL is supported (got UNION %s)\n",
-                    keyword[0] ? keyword : "(empty)");
-                if (pending_set_left != NULL)
+                set_op = FUNC_INTERSECT;
+            }
+            else if (strcmp(keyword, "EXCEPT") == 0)
+            {
+                set_op = FUNC_EXCEPT;
+            }
+
+            size_t after_keyword = index;
+            getToken(query, &index, keyword, MAX_FIELD_LENGTH);
+            if (strcmp(keyword, "ALL") == 0)
+            {
+                if (set_op == FUNC_UNION)
                 {
-                    destroyQuery(pending_set_left);
-                    free(pending_set_left);
+                    set_op = FUNC_UNION_ALL;
                 }
-                return -1;
+                else
+                {
+                    fprintf(
+                        stderr,
+                        "%s ALL is not supported\n",
+                        set_op == FUNC_INTERSECT ? "INTERSECT" : "EXCEPT");
+                    if (pending_set_left != NULL)
+                    {
+                        destroyQuery(pending_set_left);
+                        free(pending_set_left);
+                    }
+                    return -1;
+                }
+            }
+            else if (strcmp(keyword, "DISTINCT") == 0)
+            {
+                // Explicit DISTINCT is the default for set ops.
+            }
+            else
+            {
+                // No qualifier — leave index before this token.
+                index = after_keyword;
             }
 
             // Left-assoc: if a previous arm is pending, current q is that
@@ -1043,7 +1077,7 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                 fprintf(stderr, "Out of memory\n");
                 return -1;
             }
-            pending_set_op = FUNC_UNION_ALL;
+            pending_set_op = set_op;
         }
         else if (strcmp(keyword, "OFFSET") == 0)
         {
@@ -1241,7 +1275,7 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
             fprintf(
                 stderr,
                 "expected WITH|VALUES|SELECT|FROM|WHERE|HAVING|OFFSET|FETCH "
-                "FIRST|LIMIT|ORDER|GROUP|UNION\n");
+                "FIRST|LIMIT|ORDER|GROUP|UNION|INTERSECT|EXCEPT\n");
             fprintf(stderr, "Found '%s'\n", keyword);
             if (pending_set_left != NULL)
             {

@@ -585,6 +585,332 @@ int csvMem_appendRows(struct DB *dest, struct DB *src)
     return 0;
 }
 
+static int csvMem_rowsEqual(
+    struct DB *a,
+    int row_a,
+    struct DB *b,
+    int row_b)
+{
+    if (a->field_count != b->field_count)
+    {
+        return 0;
+    }
+
+    char value_a[MAX_VALUE_LENGTH];
+    char value_b[MAX_VALUE_LENGTH];
+
+    for (int i = 0; i < a->field_count; i++)
+    {
+        if (csvMem_getRecordValue(a, row_a, i, value_a, MAX_VALUE_LENGTH) < 0)
+        {
+            return 0;
+        }
+        if (csvMem_getRecordValue(b, row_b, i, value_b, MAX_VALUE_LENGTH) < 0)
+        {
+            return 0;
+        }
+        if (strcmp(value_a, value_b) != 0)
+        {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static int csvMem_containsRow(struct DB *haystack, struct DB *needle, int row)
+{
+    int n = csvMem_getRecordCount(haystack);
+    for (int i = 0; i < n; i++)
+    {
+        if (csvMem_rowsEqual(haystack, i, needle, row))
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int csvMem_writeRawRow(FILE *f, struct DB *db, int row)
+{
+    if (db->_record_count < 0)
+    {
+        indexLines(db, -1, '"');
+    }
+
+    if (row < 0 || row >= db->_record_count)
+    {
+        return -1;
+    }
+
+    long start = db->line_indices[row];
+    long end = db->line_indices[row + 1];
+    size_t len = (size_t)(end - start);
+
+    if (fwrite(db->data + start, 1, len, f) != len)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
+/**
+ * Write header line then selected rows into a fresh csv-mem DB via memstream.
+ * keep_left[i] / keep_right[i] are 0/1 flags for each source row.
+ */
+static int csvMem_fromKeepFlags(
+    struct DB *out,
+    struct DB *left,
+    struct DB *right,
+    const unsigned char *keep_left,
+    int left_n,
+    const unsigned char *keep_right,
+    int right_n)
+{
+    memset(out, 0, sizeof(*out));
+    out->vfs = VFS_CSV_MEM;
+
+    size_t size = 0;
+    FILE *f = open_memstream(&out->data, &size);
+    if (f == NULL)
+    {
+        fprintf(stderr, "Out of memory\n");
+        return -1;
+    }
+
+    for (int i = 0; i < left->field_count; i++)
+    {
+        if (i > 0)
+        {
+            fputc(',', f);
+        }
+        fputs(csvMem_getFieldName(left, i), f);
+    }
+    fputc('\n', f);
+
+    if (keep_left != NULL)
+    {
+        for (int i = 0; i < left_n; i++)
+        {
+            if (keep_left[i] && csvMem_writeRawRow(f, left, i) < 0)
+            {
+                fclose(f);
+                free(out->data);
+                out->data = NULL;
+                return -1;
+            }
+        }
+    }
+
+    if (keep_right != NULL)
+    {
+        for (int i = 0; i < right_n; i++)
+        {
+            if (keep_right[i] && csvMem_writeRawRow(f, right, i) < 0)
+            {
+                fclose(f);
+                free(out->data);
+                out->data = NULL;
+                return -1;
+            }
+        }
+    }
+
+    fclose(f);
+
+    if (prepareHeaders(out) < 0)
+    {
+        free(out->data);
+        out->data = NULL;
+        return -1;
+    }
+
+    out->_record_count = -1;
+    return 0;
+}
+
+int csvMem_setCombine(
+    struct DB *out,
+    struct DB *left,
+    struct DB *right,
+    enum Function op)
+{
+    if (out == NULL || left == NULL || right == NULL)
+    {
+        return -1;
+    }
+
+    if (left->field_count != right->field_count)
+    {
+        return -1;
+    }
+
+    int left_n = csvMem_getRecordCount(left);
+    int right_n = csvMem_getRecordCount(right);
+
+    if (op == FUNC_UNION_ALL)
+    {
+        // Copy left then append right (same as appendRows into a clone of left).
+        unsigned char *keep_left = NULL;
+        unsigned char *keep_right = NULL;
+
+        if (left_n > 0)
+        {
+            keep_left = malloc((size_t)left_n);
+            if (keep_left == NULL)
+            {
+                fprintf(stderr, "Out of memory\n");
+                return -1;
+            }
+            memset(keep_left, 1, (size_t)left_n);
+        }
+        if (right_n > 0)
+        {
+            keep_right = malloc((size_t)right_n);
+            if (keep_right == NULL)
+            {
+                free(keep_left);
+                fprintf(stderr, "Out of memory\n");
+                return -1;
+            }
+            memset(keep_right, 1, (size_t)right_n);
+        }
+
+        int result = csvMem_fromKeepFlags(
+            out, left, right, keep_left, left_n, keep_right, right_n);
+        free(keep_left);
+        free(keep_right);
+        return result;
+    }
+
+    unsigned char *keep_left = NULL;
+    unsigned char *keep_right = NULL;
+
+    if (left_n > 0)
+    {
+        keep_left = calloc((size_t)left_n, 1);
+        if (keep_left == NULL)
+        {
+            fprintf(stderr, "Out of memory\n");
+            return -1;
+        }
+    }
+
+    if (op == FUNC_UNION && right_n > 0)
+    {
+        keep_right = calloc((size_t)right_n, 1);
+        if (keep_right == NULL)
+        {
+            free(keep_left);
+            fprintf(stderr, "Out of memory\n");
+            return -1;
+        }
+    }
+
+    if (op == FUNC_UNION)
+    {
+        // First occurrence of each distinct row across left then right.
+        for (int i = 0; i < left_n; i++)
+        {
+            int seen = 0;
+            for (int j = 0; j < i; j++)
+            {
+                if (keep_left[j] && csvMem_rowsEqual(left, j, left, i))
+                {
+                    seen = 1;
+                    break;
+                }
+            }
+            if (!seen)
+            {
+                keep_left[i] = 1;
+            }
+        }
+        for (int i = 0; i < right_n; i++)
+        {
+            if (csvMem_containsRow(left, right, i))
+            {
+                continue;
+            }
+            int seen = 0;
+            for (int j = 0; j < i; j++)
+            {
+                if (keep_right[j] && csvMem_rowsEqual(right, j, right, i))
+                {
+                    seen = 1;
+                    break;
+                }
+            }
+            if (!seen)
+            {
+                keep_right[i] = 1;
+            }
+        }
+    }
+    else if (op == FUNC_INTERSECT)
+    {
+        // Distinct left rows that also appear in right.
+        for (int i = 0; i < left_n; i++)
+        {
+            if (!csvMem_containsRow(right, left, i))
+            {
+                continue;
+            }
+            int seen = 0;
+            for (int j = 0; j < i; j++)
+            {
+                if (keep_left[j] && csvMem_rowsEqual(left, j, left, i))
+                {
+                    seen = 1;
+                    break;
+                }
+            }
+            if (!seen)
+            {
+                keep_left[i] = 1;
+            }
+        }
+    }
+    else if (op == FUNC_EXCEPT)
+    {
+        // Distinct left rows that do not appear in right.
+        for (int i = 0; i < left_n; i++)
+        {
+            if (csvMem_containsRow(right, left, i))
+            {
+                continue;
+            }
+            int seen = 0;
+            for (int j = 0; j < i; j++)
+            {
+                if (keep_left[j] && csvMem_rowsEqual(left, j, left, i))
+                {
+                    seen = 1;
+                    break;
+                }
+            }
+            if (!seen)
+            {
+                keep_left[i] = 1;
+            }
+        }
+    }
+    else
+    {
+        free(keep_left);
+        free(keep_right);
+        fprintf(stderr, "Unsupported set operation\n");
+        return -1;
+    }
+
+    int result = csvMem_fromKeepFlags(
+        out, left, right, keep_left, left_n, keep_right, right_n);
+    free(keep_left);
+    free(keep_right);
+    return result;
+}
+
 static char *get_end_of_data(struct DB *db)
 {
     if (db->_record_count < 0)

@@ -132,10 +132,13 @@ FROM ranks GROUP BY name HAVING name = 'Ace' OR name = 'King' SELECT name;
 
 `HAVING` filters groups after aggregation. Predicates use the same shapes and `AND`/`OR` precedence as `WHERE`.
 
-### `UNION ALL`
+### Set operations (`UNION` / `INTERSECT` / `EXCEPT`)
 
 ```sql
 VALUES (1),(2) UNION ALL VALUES (3),(4);
+VALUES (1),(2),(2) UNION VALUES (2),(3);          -- distinct rows
+VALUES (1),(2) INTERSECT VALUES (2),(3);
+VALUES (1),(2),(3) EXCEPT VALUES (2);
 FROM suits WHERE name = 'hearts' SELECT name
 UNION ALL
 FROM suits WHERE name = 'spades' SELECT name;
@@ -143,10 +146,20 @@ VALUES (3),(1) UNION ALL VALUES (2) ORDER BY col1;
 VALUES (1) UNION ALL VALUES (2) UNION ALL VALUES (3);   -- left-associative
 ```
 
-Bag concat of two (or more) query primaries. Column counts must match; result
-column names come from the first arm. Trailing `ORDER BY` / `LIMIT` / `OFFSET` /
-`FETCH` apply to the combined result. Set-`UNION` (dedup), `INTERSECT`, and
-`EXCEPT` are not supported yet.
+Combine two (or more) query primaries. Column counts must match; result column
+names come from the first arm. Trailing `ORDER BY` / `LIMIT` / `OFFSET` /
+`FETCH` apply to the combined result.
+
+| Op | Semantics |
+|----|-----------|
+| `UNION ALL` | Bag concatenation (keeps duplicates) |
+| `UNION` [`DISTINCT`] | Set union (deduplicated) |
+| `INTERSECT` [`DISTINCT`] | Rows present in both arms (once each) |
+| `EXCEPT` [`DISTINCT`] | Rows in the left arm absent from the right (once each) |
+
+`INTERSECT ALL` and `EXCEPT ALL` are not supported. Chained ops are
+left-associative (SQL precedence between `INTERSECT` and `UNION`/`EXCEPT` is
+not applied).
 
 ### `ORDER BY` / limits
 
@@ -726,7 +739,7 @@ SELECT datetime, weekday;
 
 1. **Declarative clause order** — write clauses in whatever order is readable.
 2. **Optional `SELECT` / `FROM`** — `FROM test LIMIT 5` and `SELECT 1 + 1` are both fine.
-3. **Partially supported** — `UNION ALL` (bag concat; column counts must match). Not yet: set-`UNION`, `INTERSECT`, `EXCEPT`, `FULL OUTER JOIN`.
+3. **Partially supported** — set ops `UNION` [`ALL`|`DISTINCT`], `INTERSECT`, `EXCEPT` (set semantics; not `INTERSECT ALL` / `EXCEPT ALL`). Not yet: `FULL OUTER JOIN`.
 
 ---
 

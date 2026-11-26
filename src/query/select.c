@@ -47,8 +47,16 @@ static int foldUncorrelatedQuantified(struct Node *node);
 
 static void expandFieldStar(struct Query *query);
 
-/** Expand Query.set_op (UNION ALL) into a single in-memory table on q. */
+/** Expand Query.set_op (UNION / INTERSECT / EXCEPT) into one mem table on q. */
 static int expandSetOp(struct Query *q);
+
+static int isSetOpFunction(enum Function fn)
+{
+    return fn == FUNC_UNION_ALL ||
+           fn == FUNC_UNION ||
+           fn == FUNC_INTERSECT ||
+           fn == FUNC_EXCEPT;
+}
 
 static struct Query *makeQuery();
 
@@ -240,15 +248,15 @@ int process_query(
         q->flags |= FLAG_EXPLAIN;
     }
 
-    // Expand set ops (UNION ALL) to a single temp table before the normal
-    // FROM/resolve/plan path. Nested set_ops on arms expand recursively via
+    // Expand set ops to a single temp table before the normal FROM/resolve/
+    // plan path. Nested set_ops on arms expand recursively via
     // evaluate_subquery_to_db → process_query.
-    if (q->set_op.function == FUNC_UNION_ALL)
+    if (isSetOpFunction(q->set_op.function))
     {
         result = expandSetOp(q);
         if (result < 0)
         {
-            fprintf(stderr, "Unable to evaluate UNION ALL\n");
+            fprintf(stderr, "Unable to evaluate set operation\n");
             return result;
         }
     }
@@ -1133,12 +1141,14 @@ struct Query *cloneQuery(const struct Query *src)
 }
 
 /**
- * Materialize both UNION ALL arms, concatenate into one mem DB, and rewrite q
- * as a single-table SELECT * (plus any outer ORDER/LIMIT already on q).
+ * Materialize both set-op arms, combine per opcode into one mem DB, and rewrite
+ * q as a single-table SELECT * (plus any outer ORDER/LIMIT already on q).
  */
 static int expandSetOp(struct Query *q)
 {
-    if (q->set_op.function != FUNC_UNION_ALL)
+    enum Function op = q->set_op.function;
+
+    if (!isSetOpFunction(op))
     {
         fprintf(stderr, "Unsupported set operation\n");
         return -1;
@@ -1148,7 +1158,7 @@ static int expandSetOp(struct Query *q)
         q->set_op.children[0].subquery == NULL ||
         q->set_op.children[1].subquery == NULL)
     {
-        fprintf(stderr, "UNION ALL requires two query arms\n");
+        fprintf(stderr, "Set operation requires two query arms\n");
         return -1;
     }
 
@@ -1157,6 +1167,7 @@ static int expandSetOp(struct Query *q)
 
     struct DB db_left = {0};
     struct DB db_right = {0};
+    struct DB db_combined = {0};
 
     // Materialize in place (not via cloneQuery): VALUES arms already hold a
     // live mem DB that cloneQuery would drop.
@@ -1175,7 +1186,7 @@ static int expandSetOp(struct Query *q)
     {
         fprintf(
             stderr,
-            "UNION ALL column count mismatch (%d vs %d)\n",
+            "Set operation column count mismatch (%d vs %d)\n",
             db_left.field_count,
             db_right.field_count);
         closeDB(&db_left);
@@ -1183,16 +1194,17 @@ static int expandSetOp(struct Query *q)
         return -1;
     }
 
-    if (csvMem_appendRows(&db_left, &db_right) < 0)
+    if (csvMem_setCombine(&db_combined, &db_left, &db_right, op) < 0)
     {
         closeDB(&db_left);
         closeDB(&db_right);
         return -1;
     }
 
+    closeDB(&db_left);
     closeDB(&db_right);
 
-    // Drop set_op arms (owned Queries) — results now live in db_left.
+    // Drop set_op arms (owned Queries) — results now live in db_combined.
     freeNode(&q->set_op);
     clearNode(&q->set_op);
 
@@ -1223,7 +1235,7 @@ static int expandSetOp(struct Query *q)
     q->tables = calloc(1, sizeof(*q->tables));
     if (q->tables == NULL)
     {
-        closeDB(&db_left);
+        closeDB(&db_combined);
         fprintf(stderr, "Out of memory\n");
         return -1;
     }
@@ -1235,15 +1247,33 @@ static int expandSetOp(struct Query *q)
         free(q->tables);
         q->tables = NULL;
         q->table_count = 0;
-        closeDB(&db_left);
+        closeDB(&db_combined);
         fprintf(stderr, "Out of memory\n");
         return -1;
     }
-    *db = db_left;
+    *db = db_combined;
+
+    const char *name = "SETOP";
+    const char *alias = "setop";
+    if (op == FUNC_UNION_ALL || op == FUNC_UNION)
+    {
+        name = "UNION";
+        alias = "union";
+    }
+    else if (op == FUNC_INTERSECT)
+    {
+        name = "INTERSECT";
+        alias = "intersect";
+    }
+    else if (op == FUNC_EXCEPT)
+    {
+        name = "EXCEPT";
+        alias = "except";
+    }
 
     q->tables[0].db = db;
-    strcpy(q->tables[0].name, "UNION");
-    strcpy(q->tables[0].alias, "union");
+    strcpy(q->tables[0].name, name);
+    strcpy(q->tables[0].alias, alias);
     clearNode(&q->tables[0].join);
 
     // Default projection to SELECT * over the combined headers.
