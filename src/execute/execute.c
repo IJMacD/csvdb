@@ -249,6 +249,16 @@ int executeQueryPlan (
                 break;
             }
 
+            case PLAN_UNION: {
+                #ifdef DEBUG
+                debugLog(query, "PLAN_UNION");
+                #endif
+
+                result = executeUnion(tables, s, result_set);
+
+                break;
+            }
+
             case PLAN_SLICE: {
                 #ifdef DEBUG
                 debugLog(query, "PLAN_SLICE");

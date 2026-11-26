@@ -12,6 +12,12 @@ int executeReverse (
     struct ResultSet *result_set
 );
 
+int executeUnion (
+    struct Table *tables,
+    struct PlanStep *step,
+    struct ResultSet *result_set
+);
+
 int executeGroupSorted (
     struct Table *tables,
     struct PlanStep *step,
