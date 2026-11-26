@@ -931,8 +931,8 @@ int parseNode(
 
             // Scalar expression subquery: parse once into a nested Query AST.
             // Evaluated via FUNC_SUBQUERY (supports correlation by cloning +
-            // outer bind). FROM (subquery) AS t still uses allocateTable in
-            // parse.c. Body is not limited by MAX_FIELD_LENGTH.
+            // outer bind). FROM (subquery) AS t uses Table.subquery in parse.c.
+            // Body is not limited by MAX_FIELD_LENGTH / MAX_TABLE_LENGTH.
             if (len < 2)
             {
                 fprintf(stderr, "Empty subquery\n");
@@ -948,22 +948,12 @@ int parseNode(
             memcpy(sql, query + paren_start + 1, (size_t)(len - 2));
             sql[len - 2] = '\0';
 
-            struct Query *sq = calloc(1, sizeof(*sq));
+            struct Query *sq = parseOwnedQuery(sql);
+            free(sql);
             if (sq == NULL)
             {
-                free(sql);
-                fprintf(stderr, "Out of memory\n");
                 return -1;
             }
-
-            if (parseQuery(sq, sql, NULL) < 0)
-            {
-                free(sql);
-                destroyQuery(sq);
-                free(sq);
-                return -1;
-            }
-            free(sql);
 
             node->field.text[0] = '\0';
             node->field.index = FIELD_CONSTANT;
