@@ -91,6 +91,7 @@ FROM (FROM SEQUENCE LIMIT 10) AS a;
 FROM (VALUES ('a',1),('b',2)) AS t (first, second);
 ```
 
+- FROM / CTE subquery bodies are parsed into a heap `Query` (not stuffed into the table name), so they are not limited to 255 bytes.
 - Comma joins are cross joins (predicates go in `WHERE` / `ON`).
 - Supported join keywords: `JOIN`, `INNER JOIN`, `CROSS JOIN`, `LEFT [OUTER] JOIN`, `RIGHT [OUTER] JOIN`.
 - `CROSS JOIN` is a Cartesian product only — `ON` / `USING` are rejected (use `INNER JOIN`).

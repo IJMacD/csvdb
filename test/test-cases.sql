@@ -464,3 +464,6 @@ FROM test WHERE PK(id) >= 1 LIMIT 1;
 -- IN (literal/subquery) + ORDER BY must seek then SORT, not scan order index
 FROM CALENDAR WHERE date IN ('2026-01-03','2026-03-03','2026-02-02') ORDER BY julian SELECT date, julian;
 FROM CALENDAR WHERE date IN (SELECT date FROM EPHEMERIS WHERE date BETWEEN '2026-01-01' AND '2026-04-01' AND isFullMoon = 1) SELECT date, julian ORDER BY julian;
+-- FROM / CTE subquery bodies longer than 255 bytes (heap Query*, not table.name)
+FROM (FROM suits WHERE name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts') AS t SELECT name, symbol;
+WITH long_cte AS (FROM suits WHERE name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades') FROM long_cte SELECT name;

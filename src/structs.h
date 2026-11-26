@@ -446,6 +446,13 @@ struct Table {
     struct DB * db;
     struct Node join;
     enum JoinType join_type;
+    /**
+     * Parsed FROM / CTE subquery body (heap Query*).
+     * When non-NULL and db == DB_SUBQUERY, populate_tables materializes this
+     * instead of reparsing SQL from name. Owned by the Table; cloned with the
+     * parent Query. Remains after materialization as a re-run template.
+     */
+    struct Query *subquery;
 };
 
 typedef int RowListIndex;

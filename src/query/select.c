@@ -883,6 +883,13 @@ void destroyQuery(struct Query *query)
         {
             freeNode(&query->tables[i].join);
 
+            if (query->tables[i].subquery != NULL)
+            {
+                destroyQuery(query->tables[i].subquery);
+                free(query->tables[i].subquery);
+                query->tables[i].subquery = NULL;
+            }
+
             if (query->tables[i].db == stdin_db)
             {
                 // Don't close special DB created from stdin
@@ -990,9 +997,21 @@ struct Query *cloneQuery(const struct Query *src)
             strcpy(q->tables[i].name, src->tables[i].name);
             strcpy(q->tables[i].alias, src->tables[i].alias);
             q->tables[i].join_type = src->tables[i].join_type;
-            // Keep DB_SUBQUERY sentinel so populate_tables re-runs the nested
-            // table subquery; never share opened DB pointers from a prior run.
-            if (src->tables[i].db == DB_SUBQUERY)
+            q->tables[i].subquery = NULL;
+            // Prefer heap subquery template: clone and mark for re-materialize.
+            // Never share opened DB pointers from a prior run.
+            if (src->tables[i].subquery != NULL)
+            {
+                q->tables[i].subquery = cloneQuery(src->tables[i].subquery);
+                if (q->tables[i].subquery == NULL)
+                {
+                    destroyQuery(q);
+                    free(q);
+                    return NULL;
+                }
+                q->tables[i].db = DB_SUBQUERY;
+            }
+            else if (src->tables[i].db == DB_SUBQUERY)
             {
                 q->tables[i].db = DB_SUBQUERY;
             }
@@ -1115,11 +1134,17 @@ static int populate_tables(struct Query *q)
             found = 1;
         }
 
-        if (found == 0)
+        if (found == 0 && table->db != DB_SUBQUERY)
         {
-            // Try to reuse existing open table next
+            // Try to reuse existing open table next (file tables only —
+            // pending FROM/CTE subqueries all share the display name
+            // "SUBQUERY" and must not share DBs).
             for (int j = 0; j < i; j++)
             {
+                if (q->tables[j].db == DB_SUBQUERY)
+                {
+                    continue;
+                }
                 if (strcmp(q->tables[j].name, table->name) == 0)
                 {
                     // Copy pointer
@@ -1137,20 +1162,36 @@ static int populate_tables(struct Query *q)
         if (found == 0 && table->db == DB_SUBQUERY)
         {
             table->db = calloc(1, sizeof(*table->db));
+            if (table->db == NULL)
+            {
+                fprintf(stderr, "Out of memory\n");
+                return -1;
+            }
 
-            int result = select_subquery_mem(table->name, table->db, NULL);
+            int result;
+            if (table->subquery != NULL)
+            {
+                // Clone + materialize so the template Query stays reusable.
+                result = evaluate_subquery_to_db(
+                    table->subquery,
+                    NULL,
+                    0,
+                    0,
+                    0,
+                    0,
+                    table->db);
+            }
+            else
+            {
+                // Legacy fallback: SQL still in name (should not happen).
+                result = select_subquery_mem(table->name, table->db, NULL);
+            }
             if (result < 0)
             {
                 return -1;
             }
 
-            /// TODO: do we want to change table->name to "SUBQUERY" or keep a
-            /// record of what the query was?
-            // Counter point: subquery can have commas which messes with EXPLAIN
-            // output.
             strcpy(table->name, "SUBQUERY");
-            // Counter counter point: what if we want to re-evaluate later? e.g.
-            // implement correlated subqueries
 
             found = 1;
         }

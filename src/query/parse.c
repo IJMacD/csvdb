@@ -13,10 +13,29 @@
 
 #define MAX_CTES 10
 
-static struct Table *findTable(
+/** WITH name AS (...) holding area — body points into the query string. */
+struct PendingCte {
+    char alias[MAX_TABLE_LENGTH];
+    const char *body;
+    size_t body_len;
+};
+
+static struct PendingCte *findCte(
     const char *table_name,
-    struct Table *tables,
-    int table_count);
+    struct PendingCte *ctes,
+    int cte_count);
+
+/**
+ * Parse the interior of a parenthesized subquery into a heap Query*.
+ * paren_len is from find_matching_parenthesis (includes both '(' and ')').
+ */
+static struct Query *parseParenSubquery(
+    const char *query,
+    size_t paren_index,
+    int paren_len);
+
+/* Defined below; also exported via parse.h */
+struct Query *parseOwnedQuery(const char *sql);
 
 int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 {
@@ -43,7 +62,7 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
     q->offset_value = 0;
     q->limit_value = -1;
 
-    struct Table ctes[MAX_CTES] = {0};
+    struct PendingCte ctes[MAX_CTES] = {0};
     int cte_count = 0;
 
     skipWhitespace(query, &index);
@@ -192,7 +211,7 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                     return -1;
                 }
 
-                struct Table *cte = ctes + cte_index;
+                struct PendingCte *cte = ctes + cte_index;
 
                 getQuotedToken(query, &index, cte->alias, MAX_TABLE_LENGTH);
 
@@ -214,21 +233,16 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 
                 int len = find_matching_parenthesis(query + index);
 
-                if (len >= MAX_TABLE_LENGTH)
+                if (len < 2)
                 {
-                    fprintf(
-                        stderr,
-                        "CTEs longer than %d are not supported. CTE was %d "
-                        "bytes.\n",
-                        MAX_TABLE_LENGTH,
-                        len);
+                    fprintf(stderr, "Empty CTE\n");
                     return -1;
                 }
 
-                strncpy(cte->name, query + index + 1, len - 2);
-
-                // Indicate to query processor this is a subquery
-                cte->db = DB_SUBQUERY;
+                // Keep a pointer into the query text; parse into a Query* when
+                // the CTE is referenced from FROM (avoids 255-byte name limit).
+                cte->body = query + index + 1;
+                cte->body_len = (size_t)(len - 2);
 
                 index += len;
 
@@ -505,21 +519,15 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                     }
                     else
                     {
-                        if (len >= MAX_TABLE_LENGTH)
+                        struct Query *sq = parseParenSubquery(query, index, len);
+                        if (sq == NULL)
                         {
-                            fprintf(
-                                stderr,
-                                "Subqueries longer than %d are not supported. "
-                                "Subquery was %d bytes.\n",
-                                MAX_TABLE_LENGTH,
-                                len);
                             return -1;
                         }
 
-                        strncpy(table->name, query + index + 1, len - 2);
-
-                        // Indicate to query processor this is a subquery
+                        table->subquery = sq;
                         table->db = DB_SUBQUERY;
+                        strcpy(table->name, "SUBQUERY");
 
                         index += len;
 
@@ -554,19 +562,80 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 
                         // As soon as we have a name we should search for a
                         // matching CTE
-                        struct Table *cte = findTable(
+                        struct PendingCte *cte = findCte(
                             table->name,
                             ctes,
-                            MAX_CTES);
+                            cte_count);
 
                         if (cte != NULL)
                         {
-                            // `ctes` array is just a holding area on the stack.
-                            // Nothing happens to any of them until they're
-                            // actually referenced in the FROM clause.
-                            // In which case we copy into the tables area of the
-                            // query.
-                            memcpy(table, cte, sizeof(*cte));
+                            strcpy(table->alias, cte->alias);
+
+                            // VALUES CTEs match FROM (VALUES …): build the mem
+                            // DB now. parseOwnedQuery would attach a live DB
+                            // that cloneQuery cannot copy on materialize.
+                            if (cte->body_len >= 6 &&
+                                strncmp(cte->body, "VALUES", 6) == 0 &&
+                                (cte->body_len == 6 ||
+                                 isspace((unsigned char)cte->body[6]) ||
+                                 cte->body[6] == '('))
+                            {
+                                size_t v = 6;
+                                while (v < cte->body_len &&
+                                       isspace((unsigned char)cte->body[v]))
+                                {
+                                    v++;
+                                }
+
+                                struct DB *db = calloc(1, sizeof(*db));
+                                if (db == NULL)
+                                {
+                                    fprintf(stderr, "Out of memory\n");
+                                    return -1;
+                                }
+
+                                // Null-terminated copy: csvMem_fromValues(-1)
+                                // walks until '\0' (same as top-level VALUES).
+                                char *vals = malloc(cte->body_len - v + 1);
+                                if (vals == NULL)
+                                {
+                                    free(db);
+                                    fprintf(stderr, "Out of memory\n");
+                                    return -1;
+                                }
+                                memcpy(vals, cte->body + v, cte->body_len - v);
+                                vals[cte->body_len - v] = '\0';
+                                csvMem_fromValues(db, vals, -1);
+                                free(vals);
+
+                                table->db = db;
+                                strcpy(table->name, "VALUES");
+                            }
+                            else
+                            {
+                                // Parse CTE body into a heap Query for this
+                                // table. Each FROM reference gets its own
+                                // Query* (same as historically re-parsing).
+                                char *sql = malloc(cte->body_len + 1);
+                                if (sql == NULL)
+                                {
+                                    fprintf(stderr, "Out of memory\n");
+                                    return -1;
+                                }
+                                memcpy(sql, cte->body, cte->body_len);
+                                sql[cte->body_len] = '\0';
+
+                                struct Query *sq = parseOwnedQuery(sql);
+                                free(sql);
+                                if (sq == NULL)
+                                {
+                                    return -1;
+                                }
+
+                                table->subquery = sq;
+                                table->db = DB_SUBQUERY;
+                                strcpy(table->name, "SUBQUERY");
+                            }
 
                             // TODO: CTEs can't reference CTEs
                         }
@@ -1044,25 +1113,69 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
     return 0;
 }
 
-static struct Table *findTable(
+static struct PendingCte *findCte(
     const char *table_name,
-    struct Table *tables,
-    int table_count)
+    struct PendingCte *ctes,
+    int cte_count)
 {
-    for (int i = 0; i < table_count; i++)
+    for (int i = 0; i < cte_count; i++)
     {
-        struct Table *table = tables + i;
-
-        if (strcmp(table->alias, table_name) == 0)
+        if (strcmp(ctes[i].alias, table_name) == 0)
         {
-            return table;
-        }
-
-        if (strcmp(table->name, table_name) == 0)
-        {
-            return table;
+            return &ctes[i];
         }
     }
 
     return NULL;
+}
+
+struct Query *parseOwnedQuery(const char *sql)
+{
+    if (sql == NULL)
+    {
+        return NULL;
+    }
+
+    struct Query *q = calloc(1, sizeof(*q));
+    if (q == NULL)
+    {
+        fprintf(stderr, "Out of memory\n");
+        return NULL;
+    }
+
+    if (parseQuery(q, sql, NULL) < 0)
+    {
+        destroyQuery(q);
+        free(q);
+        return NULL;
+    }
+
+    return q;
+}
+
+static struct Query *parseParenSubquery(
+    const char *query,
+    size_t paren_index,
+    int paren_len)
+{
+    if (paren_len < 2)
+    {
+        fprintf(stderr, "Empty subquery\n");
+        return NULL;
+    }
+
+    size_t body_len = (size_t)(paren_len - 2);
+    char *sql = malloc(body_len + 1);
+    if (sql == NULL)
+    {
+        fprintf(stderr, "Out of memory\n");
+        return NULL;
+    }
+
+    memcpy(sql, query + paren_index + 1, body_len);
+    sql[body_len] = '\0';
+
+    struct Query *sq = parseOwnedQuery(sql);
+    free(sql);
+    return sq;
 }
