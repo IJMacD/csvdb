@@ -40,3 +40,9 @@ void csvMem_fromHeaders (struct DB *db, const char *headers);
 int csvMem_fromQuery (struct DB *db, struct Query *query);
 
 int csvMem_insertRow (struct DB *db, const char *row);
+
+/**
+ * Append all data rows from src onto dest (same field_count required).
+ * Headers stay those of dest. Returns 0 on success, -1 on mismatch/error.
+ */
+int csvMem_appendRows (struct DB *dest, struct DB *src);

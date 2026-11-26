@@ -467,3 +467,9 @@ FROM CALENDAR WHERE date IN (SELECT date FROM EPHEMERIS WHERE date BETWEEN '2026
 -- FROM / CTE subquery bodies longer than 255 bytes (heap Query*, not table.name)
 FROM (FROM suits WHERE name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts' OR name = 'hearts') AS t SELECT name, symbol;
 WITH long_cte AS (FROM suits WHERE name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades' OR name = 'spades') FROM long_cte SELECT name;
+-- UNION ALL (bag concat; outer ORDER/LIMIT; left-assoc chain)
+VALUES (1),(2) UNION ALL VALUES (3),(4);
+FROM suits WHERE name = 'hearts' SELECT name UNION ALL FROM suits WHERE name = 'spades' SELECT name;
+VALUES (1) UNION ALL VALUES (2) UNION ALL VALUES (3);
+VALUES (3),(1) UNION ALL VALUES (2) ORDER BY col1;
+VALUES (1),(2),(3) UNION ALL VALUES (4),(5) LIMIT 3;

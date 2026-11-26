@@ -37,6 +37,26 @@ static struct Query *parseParenSubquery(
 /* Defined below; also exported via parse.h */
 struct Query *parseOwnedQuery(const char *sql);
 
+/**
+ * Move primary body (and any existing set_op) from q into a new heap Query.
+ * Leaves q empty aside from FLAG_EXPLAIN. Caller owns the result.
+ */
+static struct Query *stealQueryBody(struct Query *q);
+
+/** Attach FUNC_UNION_ALL set_op on q with left/right arm Queries. */
+static int attachUnionAll(
+    struct Query *q,
+    struct Query *left,
+    struct Query *right);
+
+/**
+ * If a UNION ALL left arm is pending, wrap current q body as the right arm.
+ * Returns 0 on success, -1 on error.
+ */
+static int flushPendingUnion(
+    struct Query *q,
+    struct Query **pending_left);
+
 int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 {
     /*********************
@@ -62,8 +82,11 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
     q->offset_value = 0;
     q->limit_value = -1;
 
+    clearNode(&q->set_op);
+
     struct PendingCte ctes[MAX_CTES] = {0};
     int cte_count = 0;
+    struct Query *pending_union_left = NULL;
 
     skipWhitespace(query, &index);
 
@@ -76,37 +99,60 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 
     skipWhitespace(query, &index);
 
-    // Special treatment for VALUES only (top-level) query
-    // Will behave as a query: SELECT * FROM values_mem
-    // Where values_mem is a simulated DB in memory
-    if (strncmp(query + index, "VALUES", 6) == 0)
+    // Special treatment for VALUES-only primary (also a UNION ALL arm).
+    // Behaves as SELECT * FROM values_mem. Stops before UNION / ORDER / etc.
+    if (strncmp(query + index, "VALUES", 6) == 0 &&
+        (isspace((unsigned char)query[index + 6]) || query[index + 6] == '('))
     {
         index += 6;
 
-        q->tables = calloc(1, sizeof(q->tables[0]));
-        q->table_count = 1;
-
-        struct Table *table = &q->tables[0];
+        struct Table *table = allocateTable(q);
 
         skipWhitespace(query, &index);
 
-        // Malloc a DB ahead of time.
         struct DB *db = calloc(1, sizeof(*db));
-
-        const char *end = csvMem_fromValues(db, query + index, -1);
-
-        if (end_ptr != NULL)
+        if (db == NULL)
         {
-            *end_ptr = end;
+            fprintf(stderr, "Out of memory\n");
+            return -1;
         }
 
+        const char *end = csvMem_fromValues(db, query + index, -1);
+        index = (size_t)(end - query);
+
         table->db = db;
-
         strcpy(table->name, "VALUES");
-
         strcpy(table->alias, "values");
 
-        return 0;
+        skipWhitespace(query, &index);
+
+        // Fall through only for set-op / presentation clauses on this statement.
+        // Otherwise end the statement so multi-statement scripts keep working
+        // (INSERT … VALUES (…); TABLE … must not parse TABLE here).
+        int continue_clauses =
+            (strncmp(query + index, "UNION", 5) == 0 &&
+             !isalnum((unsigned char)query[index + 5])) ||
+            (strncmp(query + index, "ORDER", 5) == 0 &&
+             !isalnum((unsigned char)query[index + 5])) ||
+            (strncmp(query + index, "LIMIT", 5) == 0 &&
+             !isalnum((unsigned char)query[index + 5])) ||
+            (strncmp(query + index, "OFFSET", 6) == 0 &&
+             !isalnum((unsigned char)query[index + 6])) ||
+            (strncmp(query + index, "FETCH", 5) == 0 &&
+             !isalnum((unsigned char)query[index + 5]));
+
+        if (!continue_clauses)
+        {
+            if (query[index] == ';')
+            {
+                index++;
+            }
+            if (end_ptr != NULL)
+            {
+                *end_ptr = query + index;
+            }
+            return 0;
+        }
     }
 
     // Special treatment for TABLE query
@@ -196,7 +242,46 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
 
         // printf("Token: '%s'\n", keyword);
 
-        if (strcmp(keyword, "WITH") == 0)
+        if (strcmp(keyword, "VALUES") == 0)
+        {
+            // Primary arm: SELECT * FROM in-memory VALUES rows.
+            // csvMem_fromValues stops before UNION / ORDER / LIMIT / etc.
+            struct Table *table = allocateTable(q);
+
+            skipWhitespace(query, &index);
+
+            struct DB *db = calloc(1, sizeof(*db));
+            if (db == NULL)
+            {
+                fprintf(stderr, "Out of memory\n");
+                if (pending_union_left != NULL)
+                {
+                    destroyQuery(pending_union_left);
+                    free(pending_union_left);
+                }
+                return -1;
+            }
+
+            const char *end = csvMem_fromValues(db, query + index, -1);
+            index = (size_t)(end - query);
+
+            table->db = db;
+            strcpy(table->name, "VALUES");
+            strcpy(table->alias, "values");
+
+            // fromValues may have consumed a trailing ';'. Stop this statement
+            // so multi-statement scripts do not parse the next query here.
+            skipWhitespace(query, &index);
+            if (query[index] == '\0' || query[index] == ';')
+            {
+                break;
+            }
+            if (index > 0 && query[index - 1] == ';')
+            {
+                break;
+            }
+        }
+        else if (strcmp(keyword, "WITH") == 0)
         {
             while (query[index] != '\0' && query[index] != ';')
             {
@@ -921,8 +1006,46 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                 return -1;
             }
         }
+        else if (strcmp(keyword, "UNION") == 0)
+        {
+            getToken(query, &index, keyword, MAX_FIELD_LENGTH);
+            if (strcmp(keyword, "ALL") != 0)
+            {
+                fprintf(
+                    stderr,
+                    "Only UNION ALL is supported (got UNION %s)\n",
+                    keyword[0] ? keyword : "(empty)");
+                if (pending_union_left != NULL)
+                {
+                    destroyQuery(pending_union_left);
+                    free(pending_union_left);
+                }
+                return -1;
+            }
+
+            // Left-assoc: if a previous arm is pending, current q is that
+            // arm's right — wrap before starting the next arm.
+            if (pending_union_left != NULL)
+            {
+                if (flushPendingUnion(q, &pending_union_left) < 0)
+                {
+                    return -1;
+                }
+            }
+
+            pending_union_left = stealQueryBody(q);
+            if (pending_union_left == NULL)
+            {
+                fprintf(stderr, "Out of memory\n");
+                return -1;
+            }
+        }
         else if (strcmp(keyword, "OFFSET") == 0)
         {
+            if (flushPendingUnion(q, &pending_union_left) < 0)
+            {
+                return -1;
+            }
             q->offset_value = getNumericToken(query, &index);
 
             if (q->offset_value < 0)
@@ -941,6 +1064,11 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
         }
         else if (strcmp(keyword, "FETCH") == 0)
         {
+            if (flushPendingUnion(q, &pending_union_left) < 0)
+            {
+                return -1;
+            }
+
             getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
             if (strcmp(keyword, "FIRST") != 0 && strcmp(keyword, "NEXT") != 0)
@@ -985,6 +1113,11 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
         }
         else if (strcmp(keyword, "LIMIT") == 0)
         {
+            if (flushPendingUnion(q, &pending_union_left) < 0)
+            {
+                return -1;
+            }
+
             q->limit_value = getNumericToken(query, &index);
 
             if (q->limit_value < 0)
@@ -995,6 +1128,11 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
         }
         else if (strcmp(keyword, "ORDER") == 0)
         {
+            if (flushPendingUnion(q, &pending_union_left) < 0)
+            {
+                return -1;
+            }
+
             getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
             if (strcmp(keyword, "BY") != 0)
@@ -1056,6 +1194,11 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
         }
         else if (strcmp(keyword, "GROUP") == 0)
         {
+            if (flushPendingUnion(q, &pending_union_left) < 0)
+            {
+                return -1;
+            }
+
             getToken(query, &index, keyword, MAX_FIELD_LENGTH);
 
             if (strcmp(keyword, "BY") != 0)
@@ -1092,11 +1235,21 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
         {
             fprintf(
                 stderr,
-                "expected WITH|SELECT|FROM|WHERE|HAVING|OFFSET|FETCH FIRST|"
-                "LIMIT|ORDER|GROUP\n");
+                "expected WITH|VALUES|SELECT|FROM|WHERE|HAVING|OFFSET|FETCH "
+                "FIRST|LIMIT|ORDER|GROUP|UNION\n");
             fprintf(stderr, "Found '%s'\n", keyword);
+            if (pending_union_left != NULL)
+            {
+                destroyQuery(pending_union_left);
+                free(pending_union_left);
+            }
             return -1;
         }
+    }
+
+    if (flushPendingUnion(q, &pending_union_left) < 0)
+    {
+        return -1;
     }
 
     // Consume trailing semicolon
@@ -1127,6 +1280,144 @@ static struct PendingCte *findCte(
     }
 
     return NULL;
+}
+
+/**
+ * Shallow-move a Node (including owned pointers) from src to dest, then zero src
+ * without freeing — ownership transfers to dest.
+ */
+static void moveNode(struct Node *dest, struct Node *src)
+{
+    *dest = *src;
+    memset(src, 0, sizeof(*src));
+    src->function = FUNC_UNITY;
+    src->field.index = FIELD_UNKNOWN;
+    src->field.table_id = -1;
+}
+
+static struct Query *stealQueryBody(struct Query *q)
+{
+    struct Query *left = calloc(1, sizeof(*left));
+    if (left == NULL)
+    {
+        return NULL;
+    }
+
+#ifdef DEBUG
+    left->id = q->id;
+#endif
+
+    // Keep EXPLAIN on the outermost query only.
+    left->flags = q->flags & ~FLAG_EXPLAIN;
+    q->flags &= FLAG_EXPLAIN;
+
+    left->tables = q->tables;
+    left->table_count = q->table_count;
+    q->tables = NULL;
+    q->table_count = 0;
+
+    left->column_nodes = q->column_nodes;
+    left->column_count = q->column_count;
+    q->column_nodes = NULL;
+    q->column_count = 0;
+
+    left->predicate_nodes = q->predicate_nodes;
+    left->predicate_count = q->predicate_count;
+    q->predicate_nodes = NULL;
+    q->predicate_count = 0;
+
+    left->having_nodes = q->having_nodes;
+    left->having_count = q->having_count;
+    q->having_nodes = NULL;
+    q->having_count = 0;
+
+    left->order_count = q->order_count;
+    for (int i = 0; i < q->order_count; i++)
+    {
+        moveNode(&left->order_nodes[i], &q->order_nodes[i]);
+    }
+    q->order_count = 0;
+
+    left->group_count = q->group_count;
+    for (int i = 0; i < q->group_count; i++)
+    {
+        moveNode(&left->group_nodes[i], &q->group_nodes[i]);
+    }
+    q->group_count = 0;
+
+    left->distinct_count = q->distinct_count;
+    for (int i = 0; i < q->distinct_count; i++)
+    {
+        moveNode(&left->distinct_nodes[i], &q->distinct_nodes[i]);
+    }
+    q->distinct_count = 0;
+
+    left->offset_value = q->offset_value;
+    left->limit_value = q->limit_value;
+    q->offset_value = 0;
+    q->limit_value = -1;
+
+    moveNode(&left->set_op, &q->set_op);
+
+    return left;
+}
+
+static int attachUnionAll(
+    struct Query *q,
+    struct Query *left,
+    struct Query *right)
+{
+    if (left == NULL || right == NULL)
+    {
+        return -1;
+    }
+
+    // q should not already hold a set_op with children.
+    if (q->set_op.child_count > 0 || q->set_op.subquery != NULL)
+    {
+        freeNode(&q->set_op);
+    }
+    clearNode(&q->set_op);
+
+    allocateNodeChildren(&q->set_op, 2);
+    q->set_op.function = FUNC_UNION_ALL;
+    q->set_op.children[0].subquery = left;
+    q->set_op.children[1].subquery = right;
+
+    return 0;
+}
+
+static int flushPendingUnion(
+    struct Query *q,
+    struct Query **pending_left)
+{
+    if (pending_left == NULL || *pending_left == NULL)
+    {
+        return 0;
+    }
+
+    struct Query *right = stealQueryBody(q);
+    if (right == NULL)
+    {
+        destroyQuery(*pending_left);
+        free(*pending_left);
+        *pending_left = NULL;
+        fprintf(stderr, "Out of memory\n");
+        return -1;
+    }
+
+    if (attachUnionAll(q, *pending_left, right) < 0)
+    {
+        destroyQuery(*pending_left);
+        free(*pending_left);
+        destroyQuery(right);
+        free(right);
+        *pending_left = NULL;
+        return -1;
+    }
+
+    *pending_left = NULL;
+    return 0;
 }
 
 struct Query *parseOwnedQuery(const char *sql)

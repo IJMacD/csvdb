@@ -296,15 +296,20 @@ const char *csvMem_fromValues(struct DB *db, const char *input, int length)
 
     while (*in_ptr != '\0' && *in_ptr != ';' && in_ptr != end_ptr)
     {
+        while (isspace((unsigned char)*in_ptr))
+        {
+            in_ptr++;
+        }
 
+        if (*in_ptr == '\0' || *in_ptr == ';' || in_ptr == end_ptr)
+        {
+            break;
+        }
+
+        // Leave trailing clauses (UNION / ORDER / LIMIT / …) for the parser.
         if (*in_ptr != '(')
         {
-            fprintf(
-                stderr,
-                "VALUES: expected row %d to start with '('. Found: %c\n",
-                line_index,
-                *in_ptr);
-            csvdb_fatal(-1);
+            break;
         }
 
         db->line_indices[line_index++] = out_ptr - db->data;
@@ -516,6 +521,66 @@ int csvMem_insertRow(struct DB *db, const char *row)
     // IF THERE'S A BUG CHECK HERE!
     // We're not checking if db->line_indices is big enough
     db->line_indices[db->_record_count] = data_len + len;
+
+    return 0;
+}
+
+int csvMem_appendRows(struct DB *dest, struct DB *src)
+{
+    if (dest == NULL || src == NULL)
+    {
+        return -1;
+    }
+
+    if (dest->field_count != src->field_count)
+    {
+        return -1;
+    }
+
+    // Ensure both bodies are fully indexed so data extents are known.
+    if (dest->_record_count < 0)
+    {
+        indexLines(dest, -1, '"');
+    }
+    if (src->_record_count < 0)
+    {
+        indexLines(src, -1, '"');
+    }
+
+    if (src->_record_count == 0)
+    {
+        return 0;
+    }
+
+    char *src_end = src->data + src->line_indices[src->_record_count];
+    size_t src_data_len = (size_t)(src_end - src->data);
+
+    char *dest_end = dest->data + dest->line_indices[dest->_record_count];
+    size_t dest_data_len = (size_t)(dest_end - dest->data);
+    size_t header_len = (size_t)(dest->data - dest->fields);
+
+    size_t new_size = header_len + dest_data_len + src_data_len + 1;
+    char *fields = realloc(dest->fields, new_size);
+    if (fields == NULL)
+    {
+        fprintf(stderr, "Unable to allocate memory for UNION ALL\n");
+        return -1;
+    }
+
+    dest->fields = fields;
+    dest->data = dest->fields + header_len;
+    dest_end = dest->data + dest_data_len;
+    memcpy(dest_end, src->data, src_data_len);
+    dest_end[src_data_len] = '\0';
+
+    // Drop stale line index; next getRecordCount will rebuild.
+    if (dest->line_indices != NULL)
+    {
+        void *ptr = dest->line_indices;
+        free(ptr - sizeof(int));
+        dest->line_indices = NULL;
+    }
+    dest->_record_count = -1;
 
     return 0;
 }
