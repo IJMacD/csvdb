@@ -25,6 +25,7 @@
 #include "../evaluate/evaluate.h"
 #include "../query/result.h"
 #include "db.h"
+#include "helper.h"
 #include "../functions/util.h"
 #include "../evaluate/function.h"
 #include "../debug.h"
@@ -254,14 +255,14 @@ int openDB (struct DB *db, const char *filename, char **resolved) {
         f = stdin;
     }
     else {
-        f = fopen(filename, "r");
+        f = fopen_regular(filename, "r");
     }
 
     // We haven't found the file yet. Try adding '.csv' and checking again.
     if (!f) {
         char buffer[FILENAME_MAX];
         sprintf(buffer, "%s.csv", filename);
-        f = fopen(buffer, "r");
+        f = fopen_regular(buffer, "r");
 
         if (!f) {
             /*

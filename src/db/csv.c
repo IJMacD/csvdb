@@ -10,6 +10,9 @@
 #include "../query/node.h"
 #include "../fatal.h"
 
+/* Declared in helper.h; avoid including it here (indexLines name clash). */
+FILE *fopen_regular (const char *path, const char *mode);
+
 static int makeDB(struct DB *db, FILE *f);
 
 static int countLines(FILE *f);
@@ -37,7 +40,7 @@ static int makeDB(struct DB *db, FILE *f)
  */
 int csv_openDB(struct DB *db, const char *filename, char **resolved)
 {
-    FILE *f = fopen(filename, "r+");
+    FILE *f = fopen_regular(filename, "r+");
 
     if (f && resolved != NULL)
     {
@@ -48,7 +51,7 @@ int csv_openDB(struct DB *db, const char *filename, char **resolved)
     {
         char buffer[FILENAME_MAX];
         sprintf(buffer, "%s.csv", filename);
-        f = fopen(buffer, "r+");
+        f = fopen_regular(buffer, "r+");
 
         if (!f)
         {
