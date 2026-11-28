@@ -270,21 +270,24 @@ int parseQuery(struct Query *q, const char *query, const char **end_ptr)
                 return -1;
             }
 
-            const char *end = csvMem_fromValues(db, query + index, -1);
+            const char *values_start = query + index;
+            const char *end = csvMem_fromValues(db, values_start, -1);
+            /*
+             * csvMem_fromValues consumes a trailing ';' when present. Detect
+             * that before skipWhitespace — otherwise the next statement
+             * (e.g. another VALUES … UNION …) is parsed as more of this arm
+             * and set ops see a column-count mismatch.
+             */
+            int ate_semicolon = (end > values_start && *(end - 1) == ';');
             index = (size_t)(end - query);
 
             table->db = db;
             strcpy(table->name, "VALUES");
             strcpy(table->alias, "values");
 
-            // fromValues may have consumed a trailing ';'. Stop this statement
-            // so multi-statement scripts do not parse the next query here.
+            // Stop this statement so multi-statement scripts do not continue.
             skipWhitespace(query, &index);
-            if (query[index] == '\0' || query[index] == ';')
-            {
-                break;
-            }
-            if (index > 0 && query[index - 1] == ';')
+            if (ate_semicolon || query[index] == '\0' || query[index] == ';')
             {
                 break;
             }

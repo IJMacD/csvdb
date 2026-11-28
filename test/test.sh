@@ -323,6 +323,27 @@ if [[ "$(cat "$multi_out")" != "$multi_expected" ]]; then
 fi
 rm -f "$multi_sql" "$multi_out"
 
+# Set-op scripts: a VALUES arm that ends with ';' must not pull the next
+# statement into the same set-op (used to report column count mismatch).
+multi_sql=$(mktemp)
+multi_out=$(mktemp)
+cat > "$multi_sql" <<'EOF'
+VALUES (1),(2) UNION ALL VALUES (3),(4);
+VALUES (1),(2),(2) UNION VALUES (2),(3);          -- distinct rows
+VALUES (1),(2) INTERSECT VALUES (2),(3);
+VALUES (1),(2),(3) EXCEPT VALUES (2);
+EOF
+if ! "$CSVDB" -N -F csv -f "$multi_sql" </dev/null >"$multi_out" 2>/dev/null; then
+    rm -f "$multi_sql" "$multi_out"
+    cli_die "multi-statement set-ops failed"
+fi
+multi_expected=$'1\n2\n3\n4\n1\n2\n3\n2\n1\n3'
+if [[ "$(cat "$multi_out")" != "$multi_expected" ]]; then
+    rm -f "$multi_sql" "$multi_out"
+    cli_die "multi-statement set-ops unexpected: [$(cat "$multi_out")]"
+fi
+rm -f "$multi_sql" "$multi_out"
+
 # REPL: pasting multiple statements must run all of them (not only the first).
 # Needs a real TTY (pty) and python3.
 if command -v python3 >/dev/null 2>&1; then
