@@ -728,10 +728,10 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
     /* table_count == 1 */
     // Special case if the only predicate is an OR of unique same-column EQ
     // arms (as produced by IN (...)). Multiple SOURCE steps each push their
-    // own row list; SORT/REVERSE only operate on the top list, so with
-    // ORDER BY we UNION those lists first. Without an index on the IN
-    // column, prefer a single filter (+ SORT) instead of N full scans.
-    // Cross-column or non-EQ OR must use a single filter — multi-source
+    // own row list; SORT/REVERSE/SLICE only operate on the top list, so with
+    // ORDER BY or LIMIT/OFFSET we UNION those lists first. Without an index
+    // on the IN column, prefer a single filter (+ SORT) instead of N full
+    // scans. Cross-column or non-EQ OR must use a single filter — multi-source
     // would duplicate rows that match more than one arm.
     else if (
         query->predicate_count == 1 &&
@@ -740,18 +740,18 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
         isSameColumnEqOr(&query->predicate_nodes[0]) &&
         (!have_order_by ||
          isSeekableSameColumnEqOr(query, &query->predicate_nodes[0])) &&
-        // Multiple sources each apply LIMIT locally; skip when a global
-        // LIMIT/OFFSET is present so a single OR filter + SLICE is used.
-        query->limit_value < 0 &&
-        query->offset_value <= 0 &&
-        // UNIQUE × N + UNION × (N-1) + SORT/SELECT must fit the plan.
+        // UNIQUE × N + UNION × (N-1) + SORT/SLICE/SELECT must fit the plan.
         plan->step_count +
-                query->predicate_nodes[0].child_count * 2 + 2 <
+                query->predicate_nodes[0].child_count * 2 + 3 <
             MAX_PLAN_STEPS)
     {
         struct Node *or_children = query->predicate_nodes[0].children;
         struct Table *table0 = &query->tables[0];
         int arm_count = query->predicate_nodes[0].child_count;
+        int need_single_list =
+            have_order_by ||
+            query->limit_value >= 0 ||
+            query->offset_value > 0;
 
         for (int i = 0; i < arm_count; i++)
         {
@@ -797,14 +797,17 @@ static void addPredicateSource(struct Plan *plan, struct Query *query)
             addStepWithNode(plan, child_step, child);
         }
 
-        if (have_order_by)
+        if (need_single_list)
         {
-            // Collapse N source lists into one before SORT/REVERSE.
+            // Collapse N source lists into one before SORT/REVERSE/SLICE.
             for (int i = 1; i < arm_count; i++)
             {
                 addStep(plan, PLAN_UNION);
             }
-            addOrderStepsIfRequired(plan, query);
+            if (have_order_by)
+            {
+                addOrderStepsIfRequired(plan, query);
+            }
         }
     }
     /* table_count == 1 */
@@ -1487,8 +1490,8 @@ static void addLimitStepIfRequired(struct Plan *plan, struct Query *query)
             return;
         }
 
-        // PLAN_SORT is incapable of self limiting
-        if (prev->type != PLAN_SORT)
+        // PLAN_SORT / PLAN_UNION cannot self-limit (UNION ignores step->limit)
+        if (prev->type != PLAN_SORT && prev->type != PLAN_UNION)
         {
             // If there's no previous limit or the limit was higher than
             // necessary we'll set our limit.
@@ -1768,6 +1771,13 @@ static int applySortLogic(
     // These assumptions work if the rows are from exactly one table, they can
     // however be from additional tables if they are uniquely joined to the
     // first table.
+    // Multi-source IN/OR plans UNION lists in arm order, which is not the
+    // ORDER BY order even when each seek uses the sort index — always SORT.
+    if (sorts_added > 0 && countPlanSourceSteps(plan) > 1)
+    {
+        return sorts_added;
+    }
+
     if (sorts_added > 0 && haveNonUniqueJoins(plan) == 0)
     {
         int primary_sort_idx = sorts_needed[0];
@@ -1819,11 +1829,7 @@ static int applySortLogic(
             }
 
             // UNIQUE EQ returns at most one row — never needs a sort.
-            // Multi-source IN plans emit several UNIQUE seeks (+ UNION);
-            // those still need ORDER BY after the lists are collapsed.
-            if (
-                first_step->type == PLAN_UNIQUE &&
-                countPlanSourceSteps(plan) <= 1)
+            if (first_step->type == PLAN_UNIQUE)
             {
                 return 0;
             }

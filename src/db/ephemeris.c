@@ -551,6 +551,48 @@ static int getJulianRange (
                 have_unprocessed = 1;
             }
         }
+        else if (op == OPERATOR_OR) {
+            // IN (...) becomes OR of EQ arms. Bound the scan to [min, max)
+            // of those arms; still evaluate the OR (have_unprocessed).
+            int or_start = -1;
+            int or_end = -1;
+            int bounded = 1;
+
+            for (int c = 0; c < predicate->child_count; c++) {
+                struct Node *arm = &predicate->children[c];
+                int arm_start = -1;
+                int arm_end = -1;
+
+                if (arm->function != OPERATOR_EQ) {
+                    bounded = 0;
+                    break;
+                }
+
+                getSingleJulianRange(arm, &arm_start, &arm_end);
+                if (arm_start < 0 || arm_end < 0) {
+                    bounded = 0;
+                    break;
+                }
+
+                if (or_start < 0 || arm_start < or_start) {
+                    or_start = arm_start;
+                }
+                if (or_end < 0 || arm_end > or_end) {
+                    or_end = arm_end;
+                }
+            }
+
+            if (bounded && or_start >= 0 && or_end >= 0) {
+                if (*julian_start == -1 || or_start > *julian_start) {
+                    *julian_start = or_start;
+                }
+                if (*julian_end == -1 || or_end < *julian_end) {
+                    *julian_end = or_end;
+                }
+            }
+
+            have_unprocessed = 1;
+        }
         else {
             have_unprocessed = 1;
         }
