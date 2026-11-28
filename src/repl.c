@@ -38,7 +38,11 @@ static void disableRawMode(void)
 {
     if (raw_mode_active)
     {
-        tcsetattr(STDIN_FILENO, TCSAFLUSH, &saved_termios);
+        /*
+         * TCSADRAIN (not TCSAFLUSH): keep unread stdin. A multi-line paste
+         * arrives ahead of the first submit; flushing would drop the rest.
+         */
+        tcsetattr(STDIN_FILENO, TCSADRAIN, &saved_termios);
         raw_mode_active = 0;
     }
 }
@@ -67,13 +71,25 @@ static int enableRawMode(void)
     raw.c_cc[VMIN] = 1;
     raw.c_cc[VTIME] = 0;
 
-    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1)
+    /* TCSADRAIN: do not discard unread paste / typeahead. */
+    if (tcsetattr(STDIN_FILENO, TCSADRAIN, &raw) == -1)
     {
         return -1;
     }
 
     raw_mode_active = 1;
     return 0;
+}
+
+/** Bytes waiting on stdin (for paste: keep collecting until the queue drains). */
+static int stdinBytesWaiting(void)
+{
+    int n = 0;
+    if (ioctl(STDIN_FILENO, FIONREAD, &n) == -1)
+    {
+        return 0;
+    }
+    return n;
 }
 
 static int termCols(void)
@@ -510,7 +526,14 @@ static char *readEditedStatement(int *interrupted, int require_semicolon)
                 return strdup("");
             }
 
-            if (statementComplete(buf, require_semicolon))
+            /*
+             * Submit only when the statement is complete and no more input is
+             * queued. During a paste, newlines arrive with more bytes waiting;
+             * keep them as line breaks so the whole paste lands in one buffer.
+             * (CRLF pastes may insert a blank line; that is harmless whitespace.)
+             */
+            if (statementComplete(buf, require_semicolon) &&
+                stdinBytesWaiting() == 0)
             {
                 disableRawMode();
                 free(stash);
@@ -522,7 +545,7 @@ static char *readEditedStatement(int *interrupted, int require_semicolon)
                 return strdup(buf);
             }
 
-            /* Incomplete SQL: insert a newline at the cursor and keep editing. */
+            /* Incomplete SQL, or more paste pending: insert a newline. */
             if (len + 1 >= REPL_LINE_CAP)
             {
                 continue;
@@ -1119,13 +1142,14 @@ void repl(int options_in)
         /*
          * Recover from query-time csvdb_fatal() so the session continues.
          * setjmp returns non-zero after a fatal; both paths share cleanup.
+         * runQueries (not query) so a pasted buffer with several statements
+         * executes each one, matching batch / -f behaviour.
          */
         jmp_buf fatal_jmp;
         csvdb_fatal_catch(&fatal_jmp);
         if (setjmp(fatal_jmp) == 0)
         {
-            const char *end_ptr;
-            query(statement, run_flags, stdout, &end_ptr);
+            runQueries(statement, run_flags, stdout);
         }
         csvdb_fatal_catch(NULL);
 
@@ -1139,6 +1163,7 @@ static void printHelp(void)
     printf(
         "Enter SQL statements ending with ';'. Dot-commands need no semicolon.\n"
         "Enter adds a continuation line while a statement is incomplete.\n"
+        "Paste may include several statements; each is executed in order.\n"
         "Up/down move between those lines (or history on the first line);\n"
         "left/right move the cursor. Home/End are per-line.\n\n"
         "Commands in REPL:\n"
