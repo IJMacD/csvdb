@@ -323,6 +323,73 @@ if [[ "$(cat "$multi_out")" != "$multi_expected" ]]; then
 fi
 rm -f "$multi_sql" "$multi_out"
 
+# REPL: pasting multiple statements must run all of them (not only the first).
+# Needs a real TTY (pty) and python3.
+if command -v python3 >/dev/null 2>&1; then
+    repl_paste_out=$(python3 - "$CSVDB" <<'PY'
+import os, pty, select, sys, time, re
+
+csvdb = sys.argv[1]
+master, slave = pty.openpty()
+pid = os.fork()
+if pid == 0:
+    os.close(master)
+    os.setsid()
+    os.dup2(slave, 0)
+    os.dup2(slave, 1)
+    os.dup2(slave, 2)
+    if slave > 2:
+        os.close(slave)
+    os.environ["TERM"] = "xterm"
+    os.execl(csvdb, csvdb, "-F", "csv", "-N")
+os.close(slave)
+
+def drain(budget=0.4):
+    chunks = []
+    end = time.time() + budget
+    while time.time() < end:
+        r, _, _ = select.select([master], [], [], 0.05)
+        if master not in r:
+            continue
+        try:
+            data = os.read(master, 4096)
+        except OSError:
+            break
+        if not data:
+            break
+        chunks.append(data)
+    return b"".join(chunks)
+
+out = drain(0.6)
+# Single-line paste with two statements
+os.write(master, b"SELECT 1; SELECT 2;\n")
+out += drain(0.5)
+# Multi-line paste
+os.write(master, b"SELECT 3;\nSELECT 4;\n")
+out += drain(0.5)
+os.write(master, b".exit\n")
+out += drain(0.5)
+try:
+    os.close(master)
+except OSError:
+    pass
+try:
+    os.waitpid(pid, 0)
+except ChildProcessError:
+    pass
+
+text = re.sub(rb"\x1b\[[0-9;]*[A-Za-z]", b"", out).decode("utf-8", "replace")
+text = text.replace("\r", "")
+# Result rows are lone integers on their own lines
+rows = [ln.strip() for ln in text.splitlines() if ln.strip() in {"1", "2", "3", "4"}]
+print(" ".join(rows))
+PY
+)
+    if [[ "$repl_paste_out" != "1 2 3 4" ]]; then
+        cli_die "REPL multi-statement paste unexpected: [$repl_paste_out]"
+    fi
+fi
+
 # Subquery after '(' with newlines/spaces (parseNode must skipWhitespace)
 multi_sql=$(mktemp)
 multi_out=$(mktemp)
