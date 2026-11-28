@@ -94,6 +94,22 @@ docker run -p 8001:80 -v csvdb-data:/data ijmacd/csvdb
 
 The first command runs a query. `csvdb` with no query starts the REPL. Mount a directory on `/data` to query CSV files there. The last command serves the CGI on port 8001.
 
+## Web / CGI API
+
+The CGI accepts SQL in two ways:
+
+```shell
+# Query string (URL-encoded) — also used by the browser form
+curl 'http://localhost:8001/cgi-bin/csvdb?query=SELECT%201&format=csv'
+
+# Raw SQL body — easier for scripting (no URL-encoding)
+curl -H 'Content-Type: text/sql' -H 'Accept: text/csv' \
+  --data-binary 'SELECT 1 AS n' \
+  'http://localhost:8001/cgi-bin/csvdb'
+```
+
+Output format can be selected with `?format=` (`csv`, `tsv`, `json`, `html`, `xml`, `sql`, …) or with an `Accept` header (`text/csv`, `application/json`, …). Query-string `format=` wins over `Accept` when both are present. `POST` bodies are limited to 1 MiB.
+
 ## Features
 
 - Multiple output formats

@@ -18,5 +18,9 @@ jobs:
         fetch-depth: 0  # Checkout tags too
     - name: Build
       run: make
+    - name: Build CGI
+      run: make cgi
     - name: Run tests
       run: ./test/test.sh --ci
+    - name: Run CGI tests
+      run: ./test/test-cgi.sh
