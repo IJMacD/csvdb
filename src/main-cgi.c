@@ -19,8 +19,10 @@ int debug_verbosity = 0;
  * CGI Spec:
  *
  * GET  /cgi-bin/csvdb?query=<url-encoded-sql>[&format=...]
- * POST /cgi-bin/csvdb  with Content-Type: text/sql  (body = raw SQL)
- *      Optional query-string format=... still applies.
+ * POST /cgi-bin/csvdb
+ *   - Content-Type: application/x-www-form-urlencoded  (HTML forms)
+ *   - Content-Type: text/sql  (body = raw SQL)
+ * Query-string params still apply; form fields override them.
  *
  * $PATH_INFO = /extra/path
  * $QUERY_STRING = query=string
@@ -123,12 +125,29 @@ int main(void)
         free(query_string);
     }
 
-    // POST body as raw SQL when Content-Type is text/sql
-    if ((query == NULL || query[0] == '\0') &&
-        strcasecmp(request_method, "POST") == 0)
+    // POST body: HTML form fields, or raw SQL for text/sql
+    if (strcasecmp(request_method, "POST") == 0)
     {
         char *content_type = getenv("CONTENT_TYPE");
-        if (content_type_is(content_type, "text/sql"))
+        if (content_type_is(content_type, "application/x-www-form-urlencoded"))
+        {
+            char *body = read_post_body(MAX_POST_BODY);
+            if (body == NULL)
+            {
+                printf("Status: 400 Bad Request\n");
+                print_cors_headers();
+                printf("Content-Type: text/plain\n\n");
+                printf("Unable to read POST form body\n");
+                free(query);
+                fclose(error_log);
+                return -1;
+            }
+            apply_query_params(body, &format, &query);
+            free(body);
+        }
+        else if (
+            (query == NULL || query[0] == '\0') &&
+            content_type_is(content_type, "text/sql"))
         {
             free(query);
             query = read_post_body(MAX_POST_BODY);
@@ -149,7 +168,9 @@ int main(void)
         printf("Status: 400 Bad Request\n");
         print_cors_headers();
         printf("Content-Type: text/plain\n\n");
-        printf("No query was provided (use ?query=... or POST text/sql)\n");
+        printf(
+            "No query was provided (use ?query=..., POST form fields, or "
+            "POST text/sql)\n");
         free(query);
         fclose(error_log);
         return -1;

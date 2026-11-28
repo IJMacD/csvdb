@@ -57,6 +57,17 @@ echo "$out" | grep -qi 'Content-Type: text/csv' || die "Accept: text/csv missing
 body=$(printf '%s\n' "$out" | body_of)
 [[ "$body" == $'n\n2' ]] || die "Accept: text/csv body unexpected: [$body]"
 
+# POST application/x-www-form-urlencoded (HTML form)
+form='query=SELECT+5+AS+n&format=csv'
+out=$(printf '%s' "$form" | run_cgi \
+    REQUEST_METHOD=POST \
+    CONTENT_TYPE='application/x-www-form-urlencoded' \
+    CONTENT_LENGTH=${#form} \
+    QUERY_STRING='')
+echo "$out" | grep -qi 'Content-Type: text/csv' || die "POST form missing Content-Type"
+body=$(printf '%s\n' "$out" | body_of)
+[[ "$body" == $'n\n5' ]] || die "POST form body unexpected: [$body]"
+
 # POST text/sql + Accept: text/csv
 sql='SELECT 3 AS n'
 out=$(printf '%s' "$sql" | run_cgi \

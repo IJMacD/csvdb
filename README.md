@@ -96,11 +96,15 @@ The first command runs a query. `csvdb` with no query starts the REPL. Mount a d
 
 ## Web / CGI API
 
-The CGI accepts SQL in two ways:
+The CGI accepts SQL in three ways:
 
 ```shell
-# Query string (URL-encoded) — also used by the browser form
+# Query string (URL-encoded) — also used by the browser form (GET)
 curl 'http://localhost:8001/cgi-bin/csvdb?query=SELECT%201&format=csv'
+
+# HTML form POST (application/x-www-form-urlencoded)
+curl --data-urlencode 'query=SELECT 1 AS n' --data 'format=csv' \
+  'http://localhost:8001/cgi-bin/csvdb'
 
 # Raw SQL body — easier for scripting (no URL-encoding)
 curl -H 'Content-Type: text/sql' -H 'Accept: text/csv' \
@@ -108,7 +112,7 @@ curl -H 'Content-Type: text/sql' -H 'Accept: text/csv' \
   'http://localhost:8001/cgi-bin/csvdb'
 ```
 
-Output format can be selected with `?format=` (`csv`, `tsv`, `json`, `html`, `xml`, `sql`, …) or with an `Accept` header (`text/csv`, `application/json`, …). Query-string `format=` wins over `Accept` when both are present. `POST` bodies are limited to 1 MiB.
+Output format can be selected with `format=` (`csv`, `tsv`, `json`, `html`, `xml`, `sql`, …) or with an `Accept` header (`text/csv`, `application/json`, …). Form/`?format=` wins over `Accept` when both are present. `POST` bodies are limited to 1 MiB.
 
 ## Features
 
