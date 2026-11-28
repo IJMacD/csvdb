@@ -27,6 +27,8 @@ static int makeDB(struct DB *db, FILE *f)
 {
     db->vfs = VFS_CSV;
     db->file = f;
+    db->line_indices = NULL;
+    db->fields = NULL;
 
     prepareHeaders(db);
 

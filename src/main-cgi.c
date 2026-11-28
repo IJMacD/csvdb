@@ -646,6 +646,11 @@ void set_session_temp_db(const char *session_id)
     sprintf(temp_mapping_filename, "/tmp/csvdb.session.%s.temp.csv", session_id);
 
     struct DB *temp_mapping = temp_openMappingDB(temp_mapping_filename);
+    if (temp_mapping == NULL)
+    {
+        fprintf(stderr, "Unable to open session temp mapping\n");
+        return;
+    }
 
     temp_setMappingDB(temp_mapping);
 }

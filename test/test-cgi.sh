@@ -80,6 +80,26 @@ echo "$out" | grep -qi 'Content-Type: text/csv' || die "POST text/sql missing Co
 body=$(printf '%s\n' "$out" | body_of)
 [[ "$body" == $'n\n3' ]] || die "POST text/sql body unexpected: [$body]"
 
+# Trailing CRLF blank lines (browser textareas) must not break the query
+sql=$'SELECT 7 AS n\r\n\r\n'
+out=$(printf '%s' "$sql" | run_cgi \
+    REQUEST_METHOD=POST \
+    CONTENT_TYPE='text/sql' \
+    CONTENT_LENGTH=${#sql} \
+    HTTP_ACCEPT='text/csv' \
+    QUERY_STRING='')
+body=$(printf '%s\n' "$out" | body_of)
+[[ "$body" == $'n\n7' ]] || die "POST text/sql with CRLF unexpected: [$body]"
+
+# Long table names via GET (previously SIGSEGV'd due to uninitialized session DB)
+long_name=$(python3 -c "print('a'*32)")
+echo 'col1,col2' >"$SCRIPT_DIR/${long_name}.csv"
+echo 'x,1' >>"$SCRIPT_DIR/${long_name}.csv"
+trap 'rm -f "$SCRIPT_DIR/${long_name}.csv"; rm -rf "$TMPDIR_CGI"' EXIT
+out=$(run_cgi REQUEST_METHOD=GET QUERY_STRING="query=FROM+${long_name}%0D%0A%0D%0A" HTTP_ACCEPT='text/csv')
+body=$(printf '%s\n' "$out" | body_of)
+[[ "$body" == $'col1,col2\nx,1' ]] || die "GET long table+CRLF unexpected: [$body]"
+
 # POST text/sql; charset=utf-8 + ?format=json
 sql='SELECT 4 AS n'
 out=$(printf '%s' "$sql" | run_cgi \

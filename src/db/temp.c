@@ -171,7 +171,14 @@ int temp_findTable(const char *table_name, char *filename)
  */
 struct DB *temp_openMappingDB(const char *filename)
 {
-    struct DB *db = malloc(sizeof(*db));
+    // Zero-fill: csv_openDB/makeDB do not clear line_indices; an uninitialized
+    // pointer here can later be free()'d in indexLines (stack/heap layout
+    // sensitive — longer GET query strings made this easier to hit).
+    struct DB *db = calloc(1, sizeof(*db));
+    if (db == NULL)
+    {
+        return NULL;
+    }
 
     // First deal with in-memory mapping.
     if (filename == NULL)
